@@ -24,3 +24,24 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Local config (contains secrets — never commit)
+backend/.env
+.env
+
+# AI model weights (large files)
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf
+models/
+tools/comfyui/models/
+tools/comfyui/output/
+tools/comfyui/input/
+tools/comfyui/custom_nodes/
+
+# Generated output
+generated/
+exports/

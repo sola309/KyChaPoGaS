@@ -38,9 +38,9 @@ export interface Asset {
 }
 
 export const projectsApi = {
-  list: () => api.get<Project[]>('/projects/').then(r => r.data),
+  list:   () => api.get<Project[]>('/projects/').then(r => r.data),
   create: (data: ProjectCreate) => api.post<Project>('/projects/', data).then(r => r.data),
-  get: (id: number) => api.get<Project>(`/projects/${id}`).then(r => r.data),
+  get:    (id: number) => api.get<Project>(`/projects/${id}`).then(r => r.data),
   delete: (id: number) => api.delete(`/projects/${id}`),
 }
 
@@ -69,23 +69,40 @@ export interface ClipUpdate {
 }
 
 export const tracksApi = {
-  list: (projectId: number) =>
+  list:   (projectId: number) =>
     api.get<Track[]>('/tracks/', { params: { project_id: projectId } }).then(r => r.data),
   create: (data: Omit<Track, 'id'>) => api.post<Track>('/tracks/', data).then(r => r.data),
   delete: (id: number) => api.delete(`/tracks/${id}`),
 }
 
 export const clipsApi = {
-  list: (projectId: number) =>
+  list:   (projectId: number) =>
     api.get<Clip[]>('/clips/', { params: { project_id: projectId } }).then(r => r.data),
   create: (data: Omit<Clip, 'id'>) => api.post<Clip>('/clips/', data).then(r => r.data),
   update: (id: number, data: ClipUpdate) => api.patch<Clip>(`/clips/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/clips/${id}`),
 }
 
-// ── Job types ────────────────────────────────────────────────────────────────
+export const assetsApi = {
+  list:         (projectId?: number) =>
+    api.get<Asset[]>('/assets/', { params: projectId ? { project_id: projectId } : {} }).then(r => r.data),
+  get:          (id: number) => api.get<Asset>(`/assets/${id}`).then(r => r.data),
+  delete:       (id: number) => api.delete(`/assets/${id}`),
+  upload:       (projectId: number, file: File) => {
+    const form = new FormData()
+    form.append('project_id', String(projectId))
+    form.append('file', file)
+    return api.post<Asset>('/assets/upload/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
+  fileUrl:      (assetId: number) => `/api/assets/${assetId}/file`,
+}
 
-export type JobType = 'generate_image' | 'generate_audio' | 'generate_video_i2v'
+// ── Job types ─────────────────────────────────────────────────────────────────
+
+export type JobType   = 'generate_image' | 'generate_audio' | 'generate_video_i2v'
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface Job {
@@ -102,19 +119,10 @@ export interface Job {
   completed_at: string | null
 }
 
-export interface I2VKeyframe { time_sec: number; asset_id: number }
-
-export interface ImageGenParams {
-  project_id: number; prompt: string; negative_prompt?: string
-  model?: string; width?: number; height?: number; seed?: number
-}
-export interface AudioGenParams {
-  project_id: number; prompt: string; duration_sec?: number; model?: string; seed?: number
-}
-export interface VideoI2VParams {
-  project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number
-  fps?: number; motion_strength?: number; model?: string; seed?: number
-}
+export interface I2VKeyframe  { time_sec: number; asset_id: number }
+export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number }
+export interface AudioGenParams  { project_id: number; prompt: string; duration_sec?: number; model?: string; seed?: number }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number }
 
 export const jobsApi = {
   list:   (projectId: number) =>
@@ -128,24 +136,19 @@ export const jobsApi = {
 export const generationApi = {
   models:      () => api.get<Record<string, unknown[]>>('/generation/models').then(r => r.data),
   comfyStatus: () => api.get<{ available: boolean; url: string }>('/generation/comfyui/status').then(r => r.data),
-  image:       (p: ImageGenParams)    => api.post<Job>('/generation/image', p).then(r => r.data),
-  audio:       (p: AudioGenParams)    => api.post<Job>('/generation/audio', p).then(r => r.data),
-  videoI2V:    (p: VideoI2VParams)    => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
+  image:       (p: ImageGenParams)  => api.post<Job>('/generation/image', p).then(r => r.data),
+  audio:       (p: AudioGenParams)  => api.post<Job>('/generation/audio', p).then(r => r.data),
+  videoI2V:    (p: VideoI2VParams)  => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
 }
 
-export const assetsApi = {
-  list: (projectId?: number) =>
-    api.get<Asset[]>('/assets/', { params: projectId ? { project_id: projectId } : {} }).then(r => r.data),
-  get: (id: number) => api.get<Asset>(`/assets/${id}`).then(r => r.data),
-  delete: (id: number) => api.delete(`/assets/${id}`),
-  upload: (projectId: number, file: File) => {
-    const form = new FormData()
-    form.append('project_id', String(projectId))
-    form.append('file', file)
-    return api.post<Asset>('/assets/upload/', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then(r => r.data)
-  },
-  thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
-  fileUrl: (assetId: number) => `/api/assets/${assetId}/file`,
+// ── LLM chat ──────────────────────────────────────────────────────────────────
+
+export interface LLMChatMessage { role: 'user' | 'assistant'; content: string }
+export interface LLMActionLog   { tool: string; input: Record<string,unknown>; result: Record<string,unknown> }
+export interface LLMChatResponse { reply: string; actions: LLMActionLog[]; error?: string }
+
+export const llmApi = {
+  status: () => api.get<{ configured: boolean; model: string }>('/llm/status').then(r => r.data),
+  chat:   (project_id: number, message: string, history: LLMChatMessage[]) =>
+    api.post<LLMChatResponse>('/llm/chat', { project_id, message, history }).then(r => r.data),
 }

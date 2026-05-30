@@ -1,0 +1,281 @@
+"""
+LLM chat router — Claude-powered timeline assistant.
+
+POST /api/llm/chat
+  - Receives conversation history + project_id
+  - Injects project state as context
+  - Runs agentic loop with tool use
+  - Executes timeline operations via command_api
+  - Returns assistant reply + executed actions log
+"""
+
+import json
+from typing import Any
+
+import anthropic
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlmodel import Session
+
+from app.config import ANTHROPIC_API_KEY, LLM_MODEL
+from app.db.database import get_session
+from app.models import Project
+from app.services import command_api
+
+router = APIRouter(prefix="/llm", tags=["llm"])
+
+# ── Anthropic tool definitions ────────────────────────────────────────────────
+
+TOOLS: list[dict] = [
+    {
+        "name": "get_project_state",
+        "description": (
+            "Get the current timeline state: all tracks, clips, and their positions. "
+            "Call this first to understand what's on the timeline."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_assets",
+        "description": "List assets available in the project.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "asset_type": {
+                    "type": "string",
+                    "description": "Filter by type",
+                    "enum": ["video", "audio", "image", "generated"],
+                }
+            },
+        },
+    },
+    {
+        "name": "add_clip",
+        "description": "Add an asset as a clip to a track at a given start frame.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "track_id":       {"type": "integer", "description": "Target track ID"},
+                "asset_id":       {"type": "integer", "description": "Asset ID (or null for empty clip)"},
+                "start_frame":    {"type": "integer", "description": "Start frame on the timeline"},
+                "duration_frames": {"type": "integer", "description": "Clip length in frames"},
+            },
+            "required": ["track_id", "start_frame", "duration_frames"],
+        },
+    },
+    {
+        "name": "move_clip",
+        "description": "Move a clip to a new start frame.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id":        {"type": "integer"},
+                "new_start_frame": {"type": "integer"},
+            },
+            "required": ["clip_id", "new_start_frame"],
+        },
+    },
+    {
+        "name": "delete_clip",
+        "description": "Delete a clip from the timeline.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"clip_id": {"type": "integer"}},
+            "required": ["clip_id"],
+        },
+    },
+    {
+        "name": "split_clip",
+        "description": "Split a clip into two at the given frame.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id":     {"type": "integer"},
+                "split_frame": {"type": "integer", "description": "Frame at which to cut"},
+            },
+            "required": ["clip_id", "split_frame"],
+        },
+    },
+    {
+        "name": "create_generation_job",
+        "description": (
+            "Queue an AI generation job. "
+            "job_type: 'generate_image' | 'generate_audio' | 'generate_video_i2v'. "
+            "params vary by type — include prompt, model, keyframes (for I2V), etc."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "job_type": {
+                    "type": "string",
+                    "enum": ["generate_image", "generate_audio", "generate_video_i2v"],
+                },
+                "params": {
+                    "type": "object",
+                    "description": "Job parameters (prompt, model, keyframes for I2V, etc.)",
+                },
+            },
+            "required": ["job_type", "params"],
+        },
+    },
+]
+
+SYSTEM_PROMPT = """\
+あなたはMAD動画制作スタジオ「KyChaPoGaS」のAIアシスタントです。
+ユーザーの自然言語指示を受けて、タイムライン操作・素材管理・AI生成ジョブ作成を支援します。
+
+## 基本方針
+- 操作を実行する前に、何を行うか簡潔に説明してください。
+- 複数クリップの一括削除など大きな変更は、実行前にユーザーの確認を求めてください。
+- フレーム計算にはプロジェクトのFPSを使用してください（get_project_stateで確認可能）。
+- 素材名・トラック名など曖昧な指示は、get_project_state / get_assetsで現状を確認してから判断してください。
+- 操作後は何を実行したか簡潔に報告してください。
+
+## MCP対応について
+このAPIはMCPサーバーとしても将来的に公開予定です。同じtoolsをMCP経由でClaude Codeから呼ぶことができます。
+"""
+
+
+# ── Request / Response models ─────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    project_id: int
+    history: list[ChatMessage] = []
+    message: str
+
+
+class ActionLog(BaseModel):
+    tool: str
+    input: dict
+    result: dict
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    actions: list[ActionLog]
+    error: str | None = None
+
+
+# ── Tool executor ─────────────────────────────────────────────────────────────
+
+def _exec_tool(
+    name: str,
+    inp: dict,
+    project_id: int,
+    session: Session,
+) -> dict:
+    match name:
+        case "get_project_state":
+            return command_api.get_project_state(project_id, session)
+        case "get_assets":
+            return command_api.get_assets(project_id, session, inp.get("asset_type"))
+        case "add_clip":
+            return command_api.add_clip(
+                project_id, inp["track_id"],
+                inp.get("asset_id"), inp["start_frame"], inp["duration_frames"],
+                session,
+            )
+        case "move_clip":
+            return command_api.move_clip(inp["clip_id"], inp["new_start_frame"], session)
+        case "delete_clip":
+            return command_api.delete_clip(inp["clip_id"], session)
+        case "split_clip":
+            return command_api.split_clip(inp["clip_id"], inp["split_frame"], session)
+        case "create_generation_job":
+            return command_api.create_job(
+                project_id, inp["job_type"], inp.get("params", {}), session
+            )
+        case _:
+            return {"error": f"Unknown tool: {name}"}
+
+
+# ── Main endpoint ─────────────────────────────────────────────────────────────
+
+@router.post("/chat", response_model=ChatResponse)
+def chat(req: ChatRequest, session: Session = Depends(get_session)):
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY not configured. Add it to backend/.env",
+        )
+
+    project = session.get(Project, req.project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    # Build message history
+    messages: list[dict[str, Any]] = [
+        {"role": m.role, "content": m.content} for m in req.history
+    ]
+    messages.append({"role": "user", "content": req.message})
+
+    actions: list[ActionLog] = []
+
+    # System prompt with project context (cached)
+    system = [
+        {
+            "type": "text",
+            "text": SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": (
+                f"## 現在のプロジェクト\n"
+                f"名前: {project.name}\n"
+                f"FPS: {project.fps}\n"
+                f"解像度: {project.width}×{project.height}\n"
+            ),
+        },
+    ]
+
+    # Agentic loop
+    for _ in range(10):   # max 10 tool-call rounds
+        response = client.messages.create(
+            model=LLM_MODEL,
+            max_tokens=4096,
+            system=system,
+            tools=TOOLS,
+            messages=messages,
+        )
+
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "end_turn":
+            break
+
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    result = _exec_tool(block.name, block.input, req.project_id, session)
+                    actions.append(ActionLog(tool=block.name, input=block.input, result=result))
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, ensure_ascii=False),
+                    })
+            messages.append({"role": "user", "content": tool_results})
+
+    # Extract final text reply
+    reply = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            reply += block.text
+
+    return ChatResponse(reply=reply, actions=actions)
+
+
+@router.get("/status")
+def llm_status():
+    return {
+        "configured": bool(ANTHROPIC_API_KEY),
+        "model": LLM_MODEL,
+    }
