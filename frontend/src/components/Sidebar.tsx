@@ -19,8 +19,9 @@ export function Sidebar() {
       setActiveProject(project)
       setNewName('')
       setCreating(false)
-    } catch (err) {
-      setError('作成失敗。サーバーを確認してください。')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setError(msg)
       console.error('createProject failed:', err)
     } finally {
       setSubmitting(false)

@@ -17,6 +17,7 @@ app = FastAPI(
     description="A MAD Video Creation Studio — backend API",
     version="0.1.0",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 app.add_middleware(
