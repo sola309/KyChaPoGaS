@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { Project, projectsApi, ProjectCreate } from '../api/client'
+import type { Project, ProjectCreate } from '../api/client'
+import { projectsApi } from '../api/client'
 
 interface ProjectState {
   projects: Project[]
@@ -12,7 +13,7 @@ interface ProjectState {
   deleteProject: (id: number) => Promise<void>
 }
 
-export const useProjectStore = create<ProjectState>((set, get) => ({
+export const useProjectStore = create<ProjectState>((set) => ({
   projects: [],
   activeProject: null,
   loading: false,

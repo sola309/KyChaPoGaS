@@ -49,4 +49,13 @@ export const assetsApi = {
     api.get<Asset[]>('/assets', { params: projectId ? { project_id: projectId } : {} }).then(r => r.data),
   get: (id: number) => api.get<Asset>(`/assets/${id}`).then(r => r.data),
   delete: (id: number) => api.delete(`/assets/${id}`),
+  upload: (projectId: number, file: File) => {
+    const form = new FormData()
+    form.append('project_id', String(projectId))
+    form.append('file', file)
+    return api.post<Asset>('/assets/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data)
+  },
+  thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
 }
