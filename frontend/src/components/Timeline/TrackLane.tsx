@@ -1,8 +1,9 @@
 import type { Track, Clip, Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { ClipBlock } from './ClipBlock'
+import { WaveformCanvas } from './WaveformCanvas'
 
-const TRACK_HEIGHT = 48
+export const TRACK_HEIGHT = 48
 
 interface Props {
   track: Track
@@ -32,6 +33,7 @@ export function TrackLane({
   }
 
   const typeColor = track.track_type === 'video' ? 'text-blue-400' : 'text-green-400'
+  const isAudio   = track.track_type === 'audio'
 
   return (
     <div className="flex flex-shrink-0" style={{ height: TRACK_HEIGHT }}>
@@ -52,23 +54,48 @@ export function TrackLane({
         onDragOver={e => e.preventDefault()}
         onDrop={handleDrop}
       >
-        {/* Lane line */}
+        {/* Lane centre line */}
         <div className="absolute inset-x-0 top-1/2 h-px bg-zinc-800 pointer-events-none" />
 
-        {clips.map(clip => (
-          <ClipBlock
-            key={clip.id}
-            clip={clip}
-            asset={assets.find(a => a.id === clip.asset_id)}
-            pixelsPerFrame={pixelsPerFrame}
-            trackHeight={TRACK_HEIGHT}
-            selected={selectedClipId === clip.id}
-            onSelect={onSelectClip}
-          />
-        ))}
+        {clips.map(clip => {
+          const asset       = assets.find(a => a.id === clip.asset_id)
+          const clipWidth   = Math.max(clip.duration_frames * pixelsPerFrame, 12)
+          const clipInner   = TRACK_HEIGHT - 8  // matches ClipBlock top-1 + 1px margin
+
+          return (
+            <div key={clip.id}>
+              {/* Waveform overlay for audio tracks */}
+              {isAudio && clip.asset_id != null && (
+                <div
+                  className="absolute pointer-events-none"
+                  style={{
+                    left:   clip.start_frame * pixelsPerFrame + 6,  // account for trim handles
+                    width:  Math.max(clipWidth - 12, 2),
+                    top:    4,
+                    height: clipInner,
+                  }}
+                >
+                  <WaveformCanvas
+                    assetId={clip.asset_id}
+                    width={Math.max(clipWidth - 12, 2)}
+                    height={clipInner}
+                    color="#4ade80"
+                  />
+                </div>
+              )}
+
+              <ClipBlock
+                clip={clip}
+                asset={asset}
+                pixelsPerFrame={pixelsPerFrame}
+                trackHeight={TRACK_HEIGHT}
+                selected={selectedClipId === clip.id}
+                onSelect={onSelectClip}
+              />
+            </div>
+          )
+        })}
       </div>
     </div>
   )
 }
-
-export { TRACK_HEIGHT }

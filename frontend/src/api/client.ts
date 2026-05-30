@@ -97,4 +97,5 @@ export const assetsApi = {
     }).then(r => r.data)
   },
   thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
+  fileUrl: (assetId: number) => `/api/assets/${assetId}/file`,
 }

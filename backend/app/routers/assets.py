@@ -1,3 +1,4 @@
+import mimetypes
 import shutil
 from pathlib import Path
 
@@ -97,6 +98,18 @@ def get_thumbnail(asset_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Thumbnail not available")
 
     return FileResponse(thumb, media_type="image/jpeg")
+
+
+@router.get("/{asset_id}/file")
+def get_asset_file(asset_id: int, session: Session = Depends(get_session)):
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    path = Path(asset.file_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    media_type, _ = mimetypes.guess_type(str(path))
+    return FileResponse(path, media_type=media_type or "application/octet-stream")
 
 
 @router.get("/{asset_id}", response_model=AssetRead)
