@@ -5,16 +5,32 @@ export function Sidebar() {
   const { projects, activeProject, fetchProjects, createProject, setActiveProject } = useProjectStore()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
 
-  const handleCreate = async (e: React.SyntheticEvent) => {
-    e.preventDefault()
-    if (!newName.trim()) return
-    const project = await createProject({ name: newName.trim() })
-    setActiveProject(project)
-    setNewName('')
+  const handleCreate = async () => {
+    if (!newName.trim() || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      const project = await createProject({ name: newName.trim() })
+      setActiveProject(project)
+      setNewName('')
+      setCreating(false)
+    } catch (err) {
+      setError('作成失敗。サーバーを確認してください。')
+      console.error('createProject failed:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const cancelCreate = () => {
     setCreating(false)
+    setNewName('')
+    setError(null)
   }
 
   return (
@@ -27,28 +43,37 @@ export function Sidebar() {
         <div className="flex items-center justify-between px-2 py-1 mb-1">
           <span className="text-xs text-zinc-500 uppercase tracking-wider">Projects</span>
           <button
-            onClick={() => setCreating(v => !v)}
+            onClick={() => { setCreating(v => !v); setError(null) }}
             className="text-zinc-400 hover:text-white text-lg leading-none"
             title="New project"
           >+</button>
         </div>
 
         {creating && (
-          <form onSubmit={handleCreate} className="mb-2 px-2 flex gap-1">
-            <input
-              autoFocus
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') { setCreating(false); setNewName('') } }}
-              placeholder="Project name"
-              className="flex-1 bg-zinc-800 text-sm text-white rounded px-2 py-1 outline-none border border-zinc-600 focus:border-purple-500"
-            />
-            <button
-              type="submit"
-              className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
-              disabled={!newName.trim()}
-            >✓</button>
-          </form>
+          <div className="mb-2 px-2">
+            <div className="flex gap-1">
+              <input
+                autoFocus
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreate()
+                  if (e.key === 'Escape') cancelCreate()
+                }}
+                placeholder="Project name"
+                className="flex-1 bg-zinc-800 text-sm text-white rounded px-2 py-1 outline-none border border-zinc-600 focus:border-purple-500"
+              />
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={!newName.trim() || submitting}
+                className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              >{submitting ? '…' : '✓'}</button>
+            </div>
+            {error && (
+              <p className="text-[10px] text-red-400 mt-1">{error}</p>
+            )}
+          </div>
         )}
 
         {projects.map(p => (
