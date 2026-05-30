@@ -1,5 +1,7 @@
 import subprocess
 import json
+import shutil
+import sys
 from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
@@ -32,7 +34,6 @@ def probe(file_path: Path) -> MediaInfo:
     if ext in _VIDEO_EXTS:
         return _probe_av(file_path, size, expect_video=True)
 
-    # Unknown: attempt ffprobe anyway
     return _probe_av(file_path, size, expect_video=False)
 
 
@@ -48,32 +49,58 @@ def _probe_image(file_path: Path, size: int) -> MediaInfo:
 
 def _probe_av(file_path: Path, size: int, *, expect_video: bool) -> MediaInfo:
     ffprobe = _ffprobe_exe()
+    atype_fallback = "video" if expect_video else "audio"
+
+    if ffprobe is None:
+        # ffprobe not available — use mutagen for duration on audio/video
+        return _probe_mutagen(file_path, size, atype_fallback)
+
     try:
         result = subprocess.run(
-            [ffprobe, "-v", "quiet", "-print_format", "json", "-show_streams", "-show_format", str(file_path)],
+            [ffprobe, "-v", "quiet", "-print_format", "json",
+             "-show_streams", "-show_format", str(file_path)],
             capture_output=True, text=True, timeout=30,
         )
         data = json.loads(result.stdout)
     except Exception:
-        atype = "video" if expect_video else "audio"
-        return MediaInfo(asset_type=atype, duration_sec=None, width=None, height=None, file_size_bytes=size)
+        return _probe_mutagen(file_path, size, atype_fallback)
 
     duration = float(data.get("format", {}).get("duration", 0) or 0) or None
 
     video_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
     if video_stream:
-        w = video_stream.get("width")
-        h = video_stream.get("height")
-        return MediaInfo(asset_type="video", duration_sec=duration, width=w, height=h, file_size_bytes=size)
+        return MediaInfo(
+            asset_type="video",
+            duration_sec=duration,
+            width=video_stream.get("width"),
+            height=video_stream.get("height"),
+            file_size_bytes=size,
+        )
 
     return MediaInfo(asset_type="audio", duration_sec=duration, width=None, height=None, file_size_bytes=size)
 
 
-def _ffprobe_exe() -> str:
+def _probe_mutagen(file_path: Path, size: int, asset_type: str) -> MediaInfo:
+    try:
+        from mutagen import File as MutagenFile
+        mf = MutagenFile(str(file_path))
+        duration = mf.info.length if mf and hasattr(mf, "info") and hasattr(mf.info, "length") else None
+    except Exception:
+        duration = None
+    return MediaInfo(asset_type=asset_type, duration_sec=duration, width=None, height=None, file_size_bytes=size)
+
+
+def _ffprobe_exe() -> Optional[str]:
+    # 1. System ffprobe (preferred — available on DGX Spark / any system with ffmpeg installed)
+    system = shutil.which("ffprobe")
+    if system:
+        return system
+
+    # 2. ffprobe next to the imageio_ffmpeg bundled binary
     exe = imageio_ffmpeg.get_ffmpeg_exe()
-    # imageio_ffmpeg ships ffmpeg; derive ffprobe from the same directory
-    ffprobe = Path(exe).parent / "ffprobe.exe"
-    if ffprobe.exists():
-        return str(ffprobe)
-    # Some builds only ship ffmpeg — fall back to ffmpeg as probe
-    return exe
+    suffix = ".exe" if sys.platform == "win32" else ""
+    candidate = Path(exe).with_name(f"ffprobe{suffix}")
+    if candidate.exists():
+        return str(candidate)
+
+    return None

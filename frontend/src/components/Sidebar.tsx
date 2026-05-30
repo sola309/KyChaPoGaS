@@ -8,7 +8,7 @@ export function Sidebar() {
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.SyntheticEvent) => {
     e.preventDefault()
     if (!newName.trim()) return
     const project = await createProject({ name: newName.trim() })
@@ -34,14 +34,20 @@ export function Sidebar() {
         </div>
 
         {creating && (
-          <form onSubmit={handleCreate} className="mb-2 px-2">
+          <form onSubmit={handleCreate} className="mb-2 px-2 flex gap-1">
             <input
               autoFocus
               value={newName}
               onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') { setCreating(false); setNewName('') } }}
               placeholder="Project name"
-              className="w-full bg-zinc-800 text-sm text-white rounded px-2 py-1 outline-none border border-zinc-600 focus:border-purple-500"
+              className="flex-1 bg-zinc-800 text-sm text-white rounded px-2 py-1 outline-none border border-zinc-600 focus:border-purple-500"
             />
+            <button
+              type="submit"
+              className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
+              disabled={!newName.trim()}
+            >✓</button>
           </form>
         )}
 
