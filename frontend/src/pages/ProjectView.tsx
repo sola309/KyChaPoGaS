@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useProjectStore } from '../store/projectStore'
-import { AssetPanel } from '../components/AssetPanel'
 import { Timeline } from '../components/Timeline/Timeline'
 import { PreviewPlayer } from '../components/Preview/PreviewPlayer'
+import { RightPanel } from '../components/RightPanel/RightPanel'
 import type { Asset } from '../api/client'
 import { assetsApi } from '../api/client'
 
@@ -12,27 +12,13 @@ const DEFAULT_TIMELINE_H = 260
 
 export function ProjectView() {
   const { activeProject } = useProjectStore()
-  const [assets, setAssets]         = useState<Asset[]>([])
-  const [timelineH, setTimelineH]   = useState(DEFAULT_TIMELINE_H)
+  const [assets, setAssets]       = useState<Asset[]>([])
+  const [timelineH, setTimelineH] = useState(DEFAULT_TIMELINE_H)
 
   useEffect(() => {
     if (!activeProject) return
     assetsApi.list(activeProject.id).then(setAssets)
   }, [activeProject?.id])
-
-  // Space bar: play/pause (handled globally here so it works from preview area)
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return
-      if (e.code === 'Space' && (e.ctrlKey || e.metaKey || e.altKey) === false) {
-        e.preventDefault()
-        // Toggle play via timeline keyboard — we trigger the timeline's play button
-        document.getElementById('preview-play-btn')?.click()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [])
 
   // Resizable split between preview and timeline
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -41,9 +27,8 @@ export function ProjectView() {
     const startH = timelineH
 
     const onMove = (ev: MouseEvent) => {
-      const dy = startY - ev.clientY  // dragging up = increase timeline height
-      const newH = Math.max(MIN_TIMELINE_H, Math.min(MAX_TIMELINE_H, startH + dy))
-      setTimelineH(newH)
+      const dy = startY - ev.clientY
+      setTimelineH(Math.max(MIN_TIMELINE_H, Math.min(MAX_TIMELINE_H, startH + dy)))
     }
     const onUp = () => {
       window.removeEventListener('mousemove', onMove)
@@ -99,16 +84,12 @@ export function ProjectView() {
         </div>
       </div>
 
-      {/* Asset panel */}
-      <div className="w-56 border-l border-zinc-800 flex flex-col flex-shrink-0">
-        <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900">
-          <span className="text-xs text-zinc-500 uppercase tracking-wider">Assets</span>
-        </div>
-        <AssetPanel
-          projectId={activeProject.id}
-          onAssetsChange={setAssets}
-        />
-      </div>
+      {/* Right panel: Assets / Generate / Jobs */}
+      <RightPanel
+        projectId={activeProject.id}
+        assets={assets}
+        onAssetsChange={setAssets}
+      />
     </div>
   )
 }

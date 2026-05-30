@@ -1,9 +1,11 @@
 import type { Track, Clip, Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { ClipBlock } from './ClipBlock'
+import { RefClipBlock } from './RefClipBlock'
 import { WaveformCanvas } from './WaveformCanvas'
 
-export const TRACK_HEIGHT = 48
+export const TRACK_HEIGHT    = 48
+export const REF_TRACK_HEIGHT = 36  // thinner for reference tracks
 
 interface Props {
   track: Track
@@ -22,6 +24,14 @@ export function TrackLane({
 }: Props) {
   const { deleteTrack } = useTimelineStore()
 
+  const isRef   = track.track_type === 'reference'
+  const isAudio = track.track_type === 'audio'
+  const height  = isRef ? REF_TRACK_HEIGHT : TRACK_HEIGHT
+
+  const typeColor = isRef
+    ? 'text-amber-400'
+    : track.track_type === 'video' ? 'text-blue-400' : 'text-green-400'
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     const assetId = Number(e.dataTransfer.getData('assetId'))
@@ -32,13 +42,14 @@ export function TrackLane({
     onDropAsset(track.id, assetId, startFrame)
   }
 
-  const typeColor = track.track_type === 'video' ? 'text-blue-400' : 'text-green-400'
-  const isAudio   = track.track_type === 'audio'
-
   return (
-    <div className="flex flex-shrink-0" style={{ height: TRACK_HEIGHT }}>
+    <div className="flex flex-shrink-0" style={{ height }}>
       {/* Label */}
-      <div className="w-28 flex-shrink-0 flex items-center justify-between px-2 bg-zinc-900 border-r border-zinc-700 group">
+      <div
+        className={`w-28 flex-shrink-0 flex items-center justify-between px-2
+          bg-zinc-900 border-r border-zinc-700 group
+          ${isRef ? 'bg-amber-950/30' : ''}`}
+      >
         <span className={`text-[11px] truncate ${typeColor}`}>{track.name}</span>
         <button
           onClick={() => deleteTrack(track.id)}
@@ -49,27 +60,45 @@ export function TrackLane({
 
       {/* Clip area */}
       <div
-        className="relative bg-zinc-950 border-b border-zinc-800 flex-shrink-0"
-        style={{ width: totalWidth, height: TRACK_HEIGHT }}
+        className={`relative border-b border-zinc-800 flex-shrink-0
+          ${isRef ? 'bg-amber-950/10' : 'bg-zinc-950'}`}
+        style={{ width: totalWidth, height }}
         onDragOver={e => e.preventDefault()}
         onDrop={handleDrop}
       >
-        {/* Lane centre line */}
-        <div className="absolute inset-x-0 top-1/2 h-px bg-zinc-800 pointer-events-none" />
+        {/* Centre line */}
+        {!isRef && (
+          <div className="absolute inset-x-0 top-1/2 h-px bg-zinc-800 pointer-events-none" />
+        )}
 
         {clips.map(clip => {
-          const asset       = assets.find(a => a.id === clip.asset_id)
-          const clipWidth   = Math.max(clip.duration_frames * pixelsPerFrame, 12)
-          const clipInner   = TRACK_HEIGHT - 8  // matches ClipBlock top-1 + 1px margin
+          const asset = assets.find(a => a.id === clip.asset_id)
+
+          if (isRef) {
+            return (
+              <RefClipBlock
+                key={clip.id}
+                clip={clip}
+                asset={asset}
+                pixelsPerFrame={pixelsPerFrame}
+                trackHeight={height}
+                selected={selectedClipId === clip.id}
+                onSelect={onSelectClip}
+              />
+            )
+          }
+
+          const clipWidth = Math.max(clip.duration_frames * pixelsPerFrame, 12)
+          const clipInner = height - 8
 
           return (
             <div key={clip.id}>
-              {/* Waveform overlay for audio tracks */}
+              {/* Audio waveform overlay */}
               {isAudio && clip.asset_id != null && (
                 <div
                   className="absolute pointer-events-none"
                   style={{
-                    left:   clip.start_frame * pixelsPerFrame + 6,  // account for trim handles
+                    left:   clip.start_frame * pixelsPerFrame + 6,
                     width:  Math.max(clipWidth - 12, 2),
                     top:    4,
                     height: clipInner,
@@ -88,7 +117,7 @@ export function TrackLane({
                 clip={clip}
                 asset={asset}
                 pixelsPerFrame={pixelsPerFrame}
-                trackHeight={TRACK_HEIGHT}
+                trackHeight={height}
                 selected={selectedClipId === clip.id}
                 onSelect={onSelectClip}
               />

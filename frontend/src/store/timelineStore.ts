@@ -27,7 +27,7 @@ interface TimelineState {
   canRedo: boolean
 
   loadTimeline: (projectId: number, fps: number) => Promise<void>
-  addTrack: (projectId: number, type: 'video' | 'audio', name: string) => Promise<void>
+  addTrack: (projectId: number, type: 'video' | 'audio' | 'reference', name: string) => Promise<void>
   deleteTrack: (trackId: number) => Promise<void>
   addClip: (trackId: number, assetId: number | null, startFrame: number, durationFrames: number) => Promise<Clip>
   moveClip: (clipId: number, prevFrame: number, newFrame: number) => Promise<void>

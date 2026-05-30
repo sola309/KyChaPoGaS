@@ -100,6 +100,11 @@ export function Timeline({ projectId, fps, assets }: Props) {
           onClick={() => addTrack(projectId, 'audio', `Audio ${tracks.filter(t => t.track_type === 'audio').length + 1}`)}
           className="text-[11px] px-2 py-0.5 rounded bg-green-900 hover:bg-green-800 text-green-200"
         >+ Audio</button>
+        <button
+          onClick={() => addTrack(projectId, 'reference', `Ref ${tracks.filter(t => t.track_type === 'reference').length + 1}`)}
+          className="text-[11px] px-2 py-0.5 rounded bg-amber-900 hover:bg-amber-800 text-amber-200"
+          title="参照キーフレームトラック（I2V生成用）"
+        >+ Ref</button>
 
         <div className="w-px h-4 bg-zinc-700 mx-1" />
 

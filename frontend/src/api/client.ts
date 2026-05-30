@@ -48,7 +48,7 @@ export interface Track {
   id: number
   project_id: number
   name: string
-  track_type: 'video' | 'audio'
+  track_type: 'video' | 'audio' | 'reference'
   order: number
 }
 
@@ -81,6 +81,56 @@ export const clipsApi = {
   create: (data: Omit<Clip, 'id'>) => api.post<Clip>('/clips/', data).then(r => r.data),
   update: (id: number, data: ClipUpdate) => api.patch<Clip>(`/clips/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/clips/${id}`),
+}
+
+// ── Job types ────────────────────────────────────────────────────────────────
+
+export type JobType = 'generate_image' | 'generate_audio' | 'generate_video_i2v'
+export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface Job {
+  id: number
+  project_id: number
+  job_type: JobType
+  status: JobStatus
+  params: Record<string, unknown>
+  result_asset_ids: number[]
+  progress: number
+  error_msg: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
+export interface I2VKeyframe { time_sec: number; asset_id: number }
+
+export interface ImageGenParams {
+  project_id: number; prompt: string; negative_prompt?: string
+  model?: string; width?: number; height?: number; seed?: number
+}
+export interface AudioGenParams {
+  project_id: number; prompt: string; duration_sec?: number; model?: string; seed?: number
+}
+export interface VideoI2VParams {
+  project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number
+  fps?: number; motion_strength?: number; model?: string; seed?: number
+}
+
+export const jobsApi = {
+  list:   (projectId: number) =>
+    api.get<Job[]>('/jobs/', { params: { project_id: projectId } }).then(r => r.data),
+  get:    (id: number) => api.get<Job>(`/jobs/${id}`).then(r => r.data),
+  cancel: (id: number) => api.post<Job>(`/jobs/${id}/cancel`).then(r => r.data),
+  delete: (id: number) => api.delete(`/jobs/${id}`),
+  sseUrl: (projectId: number) => `/api/jobs/stream/sse?project_id=${projectId}`,
+}
+
+export const generationApi = {
+  models:      () => api.get<Record<string, unknown[]>>('/generation/models').then(r => r.data),
+  comfyStatus: () => api.get<{ available: boolean; url: string }>('/generation/comfyui/status').then(r => r.data),
+  image:       (p: ImageGenParams)    => api.post<Job>('/generation/image', p).then(r => r.data),
+  audio:       (p: AudioGenParams)    => api.post<Job>('/generation/audio', p).then(r => r.data),
+  videoI2V:    (p: VideoI2VParams)    => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
 }
 
 export const assetsApi = {
