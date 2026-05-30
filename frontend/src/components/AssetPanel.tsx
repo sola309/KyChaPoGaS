@@ -24,9 +24,10 @@ function formatBytes(bytes: number | null): string {
 
 interface Props {
   projectId: number
+  onAssetsChange?: (assets: Asset[]) => void
 }
 
-export function AssetPanel({ projectId }: Props) {
+export function AssetPanel({ projectId, onAssetsChange }: Props) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -35,6 +36,7 @@ export function AssetPanel({ projectId }: Props) {
   const load = async () => {
     const list = await assetsApi.list(projectId)
     setAssets(list)
+    onAssetsChange?.(list)
   }
 
   useEffect(() => { load() }, [projectId])
@@ -45,7 +47,11 @@ export function AssetPanel({ projectId }: Props) {
     for (const file of Array.from(files)) {
       try {
         const asset = await assetsApi.upload(projectId, file)
-        setAssets(prev => [...prev, asset])
+        setAssets(prev => {
+          const next = [...prev, asset]
+          onAssetsChange?.(next)
+          return next
+        })
       } catch {
         // skip failed uploads silently for now
       }
@@ -61,7 +67,11 @@ export function AssetPanel({ projectId }: Props) {
 
   const handleDelete = async (id: number) => {
     await assetsApi.delete(id)
-    setAssets(prev => prev.filter(a => a.id !== id))
+    setAssets(prev => {
+      const next = prev.filter(a => a.id !== id)
+      onAssetsChange?.(next)
+      return next
+    })
   }
 
   return (
@@ -109,8 +119,18 @@ export function AssetPanel({ projectId }: Props) {
 function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) => void }) {
   const [thumbError, setThumbError] = useState(false)
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('assetId', String(asset.id))
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 group">
+    <div
+      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-zinc-800 group cursor-grab active:cursor-grabbing"
+      draggable
+      onDragStart={handleDragStart}
+      title="タイムラインにドラッグ"
+    >
       {/* Thumbnail */}
       <div className="w-14 h-9 rounded overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center">
         {(asset.asset_type === 'video' || asset.asset_type === 'image') && !thumbError ? (
