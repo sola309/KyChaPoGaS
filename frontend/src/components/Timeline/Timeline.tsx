@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { TimeRuler } from './TimeRuler'
-import { TrackLane, TRACK_HEIGHT } from './TrackLane'
+import { TrackLane } from './TrackLane'
 
 const LABEL_WIDTH = 112  // px, must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -70,7 +70,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
       {/* Scrollable area */}
       <div className="flex-1 overflow-auto" ref={scrollRef} onWheel={handleWheel}>
-        <div className="flex flex-col min-h-full">
+        <div className="flex flex-col min-h-full relative">
           {/* Ruler row */}
           <div className="flex flex-shrink-0 sticky top-0 z-10 bg-zinc-900">
             <div className="w-28 flex-shrink-0 border-r border-b border-zinc-700 bg-zinc-900" />
