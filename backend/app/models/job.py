@@ -12,6 +12,8 @@ class JobBase(SQLModel):
     result_asset_ids: str = "[]"  # JSON array
     progress: float = 0.0
     error_msg: Optional[str] = None
+    vram_estimated_mb: Optional[int] = None   # pre-run VRAM estimate
+    vram_peak_mb: Optional[int] = None        # actual peak VRAM observed during run
     created_at: datetime = Field(default_factory=datetime.utcnow)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -36,6 +38,8 @@ class JobRead(SQLModel):
     result_asset_ids: list[int]
     progress: float
     error_msg: Optional[str]
+    vram_estimated_mb: Optional[int]
+    vram_peak_mb: Optional[int]
     created_at: datetime
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -51,6 +55,8 @@ class JobRead(SQLModel):
             result_asset_ids=json.loads(job.result_asset_ids),
             progress=job.progress,
             error_msg=job.error_msg,
+            vram_estimated_mb=job.vram_estimated_mb,
+            vram_peak_mb=job.vram_peak_mb,
             created_at=job.created_at,
             started_at=job.started_at,
             completed_at=job.completed_at,

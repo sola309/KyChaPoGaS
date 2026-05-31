@@ -41,6 +41,8 @@ async def run_forever() -> None:
 
 
 async def _poll_once() -> None:
+    from app.services.gpu_monitor import estimate_vram_mb, is_vram_sufficient
+
     with Session(engine) as session:
         job = session.exec(
             select(Job)
@@ -50,15 +52,31 @@ async def _poll_once() -> None:
         if not job:
             return
 
+        params = json.loads(job.params)
+        estimated_mb = estimate_vram_mb(job.job_type, params)
+
+        # If this is a GPU-heavy job and VRAM is insufficient, skip for now
+        if estimated_mb > 512 and not is_vram_sufficient(estimated_mb):
+            log.info(
+                f"Job id={job.id} deferred — VRAM insufficient "
+                f"(need ~{estimated_mb} MB)"
+            )
+            return
+
         log.info(f"Starting job id={job.id} type={job.job_type}")
         job.status = "running"
         job.started_at = datetime.utcnow()
+        job.vram_estimated_mb = estimated_mb
         session.add(job)
         session.commit()
         session.refresh(job)
 
+    # Start background VRAM sampler
+    vram_sampler = asyncio.create_task(_sample_vram(job.id))
+
     try:
         await _dispatch(job)
+        vram_sampler.cancel()
         with Session(engine) as session:
             j = session.get(Job, job.id)
             if j and j.status == "running":   # don't overwrite if already cancelled
@@ -69,6 +87,7 @@ async def _poll_once() -> None:
                 session.commit()
         log.info(f"Job id={job.id} completed")
     except Exception as e:
+        vram_sampler.cancel()
         log.error(f"Job id={job.id} failed: {e}")
         with Session(engine) as session:
             j = session.get(Job, job.id)
@@ -78,6 +97,27 @@ async def _poll_once() -> None:
                 j.completed_at = datetime.utcnow()
                 session.add(j)
                 session.commit()
+
+
+async def _sample_vram(job_id: int) -> None:
+    """Poll GPU VRAM every 3 seconds and record the peak used value."""
+    from app.services.gpu_monitor import get_gpu_status
+    peak_mb = 0
+    try:
+        while True:
+            status = get_gpu_status()
+            if status.available and status.gpus:
+                peak_mb = max(peak_mb, status.primary_used_mb)
+            await asyncio.sleep(3)
+    except asyncio.CancelledError:
+        if peak_mb > 0:
+            with Session(engine) as session:
+                j = session.get(Job, job_id)
+                if j:
+                    j.vram_peak_mb = peak_mb
+                    session.add(j)
+                    session.commit()
+            log.info(f"Job id={job_id} peak VRAM: {peak_mb} MB")
 
 
 def _update_progress(job_id: int, pct: float) -> None:

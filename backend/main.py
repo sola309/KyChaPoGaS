@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.db.database import create_db_and_tables
-from app.routers import projects, assets, tracks, clips, jobs, generation, llm
+from app.routers import projects, assets, tracks, clips, jobs, generation, llm, system
 from app.services import job_runner
 
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +46,7 @@ app.include_router(clips.router, prefix="/api")
 app.include_router(jobs.router, prefix="/api")
 app.include_router(generation.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")
+app.include_router(system.router, prefix="/api")
 
 
 @app.get("/api/health")

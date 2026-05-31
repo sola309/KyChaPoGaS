@@ -43,7 +43,8 @@ tools/comfyui/
 *.bin
 *.gguf
 *.ggml
-models/
+/models/
+tools/*/models/
 
 # Generated / exported output
 generated/

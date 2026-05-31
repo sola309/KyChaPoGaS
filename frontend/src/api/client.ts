@@ -144,6 +144,31 @@ export const generationApi = {
   videoI2V:    (p: VideoI2VParams)  => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
 }
 
+// ── GPU / System ─────────────────────────────────────────────────────────────
+
+export interface GpuInfo {
+  index: number
+  name: string
+  vram_total_mb: number
+  vram_used_mb: number
+  vram_free_mb: number
+  utilization_pct: number
+  temperature_c: number
+  power_draw_w: number
+  power_limit_w: number
+}
+
+export interface GpuStatus {
+  available: boolean
+  error: string
+  gpus: GpuInfo[]
+}
+
+export const systemApi = {
+  gpu:       () => api.get<GpuStatus>('/system/gpu').then(r => r.data),
+  gpuSseUrl: () => '/api/system/gpu/stream',
+}
+
 // ── LLM chat ──────────────────────────────────────────────────────────────────
 
 export interface LLMChatMessage { role: 'user' | 'assistant'; content: string }
