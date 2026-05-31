@@ -169,7 +169,6 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       {assetScenes && (
         <SceneMarkers
           scenes={assetScenes}
-          clipStartFrame={clip.start_frame}
           assetInFrame={clip.asset_in_frame}
           clipDurationFrames={clip.duration_frames}
           pixelsPerFrame={pixelsPerFrame}
@@ -181,12 +180,10 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       {assetMotion && (
         <MotionHeat
           motion={assetMotion}
-          clipStartFrame={clip.start_frame}
           assetInFrame={clip.asset_in_frame}
           clipDurationFrames={clip.duration_frames}
           pixelsPerFrame={pixelsPerFrame}
           fps={24}
-          clipWidth={width}
         />
       )}
 

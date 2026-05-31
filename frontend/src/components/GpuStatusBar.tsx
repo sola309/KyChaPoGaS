@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { systemApi, GpuStatus, GpuInfo } from '../api/client'
+import { systemApi } from '../api/client'
+import type { GpuStatus, GpuInfo } from '../api/client'
 
 function VramBar({ used, total }: { used: number; total: number }) {
   const pct = total > 0 ? (used / total) * 100 : 0

@@ -3,8 +3,6 @@ import type { SceneAnalysis, MotionAnalysis } from '../../api/client'
 
 interface SceneMarkersProps {
   scenes: SceneAnalysis
-  /** Start frame of the video clip on the timeline */
-  clipStartFrame: number
   assetInFrame: number
   clipDurationFrames: number
   pixelsPerFrame: number
@@ -13,7 +11,6 @@ interface SceneMarkersProps {
 
 export function SceneMarkers({
   scenes,
-  clipStartFrame,
   assetInFrame,
   clipDurationFrames,
   pixelsPerFrame,
@@ -48,12 +45,10 @@ export function SceneMarkers({
 
 interface MotionHeatProps {
   motion: MotionAnalysis
-  clipStartFrame: number
   assetInFrame: number
   clipDurationFrames: number
   pixelsPerFrame: number
   fps: number
-  clipWidth: number
 }
 
 export function MotionHeat({
@@ -62,7 +57,6 @@ export function MotionHeat({
   clipDurationFrames,
   pixelsPerFrame,
   fps,
-  clipWidth,
 }: MotionHeatProps) {
   const assetInSec = assetInFrame / fps
   const clipDurSec = clipDurationFrames / fps

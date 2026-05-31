@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import {
-  analysisApi,
+import { analysisApi } from '../api/client'
+import type {
   BeatAnalysis,
   SceneAnalysis,
   MotionAnalysis,

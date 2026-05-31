@@ -22,12 +22,10 @@ export function BeatGrid({
 }: Props) {
   const assetInSec = assetInFrame / fps
 
-  const { beatPx, downbeatSet } = useMemo(() => {
+  const { beatPx } = useMemo(() => {
     const downbeatSet = new Set(beat.downbeats.map(t => Math.round(t * 1000)))
     const beatPx = beat.beats
       .map(t => {
-        // Offset: the clip starts at clipStartFrame on timeline, and its first frame
-        // corresponds to assetInSec into the asset.
         const effectiveSec = t - assetInSec
         if (effectiveSec < 0) return null
         const x = clipStartFrame * pixelsPerFrame + effectiveSec * fps * pixelsPerFrame
@@ -35,7 +33,7 @@ export function BeatGrid({
         return { x, isDown: downbeatSet.has(Math.round(t * 1000)) }
       })
       .filter(Boolean) as Array<{ x: number; isDown: boolean }>
-    return { beatPx, downbeatSet }
+    return { beatPx }
   }, [beat, clipStartFrame, assetInFrame, pixelsPerFrame, fps, totalWidth])
 
   if (beatPx.length === 0) return null
