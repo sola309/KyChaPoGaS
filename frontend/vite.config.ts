@@ -10,7 +10,7 @@ export default defineConfig({
     proxy: {
       // Backend REST API
       '/api': {
-        target:       'http://localhost:8000',
+        target:       'http://localhost:8002',
         changeOrigin: true,
       },
       // Terminal server health check (HTTP)
