@@ -12,6 +12,7 @@ build/
 node_modules/
 frontend/dist/
 frontend/.vite/
+terminal-server/node_modules/
 
 # Data
 data/
