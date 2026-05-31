@@ -3,11 +3,12 @@ import json
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlmodel import Session, select
 
 from app.db.database import get_session, engine
 from app.models.job import Job, JobCreate, JobRead
+from app.services.ffmpeg_render import export_path
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -56,6 +57,25 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
         session.commit()
         session.refresh(job)
     return _to_read(job)
+
+
+@router.get("/{job_id}/download")
+def download_job_output(job_id: int, session: Session = Depends(get_session)):
+    job = session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "completed":
+        raise HTTPException(status_code=409, detail="Job not completed yet")
+    params = json.loads(job.params)
+    project_id = params.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="No project_id in job params")
+    path = export_path(project_id, job_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Output file not found")
+    filename = f"render_{job_id}.mp4"
+    return FileResponse(path, media_type="video/mp4",
+                        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @router.delete("/{job_id}", status_code=204)

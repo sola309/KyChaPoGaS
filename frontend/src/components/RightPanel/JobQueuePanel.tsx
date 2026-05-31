@@ -1,4 +1,5 @@
 import type { Job, JobStatus } from '../../api/client'
+import { jobsApi } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 
 const STATUS_STYLE: Record<JobStatus, string> = {
@@ -66,6 +67,14 @@ function JobCard({ job }: { job: Job }) {
         )}
 
         <div className="ml-auto flex gap-1">
+          {/* Download for completed render jobs */}
+          {job.status === 'completed' && job.job_type === 'render_final' && (
+            <a
+              href={jobsApi.downloadUrl(job.id)}
+              download={`render_${job.id}.mp4`}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-green-900 hover:bg-green-800 text-green-300"
+            >⬇ DL</a>
+          )}
           {canCancel && (
             <button
               onClick={() => cancelJob(job.id)}

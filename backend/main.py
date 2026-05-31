@@ -1,15 +1,27 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.db.database import create_db_and_tables
 from app.routers import projects, assets, tracks, clips, jobs, generation, llm
+from app.services import job_runner
+
+logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    runner_task = asyncio.create_task(job_runner.run_forever())
     yield
+    runner_task.cancel()
+    try:
+        await runner_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

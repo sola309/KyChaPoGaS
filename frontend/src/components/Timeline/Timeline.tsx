@@ -3,6 +3,7 @@ import type { Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { TimeRuler } from './TimeRuler'
 import { TrackLane } from './TrackLane'
+import { RenderDialog } from '../RenderDialog'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -21,9 +22,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
     deleteClip, setCurrentFrame, setZoom, undo, redo,
   } = useTimelineStore()
 
-  const scrollRef     = useRef<HTMLDivElement>(null)
-  const containerRef  = useRef<HTMLDivElement>(null)
-  const [selectedClipId, setSelectedClipId] = useState<number | null>(null)
+  const scrollRef      = useRef<HTMLDivElement>(null)
+  const containerRef   = useRef<HTMLDivElement>(null)
+  const [selectedClipId,  setSelectedClipId]  = useState<number | null>(null)
+  const [showRenderDialog, setShowRenderDialog] = useState(false)
 
   useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
 
@@ -138,9 +140,16 @@ export function Timeline({ projectId, fps, assets }: Props) {
           </>
         )}
 
-        <span className="text-zinc-600 text-[10px] ml-auto hidden sm:inline">
-          S=分割　Del=削除　Ctrl+Z=元に戻す　Ctrl+Wheel=ズーム
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-zinc-600 text-[10px] hidden sm:inline">
+            S=分割　Del=削除　Ctrl+Z=元に戻す
+          </span>
+          <button
+            onClick={() => setShowRenderDialog(true)}
+            className="text-[11px] px-3 py-0.5 rounded bg-purple-800 hover:bg-purple-700 text-purple-100 font-medium"
+            title="MP4にレンダリング"
+          >▶ レンダー</button>
+        </div>
 
         <span className="text-[11px] text-zinc-400 font-mono ml-2">
           {String(Math.floor(currentFrame / fps / 60)).padStart(2, '0')}:
@@ -184,6 +193,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
             <div className="flex-1 flex items-center justify-center text-zinc-700 text-sm py-8">
               「+ Video」または「+ Audio」でトラックを追加
             </div>
+          )}
+
+          {showRenderDialog && (
+            <RenderDialog onClose={() => setShowRenderDialog(false)} />
           )}
 
           {/* Playhead — full height */}
