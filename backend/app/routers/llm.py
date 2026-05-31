@@ -27,11 +27,20 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 # ── Anthropic tool definitions ────────────────────────────────────────────────
 
 TOOLS: list[dict] = [
+    # ── Read ──────────────────────────────────────────────────────────────────
     {
         "name": "get_project_state",
         "description": (
             "Get the current timeline state: all tracks, clips, and their positions. "
             "Call this first to understand what's on the timeline."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_llm_state",
+        "description": (
+            "Comprehensive one-call state: timeline + assets + analysis results (BPM, scenes) "
+            "+ active jobs + GPU status. Use instead of multiple separate calls when you need full context."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
@@ -50,14 +59,45 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "get_analysis_summary",
+        "description": (
+            "Get audio/video analysis results: BPM, beat count, scene count, motion intensity. "
+            "Use when the user asks about tempo, rhythm, beat-sync, or scene structure."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    # ── Track ─────────────────────────────────────────────────────────────────
+    {
+        "name": "add_track",
+        "description": "Add a new track to the timeline.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "track_type": {"type": "string", "enum": ["video", "audio", "reference"]},
+                "name":       {"type": "string", "description": "Track label"},
+            },
+            "required": ["track_type", "name"],
+        },
+    },
+    {
+        "name": "delete_track",
+        "description": "Delete a track and all its clips.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"track_id": {"type": "integer"}},
+            "required": ["track_id"],
+        },
+    },
+    # ── Clip ──────────────────────────────────────────────────────────────────
+    {
         "name": "add_clip",
         "description": "Add an asset as a clip to a track at a given start frame.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "track_id":       {"type": "integer", "description": "Target track ID"},
-                "asset_id":       {"type": "integer", "description": "Asset ID (or null for empty clip)"},
-                "start_frame":    {"type": "integer", "description": "Start frame on the timeline"},
+                "track_id":        {"type": "integer", "description": "Target track ID"},
+                "asset_id":        {"type": "integer", "description": "Asset ID (or null for empty clip)"},
+                "start_frame":     {"type": "integer", "description": "Start frame on the timeline"},
                 "duration_frames": {"type": "integer", "description": "Clip length in frames"},
             },
             "required": ["track_id", "start_frame", "duration_frames"],
@@ -69,7 +109,7 @@ TOOLS: list[dict] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "clip_id":        {"type": "integer"},
+                "clip_id":         {"type": "integer"},
                 "new_start_frame": {"type": "integer"},
             },
             "required": ["clip_id", "new_start_frame"],
@@ -96,6 +136,7 @@ TOOLS: list[dict] = [
             "required": ["clip_id", "split_frame"],
         },
     },
+    # ── Generation / Analysis ─────────────────────────────────────────────────
     {
         "name": "create_generation_job",
         "description": (
@@ -116,6 +157,21 @@ TOOLS: list[dict] = [
                 },
             },
             "required": ["job_type", "params"],
+        },
+    },
+    {
+        "name": "trigger_analysis",
+        "description": (
+            "Start audio or video analysis for an asset. "
+            "analysis_type: 'audio' → BPM/beat detection. 'video' → scene detection + motion."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "asset_id":      {"type": "integer"},
+                "analysis_type": {"type": "string", "enum": ["audio", "video"]},
+            },
+            "required": ["asset_id", "analysis_type"],
         },
     },
 ]
@@ -172,8 +228,18 @@ def _exec_tool(
     match name:
         case "get_project_state":
             return command_api.get_project_state(project_id, session)
+        case "get_llm_state":
+            return command_api.get_llm_state(project_id, session)
         case "get_assets":
             return command_api.get_assets(project_id, session, inp.get("asset_type"))
+        case "get_analysis_summary":
+            return command_api.get_analysis_summary(project_id, session)
+        case "add_track":
+            return command_api.add_track(
+                project_id, inp["track_type"], inp["name"], session
+            )
+        case "delete_track":
+            return command_api.delete_track(inp["track_id"], session)
         case "add_clip":
             return command_api.add_clip(
                 project_id, inp["track_id"],
@@ -189,6 +255,10 @@ def _exec_tool(
         case "create_generation_job":
             return command_api.create_job(
                 project_id, inp["job_type"], inp.get("params", {}), session
+            )
+        case "trigger_analysis":
+            return command_api.trigger_analysis(
+                project_id, inp["asset_id"], inp["analysis_type"], session
             )
         case _:
             return {"error": f"Unknown tool: {name}"}
@@ -271,6 +341,28 @@ def chat(req: ChatRequest, session: Session = Depends(get_session)):
             reply += block.text
 
     return ChatResponse(reply=reply, actions=actions)
+
+
+@router.get("/state/{project_id}")
+def get_state(project_id: int, session: Session = Depends(get_session)):
+    """
+    Comprehensive project state for external LLM clients (MCP, Claude Code, etc.).
+    Returns timeline, assets, analysis summary, active jobs, GPU status in one call.
+    """
+    from app.models import Project
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return command_api.get_llm_state(project_id, session)
+
+
+@router.get("/tools")
+def list_tools_schema():
+    """
+    Returns the full tool schema used by the LLM chat endpoint.
+    Useful for external clients that want to know what operations are available.
+    """
+    return {"tools": TOOLS, "tool_count": len(TOOLS)}
 
 
 @router.get("/status")

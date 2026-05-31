@@ -1,14 +1,16 @@
 """
 Command API — MCP-ready shared execution layer.
 
-Both the LLM chat router and the future MCP server call this module.
+Both the LLM chat router and the MCP server call this module.
 Each function accepts a SQLModel Session and returns a plain dict
 that is JSON-serialisable and tool-result-safe.
 """
 
+import json
+
 from sqlmodel import Session, select
 
-from app.models import Asset, Track, Clip, ClipCreate, ClipUpdate
+from app.models import Asset, Track, Clip
 
 
 # ── Read operations ───────────────────────────────────────────────────────────
@@ -47,6 +49,142 @@ def get_project_state(project_id: int, session: Session) -> dict:
     }
 
 
+def get_llm_state(project_id: int, session: Session) -> dict:
+    """
+    One-call comprehensive state for LLM context.
+    Includes timeline, assets, analysis summary, running jobs, GPU status.
+    """
+    from app.models import Project
+    from app.models.job import Job
+    from app.models.analysis import AnalysisResult
+    from app.services.gpu_monitor import get_gpu_status
+
+    project = session.get(Project, project_id)
+    if not project:
+        return {"error": f"Project {project_id} not found"}
+
+    state = get_project_state(project_id, session)
+    assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+
+    # Running / pending jobs
+    jobs = session.exec(
+        select(Job)
+        .where(Job.project_id == project_id)
+        .where(Job.status.in_(["pending", "running"]))
+        .order_by(Job.created_at)
+    ).all()
+    active_jobs = [
+        {"id": j.id, "type": j.job_type, "status": j.status,
+         "progress": j.progress, "vram_estimated_mb": j.vram_estimated_mb}
+        for j in jobs
+    ]
+
+    # Analysis summary
+    asset_ids = [a.id for a in assets]
+    analysis_parts: dict = {}
+    if asset_ids:
+        results = session.exec(
+            select(AnalysisResult).where(AnalysisResult.asset_id.in_(asset_ids))
+        ).all()
+        for r in results:
+            data = json.loads(r.result_json)
+            if r.analysis_type == "audio_beats" and "audio" not in analysis_parts:
+                analysis_parts["audio"] = {
+                    "asset_id": r.asset_id,
+                    "bpm": data.get("bpm"),
+                    "beat_count": len(data.get("beats", [])),
+                    "duration_sec": data.get("duration_sec"),
+                    "tempo_label": data.get("tempo_label"),
+                }
+            elif r.analysis_type == "scene_changes":
+                analysis_parts.setdefault("scenes", []).append({
+                    "asset_id": r.asset_id,
+                    "scene_count": data.get("scene_count"),
+                    "avg_scene_duration_sec": data.get("avg_scene_duration_sec"),
+                    "cut_density_label": data.get("cut_density_label"),
+                })
+
+    # GPU
+    gpu = get_gpu_status()
+    gpu_info = None
+    if gpu.available and gpu.gpus:
+        g = gpu.gpus[0]
+        gpu_info = {
+            "name": g.name,
+            "vram_free_mb": g.vram_free_mb,
+            "vram_total_mb": g.vram_total_mb,
+            "utilization_pct": g.utilization_pct,
+        }
+
+    return {
+        "project": {
+            "id": project.id, "name": project.name,
+            "fps": project.fps, "width": project.width, "height": project.height,
+        },
+        "timeline": state,
+        "analysis": analysis_parts if analysis_parts else None,
+        "active_jobs": active_jobs,
+        "gpu": gpu_info,
+    }
+
+
+def get_analysis_summary(project_id: int, session: Session) -> dict:
+    """Return LLM-friendly analysis summary (BPM, scenes, motion) for the project."""
+    from app.models.analysis import AnalysisResult
+    assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+    asset_ids = [a.id for a in assets]
+    if not asset_ids:
+        return {"summary": "分析データなし", "details": {}}
+
+    results = session.exec(
+        select(AnalysisResult).where(AnalysisResult.asset_id.in_(asset_ids))
+    ).all()
+
+    audio_beats = None
+    scene_data, motion_data = [], []
+    for r in results:
+        data = json.loads(r.result_json)
+        if r.analysis_type == "audio_beats" and audio_beats is None:
+            audio_beats = data
+        elif r.analysis_type == "scene_changes":
+            scene_data.append(data)
+        elif r.analysis_type == "motion":
+            motion_data.append(data)
+
+    parts, details = [], {}
+    if audio_beats:
+        parts.append(
+            f"テンポ: {audio_beats['tempo_label']}, "
+            f"ビート数: {len(audio_beats['beats'])}, "
+            f"尺: {audio_beats['duration_sec']:.1f}秒"
+        )
+        details["audio"] = {
+            "bpm": audio_beats["bpm"],
+            "beat_count": len(audio_beats["beats"]),
+            "downbeat_count": len(audio_beats["downbeats"]),
+            "duration_sec": audio_beats["duration_sec"],
+            "tempo_label": audio_beats["tempo_label"],
+            "beats_sample": audio_beats["beats"][:8],
+        }
+    if scene_data:
+        total = sum(d["scene_count"] for d in scene_data)
+        avg   = sum(d["avg_scene_duration_sec"] for d in scene_data) / len(scene_data)
+        parts.append(f"シーン数: {total}, 平均シーン長: {avg:.1f}秒")
+        details["scenes"] = {
+            "total_scene_count": total,
+            "avg_scene_duration_sec": round(avg, 2),
+        }
+    if motion_data:
+        peak = max(d["peak_intensity"] for d in motion_data)
+        parts.append(f"モーション強度ピーク: {peak:.3f}")
+        details["motion"] = {"peak_intensity": round(peak, 4)}
+
+    return {
+        "summary": " / ".join(parts) if parts else "分析データなし",
+        "details": details,
+    }
+
+
 def get_assets(project_id: int, session: Session, asset_type: str | None = None) -> dict:
     query = select(Asset).where(Asset.project_id == project_id)
     if asset_type:
@@ -63,6 +201,45 @@ def get_assets(project_id: int, session: Session, asset_type: str | None = None)
             for a in assets
         ]
     }
+
+
+# ── Analysis trigger ─────────────────────────────────────────────────────────
+
+def trigger_analysis(project_id: int, asset_id: int, analysis_type: str, session: Session) -> dict:
+    """Queue an analysis job for the given asset. analysis_type: 'audio' | 'video'."""
+    asset = session.get(Asset, asset_id)
+    if not asset or asset.project_id != project_id:
+        return {"error": f"Asset {asset_id} not found in project"}
+
+    job_type = "analyze_audio" if analysis_type == "audio" else "analyze_video"
+    job = create_job(project_id, job_type, {"asset_id": asset_id, "project_id": project_id}, session)
+    return {"job_id": job["job_id"], "status": "queued", "analysis_type": analysis_type}
+
+
+# ── Track operations ──────────────────────────────────────────────────────────
+
+def add_track(project_id: int, track_type: str, name: str, session: Session) -> dict:
+    """Add a new track to the project. track_type: 'video' | 'audio' | 'reference'."""
+    existing = session.exec(select(Track).where(Track.project_id == project_id)).all()
+    order = max((t.order for t in existing), default=-1) + 1
+    track = Track(project_id=project_id, track_type=track_type, name=name, order=order)
+    session.add(track)
+    session.commit()
+    session.refresh(track)
+    return {"track_id": track.id, "name": track.name, "track_type": track.track_type, "order": track.order}
+
+
+def delete_track(track_id: int, session: Session) -> dict:
+    """Delete a track and all its clips."""
+    track = session.get(Track, track_id)
+    if not track:
+        return {"error": f"Track {track_id} not found"}
+    clips = session.exec(select(Clip).where(Clip.track_id == track_id)).all()
+    for c in clips:
+        session.delete(c)
+    session.delete(track)
+    session.commit()
+    return {"deleted_track_id": track_id, "deleted_clip_count": len(clips)}
 
 
 # ── Write operations ──────────────────────────────────────────────────────────
