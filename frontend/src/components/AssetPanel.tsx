@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Asset } from '../api/client'
 import { assetsApi } from '../api/client'
+import { useAnalysisStore } from '../store/analysisStore'
 
 const TYPE_BADGE: Record<string, string> = {
   video: 'bg-blue-900 text-blue-300',
@@ -118,6 +119,27 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
 
 function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) => void }) {
   const [thumbError, setThumbError] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const { beats, scenes, loadAnalysis, triggerAudio, triggerVideo } = useAnalysisStore()
+
+  const canAnalyze = asset.asset_type === 'audio' || asset.asset_type === 'video'
+  const hasBeat    = !!beats[asset.id]
+  const hasScene   = !!scenes[asset.id]
+
+  useEffect(() => {
+    if (canAnalyze) loadAnalysis(asset.id)
+  }, [asset.id])
+
+  const handleAnalyze = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setAnalyzing(true)
+    try {
+      if (asset.asset_type === 'audio') await triggerAudio(asset.id)
+      else await triggerVideo(asset.id)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.setData('assetId', String(asset.id))
@@ -150,7 +172,7 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
       {/* Info */}
       <div className="flex-1 min-w-0">
         <p className="text-xs text-zinc-200 truncate">{asset.name}</p>
-        <div className="flex items-center gap-1.5 mt-0.5">
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           <span className={`text-[10px] px-1 rounded ${TYPE_BADGE[asset.asset_type] ?? TYPE_BADGE.generated}`}>
             {asset.asset_type}
           </span>
@@ -160,8 +182,31 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
           {asset.file_size_bytes && (
             <span className="text-[10px] text-zinc-600">{formatBytes(asset.file_size_bytes)}</span>
           )}
+          {/* Analysis badges */}
+          {hasBeat && (
+            <span className="text-[10px] px-1 rounded bg-emerald-900 text-emerald-300" title="ビート解析済み">
+              ♩{beats[asset.id].bpm.toFixed(0)}
+            </span>
+          )}
+          {hasScene && (
+            <span className="text-[10px] px-1 rounded bg-sky-900 text-sky-300" title="シーン解析済み">
+              {scenes[asset.id].scene_count}S
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Analyze button */}
+      {canAnalyze && (
+        <button
+          onClick={handleAnalyze}
+          disabled={analyzing}
+          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-emerald-400 text-[10px] px-1 transition-opacity disabled:opacity-30"
+          title={asset.asset_type === 'audio' ? 'BPM解析' : 'シーン解析'}
+        >
+          {analyzing ? '…' : '解析'}
+        </button>
+      )}
 
       {/* Delete */}
       <button

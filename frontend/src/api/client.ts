@@ -144,6 +144,69 @@ export const generationApi = {
   videoI2V:    (p: VideoI2VParams)  => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
 }
 
+// ── Analysis ──────────────────────────────────────────────────────────────────
+
+export interface BeatAnalysis {
+  bpm: number
+  beats: number[]       // beat times in seconds
+  downbeats: number[]
+  duration_sec: number
+  tempo_label: string
+}
+
+export interface SceneSegment {
+  start_sec: number
+  end_sec: number
+  duration_sec: number
+}
+
+export interface SceneAnalysis {
+  scenes: SceneSegment[]
+  scene_count: number
+  avg_scene_duration_sec: number
+  cut_density_label: string
+}
+
+export interface MotionSegment {
+  start_sec: number
+  end_sec: number
+  intensity: number
+}
+
+export interface MotionAnalysis {
+  segments: MotionSegment[]
+  peak_intensity: number
+  avg_intensity: number
+}
+
+export interface AnalysisResult {
+  id: number
+  asset_id: number
+  analysis_type: 'audio_beats' | 'scene_changes' | 'motion'
+  result: BeatAnalysis | SceneAnalysis | MotionAnalysis
+  created_at: string
+}
+
+export interface ProjectAnalysisSummary {
+  summary: string
+  details: {
+    audio?: { bpm: number; beat_count: number; downbeat_count: number; duration_sec: number; tempo_label: string }
+    scenes?: { total_scene_count: number; avg_scene_duration_sec: number; cut_density_labels: string[] }
+    motion?: { peak_intensity: number; avg_intensity: number }
+  }
+}
+
+export const analysisApi = {
+  triggerAudio:  (assetId: number) =>
+    api.post<{ job_id: number; status: string }>(`/analysis/audio/${assetId}`).then(r => r.data),
+  triggerVideo:  (assetId: number) =>
+    api.post<{ job_id: number; status: string }>(`/analysis/video/${assetId}`).then(r => r.data),
+  getResults:    (assetId: number) =>
+    api.get<AnalysisResult[]>(`/analysis/${assetId}`).then(r => r.data),
+  getSummary:    (projectId: number) =>
+    api.get<ProjectAnalysisSummary>(`/analysis/project/${projectId}/summary`).then(r => r.data),
+}
+
 // ── GPU / System ─────────────────────────────────────────────────────────────
 
 export interface GpuInfo {

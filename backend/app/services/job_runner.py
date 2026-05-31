@@ -9,6 +9,8 @@ Supported job types:
   generate_image      — ComfyUI image generation → Asset
   generate_audio      — Local MusicGen (stub until Phase 4d)
   generate_video_i2v  — ComfyUI I2V generation → Asset
+  analyze_audio       — BPM/beat detection via librosa
+  analyze_video       — Scene detection + motion intensity
 """
 
 import asyncio
@@ -151,6 +153,10 @@ async def _dispatch(job: Job) -> None:
             await _generate_video_i2v(job, params)
         case "generate_audio":
             await _generate_audio_stub(job, params)
+        case "analyze_audio":
+            await _analyze_audio(job, params)
+        case "analyze_video":
+            await _analyze_video(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -373,6 +379,97 @@ async def _generate_audio_stub(job: Job, params: dict) -> None:
     raise RuntimeError(
         "音楽生成はPhase 4d で実装予定です。"
         "MusicGen モデルのインストールが必要です: scripts/install_models.py"
+    )
+
+
+# ── analyze_audio ─────────────────────────────────────────────────────────────
+
+async def _analyze_audio(job: Job, params: dict) -> None:
+    from app.services.audio_analyzer import analyze_beats
+    from app.models.analysis import AnalysisResult
+
+    asset_id = params["asset_id"]
+    with Session(engine) as session:
+        from app.models import Asset
+        asset = session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+        file_path = Path(asset.file_path)
+
+    _update_progress(job.id, 0.1)
+    result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_beats, file_path
+    )
+    _update_progress(job.id, 0.9)
+
+    with Session(engine) as session:
+        # Upsert: remove old beat result for this asset
+        old = session.exec(
+            select(AnalysisResult)  # type: ignore[arg-type]
+            .where(AnalysisResult.asset_id == asset_id)
+            .where(AnalysisResult.analysis_type == "audio_beats")
+        ).first()
+        if old:
+            session.delete(old)
+        ar = AnalysisResult(
+            asset_id=asset_id,
+            analysis_type="audio_beats",
+            result_json=json.dumps(result),
+        )
+        session.add(ar)
+        session.commit()
+
+    log.info(f"Audio analysis done: asset={asset_id} bpm={result['bpm']}")
+
+
+# ── analyze_video ─────────────────────────────────────────────────────────────
+
+async def _analyze_video(job: Job, params: dict) -> None:
+    from app.services.video_analyzer import analyze_scenes, analyze_motion
+    from app.models.analysis import AnalysisResult
+
+    asset_id = params["asset_id"]
+    with Session(engine) as session:
+        from app.models import Asset
+        asset = session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+        file_path = Path(asset.file_path)
+
+    _update_progress(job.id, 0.05)
+
+    scene_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_scenes, file_path
+    )
+    _update_progress(job.id, 0.55)
+
+    motion_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_motion, file_path
+    )
+    _update_progress(job.id, 0.95)
+
+    with Session(engine) as session:
+        for atype, result in (
+            ("scene_changes", scene_result),
+            ("motion", motion_result),
+        ):
+            old = session.exec(
+                select(AnalysisResult)  # type: ignore[arg-type]
+                .where(AnalysisResult.asset_id == asset_id)
+                .where(AnalysisResult.analysis_type == atype)
+            ).first()
+            if old:
+                session.delete(old)
+            session.add(AnalysisResult(
+                asset_id=asset_id,
+                analysis_type=atype,
+                result_json=json.dumps(result),
+            ))
+        session.commit()
+
+    log.info(
+        f"Video analysis done: asset={asset_id} "
+        f"scenes={scene_result['scene_count']}"
     )
 
 

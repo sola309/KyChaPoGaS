@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useAnalysisStore } from '../../store/analysisStore'
 import { TimeRuler } from './TimeRuler'
+import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
 
@@ -27,7 +29,19 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [selectedClipId,  setSelectedClipId]  = useState<number | null>(null)
   const [showRenderDialog, setShowRenderDialog] = useState(false)
 
+  const { beats } = useAnalysisStore()
+
   useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
+
+  // Find the first audio clip that has beat analysis
+  const beatInfo = useMemo(() => {
+    for (const clip of clips) {
+      if (!clip.asset_id) continue
+      const b = beats[clip.asset_id]
+      if (b) return { beat: b, clip }
+    }
+    return null
+  }, [clips, beats])
 
   const totalFrames = Math.max(
     MIN_TIMELINE_SECS * fps,
@@ -173,6 +187,23 @@ export function Timeline({ projectId, fps, assets }: Props) {
               onSeek={setCurrentFrame}
             />
           </div>
+
+          {/* Beat ruler (shown only when beat analysis is available) */}
+          {beatInfo && (
+            <div className="flex flex-shrink-0">
+              <div className="w-28 flex-shrink-0 border-r border-b border-zinc-800 bg-zinc-950 flex items-center px-2">
+                <span className="text-[9px] text-zinc-600">beat</span>
+              </div>
+              <BeatRuler
+                beat={beatInfo.beat}
+                clipStartFrame={beatInfo.clip.start_frame}
+                assetInFrame={beatInfo.clip.asset_in_frame}
+                pixelsPerFrame={pixelsPerFrame}
+                fps={fps}
+                totalWidth={totalWidth}
+              />
+            </div>
+          )}
 
           {/* Track lanes */}
           {tracks.map(track => (

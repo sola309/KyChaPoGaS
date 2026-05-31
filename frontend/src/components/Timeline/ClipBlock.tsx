@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
 import type { Clip, Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useAnalysisStore } from '../../store/analysisStore'
+import { SceneMarkers, MotionHeat } from './SceneMarkers'
 
 const CLIP_COLORS: Record<string, string> = {
   video:     'bg-blue-800 border-blue-600',
@@ -22,6 +24,9 @@ interface Props {
 
 export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected }: Props) {
   const { moveClip, trimClip, deleteClip } = useTimelineStore()
+  const { scenes, motion } = useAnalysisStore()
+  const assetScenes = asset ? scenes[asset.id] : undefined
+  const assetMotion = asset ? motion[asset.id] : undefined
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
   const [dragging, setDragging] = useState(false)
 
@@ -159,6 +164,31 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
           {asset?.name ?? `clip ${clip.id}`}
         </span>
       </div>
+
+      {/* Scene change markers (video clips) */}
+      {assetScenes && (
+        <SceneMarkers
+          scenes={assetScenes}
+          clipStartFrame={clip.start_frame}
+          assetInFrame={clip.asset_in_frame}
+          clipDurationFrames={clip.duration_frames}
+          pixelsPerFrame={pixelsPerFrame}
+          fps={24}
+        />
+      )}
+
+      {/* Motion heat overlay (video clips) */}
+      {assetMotion && (
+        <MotionHeat
+          motion={assetMotion}
+          clipStartFrame={clip.start_frame}
+          assetInFrame={clip.asset_in_frame}
+          clipDurationFrames={clip.duration_frames}
+          pixelsPerFrame={pixelsPerFrame}
+          fps={24}
+          clipWidth={width}
+        />
+      )}
 
       {/* Right trim handle */}
       <div

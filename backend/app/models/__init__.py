@@ -3,6 +3,7 @@ from .asset import Asset, AssetCreate, AssetRead
 from .track import Track, TrackCreate, TrackRead
 from .clip import Clip, ClipCreate, ClipUpdate, ClipRead
 from .job import Job, JobCreate, JobRead
+from .analysis import AnalysisResult, AnalysisResultRead
 
 __all__ = [
     "Project", "ProjectCreate", "ProjectRead",
@@ -10,4 +11,5 @@ __all__ = [
     "Track", "TrackCreate", "TrackRead",
     "Clip", "ClipCreate", "ClipUpdate", "ClipRead",
     "Job", "JobCreate", "JobRead",
+    "AnalysisResult", "AnalysisResultRead",
 ]
