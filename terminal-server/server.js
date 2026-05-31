@@ -18,8 +18,12 @@
 
 const http  = require('http')
 const os    = require('os')
+const path  = require('path')
 const { WebSocketServer } = require('ws')
 const pty   = require('node-pty')
+
+// Project root = parent of terminal-server/
+const PROJECT_ROOT = path.resolve(__dirname, '..')
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PORT = Number(process.env.TERMINAL_PORT ?? parseArg('--port', '8765'))
@@ -95,7 +99,7 @@ wss.on('connection', (ws, req) => {
       name: 'xterm-256color',
       cols: Math.max(1, cols),
       rows: Math.max(1, rows),
-      cwd:  os.homedir(),
+      cwd:  PROJECT_ROOT,
       env:  process.env,
     })
   } catch (err) {
