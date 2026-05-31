@@ -1,0 +1,60 @@
+{
+  "_comment": "モデル定義ファイル。このファイルをコピーして scripts/models.local.json を作り、自分の環境に合わせて編集してください。models.local.json は .gitignore されます。",
+  "_usage": "python scripts/install_models.py",
+
+  "image": [
+    {
+      "name": "FLUX.1 Dev (fp8)",
+      "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors",
+      "dest": "tools/comfyui/models/checkpoints/flux1-dev-fp8.safetensors",
+      "size_gb": 11.9,
+      "enabled": false,
+      "_note": "要HuggingFaceログイン (gated model)"
+    },
+    {
+      "name": "SDXL Base 1.0",
+      "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+      "dest": "tools/comfyui/models/checkpoints/sd_xl_base_1.0.safetensors",
+      "size_gb": 6.5,
+      "enabled": false
+    }
+  ],
+
+  "video_i2v": [
+    {
+      "name": "CogVideoX-5b-I2V",
+      "url": "https://huggingface.co/THUDM/CogVideoX-5b-I2V",
+      "dest": "tools/comfyui/models/video_models/",
+      "size_gb": 18.5,
+      "enabled": false,
+      "_note": "複数ファイル構成。手動DL推奨"
+    },
+    {
+      "name": "Stable Video Diffusion XT (fp16)",
+      "url": "https://huggingface.co/stabilityai/stable-video-diffusion-img2vid-xt/resolve/main/svd_xt.safetensors",
+      "dest": "tools/comfyui/models/checkpoints/svd_xt.safetensors",
+      "size_gb": 9.6,
+      "enabled": false
+    }
+  ],
+
+  "audio": [
+    {
+      "name": "MusicGen Small",
+      "url": "https://dl.fbaipublicfiles.com/audiocraft/musicgen/v0/musicgen_small.pt",
+      "dest": "tools/musicgen/models/musicgen_small.pt",
+      "size_gb": 0.3,
+      "enabled": false
+    }
+  ],
+
+  "vae": [
+    {
+      "name": "SDXL VAE",
+      "url": "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors",
+      "dest": "tools/comfyui/models/vae/sdxl_vae.safetensors",
+      "size_gb": 0.33,
+      "enabled": false
+    }
+  ]
+}

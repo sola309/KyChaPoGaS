@@ -29,20 +29,22 @@ Thumbs.db
 # Local config (contains secrets — never commit)
 backend/.env
 .env
+scripts/models.local.json
 
-# AI model weights (large files)
+# ── tools/ — installed by setup script, not committed ────────────────────────
+# ComfyUI itself (cloned at install time)
+tools/comfyui/
+
+# AI model weights (large files, any location)
 *.safetensors
 *.ckpt
 *.pt
 *.pth
 *.bin
 *.gguf
+*.ggml
 models/
-tools/comfyui/models/
-tools/comfyui/output/
-tools/comfyui/input/
-tools/comfyui/custom_nodes/
 
-# Generated output
+# Generated / exported output
 generated/
 exports/
