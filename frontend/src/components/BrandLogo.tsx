@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 /**
  * BrandLogo — the "KyChaPoGaS" wordmark with a hidden easter egg.
@@ -88,7 +89,10 @@ export function BrandLogo({ className = '' }: Props) {
         KyChaPoGaS
       </span>
 
-      {open && (
+      {/* Portal to <body> so the overlay centers on the viewport, not inside the
+          transformed sidebar/drawer (a transformed ancestor would otherwise be
+          the containing block for position:fixed). */}
+      {open && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm"
           onClick={() => setOpen(false)}
@@ -151,7 +155,8 @@ export function BrandLogo({ className = '' }: Props) {
               </p>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
