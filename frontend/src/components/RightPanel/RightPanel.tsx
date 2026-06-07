@@ -4,6 +4,7 @@ import { AssetPanel } from '../AssetPanel'
 import { GenerationPanel } from './GenerationPanel/GenerationPanel'
 import { JobQueuePanel } from './JobQueuePanel'
 import { useJobStore } from '../../store/jobStore'
+import { useUIStore } from '../../store/uiStore'
 
 type PanelTab = 'assets' | 'generate' | 'jobs'
 
@@ -21,6 +22,8 @@ const TABS: { id: PanelTab; label: string; title: string }[] = [
 
 export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
   const [tab, setTab] = useState<PanelTab>('assets')
+  const panelOpen = useUIStore(s => s.panelOpen)
+  const closeDrawers = useUIStore(s => s.closeDrawers)
   const { startSSE, stopSSE, checkComfyUI, jobs } = useJobStore()
 
   const runningCount = jobs.filter(j => j.status === 'running' || j.status === 'pending').length
@@ -32,9 +35,21 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
   }, [projectId])
 
   return (
-    <div className="flex flex-col w-64 border-l border-zinc-800 flex-shrink-0 h-full">
+    <div
+      className={`flex flex-col w-64 max-w-[85vw] border-l border-zinc-800 h-full bg-zinc-900
+        fixed inset-y-0 right-0 z-50 transition-transform duration-200
+        lg:static lg:z-auto lg:max-w-none lg:flex-shrink-0 lg:translate-x-0
+        ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}
+    >
       {/* Tab bar */}
       <div className="flex border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+        {/* Close (mobile drawer only) */}
+        <button
+          onClick={closeDrawers}
+          className="lg:hidden px-3 text-zinc-500 hover:text-zinc-200"
+          title="閉じる"
+          aria-label="パネルを閉じる"
+        >✕</button>
         {TABS.map(t => (
           <button
             key={t.id}

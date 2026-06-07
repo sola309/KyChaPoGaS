@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
+import { useUIStore } from '../store/uiStore'
 
 interface Props {
   onOpenTerminal: () => void
@@ -9,6 +10,8 @@ interface Props {
 
 export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Props) {
   const { projects, activeProject, fetchProjects, createProject, setActiveProject } = useProjectStore()
+  const navOpen      = useUIStore(s => s.navOpen)
+  const closeDrawers = useUIStore(s => s.closeDrawers)
   const [creating,   setCreating]   = useState(false)
   const [newName,    setNewName]    = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -36,7 +39,12 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
   const cancelCreate = () => { setCreating(false); setNewName(''); setError(null) }
 
   return (
-    <aside className="w-64 bg-zinc-900 border-r border-zinc-800 flex flex-col h-full">
+    <aside
+      className={`w-64 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 flex flex-col h-full
+        fixed inset-y-0 left-0 z-50 transition-transform duration-200
+        lg:static lg:z-auto lg:max-w-none lg:translate-x-0
+        ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}
+    >
       {/* Logo */}
       <div className="p-4 border-b border-zinc-800 flex-shrink-0">
         <span className="text-sm font-bold tracking-widest text-purple-400">KyChaPoGaS</span>
@@ -81,7 +89,7 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
         {projects.map(p => (
           <button
             key={p.id}
-            onClick={() => setActiveProject(p)}
+            onClick={() => { setActiveProject(p); closeDrawers() }}
             className={`w-full text-left px-3 py-2 rounded text-sm truncate transition-colors ${
               activeProject?.id === p.id
                 ? 'bg-purple-900/50 text-purple-200'

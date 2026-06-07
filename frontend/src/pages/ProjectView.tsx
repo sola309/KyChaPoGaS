@@ -49,22 +49,22 @@ export function ProjectView() {
   // Realtime collaboration presence
   useCollab(activeProject?.id)
 
-  // Resizable split between preview and timeline
-  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+  // Resizable split between preview and timeline (Pointer Events → touch + mouse)
+  const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
     e.preventDefault()
     const startY = e.clientY
     const startH = timelineH
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const dy = startY - ev.clientY
       setTimelineH(Math.max(MIN_TIMELINE_H, Math.min(MAX_TIMELINE_H, startH + dy)))
     }
     const onUp = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }, [timelineH])
 
   if (!activeProject) {
@@ -102,9 +102,10 @@ export function ProjectView() {
 
         {/* Drag divider */}
         <div
-          className="h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors"
+          className="h-2 lg:h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors"
+          style={{ touchAction: 'none' }}
           title="タイムラインの高さを調整"
-          onMouseDown={handleDividerMouseDown}
+          onPointerDown={handleDividerPointerDown}
         />
 
         {/* Timeline */}

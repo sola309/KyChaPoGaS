@@ -24,13 +24,13 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
 
   const left = clip.start_frame * pixelsPerFrame
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     onSelect(clip.id)
     const origFrame = clip.start_frame
     dragRef.current = { startX: e.clientX, origFrame }
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
       const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
@@ -39,7 +39,7 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
       }))
     }
 
-    const onUp = (ev: MouseEvent) => {
+    const onUp = (ev: PointerEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
       const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
@@ -47,12 +47,12 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
         moveClip(clip.id, dragRef.current.origFrame, newFrame)
       }
       dragRef.current = null
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   const isImage = asset?.asset_type === 'image' || asset?.asset_type === 'generated'
@@ -61,9 +61,9 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
     <div
       className={`absolute top-0.5 rounded border cursor-grab select-none overflow-hidden
         bg-amber-900/80 border-amber-500
-        ${selected ? 'ring-1 ring-white' : ''}`}
-      style={{ left, width: PIN_WIDTH, height: trackHeight - 4 }}
-      onMouseDown={handleMouseDown}
+        ${selected ? 'ring-2 ring-purple-300' : ''}`}
+      style={{ left, width: PIN_WIDTH, height: trackHeight - 4, touchAction: 'none' }}
+      onPointerDown={handlePointerDown}
       onDoubleClick={() => deleteClip(clip.id)}
       title={`${asset?.name ?? 'ref'} @ ${(clip.start_frame / 30).toFixed(2)}s — ダブルクリックで削除`}
     >

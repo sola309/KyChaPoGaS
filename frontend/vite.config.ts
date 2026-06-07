@@ -10,7 +10,7 @@ export default defineConfig({
   // setups, which would silently break auto-reload. Gated by env so a one-off
   // `vite build` is NOT forced into watch mode.
   build: process.env.KYCHAPOGAS_WATCH
-    ? { watch: { buildDelay: 200, chokidar: { usePolling: true, interval: 400 } } }
+    ? { watch: { buildDelay: 200, watcher: { usePolling: true, pollInterval: 400 } } }
     : {},
   server: {
     host: '0.0.0.0',

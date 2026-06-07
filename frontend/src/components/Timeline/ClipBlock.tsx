@@ -12,7 +12,12 @@ const CLIP_COLORS: Record<string, string> = {
   generated: 'bg-purple-800 border-purple-600',
 }
 
-const HANDLE_PX = 6  // trim handle width in px
+// Trim handles are widened on touch devices (no precise cursor) so they're
+// comfortable to grab with a finger.
+const COARSE = typeof window !== 'undefined'
+  && typeof window.matchMedia === 'function'
+  && window.matchMedia('(pointer: coarse)').matches
+const HANDLE_PX = COARSE ? 16 : 6  // trim handle width in px
 
 interface Props {
   clip: Clip
@@ -51,8 +56,12 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
   const width = Math.max(clip.duration_frames * pixelsPerFrame, HANDLE_PX * 2 + 4)
   const colorClass = CLIP_COLORS[asset?.asset_type ?? 'video']
 
+  // Interactions use Pointer Events so mouse, touch, and pen all work. The
+  // draggable surfaces set touch-action:none (below) so a finger-drag edits the
+  // clip instead of scrolling the timeline.
+
   // ── Main body: move ──────────────────────────────────────────────────
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     if (locked) return                 // another collaborator is editing this clip
     onSelect(clip.id)
@@ -61,7 +70,7 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
     dragRef.current = { startX: e.clientX, origFrame }
     setDragging(true)
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
       const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
@@ -70,7 +79,7 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       }))
     }
 
-    const onUp = (ev: MouseEvent) => {
+    const onUp = (ev: PointerEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
       const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
@@ -80,16 +89,16 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       dragRef.current = null
       setDragging(false)
       setEditingClipId(null)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   // ── Left trim handle ─────────────────────────────────────────────────
-  const handleLeftTrimDown = (e: React.MouseEvent) => {
+  const handleLeftTrimDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     if (locked) return
     onSelect(clip.id)
@@ -109,30 +118,30 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       }
     }
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const vals = clamp(ev.clientX - startX)
       useTimelineStore.setState(s => ({
         clips: s.clips.map(c => c.id === clip.id ? { ...c, ...vals } : c),
       }))
     }
 
-    const onUp = (ev: MouseEvent) => {
+    const onUp = (ev: PointerEvent) => {
       const after = clamp(ev.clientX - startX)
       trimClip(clip.id,
         { start_frame: origStart, duration_frames: origDur, asset_in_frame: origAssetIn },
         after,
       )
       setEditingClipId(null)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   // ── Right trim handle ────────────────────────────────────────────────
-  const handleRightTrimDown = (e: React.MouseEvent) => {
+  const handleRightTrimDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     if (locked) return
     onSelect(clip.id)
@@ -149,32 +158,32 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       return Math.min(maxDur, Math.max(1, dur))
     }
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const dur = clamp(ev.clientX - startX)
       useTimelineStore.setState(s => ({
         clips: s.clips.map(c => c.id === clip.id ? { ...c, duration_frames: dur } : c),
       }))
     }
 
-    const onUp = (ev: MouseEvent) => {
+    const onUp = (ev: PointerEvent) => {
       const dur = clamp(ev.clientX - startX)
       trimClip(clip.id,
         { duration_frames: origDur },
         { duration_frames: dur },
       )
       setEditingClipId(null)
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   return (
     <div
       className={`absolute top-1 rounded border text-[10px] text-white overflow-hidden select-none
-        ${colorClass} ${selected ? 'ring-1 ring-white' : ''} ${dragging ? 'opacity-80' : ''} ${locked ? 'opacity-70' : ''}`}
+        ${colorClass} ${selected ? 'ring-2 ring-purple-300' : ''} ${dragging ? 'opacity-80' : ''} ${locked ? 'opacity-70' : ''}`}
       style={{
         left, width, height: trackHeight - 8,
         ...(remoteLock ? { outline: `2px solid ${remoteLock.color}`, outlineOffset: '-1px' }
@@ -200,16 +209,16 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
 
       {/* Left trim handle */}
       <div
-        className="absolute left-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
-        style={{ width: HANDLE_PX }}
-        onMouseDown={handleLeftTrimDown}
+        className="clip-trim-handle absolute left-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
+        style={{ width: HANDLE_PX, touchAction: 'none' }}
+        onPointerDown={handleLeftTrimDown}
       />
 
       {/* Label (main drag area) */}
       <div
         className={`absolute inset-0 px-2 py-0.5 flex items-center cursor-grab ${dragging ? 'cursor-grabbing' : ''}`}
-        style={{ left: HANDLE_PX, right: HANDLE_PX }}
-        onMouseDown={handleMouseDown}
+        style={{ left: HANDLE_PX, right: HANDLE_PX, touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
       >
         <span className="truncate leading-tight">
           {asset?.name ?? `clip ${clip.id}`}
@@ -240,9 +249,9 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
 
       {/* Right trim handle */}
       <div
-        className="absolute right-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
-        style={{ width: HANDLE_PX }}
-        onMouseDown={handleRightTrimDown}
+        className="clip-trim-handle absolute right-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
+        style={{ width: HANDLE_PX, touchAction: 'none' }}
+        onPointerDown={handleRightTrimDown}
       />
     </div>
   )

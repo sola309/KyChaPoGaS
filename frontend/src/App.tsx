@@ -83,6 +83,12 @@ function App() {
     window.addEventListener('mouseup', onUp)
   }, [termH])
 
+  const navOpen    = useUIStore(s => s.navOpen)
+  const panelOpen  = useUIStore(s => s.panelOpen)
+  const toggleNav  = useUIStore(s => s.toggleNav)
+  const togglePanel = useUIStore(s => s.togglePanel)
+  const closeDrawers = useUIStore(s => s.closeDrawers)
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
       {/* GPU / VRAM status bar */}
@@ -94,8 +100,32 @@ function App() {
       {/* Small-screen guidance */}
       <MobileNotice />
 
+      {/* Mobile/tablet top bar — drawer toggles (hidden on lg where panels are inline) */}
+      <div className="lg:hidden flex items-center gap-2 px-2 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
+        <button
+          onClick={toggleNav}
+          className="px-2 py-1 rounded text-zinc-300 hover:bg-zinc-800 text-lg leading-none"
+          title="プロジェクト一覧"
+          aria-label="プロジェクト一覧"
+        >☰</button>
+        <span className="text-xs font-bold tracking-widest text-purple-400">KyChaPoGaS</span>
+        <button
+          onClick={togglePanel}
+          className="ml-auto px-2 py-1 rounded text-zinc-300 hover:bg-zinc-800"
+          title="アセット / 生成 / ジョブ"
+          aria-label="アセット / 生成 / ジョブ"
+        >✨</button>
+      </div>
+
       {/* Main area (sidebar + editor) */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-1 min-h-0 relative">
+        {/* Backdrop behind the mobile drawers */}
+        {(navOpen || panelOpen) && (
+          <div
+            className="lg:hidden fixed inset-0 bg-black/50 z-40"
+            onClick={closeDrawers}
+          />
+        )}
         <Sidebar
           onOpenTerminal={() => termEnabled && setTermOpen(v => !v)}
           termOpen={termOpen}

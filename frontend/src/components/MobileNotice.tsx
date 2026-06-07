@@ -21,13 +21,13 @@ export function MobileNotice() {
 
   if (!show) return null
   return (
-    <div className="fixed inset-x-0 top-0 z-[60] bg-amber-900/95 text-amber-50 text-xs px-3 py-2 flex items-center gap-2 shadow">
+    <div className="fixed inset-x-0 top-0 z-[60] bg-purple-900/95 text-purple-50 text-xs px-3 py-2 flex items-center gap-2 shadow">
       <span className="flex-1">
-        📱 編集UIは画面が広いほど快適です。<b>横向き</b>、または PC/タブレットでの利用を推奨します。
+        📱 スマホでも編集できます。上部の <b>☰</b>＝プロジェクト、<b>✨</b>＝アセット/生成。広い画面や<b>横向き</b>だとより快適です。
       </span>
       <button
         onClick={() => { sessionStorage.setItem('mobile_notice_dismissed', '1'); setShow(false) }}
-        className="px-2 py-0.5 rounded bg-amber-800 hover:bg-amber-700"
+        className="px-2 py-0.5 rounded bg-purple-800 hover:bg-purple-700"
       >閉じる</button>
     </div>
   )

@@ -259,6 +259,21 @@ export function Timeline({ projectId, fps, assets }: Props) {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Zoom (touch-friendly — no Ctrl+wheel needed) */}
+          <div className="flex items-center">
+            <button
+              onClick={() => setZoom(pixelsPerFrame * 0.8)}
+              className="text-sm w-7 h-6 rounded-l bg-zinc-800 hover:bg-zinc-700 text-zinc-200 leading-none"
+              title="ズームアウト"
+              aria-label="ズームアウト"
+            >−</button>
+            <button
+              onClick={() => setZoom(pixelsPerFrame * 1.25)}
+              className="text-sm w-7 h-6 rounded-r bg-zinc-800 hover:bg-zinc-700 text-zinc-200 leading-none border-l border-zinc-700"
+              title="ズームイン"
+              aria-label="ズームイン"
+            >＋</button>
+          </div>
           <span className="text-zinc-600 text-[10px] hidden sm:inline">
             S=分割　Del=削除　Ctrl+Z=元に戻す
           </span>

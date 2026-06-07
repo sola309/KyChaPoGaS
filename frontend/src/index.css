@@ -1,12 +1,75 @@
 @import "tailwindcss";
 
+/*
+ * KyChaPoGaS theme — 桜色 × 佐倉杏子（紅）
+ *
+ * We re-map Tailwind's default `zinc` and `purple` scales (which the whole UI
+ * already uses) to a custom palette, so the entire app re-themes at once and
+ * stays trivially reversible:
+ *   - neutrals (zinc) → 墨桜: a warm, faintly rose-tinted charcoal (dark base,
+ *     so generated media still pops) instead of cold blue-gray.
+ *   - accent  (purple) → 紅(くれない): Kyoko's crimson, leaning slightly toward
+ *     sakura-rose so buttons / playhead / selections read as one brand color.
+ * Lighter accent shades (200–300) double as 桜色 highlights.
+ */
+@theme {
+  /* 墨桜 neutrals (was zinc) — warm rose-charcoal */
+  --color-zinc-50:  #faf5f6;
+  --color-zinc-100: #f3eaec;
+  --color-zinc-200: #e3d6d9;
+  --color-zinc-300: #c9b8bc;
+  --color-zinc-400: #9c878c;
+  --color-zinc-500: #6f5d61;
+  --color-zinc-600: #524448;
+  --color-zinc-700: #3b3034;
+  --color-zinc-800: #2a2225;
+  --color-zinc-900: #1b1619;
+  --color-zinc-950: #110d0f;
+
+  /* 紅 accent (was purple) — Kyoko crimson with a sakura lean */
+  --color-purple-50:  #fdf2f4;
+  --color-purple-100: #fbe0e5;
+  --color-purple-200: #f6c2cb;
+  --color-purple-300: #ee98a8;
+  --color-purple-400: #e3677e;
+  --color-purple-500: #d6405d;
+  --color-purple-600: #bf2747;
+  --color-purple-700: #a01f3c;
+  --color-purple-800: #7e1a31;
+  --color-purple-900: #5f1626;
+  --color-purple-950: #3a0d17;
+}
+
 * {
   box-sizing: border-box;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  background: #0f0f13;
-  color: #e4e4e7;
+  background: #110d0f;          /* zinc-950 (墨桜) */
+  color: #e3d6d9;               /* zinc-200 */
   font-family: system-ui, 'Segoe UI', sans-serif;
+  /* avoid iOS pinch/double-tap zoom fighting the timeline gestures */
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Smooth, momentum scrolling for the timeline / panels on touch */
+.overflow-auto, .overflow-y-auto, .overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Touch affordances ──────────────────────────────────────────────────
+ * Several actions are revealed on hover (asset row buttons, track delete,
+ * clip trim handles). Touch devices have no hover, so reveal them by default
+ * when the primary pointer is coarse. */
+@media (hover: none) {
+  /* hover-revealed action buttons → always visible */
+  [class*="opacity-0"][class*="group-hover:opacity-100"] { opacity: 1 !important; }
+  /* clip trim handles → faintly visible so they're discoverable */
+  .clip-trim-handle { background: rgba(255, 255, 255, 0.14); }
 }
