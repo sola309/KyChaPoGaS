@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
+import { BrandLogo } from './BrandLogo'
 
 interface Props {
   onOpenTerminal: () => void
@@ -47,7 +48,7 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
     >
       {/* Logo */}
       <div className="p-4 border-b border-zinc-800 flex-shrink-0">
-        <span className="text-sm font-bold tracking-widest text-purple-400">KyChaPoGaS</span>
+        <BrandLogo className="text-sm font-bold tracking-widest text-purple-400" />
       </div>
 
       {/* Project list */}

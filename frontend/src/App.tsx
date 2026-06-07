@@ -5,6 +5,7 @@ import { TerminalPanel } from './components/Terminal/TerminalPanel'
 import { GpuStatusBar } from './components/GpuStatusBar'
 import { CollabToasts } from './components/CollabToasts'
 import { MobileNotice } from './components/MobileNotice'
+import { BrandLogo } from './components/BrandLogo'
 import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
@@ -108,7 +109,7 @@ function App() {
           title="プロジェクト一覧"
           aria-label="プロジェクト一覧"
         >☰</button>
-        <span className="text-xs font-bold tracking-widest text-purple-400">KyChaPoGaS</span>
+        <BrandLogo className="text-xs font-bold tracking-widest text-purple-400" />
         <button
           onClick={togglePanel}
           className="ml-auto px-2 py-1 rounded text-zinc-300 hover:bg-zinc-800"
