@@ -31,17 +31,20 @@ def _create_job(session: Session, project_id: int, job_type: str, params: dict) 
 
 MODELS = {
     "image": [
-        {"id": "flux-dev",   "name": "FLUX.1 Dev",    "backend": "comfyui"},
+        {"id": "waiNSFWIllustrious_v170", "name": "WAI Illustrious v17.0 (アニメ)",
+         "backend": "comfyui", "recommended": True},
         {"id": "sdxl-base",  "name": "SDXL Base",     "backend": "comfyui"},
+        {"id": "flux-dev",   "name": "FLUX.1 Dev (要DL)", "backend": "comfyui"},
     ],
     "audio": [
-        {"id": "musicgen-small",  "name": "MusicGen Small",  "backend": "local"},
-        {"id": "musicgen-medium", "name": "MusicGen Medium", "backend": "local"},
-        {"id": "musicgen-large",  "name": "MusicGen Large",  "backend": "local"},
+        {"id": "acestep-v15", "name": "ACE-Step 1.5（ボーカル対応）", "backend": "acestep",
+         "vocals": True, "recommended": True},
     ],
     "video_i2v": [
-        {"id": "hunyuan-i2v",    "name": "HunyuanVideo I2V",   "backend": "comfyui"},
-        {"id": "cogvideox-i2v",  "name": "CogVideoX I2V",      "backend": "comfyui"},
+        {"id": "wan2.2-flf2v",   "name": "Wan2.2 FLF2V (最初/最後フレーム)", "backend": "comfyui",
+         "first_last_frame": True, "recommended": True},
+        {"id": "wan2.2-fun-inp", "name": "Wan2.2 Fun-InP (最初/最後フレーム)", "backend": "comfyui",
+         "first_last_frame": True},
         {"id": "svd-xt",         "name": "Stable Video Diffusion XT", "backend": "comfyui"},
     ],
 }
@@ -79,9 +82,12 @@ def generate_image(req: ImageGenRequest, session: Session = Depends(get_session)
 
 class AudioGenRequest(BaseModel):
     project_id: int
-    prompt: str
+    prompt: str                       # style / genre / mood (caption)
+    lyrics: str = ""                  # lyrics for vocals; empty → instrumental
     duration_sec: float = 30.0
-    model: str = "musicgen-small"
+    vocal_language: str = "en"
+    instrumental: Optional[bool] = None   # None → auto from lyrics presence
+    model: str = "acestep-v15"
     seed: int = -1
 
 
@@ -99,12 +105,18 @@ class I2VKeyframe(BaseModel):
 
 class VideoI2VRequest(BaseModel):
     project_id: int
-    keyframes: list[I2VKeyframe]   # sorted by time_sec; 1–N frames
-    duration_sec: float = 5.0
-    fps: int = 24
-    motion_strength: float = 0.6
-    model: str = "hunyuan-i2v"
+    keyframes: list[I2VKeyframe]   # sorted by time_sec; frame[0]=start, frame[-1]=end
+    duration_sec: float = 3.0
+    fps: int = 16                  # Wan2.2 native fps is 16
+    motion_strength: float = 0.6   # (SVD only)
+    model: str = "wan2.2-flf2v"
     seed: int = -1
+    # Wan2.2-specific
+    prompt: str = ""
+    negative_prompt: str = ""
+    width: int = 640
+    height: int = 640
+    use_lightning: bool = True     # 4-step Lightning distillation (fast)
 
     def validate_keyframes(self):
         if len(self.keyframes) == 0:

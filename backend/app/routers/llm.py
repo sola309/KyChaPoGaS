@@ -66,6 +66,17 @@ TOOLS: list[dict] = [
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "get_beat_grid",
+        "description": (
+            "Get beat positions in TIMELINE FRAME coordinates for beat-synced editing (音ハメ). "
+            "Returns each beat's frame + whether it is a downbeat (小節頭), the beat interval in "
+            "frames, and downbeat frames. Use these frames directly as cut points / clip "
+            "boundaries with move_clip, split_clip, or add_clip to align edits to the music. "
+            "Requires audio beat analysis (trigger_analysis audio) on a timeline audio clip."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
     # ── Track ─────────────────────────────────────────────────────────────────
     {
         "name": "add_track",
@@ -134,6 +145,18 @@ TOOLS: list[dict] = [
                 "split_frame": {"type": "integer", "description": "Frame at which to cut"},
             },
             "required": ["clip_id", "split_frame"],
+        },
+    },
+    {
+        "name": "auto_cut_to_beats",
+        "description": (
+            "Split a clip at every beat within its span (音ハメ自動カット). Uses the project's "
+            "beat grid. Great for cutting a clip to the rhythm. Requires audio beat analysis."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {"clip_id": {"type": "integer"}},
+            "required": ["clip_id"],
         },
     },
     # ── Generation / Analysis ─────────────────────────────────────────────────
@@ -234,6 +257,8 @@ def _exec_tool(
             return command_api.get_assets(project_id, session, inp.get("asset_type"))
         case "get_analysis_summary":
             return command_api.get_analysis_summary(project_id, session)
+        case "get_beat_grid":
+            return command_api.get_beat_grid(project_id, session)
         case "add_track":
             return command_api.add_track(
                 project_id, inp["track_type"], inp["name"], session
@@ -252,6 +277,8 @@ def _exec_tool(
             return command_api.delete_clip(inp["clip_id"], session)
         case "split_clip":
             return command_api.split_clip(inp["clip_id"], inp["split_frame"], session)
+        case "auto_cut_to_beats":
+            return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
         case "create_generation_job":
             return command_api.create_job(
                 project_id, inp["job_type"], inp.get("params", {}), session

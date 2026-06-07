@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Clip, Asset } from '../../api/client'
+import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
@@ -20,11 +21,27 @@ interface Props {
   trackHeight: number
   onSelect: (id: number) => void
   selected: boolean
+  /** Snap a timeline frame to the nearest beat (identity when snapping is off). */
+  snapFrame?: (frame: number) => number
+  /** Another collaborator has this clip selected (outline color). */
+  remoteSelect?: string | null
+  /** Another collaborator is actively editing this clip (soft lock). */
+  remoteLock?: { name: string; color: string } | null
 }
 
-export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected }: Props) {
-  const { moveClip, trimClip, deleteClip } = useTimelineStore()
+export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
+  const snap = snapFrame ?? ((f: number) => f)
+  const { moveClip, trimClip, deleteClip, projectFps, setEditingClipId } = useTimelineStore()
+  const locked = !!remoteLock
   const { scenes, motion } = useAnalysisStore()
+
+  // Video/audio clips have a finite source (duration_sec); images do not and can
+  // be stretched freely (freeze-frame / placeholder). For finite sources the
+  // right edge is clamped so a clip never runs past the end of its source.
+  const sourceFrames = asset?.duration_sec
+    ? Math.max(1, Math.floor(asset.duration_sec * projectFps))
+    : null
+  const isStretchable = sourceFrames == null   // images stretch without limit
   const assetScenes = asset ? scenes[asset.id] : undefined
   const assetMotion = asset ? motion[asset.id] : undefined
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
@@ -37,7 +54,9 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
   // ── Main body: move ──────────────────────────────────────────────────
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (locked) return                 // another collaborator is editing this clip
     onSelect(clip.id)
+    setEditingClipId(clip.id)
     const origFrame = clip.start_frame
     dragRef.current = { startX: e.clientX, origFrame }
     setDragging(true)
@@ -45,7 +64,7 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
-      const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
+      const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
       useTimelineStore.setState(s => ({
         clips: s.clips.map(c => c.id === clip.id ? { ...c, start_frame: newFrame } : c),
       }))
@@ -54,12 +73,13 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
     const onUp = (ev: MouseEvent) => {
       if (!dragRef.current) return
       const dx = ev.clientX - dragRef.current.startX
-      const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
+      const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
       if (newFrame !== dragRef.current.origFrame) {
         moveClip(clip.id, dragRef.current.origFrame, newFrame)
       }
       dragRef.current = null
       setDragging(false)
+      setEditingClipId(null)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -71,15 +91,16 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
   // ── Left trim handle ─────────────────────────────────────────────────
   const handleLeftTrimDown = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (locked) return
     onSelect(clip.id)
+    setEditingClipId(clip.id)
     const startX      = e.clientX
     const origStart   = clip.start_frame
     const origDur     = clip.duration_frames
     const origAssetIn = clip.asset_in_frame
 
     const clamp = (dx: number) => {
-      const delta    = Math.round(dx / pixelsPerFrame)
-      const newStart = Math.max(0, origStart + delta)
+      const newStart = Math.max(0, snap(origStart + Math.round(dx / pixelsPerFrame)))
       const moved    = newStart - origStart
       return {
         start_frame:     newStart,
@@ -101,6 +122,7 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
         { start_frame: origStart, duration_frames: origDur, asset_in_frame: origAssetIn },
         after,
       )
+      setEditingClipId(null)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -112,11 +134,20 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
   // ── Right trim handle ────────────────────────────────────────────────
   const handleRightTrimDown = (e: React.MouseEvent) => {
     e.stopPropagation()
+    if (locked) return
     onSelect(clip.id)
+    setEditingClipId(clip.id)
     const startX  = e.clientX
     const origDur = clip.duration_frames
+    // For finite-source clips, cap at the remaining source frames.
+    const maxDur  = sourceFrames != null ? Math.max(1, sourceFrames - clip.asset_in_frame) : Infinity
 
-    const clamp = (dx: number) => Math.max(1, Math.round(origDur + dx / pixelsPerFrame))
+    const clamp = (dx: number) => {
+      // Snap the clip's END (start + duration) to a beat so cuts land on the beat.
+      const snappedEnd = snap(clip.start_frame + Math.round(origDur + dx / pixelsPerFrame))
+      const dur = snappedEnd - clip.start_frame
+      return Math.min(maxDur, Math.max(1, dur))
+    }
 
     const onMove = (ev: MouseEvent) => {
       const dur = clamp(ev.clientX - startX)
@@ -131,6 +162,7 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
         { duration_frames: origDur },
         { duration_frames: dur },
       )
+      setEditingClipId(null)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -142,11 +174,30 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
   return (
     <div
       className={`absolute top-1 rounded border text-[10px] text-white overflow-hidden select-none
-        ${colorClass} ${selected ? 'ring-1 ring-white' : ''} ${dragging ? 'opacity-80' : ''}`}
-      style={{ left, width, height: trackHeight - 8 }}
-      onDoubleClick={() => deleteClip(clip.id)}
-      title={`${asset?.name ?? 'clip'} — ダブルクリックで削除`}
+        ${colorClass} ${selected ? 'ring-1 ring-white' : ''} ${dragging ? 'opacity-80' : ''} ${locked ? 'opacity-70' : ''}`}
+      style={{
+        left, width, height: trackHeight - 8,
+        ...(remoteLock ? { outline: `2px solid ${remoteLock.color}`, outlineOffset: '-1px' }
+          : remoteSelect ? { outline: `1px dashed ${remoteSelect}`, outlineOffset: '-1px' } : {}),
+      }}
+      onDoubleClick={() => { if (!locked) deleteClip(clip.id) }}
+      title={remoteLock ? `${remoteLock.name} が編集中` : `${asset?.name ?? 'clip'}${isStretchable ? '（静止画: 自由に引き伸ばし可）' : ''} — ダブルクリックで削除`}
     >
+      {/* Remote editor lock badge */}
+      {remoteLock && (
+        <span
+          className="absolute -top-3 left-0 text-[8px] leading-tight px-0.5 rounded-sm text-black whitespace-nowrap z-30"
+          style={{ background: remoteLock.color }}
+        >🔒 {remoteLock.name}</span>
+      )}
+      {/* Filmstrip background (video clips) */}
+      {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (
+        <div
+          className="absolute inset-0 opacity-45 pointer-events-none bg-no-repeat"
+          style={{ backgroundImage: `url(${assetsApi.filmstripUrl(asset.id)})`, backgroundSize: '100% 100%' }}
+        />
+      )}
+
       {/* Left trim handle */}
       <div
         className="absolute left-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"

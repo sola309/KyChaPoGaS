@@ -12,6 +12,8 @@ class AssetBase(SQLModel):
     width: Optional[int] = None
     height: Optional[int] = None
     file_size_bytes: Optional[int] = None
+    # Low-res proxy for lightweight preview/scrubbing (final render uses the original).
+    proxy_path: Optional[str] = None
 
 
 class Asset(AssetBase, table=True):

@@ -8,9 +8,9 @@ export function ImageGenPanel() {
 
   const [prompt,    setPrompt]    = useState('')
   const [negPrompt, setNegPrompt] = useState('')
-  const [model,     setModel]     = useState('flux-dev')
-  const [width,     setWidth]     = useState(1024)
-  const [height,    setHeight]    = useState(1024)
+  const [model,     setModel]     = useState('waiNSFWIllustrious_v170')
+  const [width,     setWidth]     = useState(1344)   // SDXL 16:9 bucket (≈16:9)
+  const [height,    setHeight]    = useState(768)
   const [seed,      setSeed]      = useState(-1)
   const [busy,      setBusy]      = useState(false)
   const [error,     setError]     = useState<string | null>(null)
@@ -70,8 +70,9 @@ export function ImageGenPanel() {
           onChange={e => setModel(e.target.value)}
           className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700"
         >
-          <option value="flux-dev">FLUX.1 Dev</option>
+          <option value="waiNSFWIllustrious_v170">WAI Illustrious v17.0（アニメ）</option>
           <option value="sdxl-base">SDXL Base</option>
+          <option value="flux-dev">FLUX.1 Dev（要DL）</option>
         </select>
       </label>
 

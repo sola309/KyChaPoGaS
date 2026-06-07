@@ -5,10 +5,28 @@ import { PreviewPlayer } from '../components/Preview/PreviewPlayer'
 import { RightPanel } from '../components/RightPanel/RightPanel'
 import type { Asset } from '../api/client'
 import { assetsApi } from '../api/client'
+import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
+import { useCollab } from '../hooks/useCollab'
+import { CollabBar } from '../components/CollabBar'
+import { useUIStore } from '../store/uiStore'
 
 const MIN_TIMELINE_H  = 120
 const MAX_TIMELINE_H  = 600
 const DEFAULT_TIMELINE_H = 260
+
+function SaveIndicator() {
+  const pending = useUIStore(s => s.pendingWrites)
+  return (
+    <span
+      className={`text-[10px] flex items-center gap-1 ${pending > 0 ? 'text-amber-400' : 'text-zinc-600'}`}
+      title="変更は自動的にサーバへ保存されます"
+    >
+      {pending > 0
+        ? (<><span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> 保存中…</>)
+        : (<>✓ 自動保存</>)}
+    </span>
+  )
+}
 
 export function ProjectView() {
   const { activeProject } = useProjectStore()
@@ -19,6 +37,17 @@ export function ProjectView() {
     if (!activeProject) return
     assetsApi.list(activeProject.id).then(setAssets)
   }, [activeProject?.id])
+
+  // Add a generated asset to the library (dedup by id)
+  const addAsset = useCallback((asset: Asset) => {
+    setAssets(prev => prev.some(a => a.id === asset.id) ? prev : [...prev, asset])
+  }, [])
+
+  // ①③ Auto-place generated images / videos / music onto the timeline
+  useAutoPlaceGenerated(activeProject?.id, activeProject?.fps ?? 30, addAsset)
+
+  // Realtime collaboration presence
+  useCollab(activeProject?.id)
 
   // Resizable split between preview and timeline
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
@@ -60,11 +89,15 @@ export function ProjectView() {
             <span>{activeProject.fps} fps</span>
             <span>{activeProject.width} × {activeProject.height}</span>
           </div>
+          <div className="ml-auto flex items-center gap-3">
+            <SaveIndicator />
+            <CollabBar />
+          </div>
         </div>
 
         {/* Preview */}
         <div className="flex-1 min-h-0">
-          <PreviewPlayer assets={assets} />
+          <PreviewPlayer assets={assets} onAsset={addAsset} />
         </div>
 
         {/* Drag divider */}

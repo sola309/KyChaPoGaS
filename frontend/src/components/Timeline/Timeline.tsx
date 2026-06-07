@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { Asset } from '../../api/client'
+import { clipsApi, jobsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
+import { useCollabStore } from '../../store/collabStore'
+import { useUIStore } from '../../store/uiStore'
 import { TimeRuler } from './TimeRuler'
 import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
@@ -21,15 +24,17 @@ export function Timeline({ projectId, fps, assets }: Props) {
     tracks, clips, currentFrame, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
     loadTimeline, addTrack, addClip, splitClip,
-    deleteClip, setCurrentFrame, setZoom, undo, redo,
+    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed,
+    selectedClipId, setSelectedClipId, syncFromServer,
   } = useTimelineStore()
 
   const scrollRef      = useRef<HTMLDivElement>(null)
   const containerRef   = useRef<HTMLDivElement>(null)
-  const [selectedClipId,  setSelectedClipId]  = useState<number | null>(null)
   const [showRenderDialog, setShowRenderDialog] = useState(false)
+  const [snapEnabled, setSnapEnabled] = useState(true)
 
   const { beats } = useAnalysisStore()
+  const remoteUsers = useCollabStore(s => s.others)
 
   useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
 
@@ -42,6 +47,35 @@ export function Timeline({ projectId, fps, assets }: Props) {
     }
     return null
   }, [clips, beats])
+
+  // Beat positions in timeline-frame space (for beat-snapping clip edges)
+  const beatFrames = useMemo(() => {
+    if (!beatInfo) return [] as number[]
+    const assetInSec = beatInfo.clip.asset_in_frame / fps
+    return beatInfo.beat.beats
+      .map(t => Math.round(beatInfo.clip.start_frame + (t - assetInSec) * fps))
+      .filter(f => f >= 0)
+  }, [beatInfo, fps])
+
+  // Snap a frame to the nearest beat within ~8px; identity when snapping is off.
+  const snapFrame = useCallback((frame: number) => {
+    if (!snapEnabled || beatFrames.length === 0) return frame
+    const threshold = 8 / pixelsPerFrame
+    let best = frame, bestDist = threshold
+    for (const bf of beatFrames) {
+      const d = Math.abs(bf - frame)
+      if (d < bestDist) { bestDist = d; best = bf }
+    }
+    return best
+  }, [snapEnabled, beatFrames, pixelsPerFrame])
+
+  // Selected clip — for speed controls (video clips only)
+  const selectedClip = clips.find(c => c.id === selectedClipId) ?? null
+  const selTrack = selectedClip ? tracks.find(t => t.id === selectedClip.track_id) : null
+  const selAsset = selectedClip ? assets.find(a => a.id === selectedClip.asset_id) : null
+  const isVideoClip = selTrack?.track_type === 'video'
+    && (selAsset?.asset_type === 'video'
+        || (selAsset?.asset_type === 'generated' && selAsset?.duration_sec != null))
 
   const totalFrames = Math.max(
     MIN_TIMELINE_SECS * fps,
@@ -96,6 +130,27 @@ export function Timeline({ projectId, fps, assets }: Props) {
     await addClip(trackId, assetId, startFrame, durationFrames)
   }
 
+  const handleAutoCut = async () => {
+    if (selectedClipId == null) return
+    try {
+      const res = await clipsApi.autoCutBeats(selectedClipId)
+      await syncFromServer(projectId)
+      useCollabStore.getState().broadcastEdit()
+      useUIStore.getState().pushToast(
+        res.created > 0 ? `ビートで ${res.created} 分割しました` : (res.message ?? 'ビートが見つかりません'),
+        res.created > 0 ? 'success' : 'info',
+      )
+      setSelectedClipId(null)
+    } catch { /* error toast handled by interceptor */ }
+  }
+
+  const handlePrecompose = async () => {
+    try {
+      await jobsApi.create(projectId, 'precompose', { project_id: projectId })
+      useUIStore.getState().pushToast('タイムラインの焼き込みを開始しました（完了後ライブラリに追加）', 'info')
+    } catch { /* handled by interceptor */ }
+  }
+
   const undoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : ''
   const redoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : ''
 
@@ -121,6 +176,16 @@ export function Timeline({ projectId, fps, assets }: Props) {
           className="text-[11px] px-2 py-0.5 rounded bg-amber-900 hover:bg-amber-800 text-amber-200"
           title="参照キーフレームトラック（I2V生成用）"
         >+ Ref</button>
+
+        <button
+          onClick={() => setSnapEnabled(v => !v)}
+          disabled={!beatInfo}
+          title={beatInfo ? 'ビートスナップ（クリップ端をビートに吸着）' : '音声のビート解析後に有効'}
+          className={`text-[11px] px-2 py-0.5 rounded disabled:opacity-30
+            ${snapEnabled && beatInfo
+              ? 'bg-emerald-800 text-emerald-100'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+        >🧲 音ハメ{snapEnabled ? 'ON' : 'OFF'}</button>
 
         <div className="w-px h-4 bg-zinc-700 mx-1" />
 
@@ -151,6 +216,45 @@ export function Timeline({ projectId, fps, assets }: Props) {
               className="text-[11px] px-2 py-0.5 rounded bg-red-900 hover:bg-red-800 text-red-200"
               title="クリップを削除 (Del)"
             >✕ 削除</button>
+
+            {isVideoClip && beatInfo && (
+              <button
+                onClick={handleAutoCut}
+                className="text-[11px] px-2 py-0.5 rounded bg-emerald-900 hover:bg-emerald-800 text-emerald-200"
+                title="クリップ範囲のビートで自動分割（音ハメ）"
+              >🎵 ビートで分割</button>
+            )}
+
+            {isVideoClip && selectedClip && (
+              <>
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+                <span className="text-[10px] text-zinc-500">速度</span>
+                <select
+                  value={String(selectedClip.speed)}
+                  onChange={e => setClipSpeed(selectedClip.id, Number(e.target.value), selectedClip.speed_ease)}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="再生速度（フレーム数は自動調整）"
+                >
+                  {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map(s => (
+                    <option key={s} value={String(s)}>{s}x</option>
+                  ))}
+                  {![0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].includes(selectedClip.speed) && (
+                    <option value={String(selectedClip.speed)}>{selectedClip.speed.toFixed(2)}x</option>
+                  )}
+                </select>
+                <select
+                  value={selectedClip.speed_ease}
+                  onChange={e => setClipSpeed(selectedClip.id, selectedClip.speed, e.target.value as 'linear' | 'in' | 'out' | 'inout')}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="加減速（ベジェ）: 一定 / 加速 / 減速 / 緩急"
+                >
+                  <option value="linear">一定</option>
+                  <option value="in">加速</option>
+                  <option value="out">減速</option>
+                  <option value="inout">緩急</option>
+                </select>
+              </>
+            )}
           </>
         )}
 
@@ -158,6 +262,11 @@ export function Timeline({ projectId, fps, assets }: Props) {
           <span className="text-zinc-600 text-[10px] hidden sm:inline">
             S=分割　Del=削除　Ctrl+Z=元に戻す
           </span>
+          <button
+            onClick={handlePrecompose}
+            className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+            title="タイムライン全体を1本の動画に焼き込み（プリコンポーズ）→ライブラリに追加"
+          >🎬 焼き込み</button>
           <button
             onClick={() => setShowRenderDialog(true)}
             className="text-[11px] px-3 py-0.5 rounded bg-purple-800 hover:bg-purple-700 text-purple-100 font-medium"
@@ -217,6 +326,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
               selectedClipId={selectedClipId}
               onSelectClip={setSelectedClipId}
               onDropAsset={handleDropAsset}
+              snapFrame={snapFrame}
             />
           ))}
 
@@ -229,6 +339,22 @@ export function Timeline({ projectId, fps, assets }: Props) {
           {showRenderDialog && (
             <RenderDialog onClose={() => setShowRenderDialog(false)} />
           )}
+
+          {/* Remote collaborators' playheads */}
+          {Object.values(remoteUsers).map(o => (
+            o.presence.frame != null && (
+              <div
+                key={o.user.id}
+                className="absolute top-0 bottom-0 w-px pointer-events-none z-20"
+                style={{ left: LABEL_WIDTH + o.presence.frame * pixelsPerFrame, background: o.user.color }}
+              >
+                <span
+                  className="absolute top-0 left-0 text-[8px] leading-tight px-0.5 rounded-sm text-black whitespace-nowrap"
+                  style={{ background: o.user.color }}
+                >{o.user.name}</span>
+              </div>
+            )
+          ))}
 
           {/* Playhead — full height */}
           <div

@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './pages/ProjectView'
 import { TerminalPanel } from './components/Terminal/TerminalPanel'
 import { GpuStatusBar } from './components/GpuStatusBar'
+import { CollabToasts } from './components/CollabToasts'
+import { MobileNotice } from './components/MobileNotice'
 
 const MIN_TERM_H  = 160
 const MAX_TERM_H  = 600
@@ -11,18 +13,28 @@ const DEFAULT_H   = 280
 function App() {
   const [termOpen,  setTermOpen]  = useState(false)
   const [termH,     setTermH]     = useState(DEFAULT_H)
+  // The embedded terminal can be disabled server-side (KYCHAPOGAS_DISABLE_TERMINAL)
+  // so shared collaborators can't get a host shell.
+  const [termEnabled, setTermEnabled] = useState(true)
 
-  // Ctrl+` to toggle terminal (same as VS Code)
+  useEffect(() => {
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(d => setTermEnabled(d.terminal_enabled !== false))
+      .catch(() => { /* keep default */ })
+  }, [])
+
+  // Ctrl+` to toggle terminal (same as VS Code) — only when enabled
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === '`') {
         e.preventDefault()
-        setTermOpen(v => !v)
+        if (termEnabled) setTermOpen(v => !v)
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [termEnabled])
 
   // Drag divider to resize terminal height
   const handleDividerDrag = useCallback((e: React.MouseEvent) => {
@@ -47,14 +59,24 @@ function App() {
       {/* GPU / VRAM status bar */}
       <GpuStatusBar />
 
+      {/* Collaboration join/leave toasts */}
+      <CollabToasts />
+
+      {/* Small-screen guidance */}
+      <MobileNotice />
+
       {/* Main area (sidebar + editor) */}
       <div className="flex flex-1 min-h-0">
-        <Sidebar onOpenTerminal={() => setTermOpen(v => !v)} termOpen={termOpen} />
+        <Sidebar
+          onOpenTerminal={() => termEnabled && setTermOpen(v => !v)}
+          termOpen={termOpen}
+          terminalEnabled={termEnabled}
+        />
         <ProjectView />
       </div>
 
       {/* Bottom terminal drawer */}
-      {termOpen && (
+      {termOpen && termEnabled && (
         <>
           {/* Drag handle */}
           <div

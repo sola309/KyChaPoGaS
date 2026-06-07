@@ -8,6 +8,10 @@ class ClipBase(SQLModel):
     start_frame: int = 0       # position on the timeline (in frames)
     duration_frames: int = 30  # length of the clip (in frames)
     asset_in_frame: int = 0    # which frame of the source asset to start from
+    speed: float = 1.0         # playback speed multiplier (>1 faster, <1 slower)
+    # Optional speed easing for accel/decel within the clip.
+    # 'linear' (constant) | 'in' | 'out' | 'inout' — shapes the speed ramp.
+    speed_ease: str = "linear"
 
 
 class Clip(ClipBase, table=True):
@@ -23,6 +27,8 @@ class ClipUpdate(SQLModel):
     duration_frames: Optional[int] = None
     asset_in_frame: Optional[int] = None
     track_id: Optional[int] = None
+    speed: Optional[float] = None
+    speed_ease: Optional[str] = None
 
 
 class ClipRead(ClipBase):

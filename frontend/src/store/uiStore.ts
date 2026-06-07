@@ -1,0 +1,29 @@
+import { create } from 'zustand'
+
+export type ToastKind = 'info' | 'success' | 'error'
+export interface Toast { id: number; text: string; kind: ToastKind; color?: string }
+
+const KIND_COLOR: Record<ToastKind, string> = {
+  info: '#60a5fa', success: '#4ade80', error: '#f87171',
+}
+
+interface UIState {
+  toasts: Toast[]
+  pendingWrites: number        // in-flight edit writes (for the auto-save indicator)
+  pushToast: (text: string, kind?: ToastKind, color?: string) => void
+  dismissToast: (id: number) => void
+  beginWrite: () => void
+  endWrite: () => void
+}
+
+let _seq = 1
+
+export const useUIStore = create<UIState>((set) => ({
+  toasts: [],
+  pendingWrites: 0,
+  pushToast: (text, kind = 'info', color) =>
+    set(s => ({ toasts: [...s.toasts, { id: _seq++, text, kind, color: color ?? KIND_COLOR[kind] }] })),
+  dismissToast: (id) => set(s => ({ toasts: s.toasts.filter(t => t.id !== id) })),
+  beginWrite: () => set(s => ({ pendingWrites: s.pendingWrites + 1 })),
+  endWrite: () => set(s => ({ pendingWrites: Math.max(0, s.pendingWrites - 1) })),
+}))

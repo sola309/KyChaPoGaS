@@ -24,6 +24,7 @@ def _gpu_info_dict(g: GpuInfo) -> dict:
         "temperature_c": g.temperature_c,
         "power_draw_w": g.power_draw_w,
         "power_limit_w": g.power_limit_w,
+        "unified_memory": g.unified_memory,
     }
 
 

@@ -185,6 +185,118 @@ def get_analysis_summary(project_id: int, session: Session) -> dict:
     }
 
 
+def get_beat_grid(project_id: int, session: Session, max_beats: int = 500) -> dict:
+    """
+    Beat positions mapped into TIMELINE FRAME space, for beat-synced editing (音ハメ).
+
+    Finds the first timeline audio clip whose asset has beat analysis and maps each
+    beat time → timeline frame using the clip's placement and the project fps. The
+    LLM can use these frames directly as cut points / clip boundaries with
+    move_clip / split_clip / add_clip.
+    """
+    from app.models import Project
+    from app.models.analysis import AnalysisResult
+
+    project = session.get(Project, project_id)
+    if not project:
+        return {"error": f"Project {project_id} not found"}
+    fps = project.fps
+
+    tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
+    clips = session.exec(
+        select(Clip).where(Clip.track_id.in_([t.id for t in tracks]))
+    ).all()
+    asset_ids = list({c.asset_id for c in clips if c.asset_id})
+    if not asset_ids:
+        return {"error": "タイムラインに音声クリップがありません。"}
+
+    results = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.asset_id.in_(asset_ids))
+        .where(AnalysisResult.analysis_type == "audio_beats")
+    ).all()
+    beat_by_asset = {r.asset_id: json.loads(r.result_json) for r in results}
+
+    target = next((c for c in clips if c.asset_id in beat_by_asset), None)
+    if not target:
+        return {"error": "音声のビート解析がありません。先に trigger_analysis(audio) を実行してください。"}
+
+    data = beat_by_asset[target.asset_id]
+    asset_in_sec = target.asset_in_frame / fps
+    clip_end = target.start_frame + target.duration_frames
+    downbeat_set = {round(t, 4) for t in data.get("downbeats", [])}
+
+    beats = []
+    for t in data.get("beats", []):
+        frame = round(target.start_frame + (t - asset_in_sec) * fps)
+        if frame < target.start_frame or frame > clip_end:
+            continue
+        beats.append({"frame": frame, "time_sec": round(t, 3), "downbeat": round(t, 4) in downbeat_set})
+
+    bpm = data.get("bpm")
+    return {
+        "bpm": bpm,
+        "fps": fps,
+        "audio_clip_id": target.id,
+        "audio_asset_id": target.asset_id,
+        "beat_interval_frames": round(fps * 60 / bpm, 2) if bpm else None,
+        "beat_count": len(beats),
+        "downbeat_frames": [b["frame"] for b in beats if b["downbeat"]][:max_beats],
+        "beats": beats[:max_beats],
+        "truncated": len(beats) > max_beats,
+        "note": "frame はタイムライン座標。音ハメは clip 境界/カット点をこれらの frame に合わせる。downbeat=小節頭。",
+    }
+
+
+def auto_cut_to_beats(project_id: int, clip_id: int, session: Session) -> dict:
+    """
+    Split a clip at every beat that falls within its span (音ハメ自動カット).
+    Uses the project's beat grid (see get_beat_grid). The original clip is replaced
+    by consecutive segments cut on the beat.
+    """
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        return {"error": f"Clip {clip_id} not found"}
+    track = session.get(Track, clip.track_id)
+    if not track or track.project_id != project_id:
+        return {"error": f"Clip {clip_id} not in project"}
+
+    grid = get_beat_grid(project_id, session)
+    if "error" in grid:
+        return grid
+    beats = [b["frame"] for b in grid.get("beats", [])]
+
+    start = clip.start_frame
+    end = clip.start_frame + clip.duration_frames
+    cuts = sorted({bf for bf in beats if start < bf < end})
+    if not cuts:
+        return {"message": "クリップ範囲内にビートがありません", "created": 0}
+
+    speed = getattr(clip, "speed", 1.0) or 1.0
+    ease = getattr(clip, "speed_ease", "linear") or "linear"
+    bounds = [start, *cuts, end]
+    new_clips: list[Clip] = []
+    for s0, s1 in zip(bounds, bounds[1:]):
+        seg = Clip(
+            track_id=clip.track_id, asset_id=clip.asset_id,
+            start_frame=s0, duration_frames=s1 - s0,
+            asset_in_frame=clip.asset_in_frame + round((s0 - start) * speed),
+            speed=speed, speed_ease=ease,
+        )
+        session.add(seg)
+        new_clips.append(seg)
+    session.delete(clip)
+    session.commit()
+    for c in new_clips:
+        session.refresh(c)
+    return {
+        "original_clip_id": clip_id,
+        "created": len(new_clips),
+        "cut_frames": cuts,
+        "new_clip_ids": [c.id for c in new_clips],
+    }
+
+
 def get_assets(project_id: int, session: Session, asset_type: str | None = None) -> dict:
     query = select(Asset).where(Asset.project_id == project_id)
     if asset_type:

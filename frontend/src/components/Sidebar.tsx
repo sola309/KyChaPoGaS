@@ -4,9 +4,10 @@ import { useProjectStore } from '../store/projectStore'
 interface Props {
   onOpenTerminal: () => void
   termOpen: boolean
+  terminalEnabled?: boolean
 }
 
-export function Sidebar({ onOpenTerminal, termOpen }: Props) {
+export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Props) {
   const { projects, activeProject, fetchProjects, createProject, setActiveProject } = useProjectStore()
   const [creating,   setCreating]   = useState(false)
   const [newName,    setNewName]    = useState('')
@@ -92,7 +93,8 @@ export function Sidebar({ onOpenTerminal, termOpen }: Props) {
         ))}
       </div>
 
-      {/* Terminal toggle button (bottom of sidebar) */}
+      {/* Terminal toggle button (bottom of sidebar) — hidden when disabled */}
+      {terminalEnabled && (
       <div className="flex-shrink-0 border-t border-zinc-800 p-2">
         <button
           onClick={onOpenTerminal}
@@ -108,6 +110,7 @@ export function Sidebar({ onOpenTerminal, termOpen }: Props) {
           <span className="ml-auto text-[10px] text-zinc-600">Ctrl+`</span>
         </button>
       </div>
+      )}
     </aside>
   )
 }

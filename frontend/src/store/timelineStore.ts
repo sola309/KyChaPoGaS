@@ -1,6 +1,10 @@
 import { create } from 'zustand'
 import type { Track, Clip, ClipUpdate } from '../api/client'
 import { tracksApi, clipsApi } from '../api/client'
+import { useCollabStore } from './collabStore'
+
+// Tell other collaborators a committed timeline change happened (they re-sync).
+const notifyEdit = () => { try { useCollabStore.getState().broadcastEdit() } catch { /* noop */ } }
 
 interface HistoryEntry {
   label: string
@@ -20,6 +24,8 @@ interface TimelineState {
   currentFrame: number
   pixelsPerFrame: number
   projectFps: number
+  selectedClipId: number | null
+  editingClipId: number | null     // clip this user is actively dragging/trimming (soft lock)
   loading: boolean
   undoStack: HistoryEntry[]
   redoStack: HistoryEntry[]
@@ -27,18 +33,23 @@ interface TimelineState {
   canRedo: boolean
 
   loadTimeline: (projectId: number, fps: number) => Promise<void>
+  syncFromServer: (projectId: number) => Promise<void>
   addTrack: (projectId: number, type: 'video' | 'audio' | 'reference', name: string) => Promise<void>
   deleteTrack: (trackId: number) => Promise<void>
   addClip: (trackId: number, assetId: number | null, startFrame: number, durationFrames: number) => Promise<Clip>
+  placeClip: (projectId: number, trackType: 'video' | 'audio' | 'reference', assetId: number, durationFrames: number, atFrame?: number) => Promise<Clip>
   moveClip: (clipId: number, prevFrame: number, newFrame: number) => Promise<void>
   trimClip: (clipId: number, before: ClipUpdate, after: ClipUpdate) => Promise<void>
   deleteClip: (clipId: number) => Promise<void>
   splitClip: (clipId: number, splitFrame: number) => Promise<void>
   updateClip: (clipId: number, data: ClipUpdate) => Promise<void>
+  setClipSpeed: (clipId: number, speed: number, ease?: 'linear' | 'in' | 'out' | 'inout') => Promise<void>
   undo: () => Promise<void>
   redo: () => Promise<void>
   setCurrentFrame: (frame: number) => void
   setZoom: (pixelsPerFrame: number) => void
+  setSelectedClipId: (id: number | null) => void
+  setEditingClipId: (id: number | null) => void
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => {
@@ -61,6 +72,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     currentFrame: 0,
     pixelsPerFrame: 2,
     projectFps: 30,
+    selectedClipId: null,
+    editingClipId: null,
     loading: false,
     undoStack: [],
     redoStack: [],
@@ -76,10 +89,21 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       set({ tracks, clips, loading: false, undoStack: [], redoStack: [], canUndo: false, canRedo: false })
     },
 
+    // Re-pull tracks+clips from the server (source of truth) without touching
+    // undo history / playhead / selection. Used to apply remote collaborators' edits.
+    syncFromServer: async (projectId) => {
+      const [tracks, clips] = await Promise.all([
+        tracksApi.list(projectId),
+        clipsApi.list(projectId),
+      ])
+      set({ tracks, clips })
+    },
+
     addTrack: async (projectId, type, name) => {
       const order = get().tracks.filter(t => t.track_type === type).length
       const track = await tracksApi.create({ project_id: projectId, name, track_type: type, order })
       set(s => ({ tracks: [...s.tracks, track] }))
+      notifyEdit()
     },
 
     deleteTrack: async (trackId) => {
@@ -88,6 +112,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         tracks: s.tracks.filter(t => t.id !== trackId),
         clips: s.clips.filter(c => c.track_id !== trackId),
       }))
+      notifyEdit()
     },
 
     addClip: async (trackId, assetId, startFrame, durationFrames) => {
@@ -115,12 +140,43 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         },
       })
 
+      notifyEdit()
+      return clip
+    },
+
+    // Place an asset on a track (creating the track if needed). Appends at the
+    // track end by default, or at `atFrame` when given. Used to auto-place
+    // generated assets and to drop extracted keyframes onto a Reference track.
+    placeClip: async (projectId, trackType, assetId, durationFrames, atFrame) => {
+      const TRACK_NAME = { video: 'Video', audio: 'Audio', reference: 'Ref' } as const
+      let track = get().tracks.find(t => t.track_type === trackType)
+      if (!track) {
+        const order = get().tracks.filter(t => t.track_type === trackType).length
+        track = await tracksApi.create({
+          project_id: projectId,
+          name: TRACK_NAME[trackType],
+          track_type: trackType, order,
+        })
+        const created = track
+        set(s => ({ tracks: [...s.tracks, created] }))
+      }
+      const trackId = track.id
+      const startFrame = atFrame ?? get().clips
+        .filter(c => c.track_id === trackId)
+        .reduce((m, c) => Math.max(m, c.start_frame + c.duration_frames), 0)
+      const clip = await clipsApi.create({
+        track_id: trackId, asset_id: assetId,
+        start_frame: startFrame, duration_frames: durationFrames, asset_in_frame: 0,
+      })
+      set(s => ({ clips: [...s.clips, clip] }))
+      notifyEdit()
       return clip
     },
 
     moveClip: async (clipId, prevFrame, newFrame) => {
       await clipsApi.update(clipId, { start_frame: newFrame })
       applyLocal(clipId, { start_frame: newFrame })
+      notifyEdit()
 
       pushHistory({
         label: 'クリップ移動',
@@ -138,6 +194,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     trimClip: async (clipId, before, after) => {
       await clipsApi.update(clipId, after)
       applyLocal(clipId, after as Partial<Clip>)
+      notifyEdit()
 
       pushHistory({
         label: 'トリミング',
@@ -157,6 +214,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       if (!clip) return
       await clipsApi.delete(clipId)
       set(s => ({ clips: s.clips.filter(c => c.id !== clipId) }))
+      notifyEdit()
 
       let restoredId = -1
       const { id: _id, ...clipData } = clip as Clip & { id: number }
@@ -201,6 +259,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       set(s => ({
         clips: [...s.clips.filter(c => c.id !== clipId), left, right],
       }))
+      notifyEdit()
 
       let leftId = left.id
       let rightId = right.id
@@ -252,6 +311,22 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     updateClip: async (clipId, data) => {
       const updated = await clipsApi.update(clipId, data)
       set(s => ({ clips: s.clips.map(c => c.id === clipId ? updated : c) }))
+      notifyEdit()
+    },
+
+    // Change playback speed; the source span stays fixed so the timeline
+    // duration auto-adjusts (faster → shorter clip).
+    setClipSpeed: async (clipId, speed, ease) => {
+      const clip = get().clips.find(c => c.id === clipId)
+      if (!clip) return
+      const sp = Math.max(0.1, Math.min(8, speed))
+      const sourceConsumed = clip.duration_frames * (clip.speed || 1)
+      const newDuration = Math.max(1, Math.round(sourceConsumed / sp))
+      const data: ClipUpdate = { speed: sp, duration_frames: newDuration }
+      if (ease) data.speed_ease = ease
+      const updated = await clipsApi.update(clipId, data)
+      set(s => ({ clips: s.clips.map(c => c.id === clipId ? updated : c) }))
+      notifyEdit()
     },
 
     undo: async () => {
@@ -265,6 +340,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         canRedo: true,
       }))
       await entry.undoFn()
+      notifyEdit()
     },
 
     redo: async () => {
@@ -278,9 +354,12 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         canRedo: s.redoStack.length > 1,
       }))
       await entry.redoFn()
+      notifyEdit()
     },
 
     setCurrentFrame: (frame) => set({ currentFrame: Math.max(0, frame) }),
     setZoom: (ppf) => set({ pixelsPerFrame: Math.max(0.5, Math.min(10, ppf)) }),
+    setSelectedClipId: (id) => set({ selectedClipId: id }),
+    setEditingClipId: (id) => set({ editingClipId: id }),
   }
 })

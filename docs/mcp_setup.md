@@ -66,7 +66,7 @@ kychapogas の get_llm_state でプロジェクトの状態を確認して
 FastAPI が起動している状態であれば、以下の REST エンドポイントでも同等の操作ができます。
 
 ```
-GET  http://localhost:8000/api/llm/state/{project_id}   # 一括状態取得
-GET  http://localhost:8000/api/llm/tools                # ツール定義一覧
-POST http://localhost:8000/api/llm/chat                 # チャット (Claude tool use)
+GET  http://localhost:8002/api/llm/state/{project_id}   # 一括状態取得
+GET  http://localhost:8002/api/llm/tools                # ツール定義一覧
+POST http://localhost:8002/api/llm/chat                 # チャット (Claude tool use)
 ```

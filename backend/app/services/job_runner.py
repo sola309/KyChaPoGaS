@@ -30,6 +30,7 @@ from app.models import Track, Clip, Asset, AssetCreate, Project
 log = logging.getLogger("job_runner")
 
 GENERATED_DIR = Path(__file__).parent.parent.parent / "data" / "generated"
+PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
 
 
 async def run_forever() -> None:
@@ -152,11 +153,15 @@ async def _dispatch(job: Job) -> None:
         case "generate_video_i2v":
             await _generate_video_i2v(job, params)
         case "generate_audio":
-            await _generate_audio_stub(job, params)
+            await _generate_audio(job, params)
         case "analyze_audio":
             await _analyze_audio(job, params)
         case "analyze_video":
             await _analyze_video(job, params)
+        case "create_proxy":
+            await _create_proxy(job, params)
+        case "precompose":
+            await _precompose(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -189,6 +194,38 @@ async def _render_final(job: Job, params: dict) -> None:
         fps=fps, width=width, height=height,
         progress_cb=progress_cb,
     )
+
+
+# ── precompose: flatten the timeline into a single reusable asset ─────────────
+
+async def _precompose(job: Job, params: dict) -> None:
+    from app.services.ffmpeg_render import render_timeline
+
+    project_id = params["project_id"]
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+        tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
+        clips  = session.exec(select(Clip).where(Clip.track_id.in_([t.id for t in tracks]))).all()
+        assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+        fps    = float(params.get("fps",    project.fps))
+        width  = int(params.get("width",  project.width))
+        height = int(params.get("height", project.height))
+        tracks_d, clips_d, assets_d = list(tracks), list(clips), list(assets)
+
+    def progress_cb(p): _update_progress(job.id, p * 0.95)
+
+    output = await render_timeline(
+        job_id=job.id, project_id=project_id,
+        tracks=tracks_d, clips=clips_d, assets=assets_d,
+        fps=fps, width=width, height=height,
+        progress_cb=progress_cb,
+    )
+    asset_id = _register_asset(project_id, output, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    _update_progress(job.id, 1.0)
+    log.info(f"Precompose done → asset {asset_id}")
 
 
 # ── generate_image ────────────────────────────────────────────────────────────
@@ -265,12 +302,16 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
 
     if not await comfyui.is_available():
         raise RuntimeError(
-            "ComfyUI が起動していません。scripts/start.ps1 または start.sh で起動してください。"
+            "ComfyUI が起動していません。scripts/start.sh で起動してください。"
         )
+
+    model_id = params.get("model", "wan2.2-flf2v")
+    if model_id.startswith("wan2.2"):
+        await _generate_video_wan22(job, params)
+        return
 
     project_id = params["project_id"]
     keyframes  = params.get("keyframes", [])
-    model_id   = params.get("model", "svd-xt")
     fps        = int(params.get("fps", 6))
     strength   = float(params.get("motion_strength", 0.6))
     seed       = int(params.get("seed", -1))
@@ -343,6 +384,110 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
             fp.unlink(missing_ok=True)
 
 
+# ── generate_video_i2v: Wan2.2 (first/last frame) ─────────────────────────────
+
+WAN22_FPS = 16   # Wan2.2 native frame rate
+
+
+async def _generate_video_wan22(job: Job, params: dict) -> None:
+    """
+    Wan2.2 image-to-video with first / (optional) middle / last frame control.
+
+    1 keyframe  → start-image-only generation.
+    2 keyframes → first-last-frame (FLF2V).
+    N keyframes → N-1 FLF2V segments (start→mid→…→end) concatenated into one clip,
+                  giving start / middle / end control.
+    """
+    from app.services.comfyui import comfyui
+    from app.services.workflow_builder import build_wan22_video
+
+    project_id = params["project_id"]
+    keyframes  = params.get("keyframes", [])
+    mode       = params.get("model", "wan2.2-flf2v")
+    seed       = int(params.get("seed", -1))
+    width      = int(params.get("width", 640))
+    height     = int(params.get("height", 640))
+    prompt     = params.get("prompt", "")
+    neg_prompt = params.get("negative_prompt", "")
+    use_light  = bool(params.get("use_lightning", True))
+    duration   = float(params.get("duration_sec", 3.0))
+    total_len  = max(5, int(round(duration * WAN22_FPS)))
+
+    if not keyframes:
+        raise ValueError("Wan2.2 I2V には最低1つのキーフレーム（開始フレーム）が必要です")
+
+    def _asset_path(asset_id: int) -> Path:
+        with Session(engine) as session:
+            asset = session.get(Asset, asset_id)
+            if not asset:
+                raise ValueError(f"アセット {asset_id} が見つかりません")
+            p = Path(asset.file_path)
+        if not p.exists():
+            raise ValueError(f"アセットファイルが見つかりません: {p}")
+        return p
+
+    # Upload every keyframe image to ComfyUI once
+    _update_progress(job.id, 0.05)
+    names: list[str] = []
+    for kf in keyframes:
+        p = _asset_path(kf["asset_id"])
+        names.append((await comfyui.upload_image(p)).get("name", p.name))
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    n_seg   = max(1, len(names) - 1)
+    seg_len = max(5, round(total_len / n_seg))
+    log.info(f"Wan2.2 {mode}: {len(names)} keyframe(s) → {n_seg} segment(s), seg_len={seg_len}")
+
+    async def _run_segment(seg_idx: int, start_name: str, end_name: str | None) -> list[Path]:
+        wf = build_wan22_video(
+            mode=mode, start_image_name=start_name, end_image_name=end_name,
+            prompt=prompt, negative_prompt=neg_prompt,
+            width=width, height=height, length=seg_len, seed=seed,
+            use_lightning=use_light,
+        )
+        prompt_id = await comfyui.submit(wf)
+
+        def cb(p):
+            base = 0.10 + (seg_idx / n_seg) * 0.80
+            _update_progress(job.id, base + (p / n_seg) * 0.80)
+
+        outputs = await comfyui.wait_for_outputs(prompt_id, cb)
+        frames: list[Path] = []
+        for i, out in enumerate(outputs):
+            fn = out.get("filename", "")
+            if not fn:
+                continue
+            p = await comfyui.download_output(fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+            # Rename for stable global ordering across segments (avoids filename collisions)
+            newp = dest_dir / f"wanseg_{job.id}_{seg_idx:02d}_{i:04d}{p.suffix}"
+            p.replace(newp)
+            frames.append(newp)
+        frames.sort()
+        return frames
+
+    _update_progress(job.id, 0.10)
+    all_frames: list[Path] = []
+    if len(names) == 1:
+        all_frames = await _run_segment(0, names[0], None)
+    else:
+        for i in range(len(names) - 1):
+            seg = await _run_segment(i, names[i], names[i + 1])
+            if i > 0 and seg:
+                seg = seg[1:]   # drop the duplicated shared keyframe at the junction
+            all_frames.extend(seg)
+
+    if not all_frames:
+        raise RuntimeError("Wan2.2 がフレームを出力しませんでした")
+
+    video_path = await _frames_to_video(all_frames, dest_dir, WAN22_FPS, job.id)
+    asset_id = _register_asset(project_id, video_path, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    for fp in all_frames:
+        fp.unlink(missing_ok=True)
+    log.info(f"Wan2.2 video done: {len(all_frames)} frames ({n_seg} seg) → {video_path.name}")
+
+
 async def _frames_to_video(frames: list[Path], dest_dir: Path, fps: int, job_id: int) -> Path:
     """Combine image frames into an MP4 using FFmpeg."""
     import imageio_ffmpeg
@@ -375,11 +520,39 @@ async def _frames_to_video(frames: list[Path], dest_dir: Path, fps: int, job_id:
 
 # ── generate_audio (stub) ────────────────────────────────────────────────────
 
-async def _generate_audio_stub(job: Job, params: dict) -> None:
-    raise RuntimeError(
-        "音楽生成はPhase 4d で実装予定です。"
-        "MusicGen モデルのインストールが必要です: scripts/install_models.py"
+async def _generate_audio(job: Job, params: dict) -> None:
+    """Generate music (with optional vocals) via the ACE-Step service."""
+    from app.services.acestep import acestep
+
+    if not await acestep.is_available():
+        raise RuntimeError(
+            "音楽生成サービス (ACE-Step) が起動していません。"
+            "./scripts/start.sh で起動してください。"
+        )
+
+    project_id = params["project_id"]
+    caption    = params.get("prompt", "")
+    lyrics     = params.get("lyrics", "")
+    duration   = float(params.get("duration_sec", 30.0))
+    vocal_lang = params.get("vocal_language", "en")
+    instrumental = params.get("instrumental", None)
+    seed       = int(params.get("seed", -1))
+
+    _update_progress(job.id, 0.1)
+    audio_bytes = await acestep.generate(
+        caption=caption, lyrics=lyrics, duration_sec=duration,
+        vocal_language=vocal_lang, instrumental=instrumental, seed=seed,
     )
+    _update_progress(job.id, 0.9)
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out_path = dest_dir / f"music_{job.id}.wav"
+    out_path.write_bytes(audio_bytes)
+
+    asset_id = _register_asset(project_id, out_path, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    log.info(f"Music generation done: {out_path.name} ({len(audio_bytes)} bytes)")
 
 
 # ── analyze_audio ─────────────────────────────────────────────────────────────
@@ -471,6 +644,52 @@ async def _analyze_video(job: Job, params: dict) -> None:
         f"Video analysis done: asset={asset_id} "
         f"scenes={scene_result['scene_count']}"
     )
+
+
+# ── create_proxy: low-res preview proxy for a video asset ─────────────────────
+
+async def _create_proxy(job: Job, params: dict) -> None:
+    import imageio_ffmpeg
+    FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+
+    asset_id = params["asset_id"]
+    with Session(engine) as session:
+        asset = session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+        src = Path(asset.file_path)
+        project_id = asset.project_id
+    if not src.exists():
+        raise ValueError(f"アセットファイルが見つかりません: {src}")
+
+    dest_dir = PROXIES_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"{asset_id}.mp4"
+
+    _update_progress(job.id, 0.1)
+    cmd = [
+        FFMPEG, "-y", "-i", str(src),
+        # downscale to max 640px wide (even dims), fast-decoding H.264, web-streamable
+        "-vf", "scale='min(640,iw)':-2",
+        "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "96k",
+        str(out),
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode != 0 or not out.exists():
+        raise RuntimeError(f"プロキシ生成に失敗: {stderr.decode()[-400:]}")
+
+    with Session(engine) as session:
+        a = session.get(Asset, asset_id)
+        if a:
+            a.proxy_path = str(out)
+            session.add(a)
+            session.commit()
+    _update_progress(job.id, 1.0)
+    log.info(f"Proxy created: asset {asset_id} → {out.name} ({out.stat().st_size/1e6:.1f}MB)")
 
 
 # ── Asset registration ────────────────────────────────────────────────────────

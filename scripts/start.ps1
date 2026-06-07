@@ -5,7 +5,7 @@
 #   .\scripts\start.ps1 [-NoComfyUI] [-NoFrontend]
 #
 # 起動するサービス:
-#   1. Backend   (FastAPI)      — http://localhost:8000
+#   1. Backend   (FastAPI)      — http://localhost:8002
 #   2. Frontend  (Vite dev)     — http://localhost:5173
 #   3. Terminal  (node-pty WS)  — ws://localhost:8765
 #   4. ComfyUI   (任意)         — http://localhost:8188
@@ -29,7 +29,7 @@ Write-Host "KyChaPoGaS — Starting services`n" -ForegroundColor White
 $jobs = @()
 
 # ── Backend ───────────────────────────────────────────────────────────────────
-Info "Backend を起動しています (port 8000)..."
+Info "Backend を起動しています (port 8002)..."
 $backendDir = Join-Path $RootDir "backend"
 if (-not (Test-Path "$backendDir\.venv")) {
     Write-Host "  → setup.ps1 を先に実行してください" -ForegroundColor Red
@@ -37,7 +37,7 @@ if (-not (Test-Path "$backendDir\.venv")) {
 }
 $backendJob = Start-Process -FilePath "powershell" -ArgumentList @(
     "-NoProfile", "-Command",
-    "Set-Location '$backendDir'; .\.venv\Scripts\uvicorn.exe main:app --host 0.0.0.0 --port 8000 --reload"
+    "Set-Location '$backendDir'; .\.venv\Scripts\uvicorn.exe main:app --host 0.0.0.0 --port 8002 --reload"
 ) -WindowStyle Normal -PassThru
 $jobs += $backendJob
 Success "Backend PID=$($backendJob.Id)"
@@ -82,7 +82,7 @@ if (-not $NoFrontend) {
 Write-Host ""
 Write-Host "全サービス起動完了" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Backend:  http://localhost:8000"
+Write-Host "  Backend:  http://localhost:8002"
 if (-not $NoFrontend) { Write-Host "  Frontend: http://localhost:5173" }
 Write-Host "  Terminal: ws://localhost:8765"
 if (-not $NoComfyUI -and (Test-Path "$comfyDir\.venv")) {

@@ -56,9 +56,12 @@ class ComfyUIConnector:
                 if r.status_code != 200:
                     return []
                 data = r.json()
-                opts = (data.get("input", {})
-                           .get("required", {})
-                           .get(param, [[]])[0])
+                # ComfyUI's /object_info/{node} wraps the node under its name,
+                # i.e. {"CheckpointLoaderSimple": {"input": {...}}} — unwrap it.
+                node = data.get(node_class, data)
+                opts = (node.get("input", {})
+                            .get("required", {})
+                            .get(param, [[]])[0])
                 return [o for o in opts if isinstance(o, str)]
         except Exception:
             return []

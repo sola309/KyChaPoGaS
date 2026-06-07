@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Asset } from '../api/client'
 import { assetsApi } from '../api/client'
 import { useAnalysisStore } from '../store/analysisStore'
+import { useJobStore } from '../store/jobStore'
 
 const TYPE_BADGE: Record<string, string> = {
   video: 'bg-blue-900 text-blue-300',
@@ -41,6 +42,10 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
   }
 
   useEffect(() => { load() }, [projectId])
+
+  // Refresh the asset list when jobs complete (new precompose/proxy/generated assets)
+  const completedCount = useJobStore(s => s.jobs.filter(j => j.status === 'completed').length)
+  useEffect(() => { load() }, [completedCount])
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
@@ -120,9 +125,20 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
 function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) => void }) {
   const [thumbError, setThumbError] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const [proxying, setProxying] = useState(false)
   const { beats, scenes, loadAnalysis, triggerAudio, triggerVideo } = useAnalysisStore()
 
   const canAnalyze = asset.asset_type === 'audio' || asset.asset_type === 'video'
+  const isVideo = asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)
+  const hasProxy = !!asset.proxy_path
+
+  const handleProxy = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setProxying(true)
+    try { await assetsApi.makeProxy(asset.id) } finally {
+      setTimeout(() => setProxying(false), 1500)
+    }
+  }
   const hasBeat    = !!beats[asset.id]
   const hasScene   = !!scenes[asset.id]
 
@@ -193,8 +209,25 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
               {scenes[asset.id].scene_count}S
             </span>
           )}
+          {hasProxy && (
+            <span className="text-[10px] px-1 rounded bg-zinc-700 text-zinc-300" title="軽量プレビュー用プロキシあり">
+              📦
+            </span>
+          )}
         </div>
       </div>
+
+      {/* Proxy button (video, no proxy yet) */}
+      {isVideo && !hasProxy && (
+        <button
+          onClick={handleProxy}
+          disabled={proxying}
+          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-200 text-[10px] px-1 transition-opacity disabled:opacity-30"
+          title="軽量プレビュー用プロキシを生成"
+        >
+          {proxying ? '…' : '📦'}
+        </button>
+      )}
 
       {/* Analyze button */}
       {canAnalyze && (

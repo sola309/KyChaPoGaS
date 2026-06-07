@@ -93,6 +93,20 @@ MCP_TOOLS = [
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     mcp_types.Tool(
+        name="get_beat_grid",
+        description=(
+            "Beat positions in TIMELINE FRAME coordinates for beat-synced editing (音ハメ): "
+            "each beat's frame + downbeat flag, beat interval in frames, downbeat frames. "
+            "Use these frames as cut points / clip boundaries with move_clip/split_clip/add_clip."
+        ),
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+    mcp_types.Tool(
+        name="auto_cut_to_beats",
+        description="Split a clip at every beat within its span (音ハメ自動カット). Requires audio beat analysis.",
+        inputSchema={"type": "object", "properties": {"clip_id": {"type": "integer"}}, "required": ["clip_id"]},
+    ),
+    mcp_types.Tool(
         name="add_track",
         description="Add a new track.",
         inputSchema={
@@ -207,6 +221,10 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.get_assets(project_id, session, inp.get("asset_type"))
             case "get_analysis_summary":
                 return command_api.get_analysis_summary(project_id, session)
+            case "get_beat_grid":
+                return command_api.get_beat_grid(project_id, session)
+            case "auto_cut_to_beats":
+                return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
             case "add_track":
                 return command_api.add_track(
                     project_id, inp["track_type"], inp["name"], session

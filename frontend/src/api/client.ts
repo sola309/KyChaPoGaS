@@ -1,9 +1,31 @@
 import axios from 'axios'
+import { useUIStore } from '../store/uiStore'
 
 export const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
 })
+
+// Track edit-writes (for the auto-save indicator) and surface errors as toasts.
+const WRITE_METHODS = new Set(['post', 'patch', 'put', 'delete'])
+const isEditWrite = (cfg: { method?: string; url?: string }) =>
+  WRITE_METHODS.has((cfg.method ?? '').toLowerCase()) &&
+  /\/(clips|tracks|projects)\b/.test(cfg.url ?? '')
+
+api.interceptors.request.use(cfg => {
+  if (isEditWrite(cfg)) useUIStore.getState().beginWrite()
+  return cfg
+})
+api.interceptors.response.use(
+  res => { if (isEditWrite(res.config)) useUIStore.getState().endWrite(); return res },
+  err => {
+    if (err?.config && isEditWrite(err.config)) useUIStore.getState().endWrite()
+    const detail = err?.response?.data?.detail
+    const msg = typeof detail === 'string' ? detail : (err?.message ?? '通信エラー')
+    if (!err?.config?.__silent) useUIStore.getState().pushToast(msg, 'error')
+    return Promise.reject(err)
+  },
+)
 
 export interface Project {
   id: number
@@ -34,6 +56,7 @@ export interface Asset {
   width: number | null
   height: number | null
   file_size_bytes: number | null
+  proxy_path: string | null
   created_at: string
 }
 
@@ -59,6 +82,8 @@ export interface Clip {
   start_frame: number
   duration_frames: number
   asset_in_frame: number
+  speed: number
+  speed_ease: 'linear' | 'in' | 'out' | 'inout'
 }
 
 export interface ClipUpdate {
@@ -66,7 +91,13 @@ export interface ClipUpdate {
   duration_frames?: number
   asset_in_frame?: number
   track_id?: number
+  speed?: number
+  speed_ease?: 'linear' | 'in' | 'out' | 'inout'
 }
+
+// speed / speed_ease are optional on create (backend defaults to 1.0 / 'linear')
+export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease'>
+  & { speed?: number; speed_ease?: Clip['speed_ease'] }
 
 export const tracksApi = {
   list:   (projectId: number) =>
@@ -78,9 +109,11 @@ export const tracksApi = {
 export const clipsApi = {
   list:   (projectId: number) =>
     api.get<Clip[]>('/clips/', { params: { project_id: projectId } }).then(r => r.data),
-  create: (data: Omit<Clip, 'id'>) => api.post<Clip>('/clips/', data).then(r => r.data),
+  create: (data: ClipCreate) => api.post<Clip>('/clips/', data).then(r => r.data),
   update: (id: number, data: ClipUpdate) => api.patch<Clip>(`/clips/${id}`, data).then(r => r.data),
   delete: (id: number) => api.delete(`/clips/${id}`),
+  autoCutBeats: (id: number) =>
+    api.post<{ created: number; cut_frames?: number[]; message?: string }>(`/clips/${id}/auto-cut-beats`).then(r => r.data),
 }
 
 export const assetsApi = {
@@ -92,17 +125,23 @@ export const assetsApi = {
     const form = new FormData()
     form.append('project_id', String(projectId))
     form.append('file', file)
-    return api.post<Asset>('/assets/upload/', form, {
+    return api.post<Asset>('/assets/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data)
   },
   thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
-  fileUrl:      (assetId: number) => `/api/assets/${assetId}/file`,
+  filmstripUrl: (assetId: number) => `/api/assets/${assetId}/filmstrip`,
+  fileUrl:      (assetId: number, useProxy = false) =>
+    `/api/assets/${assetId}/file${useProxy ? '?proxy=1' : ''}`,
+  extractFrame: (assetId: number, timeSec: number) =>
+    api.post<Asset>(`/assets/${assetId}/extract-frame`, null, { params: { time_sec: timeSec } }).then(r => r.data),
+  makeProxy:    (assetId: number) =>
+    api.post<{ job_id: number; status: string }>(`/assets/${assetId}/proxy`).then(r => r.data),
 }
 
 // ── Job types ─────────────────────────────────────────────────────────────────
 
-export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v'
+export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v' | 'precompose' | 'create_proxy'
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface Job {
@@ -121,8 +160,8 @@ export interface Job {
 
 export interface I2VKeyframe  { time_sec: number; asset_id: number }
 export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number }
-export interface AudioGenParams  { project_id: number; prompt: string; duration_sec?: number; model?: string; seed?: number }
-export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number }
+export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean }
 
 export const jobsApi = {
   list:        (projectId: number) =>
@@ -219,6 +258,7 @@ export interface GpuInfo {
   temperature_c: number
   power_draw_w: number
   power_limit_w: number
+  unified_memory: boolean   // true on shared-memory GPUs (e.g. DGX Spark GB10)
 }
 
 export interface GpuStatus {

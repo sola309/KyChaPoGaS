@@ -1,5 +1,6 @@
 import type { Track, Clip, Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useCollabStore } from '../../store/collabStore'
 import { ClipBlock } from './ClipBlock'
 import { RefClipBlock } from './RefClipBlock'
 import { WaveformCanvas } from './WaveformCanvas'
@@ -16,13 +17,26 @@ interface Props {
   selectedClipId: number | null
   onSelectClip: (id: number) => void
   onDropAsset: (trackId: number, assetId: number, startFrame: number) => void
+  snapFrame?: (frame: number) => number
 }
 
 export function TrackLane({
   track, clips, assets, pixelsPerFrame, totalWidth,
-  selectedClipId, onSelectClip, onDropAsset,
+  selectedClipId, onSelectClip, onDropAsset, snapFrame,
 }: Props) {
   const { deleteTrack } = useTimelineStore()
+  const others = useCollabStore(s => s.others)
+
+  // Remote collaborators' selection / active-edit per clip id
+  const remoteFor = (clipId: number) => {
+    let select: string | null = null
+    let lock: { name: string; color: string } | null = null
+    for (const o of Object.values(others)) {
+      if (o.presence.editing_clip_id === clipId) lock = { name: o.user.name, color: o.user.color }
+      else if (o.presence.selected_clip_id === clipId) select = o.user.color
+    }
+    return { select, lock }
+  }
 
   const isRef   = track.track_type === 'reference'
   const isAudio = track.track_type === 'audio'
@@ -120,6 +134,9 @@ export function TrackLane({
                 trackHeight={height}
                 selected={selectedClipId === clip.id}
                 onSelect={onSelectClip}
+                snapFrame={snapFrame}
+                remoteSelect={remoteFor(clip.id).select}
+                remoteLock={remoteFor(clip.id).lock}
               />
             </div>
           )

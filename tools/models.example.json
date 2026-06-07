@@ -4,6 +4,14 @@
 
   "image": [
     {
+      "name": "WAI Illustrious v17.0 (アニメ)",
+      "url": "https://civitai.com/api/download/models/2883731",
+      "dest": "tools/comfyui/models/checkpoints/waiNSFWIllustrious_v170.safetensors",
+      "size_gb": 6.8,
+      "enabled": false,
+      "_note": "Civitai model 827184 (WAI-illustrious-SDXL, 旧名 WAI-NSFW-illustrious)。要 CIVITAI_TOKEN。アニメ系SDXL。"
+    },
+    {
       "name": "FLUX.1 Dev (fp8)",
       "url": "https://huggingface.co/Comfy-Org/flux1-dev/resolve/main/flux1-dev-fp8.safetensors",
       "dest": "tools/comfyui/models/checkpoints/flux1-dev-fp8.safetensors",

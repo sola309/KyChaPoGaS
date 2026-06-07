@@ -51,3 +51,17 @@ def delete_clip(clip_id: int, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Clip not found")
     session.delete(clip)
     session.commit()
+
+
+@router.post("/{clip_id}/auto-cut-beats")
+def auto_cut_beats(clip_id: int, session: Session = Depends(get_session)):
+    """Split a clip on every beat in its span (音ハメ自動カット)."""
+    from app.models import Track
+    from app.services import command_api
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    track = session.get(Track, clip.track_id)
+    if not track:
+        raise HTTPException(status_code=404, detail="Track not found")
+    return command_api.auto_cut_to_beats(track.project_id, clip_id, session)

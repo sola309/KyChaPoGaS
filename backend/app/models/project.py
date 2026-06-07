@@ -7,8 +7,10 @@ class ProjectBase(SQLModel):
     name: str
     description: Optional[str] = None
     fps: float = 30.0
-    width: int = 1920
-    height: int = 1080
+    # Default canvas: 1280x720 — exact 16:9, matches Wan2.2's 720p bucket and is
+    # SDXL-compatible. Generation uses each model's nearest 16:9 bucket and fits.
+    width: int = 1280
+    height: int = 720
 
 
 class Project(ProjectBase, table=True):

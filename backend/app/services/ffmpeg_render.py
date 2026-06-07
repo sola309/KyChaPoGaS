@@ -77,21 +77,92 @@ async def _run(cmd: list[str], progress_cb=None) -> str:
     return "\n".join(stderr_lines)
 
 
+# Cubic-bezier easing presets (P0=(0,0), P3=(1,1)) for accel/decel speed ramps.
+_EASE: dict[str, tuple[float, float, float, float]] = {
+    "in":    (0.42, 0.0, 1.0,  1.0),   # slow start → accelerate
+    "out":   (0.0,  0.0, 0.58, 1.0),   # fast start → decelerate
+    "inout": (0.42, 0.0, 0.58, 1.0),   # ease in and out
+}
+
+
+def _cubic_bezier_y_at_x(x: float, x1: float, y1: float, x2: float, y2: float, iters: int = 20) -> float:
+    """Source-progress (y) for output-progress (x) on a cubic bezier easing curve."""
+    def bx(t: float) -> float:
+        mt = 1 - t
+        return 3 * mt * mt * t * x1 + 3 * mt * t * t * x2 + t * t * t
+
+    def by(t: float) -> float:
+        mt = 1 - t
+        return 3 * mt * mt * t * y1 + 3 * mt * t * t * y2 + t * t * t
+
+    lo, hi = 0.0, 1.0
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        if bx(mid) < x:
+            lo = mid
+        else:
+            hi = mid
+    return by((lo + hi) / 2)
+
+
+def _scale_pad_fps(w: int, h: int, fps: float) -> str:
+    return (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps}")
+
+
 async def _extract_segment(src: str, out: Path, in_sec: float,
-                            dur_sec: float, w: int, h: int, fps: float) -> None:
-    """Extract and re-encode a clip segment to uniform resolution/fps."""
-    cmd = [
-        FFMPEG, "-y",
-        "-ss", str(in_sec),
-        "-t",  str(dur_sec),
-        "-i",  src,
-        "-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-               f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps}",
-        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-        "-an",               # strip audio here; mixed separately
-        str(out),
-    ]
-    await _run(cmd)
+                           dur_sec: float, w: int, h: int, fps: float,
+                           speed: float = 1.0, ease: str = "linear") -> None:
+    """
+    Extract a clip segment to uniform resolution/fps, applying a speed remap.
+
+    dur_sec is the OUTPUT (timeline) duration; the segment consumes
+    ``dur_sec * speed`` seconds of source. ease shapes accel/decel (bezier).
+    """
+    speed = max(0.05, float(speed))
+    source_span = dur_sec * speed
+    vf = _scale_pad_fps(w, h, fps)
+
+    # Constant speed (linear) — single pass with setpts.
+    if ease == "linear" or ease not in _EASE:
+        cmd = [
+            FFMPEG, "-y",
+            "-ss", f"{in_sec:.6f}", "-t", f"{source_span:.6f}", "-i", src,
+            "-vf", f"setpts=PTS/{speed:.6f},{vf}",
+            "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+            "-an",
+            str(out),
+        ]
+        await _run(cmd)
+        return
+
+    # Variable speed (accel/decel) — piecewise-constant approximation of the
+    # bezier speed ramp: split into K sub-segments, each at its own setpts.
+    x1, y1, x2, y2 = _EASE[ease]
+    K = 12
+    parts: list[Path] = []
+    for k in range(K):
+        u0, u1 = k / K, (k + 1) / K
+        sp0 = _cubic_bezier_y_at_x(u0, x1, y1, x2, y2)
+        sp1 = _cubic_bezier_y_at_x(u1, x1, y1, x2, y2)
+        seg_out = (u1 - u0) * dur_sec
+        seg_src_in = in_sec + sp0 * source_span
+        seg_src_dur = max(1e-3, (sp1 - sp0) * source_span)
+        seg_speed = max(0.05, seg_src_dur / seg_out)
+        part = out.parent / f"{out.stem}_e{k:02d}.mp4"
+        cmd = [
+            FFMPEG, "-y",
+            "-ss", f"{seg_src_in:.6f}", "-t", f"{seg_src_dur:.6f}", "-i", src,
+            "-vf", f"setpts=PTS/{seg_speed:.6f},{vf}",
+            "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+            "-an",
+            str(part),
+        ]
+        await _run(cmd)
+        parts.append(part)
+    await _concat(parts, out)
+    for p in parts:
+        p.unlink(missing_ok=True)
 
 
 async def _black_segment(out: Path, dur_sec: float, w: int, h: int, fps: float) -> None:
@@ -171,7 +242,7 @@ async def _mix_audio_into_video(video: Path, audio_segments: list[Path],
         filter_parts.append(f"[{i+1}:a]")
 
     if len(audio_segments) == 1:
-        audio_map = "[1:a]"
+        audio_map = "1:a"          # direct stream map (brackets = filtergraph label, wrong here)
         filter_str = None
     else:
         mix_label = "[amix]"
@@ -263,6 +334,8 @@ async def render_timeline(
                     clip.asset_in_frame / fps,
                     clip.duration_frames / fps,
                     width, height, fps,
+                    speed=getattr(clip, "speed", 1.0) or 1.0,
+                    ease=getattr(clip, "speed_ease", "linear") or "linear",
                 )
                 segs.append(seg_file)
             else:

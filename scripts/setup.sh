@@ -4,21 +4,43 @@
 # =============================================================================
 # 使い方:
 #   chmod +x scripts/setup.sh
-#   ./scripts/setup.sh
+#   ./scripts/setup.sh [--no-comfyui]
+#
+# 注意: このスクリプトは Python / Node.js / ffmpeg が既にインストール済みである
+#       ことを前提とします。まだの場合は先に ./scripts/install.sh を実行してください
+#       (システム依存をまとめて導入します)。
+#
+# オプション:
+#   --no-comfyui   ComfyUI のクローン/セットアップをスキップ (後から追加可能)
 #
 # 実行内容:
 #   1. 必須ツールの確認 (Python, Node.js, git, ffmpeg)
 #   2. Python 仮想環境 + バックエンド依存関係インストール
 #   3. フロントエンド npm install
 #   4. ターミナルサーバー npm install
-#   5. ComfyUI をクローン + 仮想環境構築
-#   6. .env ファイルの生成 (未存在の場合)
+#   5. ComfyUI をクローン + 仮想環境構築 (--no-comfyui で省略可)
+#      ※ aarch64 (DGX Spark / GB10) では CUDA 13 (cu130) の PyTorch を自動導入
+#   6. ACE-Step (音楽生成サービス) をセットアップ (--no-acestep で省略可)
+#   7. .env ファイルの生成 (未存在の場合)
+#
+# オプション:
+#   --no-comfyui   ComfyUI をスキップ
+#   --no-acestep   ACE-Step (音楽生成) をスキップ
 # =============================================================================
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT_DIR"
+
+INSTALL_COMFYUI=true
+INSTALL_ACESTEP=true
+for arg in "$@"; do
+  case $arg in
+    --no-comfyui) INSTALL_COMFYUI=false ;;
+    --no-acestep) INSTALL_ACESTEP=false ;;
+  esac
+done
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; NC='\033[0m'; BOLD='\033[1m'
@@ -47,7 +69,7 @@ check_cmd() {
   if command -v "$1" &>/dev/null; then
     success "$1 $(${2:-$1 --version 2>&1 | head -1})"
   else
-    error "$1 が見つかりません。インストールしてください。"
+    error "$1 が見つかりません。先に ./scripts/install.sh を実行してシステム依存を導入してください。"
   fi
 }
 
@@ -100,49 +122,72 @@ success "ターミナルサーバー依存関係インストール完了"
 cd "$ROOT_DIR"
 
 # ── 5. ComfyUI ────────────────────────────────────────────────────────────────
-step "ComfyUI をセットアップしています"
+if $INSTALL_COMFYUI; then
+  step "ComfyUI をセットアップしています"
 
-COMFY_DIR="$ROOT_DIR/tools/comfyui"
-COMFY_REPO="https://github.com/comfyanonymous/ComfyUI.git"
-COMFY_TAG="latest"   # ピン止めしたい場合: "v0.3.43" など
+  COMFY_DIR="$ROOT_DIR/tools/comfyui"
+  COMFY_REPO="https://github.com/comfyanonymous/ComfyUI.git"
+  COMFY_TAG="latest"   # ピン止めしたい場合: "v0.3.43" など
 
-if [ -d "$COMFY_DIR/.git" ]; then
-  info "ComfyUI は既にインストール済みです。更新しています..."
+  if [ -d "$COMFY_DIR/.git" ]; then
+    info "ComfyUI は既にインストール済みです。更新しています..."
+    cd "$COMFY_DIR"
+    git pull --ff-only 2>/dev/null || warn "git pull に失敗しました。手動で更新してください。"
+    cd "$ROOT_DIR"
+  else
+    info "ComfyUI をクローン中... (初回は数分かかります)"
+    mkdir -p "$ROOT_DIR/tools"
+    git clone --depth 1 "$COMFY_REPO" "$COMFY_DIR"
+    success "ComfyUI クローン完了"
+  fi
+
+  # ComfyUI の Python 仮想環境
+  info "ComfyUI の Python 環境を構築中..."
   cd "$COMFY_DIR"
-  git pull --ff-only 2>/dev/null || warn "git pull に失敗しました。手動で更新してください。"
+  if [ ! -d ".venv" ]; then
+    python3 -m venv .venv
+  fi
+  source .venv/bin/activate
+  pip install --quiet --upgrade pip
+  # DGX Spark / aarch64 (Blackwell GB10, sm_121): ComfyUI の requirements が引く
+  # 既定 torch は cu130 ランタイム (libcudart.so.13) と ABI が合わないため、
+  # 先に CUDA 13 (cu130) の aarch64 wheel を入れておく。sm_120 カーネルは
+  # sm_121 とバイナリ互換なので GB10 で動作する。
+  if [ "$(uname -m)" = "aarch64" ]; then
+    info "aarch64 検出 — DGX Spark 向け CUDA 13 PyTorch (cu130) を導入中... (数分かかります)"
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130 \
+      && success "cu130 PyTorch 導入完了" \
+      || warn "cu130 PyTorch の導入に失敗。手動で: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130"
+  fi
+  pip install --quiet -r requirements.txt
+  success "ComfyUI 依存関係インストール完了"
+  deactivate
   cd "$ROOT_DIR"
+
+  # ComfyUI のモデルディレクトリ作成
+  mkdir -p "$COMFY_DIR/models/checkpoints"
+  mkdir -p "$COMFY_DIR/models/loras"
+  mkdir -p "$COMFY_DIR/models/vae"
+  mkdir -p "$COMFY_DIR/models/video_models"
+  mkdir -p "$COMFY_DIR/models/clip"
+  mkdir -p "$COMFY_DIR/models/unet"
+  mkdir -p "$COMFY_DIR/input"
+  mkdir -p "$COMFY_DIR/output"
+  success "ComfyUI モデルディレクトリ作成完了"
 else
-  info "ComfyUI をクローン中... (初回は数分かかります)"
-  mkdir -p "$ROOT_DIR/tools"
-  git clone --depth 1 "$COMFY_REPO" "$COMFY_DIR"
-  success "ComfyUI クローン完了"
+  step "ComfyUI のセットアップをスキップしました (--no-comfyui)"
+  info "後で追加する場合: ./scripts/setup.sh を --no-comfyui なしで再実行してください"
 fi
 
-# ComfyUI の Python 仮想環境
-info "ComfyUI の Python 環境を構築中..."
-cd "$COMFY_DIR"
-if [ ! -d ".venv" ]; then
-  python3 -m venv .venv
+# ── 6. ACE-Step (音楽生成) ────────────────────────────────────────────────────
+if $INSTALL_ACESTEP; then
+  bash "$SCRIPT_DIR/setup_acestep.sh" || warn "ACE-Step セットアップに失敗しました。後で ./scripts/setup_acestep.sh を実行してください。"
+else
+  step "ACE-Step (音楽生成) のセットアップをスキップしました (--no-acestep)"
+  info "後で追加する場合: ./scripts/setup_acestep.sh を実行してください"
 fi
-source .venv/bin/activate
-pip install --quiet --upgrade pip
-pip install --quiet -r requirements.txt
-success "ComfyUI 依存関係インストール完了"
-deactivate
-cd "$ROOT_DIR"
 
-# ComfyUI のモデルディレクトリ作成
-mkdir -p "$COMFY_DIR/models/checkpoints"
-mkdir -p "$COMFY_DIR/models/loras"
-mkdir -p "$COMFY_DIR/models/vae"
-mkdir -p "$COMFY_DIR/models/video_models"
-mkdir -p "$COMFY_DIR/models/clip"
-mkdir -p "$COMFY_DIR/models/unet"
-mkdir -p "$COMFY_DIR/input"
-mkdir -p "$COMFY_DIR/output"
-success "ComfyUI モデルディレクトリ作成完了"
-
-# ── 6. .env ファイル ──────────────────────────────────────────────────────────
+# ── 7. .env ファイル ──────────────────────────────────────────────────────────
 step ".env ファイルを確認しています"
 
 ENV_FILE="$ROOT_DIR/backend/.env"
@@ -167,8 +212,8 @@ echo ""
 echo -e "${GREEN}${BOLD}✓ セットアップ完了！${NC}"
 echo ""
 echo "  次のステップ:"
-echo "  1. backend/.env を編集して ANTHROPIC_API_KEY を設定"
+echo "  1. backend/.env を編集 — ANTHROPIC_API_KEY / CIVITAI_TOKEN を設定"
 echo "  2. scripts/models.local.json で DL したいモデルを enabled: true に変更"
 echo "  3. python scripts/install_models.py でモデルをダウンロード"
-echo "  4. ./scripts/start.sh でサービスを起動"
+echo "  4. ./scripts/start.sh でサービスを起動 (ComfyUI / 音楽サービス含む)"
 echo ""

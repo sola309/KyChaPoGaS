@@ -36,7 +36,18 @@ function GpuChip({ gpu }: { gpu: GpuInfo }) {
         {shortName}
       </span>
 
-      {/* VRAM bar */}
+      {/* Unified-memory badge (e.g. DGX Spark GB10) */}
+      {gpu.unified_memory && (
+        <span
+          className="text-[9px] px-1 rounded bg-sky-500/15 text-sky-300 leading-tight flex-shrink-0"
+          title="ユニファイドメモリ: GPU と CPU が同じメモリプールを共有します (VRAM 値はシステムRAM)"
+        >
+          UMA
+        </span>
+      )}
+
+      {/* VRAM bar (system RAM pool on unified-memory devices) */}
+      <span className="text-zinc-500 text-[10px] flex-shrink-0">{gpu.unified_memory ? 'mem' : 'vram'}</span>
       <VramBar used={gpu.vram_used_mb} total={gpu.vram_total_mb} />
 
       {/* Core utilization */}
@@ -57,8 +68,8 @@ function GpuChip({ gpu }: { gpu: GpuInfo }) {
         </span>
       )}
 
-      {/* Power */}
-      {gpu.power_limit_w > 0 && (
+      {/* Power (draw is shown whenever available; limit may be unsupported, e.g. GB10) */}
+      {gpu.power_draw_w > 0 && (
         <span className="text-zinc-400 text-[10px] tabular-nums">
           <span className="text-zinc-500">pwr </span>
           <span className="text-zinc-300">{Math.round(gpu.power_draw_w)}W</span>

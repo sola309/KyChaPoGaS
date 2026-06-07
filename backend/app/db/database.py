@@ -21,8 +21,10 @@ def _migrate(conn) -> None:
         rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
         return {r[1] for r in rows}
 
+    tables = {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}
+
     # ── Phase 5: job VRAM columns ─────────────────────────────────────────
-    if "job" in {r[0] for r in conn.execute(text("SELECT name FROM sqlite_master WHERE type='table'")).fetchall()}:
+    if "job" in tables:
         job_cols = columns("job")
         if "vram_estimated_mb" not in job_cols:
             conn.execute(text("ALTER TABLE job ADD COLUMN vram_estimated_mb INTEGER"))
@@ -30,6 +32,21 @@ def _migrate(conn) -> None:
         if "vram_peak_mb" not in job_cols:
             conn.execute(text("ALTER TABLE job ADD COLUMN vram_peak_mb INTEGER"))
             log.info("Migration: added job.vram_peak_mb")
+
+    # ── Phase D: clip speed / time-remap columns ──────────────────────────
+    if "clip" in tables:
+        clip_cols = columns("clip")
+        if "speed" not in clip_cols:
+            conn.execute(text("ALTER TABLE clip ADD COLUMN speed FLOAT DEFAULT 1.0"))
+            log.info("Migration: added clip.speed")
+        if "speed_ease" not in clip_cols:
+            conn.execute(text("ALTER TABLE clip ADD COLUMN speed_ease VARCHAR DEFAULT 'linear'"))
+            log.info("Migration: added clip.speed_ease")
+
+    # ── Phase E: asset proxy path ─────────────────────────────────────────
+    if "asset" in tables and "proxy_path" not in columns("asset"):
+        conn.execute(text("ALTER TABLE asset ADD COLUMN proxy_path VARCHAR"))
+        log.info("Migration: added asset.proxy_path")
 
 
 def create_db_and_tables() -> None:

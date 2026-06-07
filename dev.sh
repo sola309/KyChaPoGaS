@@ -9,13 +9,13 @@ if [ ! -d "$SCRIPT_DIR/backend/.venv" ]; then
   bash "$SCRIPT_DIR/backend/setup.sh"
 fi
 
-echo "Backend  -> http://0.0.0.0:8000"
+echo "Backend  -> http://0.0.0.0:8002"
 echo "Frontend -> http://localhost:5173"
 
 trap 'kill %1 %2 2>/dev/null' EXIT
 
 cd "$SCRIPT_DIR/backend"
-.venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
+.venv/bin/uvicorn main:app --reload --host 0.0.0.0 --port 8002 &
 
 cd "$SCRIPT_DIR/frontend"
 npm run dev &

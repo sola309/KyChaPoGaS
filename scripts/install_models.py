@@ -13,10 +13,36 @@ import argparse
 import json
 import os
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
+
+
+def _load_env_token() -> str:
+    """Read CIVITAI_TOKEN from the environment, then backend/.env as a fallback."""
+    token = os.getenv("CIVITAI_TOKEN", "").strip()
+    if token:
+        return token
+    env_file = ROOT / "backend" / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("CIVITAI_TOKEN=") and not line.startswith("#"):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+CIVITAI_TOKEN = _load_env_token()
+
+
+def _authorize_url(url: str) -> str:
+    """Civitai requires an API token; append it as a query param when needed."""
+    if "civitai.com" in url and CIVITAI_TOKEN and "token=" not in url:
+        sep = "&" if "?" in url else "?"
+        return f"{url}{sep}token={urllib.parse.quote(CIVITAI_TOKEN)}"
+    return url
 
 
 def load_config(config_path: Path) -> dict:
@@ -54,6 +80,10 @@ def download(url: str, dest: Path, dry_run: bool) -> None:
     if dest.exists():
         print(f"  → スキップ (既存): {dest.name}")
         return
+    if "civitai.com" in url and not CIVITAI_TOKEN:
+        print("  ✗ Civitai のダウンロードには CIVITAI_TOKEN が必要です。")
+        print("    backend/.env の CIVITAI_TOKEN= にトークンを設定してください。")
+        return
     if dry_run:
         print(f"  → [dry-run] {dest}")
         return
@@ -61,19 +91,36 @@ def download(url: str, dest: Path, dry_run: bool) -> None:
     print(f"  → ダウンロード中: {url}")
     print(f"     保存先: {dest}")
 
-    def progress(block_num, block_size, total_size):
-        downloaded = block_num * block_size
-        if total_size > 0:
-            pct = min(100, downloaded * 100 // total_size)
-            bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
-            print(f"\r     [{bar}] {pct:3d}%  {human_size(downloaded)}/{human_size(total_size)}", end="", flush=True)
+    # Civitai blocks the default urllib User-Agent (→ 403) and authenticates via
+    # a ?token= query param (a Bearer header is rejected with 400). Send a
+    # browser-like UA and the token in the URL — matching a working `curl`.
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; KyChaPoGaS-installer/1.0)"}
+    fetch_url = _authorize_url(url)
 
+    tmp = dest.with_suffix(dest.suffix + ".part")
     try:
-        urllib.request.urlretrieve(url, dest, reporthook=progress)
+        req = urllib.request.Request(fetch_url, headers=headers)
+        with urllib.request.urlopen(req) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            chunk = 1024 * 256
+            with open(tmp, "wb") as f:
+                while True:
+                    buf = resp.read(chunk)
+                    if not buf:
+                        break
+                    f.write(buf)
+                    downloaded += len(buf)
+                    if total > 0:
+                        pct = min(100, downloaded * 100 // total)
+                        bar = "█" * (pct // 5) + "░" * (20 - pct // 5)
+                        print(f"\r     [{bar}] {pct:3d}%  {human_size(downloaded)}/{human_size(total)}", end="", flush=True)
+        tmp.replace(dest)
         print()
         print(f"  ✓ 完了: {dest.name}")
     except Exception as e:
         print(f"\n  ✗ 失敗: {e}")
+        tmp.unlink(missing_ok=True)
         if dest.exists():
             dest.unlink()
 
