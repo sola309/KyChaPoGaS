@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom'
 
 const SEGMENTS = [
   { letters: 'Ky',  word: 'Kyoko',  jp: '杏子' },
-  { letters: 'Cha', word: 'Chan',   jp: 'ちゃん' },
+  { letters: 'Cha', word: 'Chan to', jp: 'ちゃんと' },
   { letters: 'Po',  word: 'Pocky',  jp: 'ポッキー' },
   { letters: 'Ga',  word: 'Game',   jp: 'ゲーム' },
   { letters: 'S',   word: 'Shitai', jp: 'したい' },
@@ -108,12 +108,8 @@ export function BrandLogo({ className = '' }: Props) {
               aria-label="閉じる"
             >✕</button>
 
-            <p className="text-center text-[11px] uppercase tracking-[0.3em] text-purple-400/80 mb-6">
-              the name stands for
-            </p>
-
             {/* Acronym segments lighting up one by one */}
-            <div className="flex items-end justify-center gap-3 sm:gap-5">
+            <div className="mt-2 flex items-end justify-center gap-3 sm:gap-5">
               {SEGMENTS.map((s, i) => {
                 const lit = step > i
                 return (
@@ -150,8 +146,8 @@ export function BrandLogo({ className = '' }: Props) {
               <p className="text-lg sm:text-xl font-bold text-purple-200">
                 🥢 杏子ちゃんとポッキーゲームしたい
               </p>
-              <p className="mt-2 text-xs text-zinc-500">
-                元ネタ: 佐倉杏子（魔法少女まどか☆マギカ）　·　A MAD Video Creation Studio
+              <p className="mt-3 text-xs text-zinc-500">
+                created by <span className="text-purple-300 font-medium">sola309</span>
               </p>
             </div>
           </div>
