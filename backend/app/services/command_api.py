@@ -13,6 +13,49 @@ from sqlmodel import Session, select
 from app.models import Asset, Track, Clip
 
 
+# ── Operation log (cross-process observability) ───────────────────────────────
+
+def record_op(project_id: int | None, kind: str, session: Session,
+              detail: str = "", actor: str = "ai") -> None:
+    if project_id is None:
+        return
+    from app.models.oplog import OperationLog
+    session.add(OperationLog(project_id=project_id, kind=kind, detail=detail, actor=actor))
+    session.commit()
+
+
+def _after_edit(project_id: int | None, kind: str, session: Session,
+                detail: str = "", actor: str = "ai") -> None:
+    """Record the edit and broadcast a live-sync signal to collaborators."""
+    record_op(project_id, kind, session, detail, actor)
+    if project_id is not None:
+        from app.services.collab import notify_edit
+        notify_edit(project_id, by=actor)
+
+
+def _project_of_clip(clip: "Clip", session: Session) -> int | None:
+    t = session.get(Track, clip.track_id)
+    return t.project_id if t else None
+
+
+def get_recent_operations(project_id: int, session: Session, limit: int = 50) -> dict:
+    """Recent timeline edits (user + AI), newest first — so an assistant can see
+    what the user has been doing."""
+    from app.models.oplog import OperationLog
+    rows = session.exec(
+        select(OperationLog)
+        .where(OperationLog.project_id == project_id)
+        .order_by(OperationLog.id.desc())
+        .limit(min(200, max(1, limit)))
+    ).all()
+    return {
+        "operations": [
+            {"ts": r.ts.isoformat() + "Z", "actor": r.actor, "kind": r.kind, "detail": r.detail}
+            for r in rows
+        ]
+    }
+
+
 # ── Read operations ───────────────────────────────────────────────────────────
 
 def get_project_state(project_id: int, session: Session) -> dict:
@@ -289,6 +332,7 @@ def auto_cut_to_beats(project_id: int, clip_id: int, session: Session) -> dict:
     session.commit()
     for c in new_clips:
         session.refresh(c)
+    _after_edit(project_id, "auto_cut_beats", session, detail=f"{len(new_clips)} segments")
     return {
         "original_clip_id": clip_id,
         "created": len(new_clips),
@@ -338,6 +382,7 @@ def add_track(project_id: int, track_type: str, name: str, session: Session) -> 
     session.add(track)
     session.commit()
     session.refresh(track)
+    _after_edit(project_id, "add_track", session, detail=track.name or "")
     return {"track_id": track.id, "name": track.name, "track_type": track.track_type, "order": track.order}
 
 
@@ -346,11 +391,13 @@ def delete_track(track_id: int, session: Session) -> dict:
     track = session.get(Track, track_id)
     if not track:
         return {"error": f"Track {track_id} not found"}
+    proj = track.project_id
     clips = session.exec(select(Clip).where(Clip.track_id == track_id)).all()
     for c in clips:
         session.delete(c)
     session.delete(track)
     session.commit()
+    _after_edit(proj, "delete_track", session, detail=f"{len(clips)} clips")
     return {"deleted_track_id": track_id, "deleted_clip_count": len(clips)}
 
 
@@ -376,6 +423,7 @@ def add_clip(
     session.add(clip)
     session.commit()
     session.refresh(clip)
+    _after_edit(project_id, "add_clip", session, detail=f"track {track_id} @ frame {start_frame}")
     return {"clip_id": clip.id, "track_id": track_id,
             "start_frame": start_frame, "duration_frames": duration_frames}
 
@@ -388,6 +436,8 @@ def move_clip(clip_id: int, new_start_frame: int, session: Session) -> dict:
     clip.start_frame = max(0, new_start_frame)
     session.add(clip)
     session.commit()
+    _after_edit(_project_of_clip(clip, session), "move_clip", session,
+                detail=f"{old_frame}→{clip.start_frame}")
     return {"clip_id": clip_id, "from_frame": old_frame, "to_frame": clip.start_frame}
 
 
@@ -395,8 +445,10 @@ def delete_clip(clip_id: int, session: Session) -> dict:
     clip = session.get(Clip, clip_id)
     if not clip:
         return {"error": f"Clip {clip_id} not found"}
+    proj = _project_of_clip(clip, session)
     session.delete(clip)
     session.commit()
+    _after_edit(proj, "delete_clip", session)
     return {"deleted_clip_id": clip_id}
 
 
@@ -422,6 +474,7 @@ def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
     session.commit()
     session.refresh(left)
     session.refresh(right)
+    _after_edit(_project_of_clip(left, session), "split_clip", session, detail=f"@ frame {split_frame}")
     return {"left_clip_id": left.id, "right_clip_id": right.id,
             "split_at_frame": split_frame}
 

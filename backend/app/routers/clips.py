@@ -7,6 +7,12 @@ from app.models import Clip, ClipCreate, ClipUpdate, ClipRead
 router = APIRouter(prefix="/clips", tags=["clips"])
 
 
+def _proj_of_clip(clip: Clip, session: Session) -> int | None:
+    from app.models import Track
+    t = session.get(Track, clip.track_id)
+    return t.project_id if t else None
+
+
 @router.get("/", response_model=list[ClipRead])
 def list_clips(track_id: int | None = None, project_id: int | None = None,
                session: Session = Depends(get_session)):
@@ -28,6 +34,9 @@ def create_clip(data: ClipCreate, session: Session = Depends(get_session)):
     session.add(clip)
     session.commit()
     session.refresh(clip)
+    from app.services import command_api
+    command_api.record_op(_proj_of_clip(clip, session), "add_clip", session,
+                          detail=f"track {clip.track_id} @ frame {clip.start_frame}", actor="user")
     return clip
 
 
@@ -36,11 +45,20 @@ def update_clip(clip_id: int, data: ClipUpdate, session: Session = Depends(get_s
     clip = session.get(Clip, clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    changed = data.model_dump(exclude_unset=True)
+    for field, value in changed.items():
         setattr(clip, field, value)
     session.add(clip)
     session.commit()
     session.refresh(clip)
+    keys = set(changed)
+    kind = ("set_speed" if keys & {"speed", "speed_ease"}
+            else "move_clip" if keys & {"start_frame", "track_id"}
+            else "trim_clip" if keys & {"in_point", "out_point", "duration"}
+            else "update_clip")
+    from app.services import command_api
+    command_api.record_op(_proj_of_clip(clip, session), kind, session,
+                          detail=", ".join(sorted(keys)), actor="user")
     return clip
 
 
@@ -49,8 +67,12 @@ def delete_clip(clip_id: int, session: Session = Depends(get_session)):
     clip = session.get(Clip, clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    proj = _proj_of_clip(clip, session)
+    track_id = clip.track_id
     session.delete(clip)
     session.commit()
+    from app.services import command_api
+    command_api.record_op(proj, "delete_clip", session, detail=f"track {track_id}", actor="user")
 
 
 @router.post("/{clip_id}/auto-cut-beats")

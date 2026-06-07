@@ -48,6 +48,8 @@ def terminal_allowed(ip: str | None) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    from app.services.collab import set_loop
+    set_loop(asyncio.get_running_loop())   # enable sync→async edit broadcasts
     runner_task = asyncio.create_task(job_runner.run_forever())
     yield
     runner_task.cancel()
@@ -81,6 +83,31 @@ app.include_router(generation.router, prefix="/api")
 app.include_router(llm.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
 app.include_router(analysis.router, prefix="/api")
+
+
+@app.get("/api/build-id")
+def build_id():
+    """Current frontend build id (the hashed JS filename) — changes on every rebuild.
+    The client polls this and auto-reloads when it changes, so UI updates apply
+    without a manual hard reload."""
+    import re
+    try:
+        html = (FRONTEND_DIST / "index.html").read_text(encoding="utf-8")
+        m = re.search(r"/assets/(index-[^\"']+\.js)", html)
+        return {"build": m.group(1) if m else "dev"}
+    except Exception:
+        return {"build": "dev"}
+
+
+@app.get("/api/ops/recent")
+def ops_recent(project_id: int, limit: int = 50):
+    """Recent timeline edits (user + AI), newest first — lets an assistant see
+    what the user has been doing on the timeline."""
+    from sqlmodel import Session
+    from app.db.database import engine
+    from app.services import command_api
+    with Session(engine) as session:
+        return command_api.get_recent_operations(project_id, session, limit)
 
 
 @app.get("/api/health")

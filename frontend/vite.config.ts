@@ -4,6 +4,14 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // `vite build --watch` (serve.sh sets KYCHAPOGAS_WATCH=1) rebuilds dist on every
+  // source change so the browser auto-reloads (see /api/build-id poller). Poll the
+  // filesystem so edits are never missed — native fs events can be dropped on some
+  // setups, which would silently break auto-reload. Gated by env so a one-off
+  // `vite build` is NOT forced into watch mode.
+  build: process.env.KYCHAPOGAS_WATCH
+    ? { watch: { buildDelay: 200, chokidar: { usePolling: true, interval: 400 } } }
+    : {},
   server: {
     host: '0.0.0.0',
     port: 5173,

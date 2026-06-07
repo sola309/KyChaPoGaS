@@ -18,6 +18,9 @@ def create_track(data: TrackCreate, session: Session = Depends(get_session)):
     session.add(track)
     session.commit()
     session.refresh(track)
+    from app.services import command_api
+    command_api.record_op(track.project_id, "add_track", session,
+                          detail=track.name or f"track {track.id}", actor="user")
     return track
 
 
@@ -42,7 +45,11 @@ def delete_track(track_id: int, session: Session = Depends(get_session)):
     track = session.get(Track, track_id)
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
+    proj = track.project_id
+    name = track.name
     for clip in session.exec(select(Clip).where(Clip.track_id == track_id)).all():
         session.delete(clip)
     session.delete(track)
     session.commit()
+    from app.services import command_api
+    command_api.record_op(proj, "delete_track", session, detail=name or "", actor="user")

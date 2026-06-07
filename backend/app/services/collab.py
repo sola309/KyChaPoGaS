@@ -9,6 +9,7 @@ scaled to multiple workers this would need a shared pub/sub (e.g. Redis).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
@@ -16,6 +17,27 @@ from typing import Any
 from fastapi import WebSocket
 
 log = logging.getLogger("collab")
+
+# The main event loop (captured at startup) so synchronous code (REST handlers,
+# command_api) can schedule a broadcast onto it.
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_loop(loop: asyncio.AbstractEventLoop) -> None:
+    global _loop
+    _loop = loop
+
+
+def notify_edit(project_id: int, by: str | None = None) -> None:
+    """Schedule an 'edit' broadcast from synchronous code (no-op if no loop)."""
+    if _loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(
+            collab.broadcast(project_id, {"type": "edit", "by": by}), _loop
+        )
+    except Exception:
+        pass
 
 
 @dataclass

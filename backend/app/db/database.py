@@ -55,6 +55,7 @@ def create_db_and_tables() -> None:
         Project, Asset, Track, Clip, Job,
     )
     from app.models.analysis import AnalysisResult  # noqa: F401
+    from app.models.oplog import OperationLog  # noqa: F401
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
         _migrate(conn)

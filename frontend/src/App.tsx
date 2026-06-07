@@ -5,23 +5,52 @@ import { TerminalPanel } from './components/Terminal/TerminalPanel'
 import { GpuStatusBar } from './components/GpuStatusBar'
 import { CollabToasts } from './components/CollabToasts'
 import { MobileNotice } from './components/MobileNotice'
+import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
 const MAX_TERM_H  = 600
 const DEFAULT_H   = 280
+
+// 埋め込みターミナルUIは一時的に非表示（コードはアーカイブとして保持）。
+// 復活させるには true に戻す（バックエンドのIP制限/--no-terminal も併用可）。
+const TERMINAL_UI_ENABLED = false
 
 function App() {
   const [termOpen,  setTermOpen]  = useState(false)
   const [termH,     setTermH]     = useState(DEFAULT_H)
   // The embedded terminal can be disabled server-side (KYCHAPOGAS_DISABLE_TERMINAL)
   // so shared collaborators can't get a host shell.
-  const [termEnabled, setTermEnabled] = useState(true)
+  const [termBackendEnabled, setTermEnabled] = useState(true)
+  const termEnabled = TERMINAL_UI_ENABLED && termBackendEnabled
 
   useEffect(() => {
+    if (!TERMINAL_UI_ENABLED) return
     fetch('/api/health')
       .then(r => r.json())
       .then(d => setTermEnabled(d.terminal_enabled !== false))
       .catch(() => { /* keep default */ })
+  }, [])
+
+  // Auto-apply UI updates: poll the build id and soft-reload when it changes
+  // (so improvements appear without a manual hard reload).
+  useEffect(() => {
+    let initial: string | null = null
+    let reloading = false
+    const check = async () => {
+      try {
+        const { build } = await (await fetch('/api/build-id', { cache: 'no-store' })).json()
+        if (!build) return
+        if (initial === null) { initial = build; return }
+        if (build !== initial && !reloading) {
+          reloading = true
+          useUIStore.getState().pushToast('新しいバージョンを読み込みます…', 'info')
+          setTimeout(() => location.reload(), 900)
+        }
+      } catch { /* ignore */ }
+    }
+    const t = setInterval(check, 4000)
+    check()
+    return () => clearInterval(t)
   }, [])
 
   // Ctrl+` to toggle terminal (same as VS Code) — only when enabled

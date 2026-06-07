@@ -82,8 +82,10 @@ start() {
 
   # vite build --watch rebuilds dist/ on every change (FastAPI serves it live).
   # Use vite directly (no tsc gate) so a type error never halts hot rebuilds.
+  # KYCHAPOGAS_WATCH=1 enables filesystem polling (vite.config.ts) so no edit is
+  # missed; the browser then auto-reloads via the /api/build-id poller.
   spawn frontend - "$ROOT/frontend" \
-    "$ROOT/frontend/node_modules/.bin/vite" build --watch
+    env KYCHAPOGAS_WATCH=1 "$ROOT/frontend/node_modules/.bin/vite" build --watch
 
   if ! $NO_TERMINAL; then
     spawn terminal 8765 "$ROOT/terminal-server" \

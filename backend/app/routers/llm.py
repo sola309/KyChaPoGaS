@@ -67,6 +67,17 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "get_recent_operations",
+        "description": (
+            "Recent timeline edits the USER (and AI) have made, newest first. Use this to "
+            "understand what the user has been working on before suggesting or making edits. "
+            "Each entry has actor (user/ai), kind (add_clip/move_clip/trim_clip/split_clip/...), detail, ts."
+        ),
+        "input_schema": {"type": "object",
+                         "properties": {"limit": {"type": "integer", "default": 50}},
+                         "required": []},
+    },
+    {
         "name": "get_beat_grid",
         "description": (
             "Get beat positions in TIMELINE FRAME coordinates for beat-synced editing (音ハメ). "
@@ -257,6 +268,8 @@ def _exec_tool(
             return command_api.get_assets(project_id, session, inp.get("asset_type"))
         case "get_analysis_summary":
             return command_api.get_analysis_summary(project_id, session)
+        case "get_recent_operations":
+            return command_api.get_recent_operations(project_id, session, inp.get("limit", 50))
         case "get_beat_grid":
             return command_api.get_beat_grid(project_id, session)
         case "add_track":

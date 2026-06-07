@@ -93,6 +93,17 @@ MCP_TOOLS = [
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     mcp_types.Tool(
+        name="get_recent_operations",
+        description=(
+            "Recent timeline edits the USER (and AI) have made, newest first — "
+            "use this to see what the user has been doing before proposing edits. "
+            "Each entry has actor (user/ai), kind (add_clip/move_clip/trim_clip/...), detail, ts."
+        ),
+        inputSchema={"type": "object",
+                     "properties": {"limit": {"type": "integer", "default": 50}},
+                     "required": []},
+    ),
+    mcp_types.Tool(
         name="get_beat_grid",
         description=(
             "Beat positions in TIMELINE FRAME coordinates for beat-synced editing (音ハメ): "
@@ -221,6 +232,8 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.get_assets(project_id, session, inp.get("asset_type"))
             case "get_analysis_summary":
                 return command_api.get_analysis_summary(project_id, session)
+            case "get_recent_operations":
+                return command_api.get_recent_operations(project_id, session, inp.get("limit", 50))
             case "get_beat_grid":
                 return command_api.get_beat_grid(project_id, session)
             case "auto_cut_to_beats":
