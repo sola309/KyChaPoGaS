@@ -14,8 +14,6 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const { activeProject } = useProjectStore()
   const videoRef  = useRef<HTMLVideoElement>(null)
   const audioRef  = useRef<HTMLAudioElement>(null)
-  const rafRef    = useRef<number | null>(null)
-  const lastTsRef = useRef<number>(0)
   const [playing, setPlaying] = useState(false)
   const [loadedAssetId, setLoadedAssetId] = useState<number | null>(null)
   const [loadedAudioId, setLoadedAudioId] = useState<number | null>(null)
@@ -37,6 +35,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const activeAsset = activeClip?.asset_id != null
     ? assets.find(a => a.id === activeClip.asset_id)
     : null
+
+  // "generated" covers both images and videos — disambiguate by duration.
+  const isVideoAsset = activeAsset?.asset_type === 'video'
+    || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec != null)
+  const isImageAsset = activeAsset?.asset_type === 'image'
+    || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec == null)
 
   // First audio-track clip overlapping the playhead (the BGM to play)
   const activeAudioClip = clips.find(c => {
@@ -69,17 +73,27 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     video.playbackRate = activeClip?.speed && activeClip.speed > 0 ? activeClip.speed : 1
   }, [activeClip?.speed, loadedAssetId])
 
-  // Seek when NOT playing (scrubbing) — source time accounts for clip speed
+  // Keep the video element playing / seeked in sync with the playhead.
+  // The timeline clock (below) is the MASTER; the video follows it — when a new
+  // clip's src loads mid-playback we re-play() and re-seek here, so playback
+  // doesn't freeze on the new clip's first frame.
   useEffect(() => {
-    if (playing) return
     const video = videoRef.current
-    if (!video || !activeClip) return
+    if (!video) return
+    if (!activeClip || !isVideoAsset) {
+      if (!video.paused) video.pause()
+      return
+    }
     const sp = activeClip.speed > 0 ? activeClip.speed : 1
     const assetTime = (activeClip.asset_in_frame + (currentFrame - activeClip.start_frame) * sp) / projectFps
-    if (Math.abs(video.currentTime - assetTime) > 0.04) {
-      video.currentTime = Math.max(0, assetTime)
+    if (playing) {
+      if (Math.abs(video.currentTime - assetTime) > 0.25) video.currentTime = Math.max(0, assetTime)  // drift correction only
+      if (video.paused) video.play().catch(() => {})
+    } else {
+      if (!video.paused) video.pause()
+      if (Math.abs(video.currentTime - assetTime) > 0.04) video.currentTime = Math.max(0, assetTime)  // scrub
     }
-  }, [currentFrame, playing, activeClip, projectFps])
+  }, [currentFrame, playing, activeClip, projectFps, loadedAssetId, isVideoAsset])
 
   // Load audio (BGM) when the active audio clip changes
   useEffect(() => {
@@ -131,60 +145,39 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const cycleGuide = () =>
     setGuideMode(m => (m === 'off' ? 'thirds' : m === 'thirds' ? 'safe' : 'off'))
 
-  // Play / pause
+  // ── Timeline master clock ─────────────────────────────────────────────
+  // Wall-clock drives currentFrame; the <video>/<audio> elements follow it
+  // (see the sync effects above). This survives clip changes mid-playback —
+  // the old design derived the frame from video.currentTime, so when a new
+  // clip's src loaded paused, playback froze on its first frame.
+  const lastClipEnd = Math.max(0, ...clips.map(c => c.start_frame + c.duration_frames))
+  const lastEndRef = useRef(lastClipEnd)
+  lastEndRef.current = lastClipEnd
+
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-
-    if (playing) {
-      video.play().catch(() => {})
-      lastTsRef.current = performance.now()
-
-      const tick = (now: number) => {
-        const elapsed = now - lastTsRef.current
-        lastTsRef.current = now
-        // Sync currentFrame from video.currentTime when available
-        if (!video.paused && activeClip != null) {
-          const sp = activeClip.speed > 0 ? activeClip.speed : 1
-          const frame = activeClip.start_frame
-            + Math.round((video.currentTime * projectFps - activeClip.asset_in_frame) / sp)
-          setCurrentFrame(Math.max(0, frame))
-          // Auto-stop at clip boundary
-          if (frame >= activeClip.start_frame + activeClip.duration_frames) {
-            stopPlay()
-            return
-          }
-        } else {
-          // No video — advance frame by elapsed time
-          const frames = Math.round((elapsed / 1000) * projectFps)
-          if (frames > 0) {
-            useTimelineStore.setState(s => ({
-              currentFrame: s.currentFrame + frames,
-            }))
-          }
+    if (!playing) return
+    let raf: number
+    let last = performance.now()
+    let acc = 0   // fractional-frame accumulator
+    const tick = (now: number) => {
+      acc += ((now - last) / 1000) * projectFps
+      last = now
+      const adv = Math.floor(acc)
+      if (adv > 0) {
+        acc -= adv
+        const next = useTimelineStore.getState().currentFrame + adv
+        if (next >= lastEndRef.current) {           // end of timeline → stop
+          setCurrentFrame(Math.max(0, lastEndRef.current - 1))
+          setPlaying(false)
+          return
         }
-        rafRef.current = requestAnimationFrame(tick)
+        setCurrentFrame(next)
       }
-      rafRef.current = requestAnimationFrame(tick)
-    } else {
-      video.pause()
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
-      }
+      raf = requestAnimationFrame(tick)
     }
-
-    return () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current)
-        rafRef.current = null
-      }
-    }
-  }, [playing])
-
-  const stopPlay = () => {
-    setPlaying(false)
-  }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [playing, projectFps])
 
   const togglePlay = () => setPlaying(p => !p)
 
@@ -192,12 +185,6 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     setPlaying(false)
     setCurrentFrame(0)
   }
-
-  // "generated" covers both images and videos — disambiguate by duration.
-  const isVideoAsset = activeAsset?.asset_type === 'video'
-    || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec != null)
-  const isImageAsset = activeAsset?.asset_type === 'image'
-    || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec == null)
 
   // Extract the currently-previewed video frame and drop it on a Reference track
   // as an I2V keyframe (the playhead acts as the source-frame slider).
