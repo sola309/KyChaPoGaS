@@ -85,6 +85,25 @@ _EASE: dict[str, tuple[float, float, float, float]] = {
 }
 
 
+def _ease_points(ease: str) -> tuple[float, float, float, float] | None:
+    """Resolve an ease spec to bezier control points.
+
+    Accepts preset names ('in'/'out'/'inout') or a custom curve from the graph
+    editor: 'cubic:x1,y1,x2,y2' (P0=(0,0), P3=(1,1); x,y clamped to [0,1] so
+    source time stays monotonic). Returns None for linear/unknown.
+    """
+    if ease in _EASE:
+        return _EASE[ease]
+    if ease.startswith("cubic:"):
+        try:
+            x1, y1, x2, y2 = (float(v) for v in ease[6:].split(","))
+        except (ValueError, TypeError):
+            return None
+        clamp = lambda v: min(1.0, max(0.0, v))  # noqa: E731
+        return clamp(x1), clamp(y1), clamp(x2), clamp(y2)
+    return None
+
+
 def _cubic_bezier_y_at_x(x: float, x1: float, y1: float, x2: float, y2: float, iters: int = 20) -> float:
     """Source-progress (y) for output-progress (x) on a cubic bezier easing curve."""
     def bx(t: float) -> float:
@@ -124,7 +143,8 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
     vf = _scale_pad_fps(w, h, fps)
 
     # Constant speed (linear) — single pass with setpts.
-    if ease == "linear" or ease not in _EASE:
+    pts = _ease_points(ease)
+    if pts is None:
         cmd = [
             FFMPEG, "-y",
             "-ss", f"{in_sec:.6f}", "-t", f"{source_span:.6f}", "-i", src,
@@ -138,7 +158,10 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
 
     # Variable speed (accel/decel) — piecewise-constant approximation of the
     # bezier speed ramp: split into K sub-segments, each at its own setpts.
-    x1, y1, x2, y2 = _EASE[ease]
+    # Each part is clamped to EXACTLY its share of the output duration
+    # (tpad-clone + output-side -t): with extreme curves a near-zero source
+    # span quantizes to 1 frame and a slow setpts would otherwise inflate it.
+    x1, y1, x2, y2 = pts
     K = 12
     parts: list[Path] = []
     for k in range(K):
@@ -153,14 +176,31 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
         cmd = [
             FFMPEG, "-y",
             "-ss", f"{seg_src_in:.6f}", "-t", f"{seg_src_dur:.6f}", "-i", src,
-            "-vf", f"setpts=PTS/{seg_speed:.6f},{vf}",
+            "-vf", (f"setpts=PTS/{seg_speed:.6f},{vf},"
+                    f"tpad=stop_mode=clone:stop_duration={seg_out:.6f}"),
+            "-t", f"{seg_out:.6f}",
             "-c:v", "libx264", "-crf", "23", "-preset", "fast",
             "-an",
             str(part),
         ]
         await _run(cmd)
         parts.append(part)
-    await _concat(parts, out)
+    # Concat the parts, then clamp the WHOLE clip to exactly dur_sec —
+    # per-part ±1-frame quantization would otherwise accumulate and shift
+    # everything after this clip off the beat grid.
+    joined = out.parent / f"{out.stem}_joined.mp4"
+    await _concat(parts, joined)
+    cmd = [
+        FFMPEG, "-y",
+        "-i", str(joined),
+        "-vf", f"tpad=stop_mode=clone:stop_duration={dur_sec:.6f}",
+        "-t", f"{dur_sec:.6f}",
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-an",
+        str(out),
+    ]
+    await _run(cmd)
+    joined.unlink(missing_ok=True)
     for p in parts:
         p.unlink(missing_ok=True)
 

@@ -195,6 +195,22 @@ MCP_TOOLS = [
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     mcp_types.Tool(
+        name="set_clip_speed",
+        description=(
+            "Set clip playback speed + accel curve. ease: 'linear'|'in'|'out'|'inout' or "
+            "custom 'cubic:x1,y1,x2,y2'. Source span fixed — duration auto-adjusts."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "clip_id": {"type": "integer"},
+                "speed":   {"type": "number"},
+                "ease":    {"type": "string"},
+            },
+            "required": ["clip_id", "speed"],
+        },
+    ),
+    mcp_types.Tool(
         name="set_transition",
         description=(
             "Set the transition INTO a clip from the previous clip on its track. "
@@ -294,6 +310,9 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.delete_clip(inp["clip_id"], session)
             case "get_beat_match_score":
                 return command_api.get_beat_match_score(project_id, session)
+            case "set_clip_speed":
+                return command_api.set_clip_speed(
+                    inp["clip_id"], inp["speed"], inp.get("ease", "linear"), session)
             case "set_transition":
                 return command_api.set_transition(
                     inp["clip_id"], inp["transition"], inp.get("frames", 8), session)

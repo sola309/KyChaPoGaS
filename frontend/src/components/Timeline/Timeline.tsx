@@ -9,6 +9,7 @@ import { TimeRuler } from './TimeRuler'
 import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
+import { SpeedCurveEditor } from './SpeedCurveEditor'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -34,6 +35,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [beatMatch, setBeatMatch] = useState<BeatMatchResult | null>(null)
   const [scoring, setScoring] = useState(false)
+  const [showCurveEditor, setShowCurveEditor] = useState(false)
 
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
@@ -354,17 +356,29 @@ export function Timeline({ projectId, fps, assets }: Props) {
                     <option value={String(selectedClip.speed)}>{selectedClip.speed.toFixed(2)}x</option>
                   )}
                 </select>
-                <select
-                  value={selectedClip.speed_ease}
-                  onChange={e => setClipSpeed(selectedClip.id, selectedClip.speed, e.target.value as 'linear' | 'in' | 'out' | 'inout')}
-                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
-                  title="加減速（ベジェ）: 一定 / 加速 / 減速 / 緩急"
-                >
-                  <option value="linear">一定</option>
-                  <option value="in">加速</option>
-                  <option value="out">減速</option>
-                  <option value="inout">緩急</option>
-                </select>
+                <span className="relative">
+                  <button
+                    onClick={() => setShowCurveEditor(v => !v)}
+                    className={`text-[11px] px-2 py-0.5 rounded border ${
+                      showCurveEditor || selectedClip.speed_ease !== 'linear'
+                        ? 'bg-purple-900/60 text-purple-200 border-purple-700'
+                        : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                    }`}
+                    title="加減速カーブ（ベジェ）をグラフで編集"
+                  >
+                    ∿ {selectedClip.speed_ease === 'linear' ? '一定'
+                      : selectedClip.speed_ease === 'in' ? '加速'
+                      : selectedClip.speed_ease === 'out' ? '減速'
+                      : selectedClip.speed_ease === 'inout' ? '緩急' : 'カスタム'}
+                  </button>
+                  {showCurveEditor && (
+                    <SpeedCurveEditor
+                      ease={selectedClip.speed_ease}
+                      onChange={ease => setClipSpeed(selectedClip.id, selectedClip.speed, ease)}
+                      onClose={() => setShowCurveEditor(false)}
+                    />
+                  )}
+                </span>
               </>
             )}
           </>

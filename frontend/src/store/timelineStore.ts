@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Track, Clip, ClipUpdate } from '../api/client'
+import type { Track, Clip, ClipUpdate, SpeedEase } from '../api/client'
 import { tracksApi, clipsApi } from '../api/client'
 import { useCollabStore } from './collabStore'
 
@@ -43,7 +43,7 @@ interface TimelineState {
   deleteClip: (clipId: number) => Promise<void>
   splitClip: (clipId: number, splitFrame: number) => Promise<void>
   updateClip: (clipId: number, data: ClipUpdate) => Promise<void>
-  setClipSpeed: (clipId: number, speed: number, ease?: 'linear' | 'in' | 'out' | 'inout') => Promise<void>
+  setClipSpeed: (clipId: number, speed: number, ease?: SpeedEase) => Promise<void>
   undo: () => Promise<void>
   redo: () => Promise<void>
   setCurrentFrame: (frame: number) => void

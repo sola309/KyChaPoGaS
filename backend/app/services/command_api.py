@@ -594,6 +594,26 @@ def get_beat_match_score(project_id: int, session: Session) -> dict:
     }
 
 
+def set_clip_speed(clip_id: int, speed: float, ease: str, session: Session) -> dict:
+    """Set playback speed + accel curve. ease: 'linear'|'in'|'out'|'inout' or a
+    custom bezier 'cubic:x1,y1,x2,y2'. The source span stays fixed, so the
+    timeline duration auto-adjusts (faster → shorter clip)."""
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        return {"error": f"Clip {clip_id} not found"}
+    sp = max(0.1, min(8.0, float(speed)))
+    source_consumed = clip.duration_frames * (clip.speed or 1.0)
+    clip.duration_frames = max(1, round(source_consumed / sp))
+    clip.speed = sp
+    clip.speed_ease = ease or "linear"
+    session.add(clip)
+    session.commit()
+    _after_edit(_project_of_clip(clip, session), "set_speed", session,
+                detail=f"x{sp} {clip.speed_ease}")
+    return {"clip_id": clip_id, "speed": sp, "speed_ease": clip.speed_ease,
+            "duration_frames": clip.duration_frames}
+
+
 def set_transition(clip_id: int, transition: str, frames: int, session: Session) -> dict:
     """Set the transition INTO a clip (from the previous clip on its track).
     transition: '' (cut) | 'cross' | 'white' | 'black'. Duration-preserving."""

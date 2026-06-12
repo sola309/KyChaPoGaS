@@ -182,6 +182,24 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "set_clip_speed",
+        "description": (
+            "Set a clip's playback speed and acceleration curve. ease: 'linear' | 'in' "
+            "(accelerate) | 'out' (decelerate) | 'inout' | custom bezier 'cubic:x1,y1,x2,y2' "
+            "(P0=(0,0), P3=(1,1)). Source span stays fixed — timeline duration auto-adjusts. "
+            "Speed ramps make generated (constant-speed) footage feel much more dynamic."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id": {"type": "integer"},
+                "speed":   {"type": "number", "description": "0.1-8.0"},
+                "ease":    {"type": "string"},
+            },
+            "required": ["clip_id", "speed"],
+        },
+    },
+    {
         "name": "set_transition",
         "description": (
             "Set the transition INTO a clip (joins it to the previous clip on its track). "
@@ -337,6 +355,9 @@ def _exec_tool(
             return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
         case "get_beat_match_score":
             return command_api.get_beat_match_score(project_id, session)
+        case "set_clip_speed":
+            return command_api.set_clip_speed(
+                inp["clip_id"], inp["speed"], inp.get("ease", "linear"), session)
         case "set_transition":
             return command_api.set_transition(
                 inp["clip_id"], inp["transition"], inp.get("frames", 8), session)

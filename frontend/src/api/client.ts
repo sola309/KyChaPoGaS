@@ -76,6 +76,8 @@ export interface Track {
 }
 
 export type TransitionType = '' | 'cross' | 'white' | 'black'
+/** Speed accel curve: preset or custom bezier control points */
+export type SpeedEase = 'linear' | 'in' | 'out' | 'inout' | `cubic:${string}`
 
 export interface Clip {
   id: number
@@ -85,7 +87,7 @@ export interface Clip {
   duration_frames: number
   asset_in_frame: number
   speed: number
-  speed_ease: 'linear' | 'in' | 'out' | 'inout'
+  speed_ease: SpeedEase
   /** Transition into this clip: '' cut | crossfade | white flash | dip to black */
   transition_in: TransitionType
   transition_frames: number
@@ -100,7 +102,7 @@ export interface ClipUpdate {
   asset_in_frame?: number
   track_id?: number
   speed?: number
-  speed_ease?: 'linear' | 'in' | 'out' | 'inout'
+  speed_ease?: SpeedEase
   transition_in?: TransitionType
   transition_frames?: number
   fade_in_frames?: number
