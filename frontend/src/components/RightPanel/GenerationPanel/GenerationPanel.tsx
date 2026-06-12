@@ -3,13 +3,15 @@ import type { Asset } from '../../../api/client'
 import { ImageGenPanel } from './ImageGenPanel'
 import { AudioGenPanel } from './AudioGenPanel'
 import { VideoGenPanel } from './VideoGenPanel'
+import { MotionGfxPanel } from './MotionGfxPanel'
 
-type GenTab = 'image' | 'audio' | 'video'
+type GenTab = 'image' | 'audio' | 'video' | 'mg'
 
 const TABS: { id: GenTab; label: string }[] = [
   { id: 'image', label: '🖼 画像' },
   { id: 'audio', label: '🎵 音楽' },
   { id: 'video', label: '🎬 動画' },
+  { id: 'mg',    label: '⚡ MG' },
 ]
 
 export function GenerationPanel({ assets }: { assets: Asset[] }) {
@@ -39,6 +41,7 @@ export function GenerationPanel({ assets }: { assets: Asset[] }) {
         {tab === 'image' && <ImageGenPanel />}
         {tab === 'audio' && <AudioGenPanel />}
         {tab === 'video' && <VideoGenPanel assets={assets} />}
+        {tab === 'mg'    && <MotionGfxPanel />}
       </div>
     </div>
   )

@@ -162,6 +162,8 @@ async def _dispatch(job: Job) -> None:
             await _create_proxy(job, params)
         case "precompose":
             await _precompose(job, params)
+        case "render_motion_graphics":
+            await _render_motion_graphics(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -650,6 +652,35 @@ async def _analyze_video(job: Job, params: dict) -> None:
         f"Video analysis done: asset={asset_id} "
         f"scenes={scene_result['scene_count']}"
     )
+
+
+# ── render_motion_graphics: HTML/CSS/JS → video clip ──────────────────────────
+
+async def _render_motion_graphics(job: Job, params: dict) -> None:
+    from app.services.motion_graphics import render_html_to_video
+
+    project_id = params["project_id"]
+    html = params.get("html", "")
+    if not html.strip():
+        raise ValueError("html が空です")
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"mg_{job.id}.mp4"
+
+    await render_html_to_video(
+        html, out,
+        duration_sec=float(params.get("duration_sec", 3.0)),
+        fps=float(params.get("fps", 30)),
+        width=int(params.get("width", 1280)),
+        height=int(params.get("height", 720)),
+        progress_cb=lambda p: _update_progress(job.id, 0.05 + 0.9 * p),
+    )
+
+    asset_id = _register_asset(project_id, out, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    _update_progress(job.id, 1.0)
+    log.info(f"Motion graphics done → asset {asset_id}")
 
 
 # ── create_proxy: low-res preview proxy for a video asset ─────────────────────

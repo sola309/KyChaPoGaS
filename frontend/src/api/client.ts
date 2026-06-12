@@ -155,7 +155,7 @@ export const assetsApi = {
 
 // ── Job types ─────────────────────────────────────────────────────────────────
 
-export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v' | 'precompose' | 'create_proxy'
+export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v' | 'precompose' | 'create_proxy' | 'render_motion_graphics' | 'analyze_audio' | 'analyze_video'
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface Job {

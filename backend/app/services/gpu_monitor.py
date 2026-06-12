@@ -177,6 +177,7 @@ _VRAM_ESTIMATES: dict[str, int] = {
     "precompose":         256,   # CPU FFmpeg render
     "analyze_audio":      256,
     "analyze_video":      512,
+    "render_motion_graphics": 512,   # headless Chromium + FFmpeg (CPU)
 }
 
 _MODEL_VRAM_HINTS: list[tuple[str, int]] = [

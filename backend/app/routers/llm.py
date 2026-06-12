@@ -226,7 +226,7 @@ TOOLS: list[dict] = [
             "properties": {
                 "job_type": {
                     "type": "string",
-                    "enum": ["generate_image", "generate_audio", "generate_video_i2v"],
+                    "enum": ["generate_image", "generate_audio", "generate_video_i2v", "render_motion_graphics"],
                 },
                 "params": {
                     "type": "object",
