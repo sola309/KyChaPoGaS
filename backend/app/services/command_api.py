@@ -554,11 +554,18 @@ def get_beat_match_score(project_id: int, session: Session) -> dict:
                     tf = c.start_frame + f
                     if tf <= total:
                         timeline[tf] = max(timeline[tf], vals[idx])
-    # Cuts are visual changes — inject a strong spike at every clip boundary
+    # Cuts are visual changes — inject a spike at every clip boundary.
+    # A cut to a DIFFERENT scene is a strong change (0.8); a jump cut within
+    # the same asset is much weaker visually (0.25) — otherwise the score
+    # rewards machine-gunning the same scene, which reads as monotony.
     cut_frames = [c.start_frame for c in clips]
-    for cf in cut_frames:
-        if 0 <= cf <= total:
-            timeline[cf] = max(timeline[cf], 0.8)
+    for i, c in enumerate(clips):
+        cf = c.start_frame
+        if not (0 <= cf <= total):
+            continue
+        prev = clips[i - 1] if i > 0 else None
+        same_scene = prev is not None and prev.asset_id == c.asset_id
+        timeline[cf] = max(timeline[cf], 0.25 if same_scene else 0.8)
 
     # ── Score each beat: motion peak within ±2 frames? ────────────────────
     nonzero = sorted(v for v in timeline if v > 0)
