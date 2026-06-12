@@ -44,7 +44,8 @@ def _enqueue_job(job_type: str, asset_id: int, project_id: int, session: Session
 @router.post("/audio/{asset_id}", status_code=202)
 def trigger_audio_analysis(asset_id: int, session: Session = Depends(get_session)):
     asset = _get_asset_or_404(asset_id, session)
-    if asset.asset_type not in ("audio", "video"):
+    # "generated" covers AI-generated music (e.g. ACE-Step .wav) and videos
+    if asset.asset_type not in ("audio", "video", "generated"):
         raise HTTPException(status_code=400, detail="音声または動画ファイルのみ解析できます")
     job = _enqueue_job("analyze_audio", asset_id, asset.project_id, session)
     return {"job_id": job.id, "status": "queued"}
