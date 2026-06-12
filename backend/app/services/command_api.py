@@ -461,13 +461,22 @@ def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
 
     left_dur  = split_frame - clip.start_frame
     right_dur = clip.duration_frames - left_dur
-
+    speed = clip.speed or 1.0
+    # Pieces inherit speed/transition/fades. A non-linear ease can't be split
+    # exactly (the bezier spans the whole original clip), so pieces fall back
+    # to linear at the same speed. asset_in advances by SOURCE frames consumed
+    # (timeline frames × speed) — not timeline frames.
     left  = Clip(track_id=clip.track_id, asset_id=clip.asset_id,
                  start_frame=clip.start_frame, duration_frames=left_dur,
-                 asset_in_frame=clip.asset_in_frame)
+                 asset_in_frame=clip.asset_in_frame,
+                 speed=speed, speed_ease="linear",
+                 transition_in=clip.transition_in, transition_frames=clip.transition_frames,
+                 fade_in_frames=clip.fade_in_frames, fade_out_frames=0)
     right = Clip(track_id=clip.track_id, asset_id=clip.asset_id,
                  start_frame=split_frame, duration_frames=right_dur,
-                 asset_in_frame=clip.asset_in_frame + left_dur)
+                 asset_in_frame=clip.asset_in_frame + round(left_dur * speed),
+                 speed=speed, speed_ease="linear",
+                 fade_in_frames=0, fade_out_frames=clip.fade_out_frames)
     session.add(left)
     session.add(right)
     session.delete(clip)
@@ -580,7 +589,7 @@ def get_beat_match_score(project_id: int, session: Session) -> dict:
 
     considered = len(beat_hits)
     score = round(100 * hits / considered) if considered else 0
-    weak = [b for b in beat_hits if not b["hit"]][:10]
+    weak = [b for b in beat_hits if not b["hit"]][:20]
     return {
         "score": score,
         "beats_total": considered,

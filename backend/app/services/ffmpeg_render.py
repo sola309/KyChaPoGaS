@@ -143,7 +143,12 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
     vf = _scale_pad_fps(w, h, fps)
 
     # Constant speed (linear) — single pass with setpts.
+    # Clips shorter than ~0.5s also render linear: piecewise easing would
+    # produce sub-frame parts (0-stream files), and a ramp that brief is
+    # imperceptible anyway.
     pts = _ease_points(ease)
+    if dur_sec * fps < 16:
+        pts = None
     if pts is None:
         cmd = [
             FFMPEG, "-y",
@@ -162,7 +167,8 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
     # (tpad-clone + output-side -t): with extreme curves a near-zero source
     # span quantizes to 1 frame and a slow setpts would otherwise inflate it.
     x1, y1, x2, y2 = pts
-    K = 12
+    # Each piece must be several frames long or quantization dominates.
+    K = min(12, max(2, int(dur_sec * fps / 4)))
     parts: list[Path] = []
     for k in range(K):
         u0, u1 = k / K, (k + 1) / K
