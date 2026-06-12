@@ -21,6 +21,9 @@ class ClipBase(SQLModel):
     # Audio fades (audio clips; timeline frames at project fps)
     fade_in_frames: int = 0
     fade_out_frames: int = 0
+    # Compositing (clips on video tracks above the first are overlaid onto it)
+    opacity: float = 1.0       # 0..1
+    blend: str = "normal"      # normal | screen | add | multiply
 
 
 class Clip(ClipBase, table=True):
@@ -42,6 +45,8 @@ class ClipUpdate(SQLModel):
     transition_frames: Optional[int] = None
     fade_in_frames: Optional[int] = None
     fade_out_frames: Optional[int] = None
+    opacity: Optional[float] = None
+    blend: Optional[str] = None
 
 
 class ClipRead(ClipBase):

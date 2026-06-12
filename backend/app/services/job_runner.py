@@ -664,9 +664,10 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
     if not html.strip():
         raise ValueError("html が空です")
 
+    transparent = bool(params.get("transparent", False))
     dest_dir = GENERATED_DIR / str(project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    out = dest_dir / f"mg_{job.id}.mp4"
+    out = dest_dir / (f"mg_{job.id}.mov" if transparent else f"mg_{job.id}.mp4")
 
     await render_html_to_video(
         html, out,
@@ -674,6 +675,7 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
         fps=float(params.get("fps", 30)),
         width=int(params.get("width", 1280)),
         height=int(params.get("height", 720)),
+        transparent=transparent,
         progress_cb=lambda p: _update_progress(job.id, 0.05 + 0.9 * p),
     )
 

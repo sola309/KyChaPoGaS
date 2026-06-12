@@ -4,6 +4,7 @@ import type {
   BeatAnalysis,
   SceneAnalysis,
   MotionAnalysis,
+  MotionCurve,
   AnalysisResult,
 } from '../api/client'
 
@@ -12,6 +13,7 @@ interface AnalysisState {
   beats:  Record<number, BeatAnalysis>
   scenes: Record<number, SceneAnalysis>
   motion: Record<number, MotionAnalysis>
+  curves: Record<number, MotionCurve>
   loading: Record<number, boolean>
 
   loadAnalysis: (assetId: number) => Promise<void>
@@ -24,6 +26,7 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
   beats:   {},
   scenes:  {},
   motion:  {},
+  curves:  {},
   loading: {},
 
   loadAnalysis: async (assetId) => {
@@ -33,13 +36,15 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
       const beats  = { ...get().beats }
       const scenes = { ...get().scenes }
       const motion = { ...get().motion }
+      const curves = { ...get().curves }
 
       for (const r of results) {
         if (r.analysis_type === 'audio_beats') beats[assetId]  = r.result as BeatAnalysis
         if (r.analysis_type === 'scene_changes') scenes[assetId] = r.result as SceneAnalysis
         if (r.analysis_type === 'motion')        motion[assetId] = r.result as MotionAnalysis
+        if (r.analysis_type === 'motion_curve')  curves[assetId] = r.result as unknown as MotionCurve
       }
-      set({ beats, scenes, motion })
+      set({ beats, scenes, motion, curves })
     } finally {
       set(s => ({ loading: { ...s.loading, [assetId]: false } }))
     }

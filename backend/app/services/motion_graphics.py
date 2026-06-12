@@ -44,20 +44,32 @@ async def render_html_to_video(
     fps: float = 30.0,
     width: int = 1280,
     height: int = 720,
+    transparent: bool = False,
     progress_cb=None,
 ) -> Path:
-    """Render an HTML animation to an MP4 file. Returns `out`."""
+    """Render an HTML animation to a video file. Returns `out`.
+
+    transparent=True keeps the page background alpha (don't set a body
+    background in the HTML) and encodes qtrle .mov — for overlay tracks
+    (歌詞テロップ, frames, particles over footage).
+    """
     from playwright.async_api import async_playwright
 
     n_frames = max(1, round(duration_sec * fps))
     out.parent.mkdir(parents=True, exist_ok=True)
 
     # FFmpeg consumes raw PNG frames on stdin
+    if transparent:
+        codec = ["-c:v", "qtrle"]            # alpha-capable, .mov
+        vf = "format=rgba"
+    else:
+        codec = ["-c:v", "libx264", "-crf", "20", "-preset", "fast"]
+        vf = "format=yuv420p"
     cmd = [
         FFMPEG, "-y",
         "-f", "image2pipe", "-framerate", str(fps), "-i", "-",
-        "-vf", "format=yuv420p",
-        "-c:v", "libx264", "-crf", "20", "-preset", "fast",
+        "-vf", vf,
+        *codec,
         str(out),
     ]
     ff = await asyncio.create_subprocess_exec(
@@ -81,7 +93,7 @@ async def render_html_to_video(
             for i in range(n_frames):
                 t_ms = (i / fps) * 1000.0
                 await page.evaluate(_SEEK_JS, t_ms)
-                png = await page.screenshot(type="png")
+                png = await page.screenshot(type="png", omit_background=transparent)
                 ff.stdin.write(png)
                 await ff.stdin.drain()
                 if progress_cb and i % 10 == 0:

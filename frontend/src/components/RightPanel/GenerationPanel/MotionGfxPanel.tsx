@@ -20,11 +20,11 @@ const BASE_CSS = `html,body{margin:0;width:100%;height:100%;overflow:hidden;back
 .full{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 .txt{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;font-weight:900;color:#fff}`
 
-function lyricHTML(lines: string[], durPerLine: number): string {
+function lyricHTML(lines: string[], durPerLine: number, transparent = false): string {
   const items = lines.filter(l => l.trim()).map((l, i) => `
     <div class="full"><span class="txt slam" style="animation-delay:${(i * durPerLine).toFixed(2)}s">${esc(l)}</span></div>`)
   return `<!DOCTYPE html><html><head><style>${BASE_CSS}
-  body{background:#110d0f}
+  ${transparent ? '' : 'body{background:#110d0f}'}
   .slam{font-size:96px;opacity:0;text-shadow:0 0 30px rgba(214,64,93,.9);
     animation: slam ${durPerLine.toFixed(2)}s cubic-bezier(.2,1.4,.3,1) both}
   @keyframes slam{
@@ -36,9 +36,9 @@ function lyricHTML(lines: string[], durPerLine: number): string {
   </style></head><body>${items.join('')}</body></html>`
 }
 
-function titleHTML(title: string, sub: string, dur: number): string {
+function titleHTML(title: string, sub: string, dur: number, transparent = false): string {
   return `<!DOCTYPE html><html><head><style>${BASE_CSS}
-  body{background:#110d0f}
+  ${transparent ? '' : 'body{background:#110d0f}'}
   .wrap{flex-direction:column;gap:18px}
   .t{font-size:110px;letter-spacing:.08em;color:#f6c2cb;text-shadow:0 0 40px rgba(214,64,93,.8);
      animation: rise ${dur}s cubic-bezier(.16,1,.3,1) both}
@@ -51,12 +51,12 @@ function titleHTML(title: string, sub: string, dur: number): string {
   </body></html>`
 }
 
-function countdownHTML(from: number, perSec: number): string {
+function countdownHTML(from: number, perSec: number, transparent = false): string {
   const digits = Array.from({ length: from }, (_, i) => from - i)
   const items = digits.map((d, i) => `
     <div class="full"><span class="txt n" style="animation-delay:${(i * perSec).toFixed(2)}s">${d}</span></div>`)
   return `<!DOCTYPE html><html><head><style>${BASE_CSS}
-  body{background:#110d0f}
+  ${transparent ? '' : 'body{background:#110d0f}'}
   .n{font-size:240px;color:#d6405d;opacity:0;text-shadow:0 0 60px rgba(214,64,93,.7);
     animation: pop ${perSec.toFixed(2)}s cubic-bezier(.2,1.2,.4,1) both}
   @keyframes pop{0%{transform:scale(2.4);opacity:0}25%{transform:scale(1);opacity:1}80%{transform:scale(.92);opacity:1}100%{transform:scale(.8);opacity:0}}
@@ -84,6 +84,7 @@ export function MotionGfxPanel() {
   const [count, setCount] = useState(3)
   const [customHtml, setCustomHtml] = useState('')
   const [customDur,  setCustomDur]  = useState(3)
+  const [transparent, setTransparent] = useState(false)
   const [busy, setBusy] = useState(false)
 
   if (!activeProject) return null
@@ -95,14 +96,14 @@ export function MotionGfxPanel() {
     if (template === 'lyric') {
       const lines = [line1, line2, line3].filter(l => l.trim())
       if (!lines.length) return
-      html = lyricHTML(lines, durPer)
+      html = lyricHTML(lines, durPer, transparent)
       duration = lines.length * durPer
     } else if (template === 'title') {
       if (!line1.trim()) return
       duration = Math.max(2, durPer * 2)
-      html = titleHTML(line1, sub, duration)
+      html = titleHTML(line1, sub, duration, transparent)
     } else if (template === 'countdown') {
-      html = countdownHTML(count, durPer)
+      html = countdownHTML(count, durPer, transparent)
       duration = count * durPer
     } else {
       if (!customHtml.trim()) return
@@ -118,6 +119,7 @@ export function MotionGfxPanel() {
         fps: activeProject.fps,
         width: activeProject.width,
         height: activeProject.height,
+        transparent,
       })
       useUIStore.getState().pushToast('モーショングラフィックスを生成中…（完了後ライブラリに追加）', 'info')
     } catch { /* interceptor */ } finally {
@@ -188,6 +190,21 @@ export function MotionGfxPanel() {
             <code className="text-zinc-400"> window.seek(t_ms) </code>を定義してください。
           </p>
         </>
+      )}
+
+      <label className="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={transparent}
+          onChange={e => setTransparent(e.target.checked)}
+          className="accent-purple-600"
+        />
+        <span className="text-[11px] text-zinc-300">透過背景（オーバーレイ用）</span>
+      </label>
+      {transparent && (
+        <p className="text-[10px] text-zinc-600 -mt-1">
+          映像の上に重ねるテロップ等に。2本目のVideoトラックに置くと書き出しで下のトラックと合成されます
+        </p>
       )}
 
       <button

@@ -56,6 +56,8 @@ def _migrate(conn) -> None:
             ("transition_frames", "ALTER TABLE clip ADD COLUMN transition_frames INTEGER DEFAULT 0"),
             ("fade_in_frames",    "ALTER TABLE clip ADD COLUMN fade_in_frames INTEGER DEFAULT 0"),
             ("fade_out_frames",   "ALTER TABLE clip ADD COLUMN fade_out_frames INTEGER DEFAULT 0"),
+            ("opacity",           "ALTER TABLE clip ADD COLUMN opacity FLOAT DEFAULT 1.0"),
+            ("blend",             "ALTER TABLE clip ADD COLUMN blend VARCHAR DEFAULT 'normal'"),
         ]:
             if col not in clip_cols:
                 conn.execute(text(ddl))

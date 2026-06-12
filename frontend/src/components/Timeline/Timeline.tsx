@@ -10,6 +10,7 @@ import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
 import { SpeedCurveEditor } from './SpeedCurveEditor'
+import { RhythmLane } from './RhythmLane'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -41,6 +42,18 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const remoteUsers = useCollabStore(s => s.others)
 
   useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
+
+  // クリップが参照する全アセットの解析（ビート/モーションカーブ等）をロード
+  const clipAssetIds = useMemo(
+    () => [...new Set(clips.map(c => c.asset_id).filter((x): x is number => x != null))],
+    [clips],
+  )
+  useEffect(() => {
+    const st = useAnalysisStore.getState()
+    for (const aid of clipAssetIds) {
+      if (!st.curves[aid] && !st.beats[aid] && !st.loading[aid]) void st.loadAnalysis(aid)
+    }
+  }, [clipAssetIds])
 
   // Find the first audio clip that has beat analysis
   const beatInfo = useMemo(() => {
@@ -339,6 +352,36 @@ export function Timeline({ projectId, fps, assets }: Props) {
               </>
             )}
 
+            {/* Compositing (overlay-track clips): opacity + blend */}
+            {selectedClip && selTrack?.track_type === 'video'
+              && tracks.find(t => t.track_type === 'video')?.id !== selTrack.id && (
+              <>
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+                <span className="text-[10px] text-zinc-500">合成</span>
+                <select
+                  value={String(selectedClip.opacity ?? 1)}
+                  onChange={e => updateClip(selectedClip.id, { opacity: Number(e.target.value) })}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="不透明度"
+                >
+                  {[1, 0.75, 0.5, 0.25].map(o => (
+                    <option key={o} value={String(o)}>{Math.round(o * 100)}%</option>
+                  ))}
+                </select>
+                <select
+                  value={selectedClip.blend ?? 'normal'}
+                  onChange={e => updateClip(selectedClip.id, { blend: e.target.value as 'normal' | 'screen' | 'add' | 'multiply' })}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="ブレンドモード（書き出しで下のトラックと合成）"
+                >
+                  <option value="normal">通常</option>
+                  <option value="screen">スクリーン</option>
+                  <option value="add">加算</option>
+                  <option value="multiply">乗算</option>
+                </select>
+              </>
+            )}
+
             {isVideoClip && selectedClip && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
@@ -451,6 +494,26 @@ export function Timeline({ projectId, fps, assets }: Props) {
                 pixelsPerFrame={pixelsPerFrame}
                 fps={fps}
                 totalWidth={totalWidth}
+              />
+            </div>
+          )}
+
+          {/* Rhythm lane: 合成モーション×ビート（音ハメの見える化） */}
+          {beatInfo && (
+            <div className="flex flex-shrink-0 border-b border-zinc-800">
+              <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex items-center px-2">
+                <span className="text-[9px] text-zinc-600">rhythm</span>
+              </div>
+              <RhythmLane
+                clips={clips.filter(c => {
+                  const baseVideo = tracks.find(t => t.track_type === 'video')
+                  return baseVideo && c.track_id === baseVideo.id
+                })}
+                beatFrames={beatFrames}
+                pixelsPerFrame={pixelsPerFrame}
+                totalWidth={totalWidth}
+                projectFps={fps}
+                onSeek={setCurrentFrame}
               />
             </div>
           )}

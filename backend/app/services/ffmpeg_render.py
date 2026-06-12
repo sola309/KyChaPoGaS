@@ -124,37 +124,46 @@ def _cubic_bezier_y_at_x(x: float, x1: float, y1: float, x2: float, y2: float, i
     return by((lo + hi) / 2)
 
 
-def _scale_pad_fps(w: int, h: int, fps: float) -> str:
+def _scale_pad_fps(w: int, h: int, fps: float, alpha: bool = False) -> str:
+    pad_color = ":color=black@0" if alpha else ""
+    fmt = ",format=rgba" if alpha else ""
     return (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={fps}")
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2{pad_color},fps={fps}{fmt}")
+
+
+# Encoder args: alpha output uses QuickTime RLE in .mov (libx264 has no alpha)
+_X264 = ["-c:v", "libx264", "-crf", "23", "-preset", "fast"]
+_QTRLE = ["-c:v", "qtrle"]
 
 
 async def _extract_segment(src: str, out: Path, in_sec: float,
                            dur_sec: float, w: int, h: int, fps: float,
-                           speed: float = 1.0, ease: str = "linear") -> None:
+                           speed: float = 1.0, ease: str = "linear",
+                           keep_alpha: bool = False) -> None:
     """
     Extract a clip segment to uniform resolution/fps, applying a speed remap.
 
     dur_sec is the OUTPUT (timeline) duration; the segment consumes
     ``dur_sec * speed`` seconds of source. ease shapes accel/decel (bezier).
+    keep_alpha preserves transparency (overlay clips; qtrle .mov, linear only).
     """
     speed = max(0.05, float(speed))
     source_span = dur_sec * speed
-    vf = _scale_pad_fps(w, h, fps)
+    vf = _scale_pad_fps(w, h, fps, alpha=keep_alpha)
 
     # Constant speed (linear) — single pass with setpts.
     # Clips shorter than ~0.5s also render linear: piecewise easing would
     # produce sub-frame parts (0-stream files), and a ramp that brief is
-    # imperceptible anyway.
+    # imperceptible anyway. Alpha output is linear-only.
     pts = _ease_points(ease)
-    if dur_sec * fps < 16:
+    if dur_sec * fps < 16 or keep_alpha:
         pts = None
     if pts is None:
         cmd = [
             FFMPEG, "-y",
             "-ss", f"{in_sec:.6f}", "-t", f"{source_span:.6f}", "-i", src,
             "-vf", f"setpts=PTS/{speed:.6f},{vf}",
-            "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+            *(_QTRLE if keep_alpha else _X264),
             "-an",
             str(out),
         ]
@@ -244,7 +253,8 @@ async def _xfade_merge(a: Path, b: Path, out: Path, transition: str,
 
 
 async def _image_segment(src: str, out: Path, dur_sec: float,
-                         w: int, h: int, fps: float) -> None:
+                         w: int, h: int, fps: float,
+                         keep_alpha: bool = False) -> None:
     """Render a still image as a video segment of the given duration.
     (-ss/-t extraction on an image input yields a single frame, so stills
     need -loop 1 instead.)"""
@@ -252,9 +262,8 @@ async def _image_segment(src: str, out: Path, dur_sec: float,
         FFMPEG, "-y",
         "-loop", "1", "-framerate", str(fps), "-t", f"{dur_sec:.6f}",
         "-i", src,
-        "-vf", _scale_pad_fps(w, h, fps),
-        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
-        "-pix_fmt", "yuv420p",
+        "-vf", _scale_pad_fps(w, h, fps, alpha=keep_alpha),
+        *(_QTRLE if keep_alpha else [*_X264, "-pix_fmt", "yuv420p"]),
         "-an",
         str(out),
     ]
@@ -297,6 +306,50 @@ async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> Non
     ]
     await _run(cmd, progress_cb)
     list_file.unlink(missing_ok=True)
+
+
+async def _overlay_pass(base: Path, seg: Path, out: Path,
+                        start_sec: float, dur_sec: float,
+                        opacity: float, blend: str,
+                        w: int, h: int) -> None:
+    """
+    Composite one overlay segment onto the base video at its timeline position.
+
+    blend 'normal' uses alpha overlay (transparent MGs float over footage);
+    'screen'/'add'/'multiply' use the blend filter (MAD staples for light FX).
+    Frames outside [start, start+dur] pass through unchanged.
+    """
+    end_sec = start_sec + dur_sec
+    enable = f"between(t,{start_sec:.6f},{end_sec:.6f})"
+    if blend in ("screen", "add", "multiply"):
+        # blend needs equal-length streams → pad the overlay to the base span.
+        fc = (
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=gbrp,"
+            f"tpad=start_duration={start_sec:.6f}:start_mode=add:color=black,"
+            f"tpad=stop_duration=3600:stop_mode=add:color=black[ov];"
+            f"[0:v]format=gbrp[b];"
+            f"[b][ov]blend=all_mode={blend}:all_opacity={opacity:.3f}:shortest=1:enable='{enable}',format=yuv420p[v]"
+        )
+    else:
+        # alpha overlay; opacity scales the overlay's alpha channel
+        fc = (
+            f"[1:v]scale={w}:{h}:force_original_aspect_ratio=decrease,"
+            f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba,"
+            f"colorchannelmixer=aa={opacity:.3f},"
+            f"setpts=PTS+{start_sec:.6f}/TB[ov];"
+            f"[0:v][ov]overlay=0:0:enable='{enable}',format=yuv420p[v]"
+        )
+    cmd = [
+        FFMPEG, "-y",
+        "-i", str(base), "-i", str(seg),
+        "-filter_complex", fc,
+        "-map", "[v]",
+        "-c:v", "libx264", "-crf", "21", "-preset", "fast",
+        "-an",
+        str(out),
+    ]
+    await _run(cmd)
 
 
 async def _extract_audio_segment(src: str, out: Path,
@@ -401,12 +454,16 @@ async def render_timeline(
     try:
         asset_map = {a.id: a for a in assets}
 
-        # ── Identify primary tracks ───────────────────────────────────────────
-        video_tracks = [t for t in tracks if t.track_type == "video"]
+        # ── Identify tracks ───────────────────────────────────────────────────
+        # First video track (by order) is the BASE; further video tracks are
+        # OVERLAYS composited on top (alpha/blend), in track order.
+        video_tracks = sorted([t for t in tracks if t.track_type == "video"],
+                              key=lambda t: t.order)
         audio_tracks = [t for t in tracks if t.track_type == "audio"]
 
         v_track = video_tracks[0] if video_tracks else None
         a_track = audio_tracks[0] if audio_tracks else None
+        overlay_tracks = video_tracks[1:]
 
         v_clips = sorted(
             [c for c in clips if v_track and c.track_id == v_track.id],
@@ -416,8 +473,13 @@ async def render_timeline(
             [c for c in clips if a_track and c.track_id == a_track.id],
             key=lambda c: c.start_frame,
         )
+        o_clips = [
+            (t_idx, c) for t_idx, t in enumerate(overlay_tracks)
+            for c in sorted([c for c in clips if c.track_id == t.id],
+                            key=lambda c: c.start_frame)
+        ]
 
-        all_clips = v_clips + a_clips
+        all_clips = v_clips + a_clips + [c for _, c in o_clips]
         if not all_clips:
             raise ValueError("タイムラインにクリップがありません")
 
@@ -519,8 +581,42 @@ async def render_timeline(
             await _concat(seg_files, video_only,
                           progress_cb=lambda p: progress_cb(0.6 + 0.15 * p) if progress_cb else None)
 
+        # ── Overlay tracks (video tracks above the first) ─────────────────────
+        # Each overlay clip is extracted, then composited onto the running base
+        # at its timeline position with its opacity/blend. Transparent MGs
+        # (alpha .mov) float over the footage — 歌詞テロップ etc.
+        for oi, (t_idx, oc) in enumerate(o_clips):
+            asset = asset_map.get(oc.asset_id)
+            if not asset or not Path(asset.file_path).exists():
+                continue
+            oc_dur = oc.duration_frames / fps
+            oseg = tmp_root / f"ovseg_{oi:04d}.mov"   # mov preserves alpha
+            is_image = (asset.asset_type == "image"
+                        or (asset.asset_type == "generated" and asset.duration_sec is None))
+            if is_image:
+                await _image_segment(asset.file_path, oseg, oc_dur, width, height, fps,
+                                     keep_alpha=True)
+            else:
+                await _extract_segment(
+                    asset.file_path, oseg,
+                    oc.asset_in_frame / fps, oc_dur,
+                    width, height, fps,
+                    speed=getattr(oc, "speed", 1.0) or 1.0,
+                    ease=getattr(oc, "speed_ease", "linear") or "linear",
+                    keep_alpha=True,
+                )
+            merged_out = tmp_root / f"ovbase_{oi:04d}.mp4"
+            await _overlay_pass(
+                video_only, oseg, merged_out,
+                start_sec=oc.start_frame / fps, dur_sec=oc_dur,
+                opacity=max(0.0, min(1.0, getattr(oc, "opacity", 1.0) or 1.0)),
+                blend=(getattr(oc, "blend", "normal") or "normal"),
+                w=width, h=height,
+            )
+            video_only = merged_out
+
         if progress_cb:
-            progress_cb(0.75)
+            progress_cb(0.78)
 
         # ── Audio segments ────────────────────────────────────────────────────
         audio_segs: list[Path] = []

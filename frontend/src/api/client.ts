@@ -94,6 +94,9 @@ export interface Clip {
   /** Audio fades (audio clips), in timeline frames */
   fade_in_frames: number
   fade_out_frames: number
+  /** Compositing (clips on video tracks above the first overlay onto it) */
+  opacity: number
+  blend: 'normal' | 'screen' | 'add' | 'multiply'
 }
 
 export interface ClipUpdate {
@@ -107,13 +110,15 @@ export interface ClipUpdate {
   transition_frames?: number
   fade_in_frames?: number
   fade_out_frames?: number
+  opacity?: number
+  blend?: Clip['blend']
 }
 
 // extras are optional on create (backend defaults)
 export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
-  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames'>
+  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend'>
   & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
-  | 'fade_in_frames' | 'fade_out_frames'>>
+  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
@@ -234,10 +239,17 @@ export interface MotionAnalysis {
   avg_intensity: number
 }
 
+/** Per-frame inter-frame difference (画面変化量) — values[i] = diff(frame i, i+1), 0..1 */
+export interface MotionCurve {
+  fps: number
+  values: number[]
+  frame_count: number
+}
+
 export interface AnalysisResult {
   id: number
   asset_id: number
-  analysis_type: 'audio_beats' | 'scene_changes' | 'motion'
+  analysis_type: 'audio_beats' | 'scene_changes' | 'motion' | 'motion_curve'
   result: BeatAnalysis | SceneAnalysis | MotionAnalysis
   created_at: string
 }

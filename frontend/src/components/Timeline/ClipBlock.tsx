@@ -4,6 +4,7 @@ import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
+import { MotionCanvas } from './MotionCanvas'
 
 const CLIP_COLORS: Record<string, string> = {
   video:     'bg-blue-800 border-blue-600',
@@ -204,6 +205,19 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
         <div
           className="absolute inset-0 opacity-45 pointer-events-none bg-no-repeat"
           style={{ backgroundImage: `url(${assetsApi.filmstripUrl(asset.id)})`, backgroundSize: '100% 100%' }}
+        />
+      )}
+
+      {/* Motion waveform (フレーム差分量 — 音声波形の動画版) */}
+      {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (
+        <MotionCanvas
+          assetId={asset.id}
+          assetInFrame={clip.asset_in_frame}
+          durationFrames={clip.duration_frames}
+          speed={clip.speed || 1}
+          projectFps={projectFps}
+          width={Math.round(width)}
+          height={Math.max(8, Math.round((trackHeight - 8) * 0.45))}
         />
       )}
 

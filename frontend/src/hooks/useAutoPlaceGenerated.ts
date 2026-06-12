@@ -20,33 +20,34 @@ export function useAutoPlaceGenerated(
 ) {
   const jobs = useJobStore(s => s.jobs)
   const placeClip = useTimelineStore(s => s.placeClip)
-  const seenRef = useRef<Set<number>>(new Set())
-  const seededRef = useRef(false)
+  // Only place a job we WATCHED transition pending/running → completed in this
+  // session. Merely "completed and not seen before" is unsafe: a partial jobs
+  // snapshot (SSE reconnect, server restart) would mass-place the entire
+  // generation history onto the timeline.
+  const activeRef = useRef<Set<number>>(new Set())
+  const placedRef = useRef<Set<number>>(new Set())
 
   // Reset per project
   useEffect(() => {
-    seenRef.current = new Set()
-    seededRef.current = false
+    activeRef.current = new Set()
+    placedRef.current = new Set()
   }, [projectId])
 
   useEffect(() => {
     if (!projectId) return
 
-    // Seed once: mark all currently-completed jobs as already handled.
-    if (!seededRef.current) {
-      if (jobs.length === 0) return
-      for (const j of jobs) if (j.status === 'completed') seenRef.current.add(j.id)
-      seededRef.current = true
-      return
-    }
-
     for (const job of jobs) {
-      if (job.status !== 'completed') continue
-      if (seenRef.current.has(job.id)) continue
       if (!GEN_JOB_TYPES.includes(job.job_type)) continue
+      if (job.status === 'pending' || job.status === 'running') {
+        activeRef.current.add(job.id)
+        continue
+      }
+      if (job.status !== 'completed') continue
+      if (!activeRef.current.has(job.id)) continue   // never saw it run → history
+      if (placedRef.current.has(job.id)) continue
       const ids = job.result_asset_ids ?? []
       if (ids.length === 0) continue
-      seenRef.current.add(job.id)
+      placedRef.current.add(job.id)
 
       const isAudio = job.job_type === 'generate_audio'
       void (async () => {
