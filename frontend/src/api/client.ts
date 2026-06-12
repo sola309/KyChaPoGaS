@@ -97,6 +97,8 @@ export interface Clip {
   /** Compositing (clips on video tracks above the first overlay onto it) */
   opacity: number
   blend: 'normal' | 'screen' | 'add' | 'multiply'
+  /** Animated zoom/pan/shake: preset name or keyframe JSON ('' = none) */
+  transform_json: string
 }
 
 export interface ClipUpdate {
@@ -112,13 +114,14 @@ export interface ClipUpdate {
   fade_out_frames?: number
   opacity?: number
   blend?: Clip['blend']
+  transform_json?: string
 }
 
 // extras are optional on create (backend defaults)
 export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
-  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend'>
+  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'>
   & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
-  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend'>>
+  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
@@ -135,6 +138,9 @@ export const clipsApi = {
   delete: (id: number) => api.delete(`/clips/${id}`),
   autoCutBeats: (id: number) =>
     api.post<{ created: number; cut_frames?: number[]; message?: string }>(`/clips/${id}/auto-cut-beats`).then(r => r.data),
+  scatterBeatEffects: (projectId: number, effect: 'flash' | 'punch', every: 'downbeat' | 'beat' = 'downbeat') =>
+    api.post<{ count: number; applied_at_frames?: number[]; error?: string }>(
+      '/clips/scatter-beat-effects', null, { params: { project_id: projectId, effect, every } }).then(r => r.data),
 }
 
 export const assetsApi = {

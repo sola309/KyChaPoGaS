@@ -11,7 +11,7 @@ import { useUIStore } from '../../../store/uiStore'
  * window.seek(t_ms) 規約) and the result lands in the asset library.
  */
 
-type Template = 'lyric' | 'title' | 'countdown' | 'custom'
+type Template = 'lyric' | 'title' | 'countdown' | 'beatpulse' | 'custom'
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -63,6 +63,49 @@ function countdownHTML(from: number, perSec: number, transparent = false): strin
   </style></head><body>${items.join('')}</body></html>`
 }
 
+/** データ駆動MG: 実際の楽曲ビート (window.kycha.beats) で脈動するビジュアライザ.
+ *  canvas を window.seek(t_ms) で毎フレーム描画する — テンプレ自体がデータ駆動MGの作例. */
+function beatPulseHTML(transparent = false): string {
+  return `<!DOCTYPE html><html><head><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;${transparent ? '' : 'background:#110d0f'}}
+canvas{position:absolute;inset:0}
+</style></head><body>
+<canvas id="c"></canvas>
+<script>
+const cv = document.getElementById('c')
+const ctx = cv.getContext('2d')
+const K = window.kycha || { beats: [], downbeats: [], duration: 3 }
+function resize(){ cv.width = innerWidth; cv.height = innerHeight }
+resize()
+window.seek = (tms) => {
+  const t = tms / 1000
+  ctx.clearRect(0, 0, cv.width, cv.height)
+  const cx = cv.width / 2, cy = cv.height / 2
+  // 各ビートから衝撃波リングが広がる（直近1秒分）
+  for (const b of K.beats) {
+    const dt = t - b
+    if (dt < 0 || dt > 1.0) continue
+    const isDown = K.downbeats.some(d => Math.abs(d - b) < 0.01)
+    const r = 60 + dt * 520
+    const a = Math.max(0, 1 - dt) * (isDown ? 0.9 : 0.45)
+    ctx.strokeStyle = 'rgba(214,64,93,' + a + ')'
+    ctx.lineWidth = isDown ? 10 * (1 - dt) + 2 : 4 * (1 - dt) + 1
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.stroke()
+  }
+  // 中心コア: 直近ビートからの経過で脈動
+  let last = -1
+  for (const b of K.beats) if (b <= t && b > last) last = b
+  const pulse = last >= 0 ? Math.max(0, 1 - (t - last) * 3.5) : 0
+  const core = 38 + pulse * 26
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, core * 2.2)
+  g.addColorStop(0, 'rgba(246,194,203,' + (0.85 * (0.4 + pulse * 0.6)) + ')')
+  g.addColorStop(1, 'rgba(214,64,93,0)')
+  ctx.fillStyle = g
+  ctx.beginPath(); ctx.arc(cx, cy, core * 2.2, 0, 7); ctx.fill()
+}
+</script></body></html>`
+}
+
 const CUSTOM_PLACEHOLDER = `<!DOCTYPE html>
 <html><head><style>
   /* CSSアニメはフレーム単位で正確にキャプチャされます */
@@ -105,6 +148,9 @@ export function MotionGfxPanel() {
     } else if (template === 'countdown') {
       html = countdownHTML(count, durPer, transparent)
       duration = count * durPer
+    } else if (template === 'beatpulse') {
+      html = beatPulseHTML(transparent)
+      duration = customDur
     } else {
       if (!customHtml.trim()) return
       html = customHtml
@@ -137,6 +183,7 @@ export function MotionGfxPanel() {
           <option value="lyric">歌詞スラム（最大3行）</option>
           <option value="title">タイトルカード</option>
           <option value="countdown">カウントダウン</option>
+          <option value="beatpulse">ビートパルス（楽曲ビート同期）</option>
           <option value="custom">カスタムHTML</option>
         </select>
       </label>
@@ -175,6 +222,20 @@ export function MotionGfxPanel() {
         </label>
       )}
 
+      {template === 'beatpulse' && (
+        <>
+          <label className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-500">尺(秒)</span>
+            <input type="number" min={1} max={60} step={0.5} value={customDur}
+              onChange={e => setCustomDur(Number(e.target.value))} className={`${sel} w-20`} />
+          </label>
+          <p className="text-[10px] text-zinc-600 leading-relaxed">
+            タイムラインの楽曲の<b>実ビート</b>（解析結果）で脈動するビジュアライザ。
+            透過にしてオーバーレイトラックに置くと映像の上で光ります
+          </p>
+        </>
+      )}
+
       {template === 'custom' && (
         <>
           <textarea value={customHtml} onChange={e => setCustomHtml(e.target.value)} rows={10}
@@ -188,6 +249,8 @@ export function MotionGfxPanel() {
           <p className="text-[10px] text-zinc-600 leading-relaxed">
             CSS/WAAPIアニメはフレーム正確に書き出されます。JSアニメは
             <code className="text-zinc-400"> window.seek(t_ms) </code>を定義してください。
+            <code className="text-zinc-400"> window.kycha </code>に
+            {'{bpm, beats[], downbeats[], lyrics, duration}'}（楽曲の実データ）が注入されます。
           </p>
         </>
       )}

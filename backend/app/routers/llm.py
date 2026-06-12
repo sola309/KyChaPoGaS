@@ -182,6 +182,44 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "set_transform",
+        "description": (
+            "Set animated zoom/pan/shake on a clip (静止画MADの核 — makes stills move). "
+            "transform: 'kenburns_in' | 'kenburns_out' | 'punch_in' (beat hit) | 'punch_out' "
+            "| 'pan_lr' | 'pan_rl' | 'shake' (impact) | '' (clear) | custom JSON "
+            "{\"keyframes\":[{\"t\":0,\"scale\":1.3,\"x\":0,\"y\":0},{\"t\":1,\"scale\":1.0}]} "
+            "(t=0..1 over clip, x/y=-0.5..0.5 pan fraction)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id":   {"type": "integer"},
+                "transform": {"type": "string"},
+            },
+            "required": ["clip_id", "transform"],
+        },
+    },
+    {
+        "name": "scatter_beat_effects",
+        "description": (
+            "ビート同期エフェクトの一括散布: apply an effect at every (down)beat in a range "
+            "on the primary video track in ONE call. effect: 'flash' (white flash on the "
+            "beat, no jump) | 'punch' (zoom punch-in on the beat — 静止画MAD idiom). "
+            "every: 'downbeat' | 'beat'. Optional start_frame/end_frame range, max_count."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "effect":      {"type": "string", "enum": ["flash", "punch"]},
+                "every":       {"type": "string", "enum": ["downbeat", "beat"]},
+                "start_frame": {"type": "integer"},
+                "end_frame":   {"type": "integer"},
+                "max_count":   {"type": "integer"},
+            },
+            "required": ["effect"],
+        },
+    },
+    {
         "name": "set_clip_speed",
         "description": (
             "Set a clip's playback speed and acceleration curve. ease: 'linear' | 'in' "
@@ -355,6 +393,15 @@ def _exec_tool(
             return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
         case "get_beat_match_score":
             return command_api.get_beat_match_score(project_id, session)
+        case "set_transform":
+            return command_api.set_transform(inp["clip_id"], inp["transform"], session)
+        case "scatter_beat_effects":
+            return command_api.scatter_beat_effects(
+                project_id, inp["effect"], session,
+                every=inp.get("every", "downbeat"),
+                start_frame=inp.get("start_frame", 0),
+                end_frame=inp.get("end_frame"),
+                max_count=inp.get("max_count", 32))
         case "set_clip_speed":
             return command_api.set_clip_speed(
                 inp["clip_id"], inp["speed"], inp.get("ease", "linear"), session)

@@ -241,6 +241,33 @@ export function Timeline({ projectId, fps, assets }: Props) {
           }`}
         >♪ {scoring ? '採点中…' : beatMatch ? `${beatMatch.score}点` : 'スコア'}</button>
 
+        <button
+          onClick={async () => {
+            try {
+              const r = await clipsApi.scatterBeatEffects(projectId, 'flash', 'downbeat')
+              await syncFromServer(projectId)
+              useUIStore.getState().pushToast(
+                r.error ?? `小節頭 ${r.count} 箇所に白フラッシュを散布しました`, r.error ? 'info' : 'success')
+            } catch { /* interceptor */ }
+          }}
+          disabled={!beatInfo}
+          className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-30"
+          title="全小節頭に白フラッシュを一括散布（音ハメ一括）"
+        >⚡拍フラッシュ</button>
+        <button
+          onClick={async () => {
+            try {
+              const r = await clipsApi.scatterBeatEffects(projectId, 'punch', 'downbeat')
+              await syncFromServer(projectId)
+              useUIStore.getState().pushToast(
+                r.error ?? `小節頭 ${r.count} 箇所にパンチインを散布しました`, r.error ? 'info' : 'success')
+            } catch { /* interceptor */ }
+          }}
+          disabled={!beatInfo}
+          className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-30"
+          title="全小節頭にズームパンチを一括散布（静止画MAD風）"
+        >⚡拍パンチ</button>
+
         <div className="w-px h-4 bg-zinc-700 mx-1" />
 
         {/* Undo / Redo */}
@@ -349,6 +376,38 @@ export function Timeline({ projectId, fps, assets }: Props) {
                     </select>
                   </span>
                 ))}
+              </>
+            )}
+
+            {/* Transform: animated zoom/pan/shake (video & image clips) */}
+            {selectedClip && selTrack?.track_type === 'video' && (
+              <>
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+                <span className="text-[10px] text-zinc-500">動き</span>
+                <select
+                  value={(() => {
+                    const t = selectedClip.transform_json ?? ''
+                    if (!t) return ''
+                    try { return (JSON.parse(t).preset as string) ?? 'custom' } catch { return t }
+                  })()}
+                  onChange={e => updateClip(selectedClip.id, { transform_json: e.target.value })}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="ズーム/パン/シェイク（静止画も動く・書き出しに反映）"
+                >
+                  <option value="">なし</option>
+                  <option value="kenburns_in">ズームイン</option>
+                  <option value="kenburns_out">ズームアウト</option>
+                  <option value="punch_in">パンチイン</option>
+                  <option value="punch_out">パンチアウト</option>
+                  <option value="pan_lr">パン →</option>
+                  <option value="pan_rl">パン ←</option>
+                  <option value="shake">シェイク</option>
+                  {(() => {
+                    const t = selectedClip.transform_json ?? ''
+                    const known = ['', 'kenburns_in', 'kenburns_out', 'punch_in', 'punch_out', 'pan_lr', 'pan_rl', 'shake']
+                    return !known.includes(t) ? <option value={t}>カスタム</option> : null
+                  })()}
+                </select>
               </>
             )}
 

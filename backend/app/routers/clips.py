@@ -54,6 +54,8 @@ def update_clip(clip_id: int, data: ClipUpdate, session: Session = Depends(get_s
     keys = set(changed)
     kind = ("set_speed" if keys & {"speed", "speed_ease"}
             else "set_transition" if keys & {"transition_in", "transition_frames"}
+            else "set_transform" if keys & {"transform_json"}
+            else "set_composite" if keys & {"opacity", "blend"}
             else "set_fade" if keys & {"fade_in_frames", "fade_out_frames"}
             else "move_clip" if keys & {"start_frame", "track_id"}
             else "trim_clip" if keys & {"in_point", "out_point", "duration"}
@@ -75,6 +77,14 @@ def delete_clip(clip_id: int, session: Session = Depends(get_session)):
     session.commit()
     from app.services import command_api
     command_api.record_op(proj, "delete_clip", session, detail=f"track {track_id}", actor="user")
+
+
+@router.post("/scatter-beat-effects")
+def scatter_beat_effects(project_id: int, effect: str = "flash", every: str = "downbeat",
+                         session: Session = Depends(get_session)):
+    """ビート同期エフェクトの一括散布（flash=白フラッシュ / punch=パンチイン）。"""
+    from app.services import command_api
+    return command_api.scatter_beat_effects(project_id, effect, session, every=every)
 
 
 @router.post("/{clip_id}/auto-cut-beats")

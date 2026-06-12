@@ -195,6 +195,40 @@ MCP_TOOLS = [
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     mcp_types.Tool(
+        name="set_transform",
+        description=(
+            "Animated zoom/pan/shake on a clip (makes stills move). transform: "
+            "'kenburns_in'|'kenburns_out'|'punch_in'|'punch_out'|'pan_lr'|'pan_rl'|'shake'|'' "
+            "or custom JSON {\"keyframes\":[{\"t\":0,\"scale\":1.3},{\"t\":1,\"scale\":1.0}]}."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "clip_id":   {"type": "integer"},
+                "transform": {"type": "string"},
+            },
+            "required": ["clip_id", "transform"],
+        },
+    ),
+    mcp_types.Tool(
+        name="scatter_beat_effects",
+        description=(
+            "Apply an effect at every (down)beat in one call. effect: 'flash'|'punch'. "
+            "every: 'downbeat'|'beat'. Optional start_frame/end_frame/max_count."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "effect":      {"type": "string", "enum": ["flash", "punch"]},
+                "every":       {"type": "string", "enum": ["downbeat", "beat"]},
+                "start_frame": {"type": "integer"},
+                "end_frame":   {"type": "integer"},
+                "max_count":   {"type": "integer"},
+            },
+            "required": ["effect"],
+        },
+    ),
+    mcp_types.Tool(
         name="set_clip_speed",
         description=(
             "Set clip playback speed + accel curve. ease: 'linear'|'in'|'out'|'inout' or "
@@ -310,6 +344,15 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.delete_clip(inp["clip_id"], session)
             case "get_beat_match_score":
                 return command_api.get_beat_match_score(project_id, session)
+            case "set_transform":
+                return command_api.set_transform(inp["clip_id"], inp["transform"], session)
+            case "scatter_beat_effects":
+                return command_api.scatter_beat_effects(
+                    project_id, inp["effect"], session,
+                    every=inp.get("every", "downbeat"),
+                    start_frame=inp.get("start_frame", 0),
+                    end_frame=inp.get("end_frame"),
+                    max_count=inp.get("max_count", 32))
             case "set_clip_speed":
                 return command_api.set_clip_speed(
                     inp["clip_id"], inp["speed"], inp.get("ease", "linear"), session)

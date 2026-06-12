@@ -308,6 +308,103 @@ async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> Non
     list_file.unlink(missing_ok=True)
 
 
+# ── Transform (zoom / pan / shake — 静止画MADの核) ────────────────────────────
+
+# Presets resolve to keyframes: t = 0..1 over the clip,
+# scale ≥ 1, x/y = pan as fraction of the frame (-0.5..0.5), shake = px amplitude.
+_TRANSFORM_PRESETS: dict[str, dict] = {
+    "kenburns_in":  {"keyframes": [{"t": 0, "scale": 1.0}, {"t": 1, "scale": 1.18}]},
+    "kenburns_out": {"keyframes": [{"t": 0, "scale": 1.18}, {"t": 1, "scale": 1.0}]},
+    "punch_in":     {"keyframes": [{"t": 0, "scale": 1.28}, {"t": 0.22, "scale": 1.0}]},
+    "punch_out":    {"keyframes": [{"t": 0, "scale": 1.0}, {"t": 0.18, "scale": 1.25},
+                                    {"t": 0.5, "scale": 1.25}, {"t": 1, "scale": 1.25}]},
+    "pan_lr":       {"keyframes": [{"t": 0, "scale": 1.15, "x": -0.06},
+                                    {"t": 1, "scale": 1.15, "x": 0.06}]},
+    "pan_rl":       {"keyframes": [{"t": 0, "scale": 1.15, "x": 0.06},
+                                    {"t": 1, "scale": 1.15, "x": -0.06}]},
+    "shake":        {"keyframes": [{"t": 0, "scale": 1.08}, {"t": 1, "scale": 1.08}],
+                     "shake": {"amp": 14, "decay": 1.0}},
+}
+
+
+def _piecewise_expr(points: list[tuple[float, float]], var: str = "on") -> str:
+    """Build an ffmpeg piecewise-linear expression over output frame `var`.
+    points = [(frame, value), ...] sorted by frame."""
+    if len(points) == 1:
+        return f"{points[0][1]:.6f}"
+    expr = f"{points[-1][1]:.6f}"
+    for (f0, v0), (f1, v1) in reversed(list(zip(points, points[1:]))):
+        span = max(1e-6, f1 - f0)
+        seg = f"({v0:.6f}+({v1:.6f}-{v0:.6f})*({var}-{f0:.3f})/{span:.3f})"
+        expr = f"if(lt({var},{f1:.3f}),{seg},{expr})"
+    first = f"{points[0][1]:.6f}"
+    return f"if(lt({var},{points[0][0]:.3f}),{first},{expr})"
+
+
+def parse_transform(raw: str) -> dict | None:
+    """Resolve clip.transform_json (preset name or keyframes) to keyframe form."""
+    if not raw or not raw.strip():
+        return None
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return _TRANSFORM_PRESETS.get(raw.strip())   # bare preset name
+    if isinstance(data, dict) and data.get("preset"):
+        base = _TRANSFORM_PRESETS.get(data["preset"])
+        return base
+    if isinstance(data, dict) and data.get("keyframes"):
+        return data
+    return None
+
+
+async def _transform_pass(src: Path, out: Path, transform: dict,
+                          dur_sec: float, fps: float, w: int, h: int) -> None:
+    """
+    Apply animated zoom/pan/shake to a pre-rendered segment.
+
+    Upscales 2x first so zoompan's integer sampling doesn't shimmer, then
+    drives zoom/x/y with piecewise-linear expressions per output frame.
+    """
+    n = max(1, round(dur_sec * fps))
+    kfs = sorted(transform.get("keyframes", []), key=lambda k: k.get("t", 0))
+    if not kfs:
+        kfs = [{"t": 0, "scale": 1.0}]
+    z_pts  = [(k.get("t", 0) * n, max(1.0, float(k.get("scale", 1.0)))) for k in kfs]
+    px_pts = [(k.get("t", 0) * n, float(k.get("x", 0.0))) for k in kfs]
+    py_pts = [(k.get("t", 0) * n, float(k.get("y", 0.0))) for k in kfs]
+    z_expr  = _piecewise_expr(z_pts)
+    px_expr = _piecewise_expr(px_pts)
+    py_expr = _piecewise_expr(py_pts)
+
+    shake = transform.get("shake")
+    sx = sy = "0"
+    if shake:
+        amp = float(shake.get("amp", 12)) * 2   # 2x-upscaled pixels
+        decay = float(shake.get("decay", 1.0))
+        # decaying pseudo-random jitter (two incommensurate sines)
+        env = f"exp(-{decay:.3f}*on/{max(1, n):.1f}*4)"
+        sx = f"({amp:.1f}*{env}*sin(on*12.9898))"
+        sy = f"({amp:.1f}*{env}*cos(on*78.233))"
+
+    # zoompan: x/y are the crop origin in (upscaled) input pixels
+    x_expr = f"(iw-iw/zoom)/2+({px_expr})*iw+{sx}"
+    y_expr = f"(ih-ih/zoom)/2+({py_expr})*ih+{sy}"
+    vf = (
+        f"scale={w * 2}:{h * 2}:flags=lanczos,"
+        f"zoompan=z='{z_expr}':x='{x_expr}':y='{y_expr}'"
+        f":d=1:s={w}x{h}:fps={fps}"
+    )
+    cmd = [
+        FFMPEG, "-y",
+        "-i", str(src),
+        "-vf", vf,
+        *_X264,
+        "-an",
+        str(out),
+    ]
+    await _run(cmd)
+
+
 async def _overlay_pass(base: Path, seg: Path, out: Path,
                         start_sec: float, dur_sec: float,
                         opacity: float, blend: str,
@@ -533,6 +630,12 @@ async def render_timeline(
                         speed=getattr(clip, "speed", 1.0) or 1.0,
                         ease=getattr(clip, "speed_ease", "linear") or "linear",
                     )
+                # Animated zoom/pan/shake (transform keyframes)
+                tr = parse_transform(getattr(clip, "transform_json", "") or "")
+                if tr:
+                    tr_file = tmp_root / f"seg_{n:04d}_tr.mp4"
+                    await _transform_pass(seg_file, tr_file, tr, clip_dur, fps, width, height)
+                    seg_file = tr_file
                 segs.append([seg_file, clip_dur, trans, trans_sec])
             else:
                 # Missing asset → black placeholder

@@ -669,13 +669,44 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     out = dest_dir / (f"mg_{job.id}.mov" if transparent else f"mg_{job.id}.mp4")
 
+    # Data-driven MG: expose the project's real beat grid (+ params.lyrics) to
+    # the page as window.kycha, so templates can sync to the actual music.
+    duration_sec = float(params.get("duration_sec", 3.0))
+    offset_sec = float(params.get("offset_sec", 0.0))   # MGをタイムラインのどこに置くか
+    inject: dict = {
+        "duration": duration_sec, "offset": offset_sec,
+        "fps": float(params.get("fps", 30)),
+        "lyrics": params.get("lyrics", ""),
+        "bpm": None, "beats": [], "downbeats": [],
+    }
+    try:
+        from app.services import command_api
+        with Session(engine) as session:
+            grid = command_api.get_beat_grid(project_id, session)
+        if "error" not in grid:
+            from app.models import Project as _P
+            with Session(engine) as session:
+                proj = session.get(_P, project_id)
+            pfps = proj.fps if proj else 30.0
+            # MGローカル秒 (offsetを引いてクリップ内時刻に変換)
+            beats = [round(b["frame"] / pfps - offset_sec, 4) for b in grid["beats"]]
+            downs = [round(f / pfps - offset_sec, 4) for f in grid["downbeat_frames"]]
+            inject.update({
+                "bpm": grid.get("bpm"),
+                "beats": [t for t in beats if -0.05 <= t <= duration_sec + 0.05],
+                "downbeats": [t for t in downs if -0.05 <= t <= duration_sec + 0.05],
+            })
+    except Exception as e:
+        log.warning(f"MG beat injection skipped: {e}")
+
     await render_html_to_video(
         html, out,
-        duration_sec=float(params.get("duration_sec", 3.0)),
+        duration_sec=duration_sec,
         fps=float(params.get("fps", 30)),
         width=int(params.get("width", 1280)),
         height=int(params.get("height", 720)),
         transparent=transparent,
+        inject_data=inject,
         progress_cb=lambda p: _update_progress(job.id, 0.05 + 0.9 * p),
     )
 

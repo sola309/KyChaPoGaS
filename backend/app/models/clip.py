@@ -24,6 +24,11 @@ class ClipBase(SQLModel):
     # Compositing (clips on video tracks above the first are overlaid onto it)
     opacity: float = 1.0       # 0..1
     blend: str = "normal"      # normal | screen | add | multiply
+    # Transform (zoom/pan/shake — 静止画MADの核). JSON:
+    #   {"preset": "kenburns_in"} or
+    #   {"keyframes": [{"t":0,"scale":1.3,"x":0,"y":0}, {"t":0.25,"scale":1.0}]}
+    # t = 0..1 over the clip; x/y = pan as fraction of frame (-0.5..0.5).
+    transform_json: str = ""
 
 
 class Clip(ClipBase, table=True):
@@ -47,6 +52,7 @@ class ClipUpdate(SQLModel):
     fade_out_frames: Optional[int] = None
     opacity: Optional[float] = None
     blend: Optional[str] = None
+    transform_json: Optional[str] = None
 
 
 class ClipRead(ClipBase):

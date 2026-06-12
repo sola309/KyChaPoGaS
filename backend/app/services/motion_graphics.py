@@ -18,6 +18,7 @@ to be placed on the timeline like any generated asset.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 
@@ -45,6 +46,7 @@ async def render_html_to_video(
     width: int = 1280,
     height: int = 720,
     transparent: bool = False,
+    inject_data: dict | None = None,
     progress_cb=None,
 ) -> Path:
     """Render an HTML animation to a video file. Returns `out`.
@@ -52,6 +54,10 @@ async def render_html_to_video(
     transparent=True keeps the page background alpha (don't set a body
     background in the HTML) and encodes qtrle .mov — for overlay tracks
     (歌詞テロップ, frames, particles over footage).
+
+    inject_data is exposed to the page as `window.kycha` BEFORE any page script
+    runs — data-driven MGs read beats/bpm/lyrics/duration from it (e.g. a
+    visualizer that pulses exactly on the song's real beats).
     """
     from playwright.async_api import async_playwright
 
@@ -86,6 +92,10 @@ async def render_html_to_video(
                 viewport={"width": width, "height": height},
                 device_scale_factor=1,
             )
+            if inject_data is not None:
+                await page.add_init_script(
+                    f"window.kycha = {json.dumps(inject_data, ensure_ascii=False)};"
+                )
             await page.set_content(html, wait_until="load")
             # Give fonts a moment to settle (deterministic content otherwise)
             await page.evaluate("document.fonts ? document.fonts.ready : null")

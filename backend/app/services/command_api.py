@@ -610,6 +610,99 @@ def get_beat_match_score(project_id: int, session: Session) -> dict:
     }
 
 
+def set_transform(clip_id: int, transform: str, session: Session) -> dict:
+    """Set animated zoom/pan/shake on a clip. transform: preset name
+    ('kenburns_in'|'kenburns_out'|'punch_in'|'punch_out'|'pan_lr'|'pan_rl'|'shake'),
+    a JSON keyframe spec, or '' to clear."""
+    from app.services.ffmpeg_render import parse_transform
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        return {"error": f"Clip {clip_id} not found"}
+    if transform.strip() and parse_transform(transform) is None:
+        return {"error": f"unknown transform: {transform}"}
+    clip.transform_json = transform.strip()
+    session.add(clip)
+    session.commit()
+    _after_edit(_project_of_clip(clip, session), "set_transform", session,
+                detail=transform[:60] or "clear")
+    return {"clip_id": clip_id, "transform_json": clip.transform_json}
+
+
+def scatter_beat_effects(project_id: int, effect: str, session: Session,
+                         every: str = "downbeat",
+                         start_frame: int = 0, end_frame: int | None = None,
+                         max_count: int = 32) -> dict:
+    """
+    ビート同期エフェクトの一括散布 — apply an effect at every (down)beat in a
+    range on the primary video track, in one command.
+
+    effect:
+      'flash' — split the clip at the beat (continuous source, no jump) and set
+                a short white-flash transition: a pure flash on the beat.
+      'punch' — split at the beat and put a punch_in zoom (0.22s decay) on the
+                right piece: the image punches on every beat (静止画MAD idiom).
+    every: 'downbeat' (小節頭) or 'beat'.
+    """
+    grid = get_beat_grid(project_id, session)
+    if "error" in grid:
+        return grid
+    beats = grid.get("beats", [])
+    frames = [b["frame"] for b in beats
+              if (every != "downbeat" or b.get("downbeat"))]
+    if not frames:
+        return {"error": "対象ビートがありません"}
+
+    tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
+    v_tracks = sorted([t for t in tracks if t.track_type == "video"], key=lambda t: t.order)
+    if not v_tracks:
+        return {"error": "ビデオトラックがありません"}
+    base_track = v_tracks[0]
+
+    applied = []
+    for bf in frames:
+        if bf < start_frame or (end_frame is not None and bf > end_frame):
+            continue
+        if len(applied) >= max_count:
+            break
+        clips = session.exec(select(Clip).where(Clip.track_id == base_track.id)).all()
+        target = next((c for c in clips
+                       if c.start_frame <= bf < c.start_frame + c.duration_frames), None)
+        on_cut = any(abs(c.start_frame - bf) <= 2 for c in clips)
+        if effect == "flash":
+            if on_cut:       # 既にカットがある拍はトランジションだけ付与
+                c = next(c for c in clips if abs(c.start_frame - bf) <= 2)
+                c.transition_in = "white"
+                c.transition_frames = max(c.transition_frames, 3)
+                session.add(c); session.commit()
+                applied.append(bf)
+                continue
+            if not target:
+                continue
+            r = split_clip(target.id, bf, session)
+            if "error" in r:
+                continue
+            set_transition(r["right_clip_id"], "white", 3, session)
+            applied.append(bf)
+        elif effect == "punch":
+            if not target:
+                continue
+            if abs(target.start_frame - bf) <= 2:    # 拍がクリップ先頭ならそのまま
+                set_transform(target.id, "punch_in", session)
+                applied.append(bf)
+                continue
+            r = split_clip(target.id, bf, session)
+            if "error" in r:
+                continue
+            set_transform(r["right_clip_id"], "punch_in", session)
+            applied.append(bf)
+        else:
+            return {"error": "effect must be 'flash' or 'punch'"}
+
+    _after_edit(project_id, "scatter_effects", session,
+                detail=f"{effect}×{len(applied)} every={every}")
+    return {"effect": effect, "applied_at_frames": applied, "count": len(applied)}
+
+
 def set_clip_speed(clip_id: int, speed: float, ease: str, session: Session) -> dict:
     """Set playback speed + accel curve. ease: 'linear'|'in'|'out'|'inout' or a
     custom bezier 'cubic:x1,y1,x2,y2'. The source span stays fixed, so the
