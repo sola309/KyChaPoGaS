@@ -75,6 +75,13 @@ def get_analysis(asset_id: int, session: Session = Depends(get_session)):
 
 # ── LLM summary ──────────────────────────────────────────────────────────────
 
+@router.get("/project/{project_id}/beat-match")
+def get_beat_match(project_id: int, session: Session = Depends(get_session)):
+    """音ハメスコア — ビートと映像変化(カット/モーション)の一致度。"""
+    from app.services import command_api
+    return command_api.get_beat_match_score(project_id, session)
+
+
 @router.get("/project/{project_id}/summary")
 def get_project_analysis_summary(project_id: int, session: Session = Depends(get_session)):
     """

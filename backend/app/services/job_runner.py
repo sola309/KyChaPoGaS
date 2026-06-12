@@ -598,7 +598,7 @@ async def _analyze_audio(job: Job, params: dict) -> None:
 # ── analyze_video ─────────────────────────────────────────────────────────────
 
 async def _analyze_video(job: Job, params: dict) -> None:
-    from app.services.video_analyzer import analyze_scenes, analyze_motion
+    from app.services.video_analyzer import analyze_scenes, analyze_motion, analyze_motion_curve
     from app.models.analysis import AnalysisResult
 
     asset_id = params["asset_id"]
@@ -614,10 +614,15 @@ async def _analyze_video(job: Job, params: dict) -> None:
     scene_result = await asyncio.get_event_loop().run_in_executor(
         None, analyze_scenes, file_path
     )
-    _update_progress(job.id, 0.55)
+    _update_progress(job.id, 0.45)
 
     motion_result = await asyncio.get_event_loop().run_in_executor(
         None, analyze_motion, file_path
+    )
+    _update_progress(job.id, 0.7)
+
+    curve_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_motion_curve, file_path
     )
     _update_progress(job.id, 0.95)
 
@@ -625,6 +630,7 @@ async def _analyze_video(job: Job, params: dict) -> None:
         for atype, result in (
             ("scene_changes", scene_result),
             ("motion", motion_result),
+            ("motion_curve", curve_result),
         ):
             old = session.exec(
                 select(AnalysisResult)  # type: ignore[arg-type]

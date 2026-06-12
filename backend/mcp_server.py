@@ -186,6 +186,15 @@ MCP_TOOLS = [
         },
     ),
     mcp_types.Tool(
+        name="get_beat_match_score",
+        description=(
+            "音ハメスコア: alignment of visual changes (cuts + motion peaks) with beats. "
+            "Returns score 0-100, cuts_on_beat, weak_beats (positions needing a cut/flash/"
+            "high-motion clip). Requires beat + motion_curve analyses."
+        ),
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+    mcp_types.Tool(
         name="set_transition",
         description=(
             "Set the transition INTO a clip from the previous clip on its track. "
@@ -283,6 +292,8 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.move_clip(inp["clip_id"], inp["new_start_frame"], session)
             case "delete_clip":
                 return command_api.delete_clip(inp["clip_id"], session)
+            case "get_beat_match_score":
+                return command_api.get_beat_match_score(project_id, session)
             case "set_transition":
                 return command_api.set_transition(
                     inp["clip_id"], inp["transition"], inp.get("frames", 8), session)

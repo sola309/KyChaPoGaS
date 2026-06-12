@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import type { Asset, TransitionType } from '../../api/client'
-import { clipsApi, jobsApi } from '../../api/client'
+import type { Asset, TransitionType, BeatMatchResult } from '../../api/client'
+import { clipsApi, jobsApi, analysisApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { useCollabStore } from '../../store/collabStore'
@@ -32,6 +32,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const containerRef   = useRef<HTMLDivElement>(null)
   const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
+  const [beatMatch, setBeatMatch] = useState<BeatMatchResult | null>(null)
+  const [scoring, setScoring] = useState(false)
 
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
@@ -144,6 +146,28 @@ export function Timeline({ projectId, fps, assets }: Props) {
     } catch { /* error toast handled by interceptor */ }
   }
 
+  // 音ハメスコア — beat vs visual-change alignment
+  const handleBeatMatch = async () => {
+    setScoring(true)
+    try {
+      const r = await analysisApi.getBeatMatch(projectId)
+      if (r.error) {
+        useUIStore.getState().pushToast(r.error, 'info')
+        setBeatMatch(null)
+      } else {
+        setBeatMatch(r)
+        const weak = r.weak_beats.slice(0, 4).map(b => `${b.sec.toFixed(1)}s`).join(', ')
+        useUIStore.getState().pushToast(
+          `音ハメスコア ${r.score}点 — ビート一致 ${r.beats_hit}/${r.beats_total}、カット同期 ${r.cuts_on_beat}/${r.cuts_total}`
+          + (weak ? `　弱: ${weak}` : ''),
+          r.score >= 70 ? 'success' : 'info',
+        )
+      }
+    } catch { /* interceptor */ } finally {
+      setScoring(false)
+    }
+  }
+
   const handlePrecompose = async () => {
     try {
       await jobsApi.create(projectId, 'precompose', { project_id: projectId })
@@ -186,6 +210,21 @@ export function Timeline({ projectId, fps, assets }: Props) {
               ? 'bg-emerald-800 text-emerald-100'
               : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
         >🧲 音ハメ{snapEnabled ? 'ON' : 'OFF'}</button>
+
+        <button
+          onClick={handleBeatMatch}
+          disabled={!beatInfo || scoring}
+          title={beatInfo
+            ? '音ハメスコア: ビートと映像変化（カット/モーション）の一致度を採点'
+            : '音声のビート解析後に有効'}
+          className={`text-[11px] px-2 py-0.5 rounded disabled:opacity-30 ${
+            beatMatch
+              ? beatMatch.score >= 70
+                ? 'bg-emerald-900 text-emerald-200'
+                : 'bg-amber-900 text-amber-200'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+          }`}
+        >♪ {scoring ? '採点中…' : beatMatch ? `${beatMatch.score}点` : 'スコア'}</button>
 
         <div className="w-px h-4 bg-zinc-700 mx-1" />
 
@@ -442,6 +481,19 @@ export function Timeline({ projectId, fps, assets }: Props) {
                 >{o.user.name}</span>
               </div>
             )
+          ))}
+
+          {/* Weak beats (音ハメスコアの改善ポイント) — click to seek */}
+          {beatMatch?.weak_beats.map(b => (
+            <div
+              key={`wb${b.frame}`}
+              className="absolute top-0 bottom-0 w-px bg-amber-400/50 cursor-pointer z-10"
+              style={{ left: LABEL_WIDTH + b.frame * pixelsPerFrame }}
+              title={`弱いビート ${b.sec.toFixed(2)}s — カット/フラッシュ/動きを置くと◎（クリックでシーク）`}
+              onClick={() => setCurrentFrame(b.frame)}
+            >
+              <span className="absolute top-0 left-0.5 text-[8px] text-amber-400/80">▼</span>
+            </div>
           ))}
 
           {/* Playhead — full height */}

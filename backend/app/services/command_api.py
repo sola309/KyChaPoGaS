@@ -479,6 +479,121 @@ def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
             "split_at_frame": split_frame}
 
 
+def get_beat_match_score(project_id: int, session: Session) -> dict:
+    """
+    音ハメスコア — how well the timeline's visual changes line up with the music.
+
+    Builds a timeline-space motion curve from each video clip's per-frame
+    motion_curve analysis (mapped through asset_in/speed), injects spikes at
+    cut points (a cut IS a visual change), then checks every beat for a nearby
+    motion peak. Returns an overall score, per-beat hits, and the weakest
+    beats as edit suggestions.
+    """
+    import bisect
+    from app.models.analysis import AnalysisResult
+
+    grid = get_beat_grid(project_id, session)
+    if "error" in grid:
+        return grid
+    beat_frames = [b["frame"] for b in grid.get("beats", [])]
+    if not beat_frames:
+        return {"error": "ビートがありません（音声解析を実行してください）"}
+
+    from app.models import Project
+    project = session.get(Project, project_id)
+    fps = project.fps if project else 30.0
+
+    # Primary video track clips
+    tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
+    v_tracks = [t for t in tracks if t.track_type == "video"]
+    if not v_tracks:
+        return {"error": "ビデオトラックがありません"}
+    clips = sorted(
+        session.exec(select(Clip).where(Clip.track_id == v_tracks[0].id)).all(),
+        key=lambda c: c.start_frame,
+    )
+    if not clips:
+        return {"error": "クリップがありません"}
+
+    # Motion curves per asset (analysis_type=motion_curve)
+    curves: dict[int, dict] = {}
+    for c in clips:
+        if c.asset_id is None or c.asset_id in curves:
+            continue
+        row = session.exec(
+            select(AnalysisResult)
+            .where(AnalysisResult.asset_id == c.asset_id)
+            .where(AnalysisResult.analysis_type == "motion_curve")
+        ).first()
+        if row:
+            curves[c.asset_id] = json.loads(row.result_json)
+
+    # ── Timeline-space motion curve ───────────────────────────────────────
+    total = max(c.start_frame + c.duration_frames for c in clips)
+    timeline = [0.0] * (total + 1)
+    analyzed_clips = 0
+    for c in clips:
+        curve = curves.get(c.asset_id or -1)
+        speed = c.speed or 1.0
+        if curve and curve.get("values"):
+            analyzed_clips += 1
+            vals, cfps = curve["values"], curve.get("fps", fps)
+            for f in range(c.duration_frames):
+                src_sec = (c.asset_in_frame + f * speed) / fps
+                idx = int(src_sec * cfps)
+                if 0 <= idx < len(vals):
+                    tf = c.start_frame + f
+                    if tf <= total:
+                        timeline[tf] = max(timeline[tf], vals[idx])
+    # Cuts are visual changes — inject a strong spike at every clip boundary
+    cut_frames = [c.start_frame for c in clips]
+    for cf in cut_frames:
+        if 0 <= cf <= total:
+            timeline[cf] = max(timeline[cf], 0.8)
+
+    # ── Score each beat: motion peak within ±2 frames? ────────────────────
+    nonzero = sorted(v for v in timeline if v > 0)
+    if not nonzero:
+        return {"error": "動画クリップの motion_curve 解析がありません（動画解析を実行してください）"}
+    threshold = nonzero[int(len(nonzero) * 0.6)]   # 60th percentile of activity
+
+    win = 2
+    beat_hits = []
+    hits = 0
+    for bf in beat_frames:
+        if bf > total:
+            continue
+        lo, hi = max(0, bf - win), min(total, bf + win)
+        peak = max(timeline[lo:hi + 1])
+        hit = peak >= max(threshold, 0.05)
+        hits += hit
+        beat_hits.append({"frame": bf, "sec": round(bf / fps, 2),
+                          "peak": round(peak, 3), "hit": bool(hit)})
+
+    # Cut-on-beat ratio (cuts within ±3 frames of a beat)
+    on_beat = 0
+    for cf in cut_frames:
+        i = bisect.bisect_left(beat_frames, cf)
+        near = min((abs(cf - beat_frames[j]) for j in (i - 1, i) if 0 <= j < len(beat_frames)),
+                   default=999)
+        on_beat += near <= 3
+
+    considered = len(beat_hits)
+    score = round(100 * hits / considered) if considered else 0
+    weak = [b for b in beat_hits if not b["hit"]][:10]
+    return {
+        "score": score,
+        "beats_total": considered,
+        "beats_hit": hits,
+        "cuts_total": len(cut_frames),
+        "cuts_on_beat": on_beat,
+        "analyzed_clips": analyzed_clips,
+        "unanalyzed_clips": len([c for c in clips if c.asset_id not in curves]),
+        "weak_beats": weak,
+        "hint": "weak_beats のフレーム位置にカット・動きの山・フラッシュを置くとスコアが上がります",
+    }
+
+
 def set_transition(clip_id: int, transition: str, frames: int, session: Session) -> dict:
     """Set the transition INTO a clip (from the previous clip on its track).
     transition: '' (cut) | 'cross' | 'white' | 'black'. Duration-preserving."""

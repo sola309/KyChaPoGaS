@@ -78,6 +78,57 @@ def analyze_scenes(file_path: Path) -> dict[str, Any]:
     }
 
 
+def analyze_motion_curve(file_path: Path) -> dict[str, Any]:
+    """
+    Per-frame inter-frame difference curve (画面の変化量を数値化).
+
+    Full frame-rate resolution so the curve can be aligned with a beat grid
+    (beat interval at 172 bpm ≈ 0.35 s — 1 s segments are far too coarse).
+
+    Returns:
+        {
+            "fps": float,            # sampling rate (= video fps)
+            "values": [float, ...],  # 0..1 mean-abs-diff per frame pair;
+                                     # values[i] = diff(frame i, frame i+1)
+            "frame_count": int,
+        }
+    """
+    try:
+        import cv2  # noqa: PLC0415
+        import numpy as np  # noqa: PLC0415
+    except ImportError as e:
+        raise RuntimeError(f"opencv-python is not installed: {e}")
+
+    log.info(f"Motion curve: {file_path.name}")
+
+    cap = cv2.VideoCapture(str(file_path))
+    if not cap.isOpened():
+        raise RuntimeError(f"Cannot open video: {file_path}")
+
+    video_fps = cap.get(cv2.CAP_PROP_FPS) or 24.0
+    values: list[float] = []
+    prev_gray = None
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        # Downscale for speed — diff statistics are stable at low res
+        small = cv2.resize(frame, (160, 90), interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+        if prev_gray is not None:
+            diff = cv2.absdiff(gray, prev_gray)
+            values.append(round(float(np.mean(diff)) / 255.0, 4))
+        prev_gray = gray
+
+    cap.release()
+    return {
+        "fps": round(video_fps, 3),
+        "values": values,
+        "frame_count": len(values) + 1,
+    }
+
+
 def analyze_motion(file_path: Path) -> dict[str, Any]:
     """
     Compute motion intensity (frame-difference mean) at sampled intervals.

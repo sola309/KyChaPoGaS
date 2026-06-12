@@ -249,6 +249,19 @@ export interface ProjectAnalysisSummary {
   }
 }
 
+export interface BeatMatchResult {
+  score: number
+  beats_total: number
+  beats_hit: number
+  cuts_total: number
+  cuts_on_beat: number
+  analyzed_clips: number
+  unanalyzed_clips: number
+  weak_beats: { frame: number; sec: number; peak: number; hit: boolean }[]
+  hint?: string
+  error?: string
+}
+
 export const analysisApi = {
   triggerAudio:  (assetId: number) =>
     api.post<{ job_id: number; status: string }>(`/analysis/audio/${assetId}`).then(r => r.data),
@@ -258,6 +271,8 @@ export const analysisApi = {
     api.get<AnalysisResult[]>(`/analysis/${assetId}`).then(r => r.data),
   getSummary:    (projectId: number) =>
     api.get<ProjectAnalysisSummary>(`/analysis/project/${projectId}/summary`).then(r => r.data),
+  getBeatMatch:  (projectId: number) =>
+    api.get<BeatMatchResult>(`/analysis/project/${projectId}/beat-match`).then(r => r.data),
 }
 
 // ── GPU / System ─────────────────────────────────────────────────────────────

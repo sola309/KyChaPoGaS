@@ -171,6 +171,17 @@ TOOLS: list[dict] = [
         },
     },
     {
+        "name": "get_beat_match_score",
+        "description": (
+            "音ハメスコア: how well visual changes (cuts + per-frame motion) line up with "
+            "the music's beats. Returns score (0-100), cuts_on_beat, and weak_beats — "
+            "beat positions lacking a visual change. Use weak_beats to decide where to "
+            "add cuts, flashes, or high-motion clips. Requires audio beat analysis and "
+            "video motion_curve analysis (trigger_analysis)."
+        ),
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
         "name": "set_transition",
         "description": (
             "Set the transition INTO a clip (joins it to the previous clip on its track). "
@@ -324,6 +335,8 @@ def _exec_tool(
             return command_api.split_clip(inp["clip_id"], inp["split_frame"], session)
         case "auto_cut_to_beats":
             return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
+        case "get_beat_match_score":
+            return command_api.get_beat_match_score(project_id, session)
         case "set_transition":
             return command_api.set_transition(
                 inp["clip_id"], inp["transition"], inp.get("frames", 8), session)
