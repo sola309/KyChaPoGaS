@@ -170,6 +170,38 @@ TOOLS: list[dict] = [
             "required": ["clip_id"],
         },
     },
+    {
+        "name": "set_transition",
+        "description": (
+            "Set the transition INTO a clip (joins it to the previous clip on its track). "
+            "transition: '' (hard cut) | 'cross' (crossfade) | 'white' (white flash, MAD定番) "
+            "| 'black' (dip to black). frames = duration in timeline frames (e.g. 8 ≈ 0.27s "
+            "at 30fps). Duration-preserving — the timeline and music sync never shift."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id":    {"type": "integer"},
+                "transition": {"type": "string", "enum": ["", "cross", "white", "black"]},
+                "frames":     {"type": "integer", "description": "transition duration in frames"},
+            },
+            "required": ["clip_id", "transition"],
+        },
+    },
+    {
+        "name": "set_audio_fade",
+        "description": "Set fade-in/fade-out on an audio clip (frames at project fps). "
+                       "Use fade_out to avoid an abrupt end of the music.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "clip_id":         {"type": "integer"},
+                "fade_in_frames":  {"type": "integer"},
+                "fade_out_frames": {"type": "integer"},
+            },
+            "required": ["clip_id"],
+        },
+    },
     # ── Generation / Analysis ─────────────────────────────────────────────────
     {
         "name": "create_generation_job",
@@ -292,6 +324,12 @@ def _exec_tool(
             return command_api.split_clip(inp["clip_id"], inp["split_frame"], session)
         case "auto_cut_to_beats":
             return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
+        case "set_transition":
+            return command_api.set_transition(
+                inp["clip_id"], inp["transition"], inp.get("frames", 8), session)
+        case "set_audio_fade":
+            return command_api.set_audio_fade(
+                inp["clip_id"], inp.get("fade_in_frames", 0), inp.get("fade_out_frames", 0), session)
         case "create_generation_job":
             return command_api.create_job(
                 project_id, inp["job_type"], inp.get("params", {}), session

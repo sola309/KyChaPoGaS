@@ -48,6 +48,19 @@ def _migrate(conn) -> None:
         conn.execute(text("ALTER TABLE asset ADD COLUMN proxy_path VARCHAR"))
         log.info("Migration: added asset.proxy_path")
 
+    # ── Transitions + audio fades ─────────────────────────────────────────
+    if "clip" in tables:
+        clip_cols = columns("clip")
+        for col, ddl in [
+            ("transition_in",     "ALTER TABLE clip ADD COLUMN transition_in VARCHAR DEFAULT ''"),
+            ("transition_frames", "ALTER TABLE clip ADD COLUMN transition_frames INTEGER DEFAULT 0"),
+            ("fade_in_frames",    "ALTER TABLE clip ADD COLUMN fade_in_frames INTEGER DEFAULT 0"),
+            ("fade_out_frames",   "ALTER TABLE clip ADD COLUMN fade_out_frames INTEGER DEFAULT 0"),
+        ]:
+            if col not in clip_cols:
+                conn.execute(text(ddl))
+                log.info(f"Migration: added clip.{col}")
+
 
 def create_db_and_tables() -> None:
     # Import all models so SQLModel.metadata is populated

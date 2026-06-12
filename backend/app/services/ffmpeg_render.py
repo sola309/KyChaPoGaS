@@ -165,6 +165,56 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
         p.unlink(missing_ok=True)
 
 
+# xfade transition names for clip.transition_in values
+_XFADE: dict[str, str] = {
+    "cross": "fade",        # crossfade
+    "white": "fadewhite",   # flash to white
+    "black": "fadeblack",   # dip to black
+}
+
+
+async def _xfade_merge(a: Path, b: Path, out: Path, transition: str,
+                       d_sec: float, a_dur: float) -> None:
+    """
+    Merge two pre-encoded segments with a duration-preserving transition.
+
+    The first segment is freeze-extended (clone last frame) by the transition
+    duration, then xfade consumes exactly that extension — so the merged length
+    is a_dur + b_dur and the timeline (music sync) never shifts.
+    """
+    trans = _XFADE.get(transition, "fade")
+    fc = (f"[0:v]tpad=stop_mode=clone:stop_duration={d_sec:.6f}[a];"
+          f"[a][1:v]xfade=transition={trans}:duration={d_sec:.6f}:offset={a_dur:.6f}[v]")
+    cmd = [
+        FFMPEG, "-y",
+        "-i", str(a), "-i", str(b),
+        "-filter_complex", fc,
+        "-map", "[v]",
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-an",
+        str(out),
+    ]
+    await _run(cmd)
+
+
+async def _image_segment(src: str, out: Path, dur_sec: float,
+                         w: int, h: int, fps: float) -> None:
+    """Render a still image as a video segment of the given duration.
+    (-ss/-t extraction on an image input yields a single frame, so stills
+    need -loop 1 instead.)"""
+    cmd = [
+        FFMPEG, "-y",
+        "-loop", "1", "-framerate", str(fps), "-t", f"{dur_sec:.6f}",
+        "-i", src,
+        "-vf", _scale_pad_fps(w, h, fps),
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-pix_fmt", "yuv420p",
+        "-an",
+        str(out),
+    ]
+    await _run(cmd)
+
+
 async def _black_segment(out: Path, dur_sec: float, w: int, h: int, fps: float) -> None:
     """Generate a black-frame segment."""
     cmd = [
@@ -178,7 +228,13 @@ async def _black_segment(out: Path, dur_sec: float, w: int, h: int, fps: float) 
 
 
 async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> None:
-    """Concatenate pre-encoded segments via FFmpeg concat demuxer."""
+    """
+    Concatenate pre-encoded segments via the FFmpeg concat demuxer.
+
+    Re-encodes instead of stream-copying: xfade-merged segments and plain
+    segments have slightly different timestamp layouts, and `-c copy` drops
+    packets at those boundaries (video ends early / non-monotonic DTS).
+    """
     list_file = out.parent / f"{out.stem}_concat.txt"
     with open(list_file, "w", encoding="utf-8") as f:
         for seg in segment_files:
@@ -188,7 +244,9 @@ async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> Non
         FFMPEG, "-y",
         "-f", "concat", "-safe", "0",
         "-i", str(list_file),
-        "-c", "copy",
+        "-fps_mode", "cfr",
+        "-c:v", "libx264", "-crf", "23", "-preset", "fast",
+        "-an",
         str(out),
     ]
     await _run(cmd, progress_cb)
@@ -197,14 +255,26 @@ async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> Non
 
 async def _extract_audio_segment(src: str, out: Path,
                                   in_sec: float, dur_sec: float,
-                                  timeline_start: float) -> None:
-    """Extract audio, pad with silence to match timeline position."""
-    # First extract the clip audio
+                                  timeline_start: float,
+                                  fade_in_sec: float = 0.0,
+                                  fade_out_sec: float = 0.0) -> None:
+    """Extract audio, apply fades, pad with silence to match timeline position."""
+    # First extract the clip audio (with optional fade in/out)
     raw = out.parent / f"{out.stem}_raw.aac"
+    afilters = []
+    if fade_in_sec > 0.01:
+        afilters.append(f"afade=t=in:st=0:d={fade_in_sec:.3f}")
+    if fade_out_sec > 0.01:
+        st = max(0.0, dur_sec - fade_out_sec)
+        afilters.append(f"afade=t=out:st={st:.3f}:d={fade_out_sec:.3f}")
     cmd = [
         FFMPEG, "-y",
         "-ss", str(in_sec), "-t", str(dur_sec),
         "-i", src,
+    ]
+    if afilters:
+        cmd += ["-af", ",".join(afilters)]
+    cmd += [
         "-vn", "-c:a", "aac", "-b:a", "192k",
         str(raw),
     ]
@@ -309,7 +379,9 @@ async def render_timeline(
         total_dur = total_frames / fps
 
         # ── Video segments ────────────────────────────────────────────────────
-        segs: list[Path] = []
+        # Each entry: [path, duration_sec, transition_in, transition_sec]
+        # (transition_in joins the segment to the PREVIOUS one, duration-preserving)
+        segs: list[list] = []
         current_frame = 0
         n = 0
 
@@ -322,46 +394,83 @@ async def render_timeline(
                 gap_dur = (clip.start_frame - current_frame) / fps
                 gap_file = tmp_root / f"gap_{n:04d}.mp4"
                 await _black_segment(gap_file, gap_dur, width, height, fps)
-                segs.append(gap_file)
+                segs.append([gap_file, gap_dur, "", 0.0])
                 n += 1
+
+            clip_dur = clip.duration_frames / fps
+            trans = getattr(clip, "transition_in", "") or ""
+            trans_sec = (getattr(clip, "transition_frames", 0) or 0) / fps
+            # A transition needs a previous segment and a sane duration
+            if trans and (not segs or trans_sec < 0.02):
+                trans = ""
+            trans_sec = min(trans_sec, clip_dur * 0.9, 2.0)
 
             # Clip segment
             asset = asset_map.get(clip.asset_id)
             if asset and Path(asset.file_path).exists():
                 seg_file = tmp_root / f"seg_{n:04d}.mp4"
-                await _extract_segment(
-                    asset.file_path, seg_file,
-                    clip.asset_in_frame / fps,
-                    clip.duration_frames / fps,
-                    width, height, fps,
-                    speed=getattr(clip, "speed", 1.0) or 1.0,
-                    ease=getattr(clip, "speed_ease", "linear") or "linear",
-                )
-                segs.append(seg_file)
+                # Still images (freeze-frames / placeholders) loop for the clip
+                # duration; videos are extracted with speed remap.
+                is_image = (asset.asset_type == "image"
+                            or (asset.asset_type == "generated" and asset.duration_sec is None))
+                if is_image:
+                    await _image_segment(asset.file_path, seg_file, clip_dur,
+                                         width, height, fps)
+                else:
+                    await _extract_segment(
+                        asset.file_path, seg_file,
+                        clip.asset_in_frame / fps,
+                        clip_dur,
+                        width, height, fps,
+                        speed=getattr(clip, "speed", 1.0) or 1.0,
+                        ease=getattr(clip, "speed_ease", "linear") or "linear",
+                    )
+                segs.append([seg_file, clip_dur, trans, trans_sec])
             else:
                 # Missing asset → black placeholder
                 gap_file = tmp_root / f"missing_{n:04d}.mp4"
-                await _black_segment(gap_file, clip.duration_frames / fps, width, height, fps)
-                segs.append(gap_file)
+                await _black_segment(gap_file, clip_dur, width, height, fps)
+                segs.append([gap_file, clip_dur, trans, trans_sec])
             n += 1
             current_frame = clip.start_frame + clip.duration_frames
 
             if progress_cb:
-                progress_cb(0.05 + 0.55 * (current_frame / total_frames))
+                progress_cb(0.05 + 0.5 * (current_frame / total_frames))
+
+        # ── Transition merge pass ─────────────────────────────────────────────
+        # Left-fold: whenever a segment declares a transition, xfade-merge it
+        # into the accumulated previous segment (freeze-extended, so the total
+        # length is unchanged and the music stays in sync).
+        merged: list[list] = []
+        m = 0
+        for seg in segs:
+            if seg[2] and merged:
+                prev = merged[-1]
+                out_file = tmp_root / f"xf_{m:04d}.mp4"
+                m += 1
+                await _xfade_merge(prev[0], seg[0], out_file,
+                                   transition=seg[2], d_sec=seg[3], a_dur=prev[1])
+                merged[-1] = [out_file, prev[1] + seg[1], prev[2], prev[3]]
+            else:
+                merged.append(seg)
+        seg_files = [s[0] for s in merged]
+
+        if progress_cb:
+            progress_cb(0.6)
 
         # Trailing gap if needed
         if not v_clips:
             # Pure audio project — generate silent black video
             blank = tmp_root / "blank.mp4"
             await _black_segment(blank, total_dur, width, height, fps)
-            segs = [blank]
+            seg_files = [blank]
 
         # ── Concat video ──────────────────────────────────────────────────────
         video_only = tmp_root / "video_only.mp4"
-        if len(segs) == 1:
-            shutil.copy(segs[0], video_only)
+        if len(seg_files) == 1:
+            shutil.copy(seg_files[0], video_only)
         else:
-            await _concat(segs, video_only,
+            await _concat(seg_files, video_only,
                           progress_cb=lambda p: progress_cb(0.6 + 0.15 * p) if progress_cb else None)
 
         if progress_cb:
@@ -379,6 +488,8 @@ async def render_timeline(
                 clip.asset_in_frame / fps,
                 clip.duration_frames / fps,
                 clip.start_frame / fps,
+                fade_in_sec=(getattr(clip, "fade_in_frames", 0) or 0) / fps,
+                fade_out_sec=(getattr(clip, "fade_out_frames", 0) or 0) / fps,
             )
             audio_segs.append(seg_file)
 

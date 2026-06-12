@@ -53,6 +53,8 @@ def update_clip(clip_id: int, data: ClipUpdate, session: Session = Depends(get_s
     session.refresh(clip)
     keys = set(changed)
     kind = ("set_speed" if keys & {"speed", "speed_ease"}
+            else "set_transition" if keys & {"transition_in", "transition_frames"}
+            else "set_fade" if keys & {"fade_in_frames", "fade_out_frames"}
             else "move_clip" if keys & {"start_frame", "track_id"}
             else "trim_clip" if keys & {"in_point", "out_point", "duration"}
             else "update_clip")

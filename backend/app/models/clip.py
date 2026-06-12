@@ -12,6 +12,15 @@ class ClipBase(SQLModel):
     # Optional speed easing for accel/decel within the clip.
     # 'linear' (constant) | 'in' | 'out' | 'inout' — shapes the speed ramp.
     speed_ease: str = "linear"
+    # Transition INTO this clip from the previous segment on the same track.
+    # '' (hard cut) | 'cross' (crossfade) | 'white' (white flash) | 'black' (dip to black)
+    # Duration-preserving: the previous segment is freeze-extended before the
+    # xfade, so the timeline length (and music sync) never changes.
+    transition_in: str = ""
+    transition_frames: int = 0   # transition duration (timeline frames)
+    # Audio fades (audio clips; timeline frames at project fps)
+    fade_in_frames: int = 0
+    fade_out_frames: int = 0
 
 
 class Clip(ClipBase, table=True):
@@ -29,6 +38,10 @@ class ClipUpdate(SQLModel):
     track_id: Optional[int] = None
     speed: Optional[float] = None
     speed_ease: Optional[str] = None
+    transition_in: Optional[str] = None
+    transition_frames: Optional[int] = None
+    fade_in_frames: Optional[int] = None
+    fade_out_frames: Optional[int] = None
 
 
 class ClipRead(ClipBase):

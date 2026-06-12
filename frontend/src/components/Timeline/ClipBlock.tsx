@@ -207,6 +207,22 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
         />
       )}
 
+      {/* Transition-in indicator (◣ at the head of the clip) */}
+      {clip.transition_in && (
+        <div
+          className="absolute left-0 top-0 bottom-0 pointer-events-none z-[5]"
+          style={{
+            width: Math.max(6, clip.transition_frames * pixelsPerFrame),
+            background: clip.transition_in === 'white'
+              ? 'linear-gradient(to right, rgba(255,255,255,0.75), transparent)'
+              : clip.transition_in === 'black'
+              ? 'linear-gradient(to right, rgba(0,0,0,0.85), transparent)'
+              : 'linear-gradient(to right, rgba(238,152,168,0.7), transparent)',
+          }}
+          title={`遷移: ${clip.transition_in}`}
+        />
+      )}
+
       {/* Left trim handle */}
       <div
         className="clip-trim-handle absolute left-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"

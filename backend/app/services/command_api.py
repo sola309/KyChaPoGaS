@@ -479,6 +479,39 @@ def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
             "split_at_frame": split_frame}
 
 
+def set_transition(clip_id: int, transition: str, frames: int, session: Session) -> dict:
+    """Set the transition INTO a clip (from the previous clip on its track).
+    transition: '' (cut) | 'cross' | 'white' | 'black'. Duration-preserving."""
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        return {"error": f"Clip {clip_id} not found"}
+    if transition not in ("", "cross", "white", "black"):
+        return {"error": "transition must be '', 'cross', 'white' or 'black'"}
+    clip.transition_in = transition
+    clip.transition_frames = max(0, int(frames)) if transition else 0
+    session.add(clip)
+    session.commit()
+    _after_edit(_project_of_clip(clip, session), "set_transition", session,
+                detail=f"{transition or 'cut'} {clip.transition_frames}f")
+    return {"clip_id": clip_id, "transition_in": clip.transition_in,
+            "transition_frames": clip.transition_frames}
+
+
+def set_audio_fade(clip_id: int, fade_in_frames: int, fade_out_frames: int, session: Session) -> dict:
+    """Set fade-in/out on an audio clip (frames at project fps)."""
+    clip = session.get(Clip, clip_id)
+    if not clip:
+        return {"error": f"Clip {clip_id} not found"}
+    clip.fade_in_frames = max(0, int(fade_in_frames))
+    clip.fade_out_frames = max(0, int(fade_out_frames))
+    session.add(clip)
+    session.commit()
+    _after_edit(_project_of_clip(clip, session), "set_fade", session,
+                detail=f"in {clip.fade_in_frames}f / out {clip.fade_out_frames}f")
+    return {"clip_id": clip_id, "fade_in_frames": clip.fade_in_frames,
+            "fade_out_frames": clip.fade_out_frames}
+
+
 def create_job(project_id: int, job_type: str, params: dict, session: Session) -> dict:
     import json
     from app.models.job import Job

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
-import type { Asset } from '../../api/client'
+import type { Asset, TransitionType } from '../../api/client'
 import { clipsApi, jobsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
@@ -24,7 +24,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
     tracks, clips, currentFrame, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
     loadTimeline, addTrack, addClip, splitClip,
-    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed,
+    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, updateClip,
     selectedClipId, setSelectedClipId, syncFromServer,
   } = useTimelineStore()
 
@@ -223,6 +223,79 @@ export function Timeline({ projectId, fps, assets }: Props) {
                 className="text-[11px] px-2 py-0.5 rounded bg-emerald-900 hover:bg-emerald-800 text-emerald-200"
                 title="クリップ範囲のビートで自動分割（音ハメ）"
               >🎵 ビートで分割</button>
+            )}
+
+            {/* Transition into this clip (rendered on the primary video track) */}
+            {selTrack?.track_type === 'video' && selectedClip && (
+              <>
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+                <span className="text-[10px] text-zinc-500">遷移</span>
+                <select
+                  value={selectedClip.transition_in ?? ''}
+                  onChange={e => {
+                    const t = e.target.value as TransitionType
+                    updateClip(selectedClip.id, {
+                      transition_in: t,
+                      transition_frames: t ? (selectedClip.transition_frames || Math.round(fps * 0.27)) : 0,
+                    })
+                  }}
+                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                  title="前のクリップからの遷移（書き出しに反映・尺は変わらず音ズレしない）"
+                >
+                  <option value="">カット</option>
+                  <option value="cross">クロス</option>
+                  <option value="white">白フラッシュ</option>
+                  <option value="black">黒</option>
+                </select>
+                {selectedClip.transition_in && (
+                  <select
+                    value={String(selectedClip.transition_frames)}
+                    onChange={e => updateClip(selectedClip.id, { transition_frames: Number(e.target.value) })}
+                    className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                    title="遷移の長さ"
+                  >
+                    {[
+                      [Math.max(2, Math.round(fps * 0.13)), '0.13s'],
+                      [Math.round(fps * 0.27), '0.27s'],
+                      [Math.round(fps * 0.5),  '0.5s'],
+                      [Math.round(fps * 1.0),  '1s'],
+                    ].map(([f, label]) => (
+                      <option key={String(label)} value={String(f)}>{label}</option>
+                    ))}
+                    {![Math.max(2, Math.round(fps * 0.13)), Math.round(fps * 0.27), Math.round(fps * 0.5), Math.round(fps * 1.0)]
+                      .includes(selectedClip.transition_frames) && (
+                      <option value={String(selectedClip.transition_frames)}>
+                        {(selectedClip.transition_frames / fps).toFixed(2)}s
+                      </option>
+                    )}
+                  </select>
+                )}
+              </>
+            )}
+
+            {/* Audio fades */}
+            {selTrack?.track_type === 'audio' && selectedClip && (
+              <>
+                <div className="w-px h-4 bg-zinc-700 mx-1" />
+                {([['fade_in_frames', 'フェードIN'], ['fade_out_frames', 'フェードOUT']] as const).map(([key, label]) => (
+                  <span key={key} className="flex items-center gap-1">
+                    <span className="text-[10px] text-zinc-500">{label}</span>
+                    <select
+                      value={String(selectedClip[key] ?? 0)}
+                      onChange={e => updateClip(selectedClip.id, { [key]: Number(e.target.value) })}
+                      className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                      title="音声フェード（書き出しに反映）"
+                    >
+                      {[[0, 'なし'], [Math.round(fps * 0.5), '0.5s'], [fps, '1s'], [fps * 2, '2s'], [fps * 4, '4s']].map(([f, l]) => (
+                        <option key={String(l)} value={String(f)}>{l}</option>
+                      ))}
+                      {![0, Math.round(fps * 0.5), fps, fps * 2, fps * 4].includes(selectedClip[key] ?? 0) && (
+                        <option value={String(selectedClip[key])}>{((selectedClip[key] ?? 0) / fps).toFixed(1)}s</option>
+                      )}
+                    </select>
+                  </span>
+                ))}
+              </>
             )}
 
             {isVideoClip && selectedClip && (

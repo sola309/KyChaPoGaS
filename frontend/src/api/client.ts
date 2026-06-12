@@ -75,6 +75,8 @@ export interface Track {
   order: number
 }
 
+export type TransitionType = '' | 'cross' | 'white' | 'black'
+
 export interface Clip {
   id: number
   track_id: number
@@ -84,6 +86,12 @@ export interface Clip {
   asset_in_frame: number
   speed: number
   speed_ease: 'linear' | 'in' | 'out' | 'inout'
+  /** Transition into this clip: '' cut | crossfade | white flash | dip to black */
+  transition_in: TransitionType
+  transition_frames: number
+  /** Audio fades (audio clips), in timeline frames */
+  fade_in_frames: number
+  fade_out_frames: number
 }
 
 export interface ClipUpdate {
@@ -93,11 +101,17 @@ export interface ClipUpdate {
   track_id?: number
   speed?: number
   speed_ease?: 'linear' | 'in' | 'out' | 'inout'
+  transition_in?: TransitionType
+  transition_frames?: number
+  fade_in_frames?: number
+  fade_out_frames?: number
 }
 
-// speed / speed_ease are optional on create (backend defaults to 1.0 / 'linear')
-export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease'>
-  & { speed?: number; speed_ease?: Clip['speed_ease'] }
+// extras are optional on create (backend defaults)
+export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
+  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames'>
+  & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
+  | 'fade_in_frames' | 'fade_out_frames'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
