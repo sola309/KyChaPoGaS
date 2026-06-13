@@ -61,3 +61,6 @@ tools/see-through/
 
 # Irodori-TTS-Server (external clone: models+venv, heavy)
 tools/irodori-tts/
+
+# Ollama (binary + models, heavy)
+tools/ollama/

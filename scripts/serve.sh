@@ -106,6 +106,11 @@ start() {
         env IRODORI_DEFAULT_VOICE=kyoko_ref \
         "$ROOT/tools/irodori-tts/.venv/bin/python" -m irodori_openai_tts --host 0.0.0.0 --port 8088
     fi
+    if [ -x "$ROOT/tools/ollama/bin/ollama" ]; then
+      spawn ollama 11434 "$ROOT/tools/ollama" \
+        env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$ROOT/tools/ollama/models" \
+        "$ROOT/tools/ollama/bin/ollama" serve
+    fi
   fi
 
   echo ""
