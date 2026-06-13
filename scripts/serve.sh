@@ -101,6 +101,11 @@ start() {
       spawn acestep 7867 "$ROOT/tools/ace-step" \
         env OPENROUTER_PORT=7867 "$(command -v uv)" run acestep-openrouter --host 0.0.0.0 --port 7867
     fi
+    if [ -d "$ROOT/tools/irodori-tts/.venv" ]; then
+      spawn tts 8088 "$ROOT/tools/irodori-tts" \
+        env IRODORI_DEFAULT_VOICE=kyoko_ref \
+        "$ROOT/tools/irodori-tts/.venv/bin/python" -m irodori_openai_tts --host 0.0.0.0 --port 8088
+    fi
   fi
 
   echo ""

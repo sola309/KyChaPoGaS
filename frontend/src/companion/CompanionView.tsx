@@ -1,18 +1,36 @@
 import { useEffect, useRef, useState } from 'react'
 import { PuppetStage, type PuppetManifest, type PuppetParams } from './PuppetStage'
+import { useUIStore } from '../store/uiStore'
 
 /**
  * CompanionView — the AI companion app (first slice): a See-Through character
  * rigged into a living puppet (breath / blink / sway), with manual controls to
  * prove Stage③ (rigging) + Stage④ (motion). Conversation/TTS comes later.
  */
+// Picture-in-Picture for the puppet: a <canvas> can't go PiP directly, so we
+// pipe canvas.captureStream() into a hidden <video> and PiP that. iOS Safari
+// uses webkitSetPresentationMode; desktop uses the standard requestPictureInPicture.
+interface IOSVideo extends HTMLVideoElement {
+  webkitSetPresentationMode?: (m: 'picture-in-picture' | 'inline') => void
+  webkitSupportsPresentationMode?: (m: string) => boolean
+}
+function pipSupported(video: IOSVideo | null): boolean {
+  if (!video) return false
+  return ('pictureInPictureEnabled' in document && !(document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled === false)
+    || typeof video.webkitSupportsPresentationMode === 'function'
+}
+
 export function CompanionView() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const stageRef = useRef<PuppetStage | null>(null)
   const [puppets, setPuppets] = useState<{ id: string; name: string }[]>([])
   const [pid, setPid] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [canPip, setCanPip] = useState(false)
+  const [speech, setSpeech] = useState('こんにちは。私が喋るとき、口が声に合わせて動くよ。')
+  const [speaking, setSpeaking] = useState(false)
   const [params, setParams] = useState<PuppetParams>({ headTurn: 0, headNod: 0, talk: 0, expression: 'neutral' })
 
   useEffect(() => {
@@ -36,6 +54,15 @@ export function CompanionView() {
         if (disposed) return
         await stage.init(canvasRef.current!, `/api/puppet/${pid}/layer/`, manifest)
         stage.params = params
+        // pipe the live canvas into the hidden video for Picture-in-Picture
+        try {
+          const cap = (canvasRef.current as HTMLCanvasElement & { captureStream?: (fps: number) => MediaStream })
+          if (cap.captureStream && videoRef.current) {
+            videoRef.current.srcObject = cap.captureStream(30)
+            await videoRef.current.play().catch(() => {})
+            setCanPip(pipSupported(videoRef.current as IOSVideo))
+          }
+        } catch { /* PiP unavailable */ }
       } catch {
         if (!disposed) setError('パペットの読み込みに失敗しました')
       } finally {
@@ -50,11 +77,70 @@ export function CompanionView() {
 
   const set = (patch: Partial<PuppetParams>) => setParams(p => ({ ...p, ...patch }))
 
+  // Speak: fetch TTS audio, play it, and drive the puppet's mouth from the live
+  // audio amplitude (engine-agnostic real lip-sync via Web Audio AnalyserNode).
+  const speak = async () => {
+    const stage = stageRef.current
+    if (!stage || speaking || !speech.trim()) return
+    setSpeaking(true)
+    try {
+      const res = await fetch('/api/puppet/tts/speak', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: speech.trim() }),
+      })
+      if (!res.ok) throw new Error('tts')
+      const buf = await res.arrayBuffer()
+      const ctx = new AudioContext()
+      const audio = await ctx.decodeAudioData(buf)
+      const src = ctx.createBufferSource(); src.buffer = audio
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 256
+      src.connect(analyser); analyser.connect(ctx.destination)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      let raf = 0
+      const tick = () => {
+        analyser.getByteTimeDomainData(data)
+        let sum = 0
+        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v }
+        const rms = Math.sqrt(sum / data.length)            // 0..~1
+        stage.talkLevel = Math.min(1, rms * 3.2)
+        raf = requestAnimationFrame(tick)
+      }
+      src.onended = () => { cancelAnimationFrame(raf); stage.talkLevel = 0; ctx.close(); setSpeaking(false) }
+      src.start(); tick()
+    } catch {
+      stage.talkLevel = 0; setSpeaking(false)
+      useUIStore.getState().pushToast('TTSサーバが応答しません（Irodori未起動／未対応の可能性）', 'info')
+    }
+  }
+
+  const enterPiP = async () => {
+    const video = videoRef.current as IOSVideo | null
+    if (!video) return
+    try {
+      if (typeof video.webkitSetPresentationMode === 'function') {
+        video.webkitSetPresentationMode('picture-in-picture')   // iOS Safari
+      } else if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture()
+      } else {
+        await video.requestPictureInPicture()                   // desktop
+      }
+    } catch { /* user gesture / unsupported */ }
+  }
+
   return (
     <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-zinc-950">
       {/* Stage */}
       <div className="flex-1 flex items-center justify-center relative bg-gradient-to-b from-zinc-900 to-zinc-950 min-h-0">
         <canvas ref={canvasRef} width={540} height={760} className="max-h-full max-w-full" />
+        {/* hidden video carries the canvas stream for Picture-in-Picture */}
+        <video ref={videoRef} playsInline muted className="hidden" />
+        {canPip && !loading && (
+          <button
+            onClick={enterPiP}
+            className="absolute top-2 right-2 text-[11px] px-2 py-1 rounded bg-zinc-800/80 text-zinc-200 hover:bg-zinc-700"
+            title="ピクチャインピクチャ（他アプリの上に浮かせる）"
+          >⧉ PiP</button>
+        )}
         {loading && <span className="absolute text-zinc-500 text-sm">読み込み中…</span>}
         {error && <span className="absolute text-red-400 text-sm">{error}</span>}
         {!loading && !error && (
@@ -75,6 +161,22 @@ export function CompanionView() {
           >
             {puppets.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
+        </div>
+
+        {/* Speak (TTS → real lip-sync) */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-zinc-500">喋らせる（TTS→口が声に同期）</span>
+          <textarea
+            value={speech}
+            onChange={e => setSpeech(e.target.value)}
+            rows={2}
+            className="bg-zinc-800 text-xs text-zinc-100 rounded px-2 py-1.5 resize-none outline-none border border-zinc-700 focus:border-purple-500"
+          />
+          <button
+            onClick={speak}
+            disabled={speaking}
+            className="text-xs rounded py-2 font-medium bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
+          >{speaking ? '🔊 喋っています…' : '🗣 喋らせる'}</button>
         </div>
 
         <Slider label="首振り（左右）" min={-1} max={1} value={params.headTurn} onChange={v => set({ headTurn: v })} />

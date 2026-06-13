@@ -49,6 +49,9 @@ export class PuppetStage {
   private ch = 1280
   private pivots: Record<string, [number, number]> = {}
   params: PuppetParams = { headTurn: 0, headNod: 0, talk: 0, expression: 'neutral' }
+  /** external lip-sync drive (0..1) — set from real TTS audio amplitude; when >0
+   *  it overrides the procedural talk envelope so the mouth matches the speech. */
+  talkLevel = 0
   // smoothed values
   private sTurn = 0; private sNod = 0; private sTalk = 0
 
@@ -118,9 +121,13 @@ export class PuppetStage {
     const gz = 6 * Math.sin((t / 7.3) * TAU) + (Math.sin(t * 1.7) > 0.97 ? 10 : 0)
 
     // ── mouth (lip-sync) ──
-    const talkEnv = this.sTalk * Math.abs(Math.sin(t * 9.5)) * (0.55 + 0.45 * Math.sin(t * 2.3))
-    const mouthSY = 1 + 1.1 * talkEnv
-    const mouthDy = 10 * talkEnv
+    // Real audio amplitude (talkLevel) drives the mouth when speaking; otherwise
+    // fall back to a procedural envelope from the push-to-talk param.
+    const talkEnv = this.talkLevel > 0.001
+      ? this.talkLevel
+      : this.sTalk * Math.abs(Math.sin(t * 9.5)) * (0.55 + 0.45 * Math.sin(t * 2.3))
+    const mouthSY = 1 + 1.2 * talkEnv
+    const mouthDy = 11 * talkEnv
 
     // ── expression offsets ──
     const expr = this.expr(p.expression)

@@ -58,3 +58,6 @@ outputs/
 
 # See-Through (external clone: models+venv, heavy)
 tools/see-through/
+
+# Irodori-TTS-Server (external clone: models+venv, heavy)
+tools/irodori-tts/

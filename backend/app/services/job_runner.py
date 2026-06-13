@@ -164,6 +164,8 @@ async def _dispatch(job: Job) -> None:
             await _precompose(job, params)
         case "render_motion_graphics":
             await _render_motion_graphics(job, params)
+        case "decompose_character":
+            await _decompose_character(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -738,6 +740,97 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
     _update_result_assets(job.id, [asset_id])
     _update_progress(job.id, 1.0)
     log.info(f"Motion graphics done → asset {asset_id}")
+
+
+# ── decompose_character: image → See-Through layers → rigged puppet ───────────
+
+REPO_ROOT      = Path(__file__).parent.parent.parent.parent
+SEE_THROUGH    = REPO_ROOT / "tools" / "see-through"
+PUPPETS_DIR    = Path(__file__).parent.parent.parent / "data" / "puppets"
+
+
+async def _decompose_character(job: Job, params: dict) -> None:
+    """
+    キャラ画像 → See-Through で23パーツ分解(+遮蔽補完) → パペット登録。
+
+    See-Through is a separate, heavy venv (its own torch/models), so we shell out
+    to it rather than importing into the backend process. Output lands in
+    data/puppets/<puppet_id>/ (manifest.json + per-layer PNGs), served by the
+    puppet router and rigged by the companion frontend.
+    """
+    import re
+
+    st_py = SEE_THROUGH / ".venv" / "bin" / "python"
+    if not st_py.exists():
+        raise RuntimeError("See-Through 未導入（tools/see-through/.venv が無い）")
+
+    project_id = params["project_id"]
+    puppet_id = params.get("puppet_id") or f"char_{job.id}"
+    puppet_id = re.sub(r"[^a-zA-Z0-9_-]", "_", puppet_id)
+    name = params.get("name") or puppet_id
+
+    # source image (project asset, or explicit path)
+    if params.get("asset_id"):
+        with Session(engine) as session:
+            asset = session.get(Asset, params["asset_id"])
+            if not asset:
+                raise ValueError(f"Asset {params['asset_id']} not found")
+            src = Path(asset.file_path)
+    else:
+        src = Path(params["image_path"])
+    if not src.exists():
+        raise ValueError(f"画像が見つかりません: {src}")
+
+    # stage the input inside See-Through and run the pipeline
+    in_dir = SEE_THROUGH / "input"
+    in_dir.mkdir(exist_ok=True)
+    stem = f"{puppet_id}"
+    staged = in_dir / f"{stem}.png"
+    shutil.copy(src, staged)
+    _update_progress(job.id, 0.05)
+
+    async def run(cmd: list[str], cwd: Path):
+        proc = await asyncio.create_subprocess_exec(
+            *[str(c) for c in cmd], cwd=str(cwd),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        out, _ = await proc.communicate()
+        if proc.returncode != 0:
+            tail = out.decode(errors="replace")[-1500:]
+            raise RuntimeError(f"{cmd[1]} failed:\n{tail}")
+        return out
+
+    # 1) layer decomposition → PSD (~9 min on GB10)
+    log.info(f"decompose_character: layerdiff on {staged.name}")
+    await run([st_py, "inference/scripts/inference_psd.py",
+               "--srcp", str(staged), "--save_to_psd"], cwd=SEE_THROUGH)
+    _update_progress(job.id, 0.85)
+
+    out_dir = SEE_THROUGH / "workspace" / "layerdiff_output" / stem
+    psd = SEE_THROUGH / "workspace" / "layerdiff_output" / f"{stem}.psd"
+    if not psd.exists():
+        raise RuntimeError("See-Through 出力PSDが見つかりません")
+
+    # 2) PSD → puppet manifest (build_puppet uses See-Through's psd-tools)
+    log.info("decompose_character: building puppet manifest")
+    await run([st_py, str(REPO_ROOT / "scripts" / "build_puppet.py"),
+               str(out_dir), str(psd), puppet_id, name], cwd=SEE_THROUGH)
+    _update_progress(job.id, 0.97)
+
+    manifest = PUPPETS_DIR / puppet_id / "manifest.json"
+    if not manifest.exists():
+        raise RuntimeError("パペット・マニフェスト生成に失敗")
+
+    # record the puppet id on the job result (no asset row — puppets are their own store)
+    with Session(engine) as session:
+        j = session.get(Job, job.id)
+        if j:
+            j.result_asset_ids = json.dumps([])
+            j.params = json.dumps({**params, "puppet_id": puppet_id})
+            session.add(j)
+            session.commit()
+    _update_progress(job.id, 1.0)
+    log.info(f"decompose_character done → puppet '{puppet_id}'")
 
 
 # ── create_proxy: low-res preview proxy for a video asset ─────────────────────

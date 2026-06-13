@@ -178,6 +178,7 @@ _VRAM_ESTIMATES: dict[str, int] = {
     "analyze_audio":      256,
     "analyze_video":      512,
     "render_motion_graphics": 512,   # headless Chromium + FFmpeg (CPU)
+    "decompose_character":   16384,  # See-Through (LayerDiff3D SDXL + Marigold)
 }
 
 _MODEL_VRAM_HINTS: list[tuple[str, int]] = [
