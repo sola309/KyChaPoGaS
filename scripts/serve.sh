@@ -147,11 +147,36 @@ status() {
   echo -e "  ${CYAN}health${NC}: $(curl -s -m3 http://localhost:8002/api/health 2>/dev/null || echo '応答なし')"
 }
 
+# ── individual engine control (for the Engine Supervisor) ────────────────────
+start_one() {
+  case "$1" in
+    comfyui) spawn comfyui 8188 "$ROOT/tools/comfyui" \
+               "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 ;;
+    acestep) spawn acestep 7867 "$ROOT/tools/ace-step" \
+               env OPENROUTER_PORT=7867 "$(command -v uv)" run acestep-openrouter --host 0.0.0.0 --port 7867 ;;
+    tts)     spawn tts 8088 "$ROOT/tools/irodori-tts" \
+               env IRODORI_DEFAULT_VOICE=kyoko_ref \
+               "$ROOT/tools/irodori-tts/.venv/bin/python" -m irodori_openai_tts --host 0.0.0.0 --port 8088 ;;
+    ollama)  spawn ollama 11434 "$ROOT/tools/ollama" \
+               env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$ROOT/tools/ollama/models" \
+               "$ROOT/tools/ollama/bin/ollama" serve ;;
+    *) echo "unknown engine: $1"; return 1 ;;
+  esac
+}
+stop_one() {
+  local p
+  case "$1" in
+    comfyui) p=8188 ;; acestep) p=7867 ;; tts) p=8088 ;; ollama) p=11434 ;;
+    *) echo "unknown engine: $1"; return 1 ;;
+  esac
+  fuser -k ${p}/tcp >/dev/null 2>&1 && echo "stopped $1 (:$p)" || echo "$1 not running"
+}
+
 case "${1:-start}" in
-  start)   start ;;
-  stop)    stop ;;
-  restart) stop; sleep 1; start ;;
+  start)   if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then start_one "$2"; else start; fi ;;
+  stop)    if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; else stop; fi ;;
+  restart) if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; sleep 1; start_one "$2"; else stop; sleep 1; start; fi ;;
   status)  status ;;
   logs)    tail -n 80 -f "$RUN/${2:-backend}.log" ;;
-  *)       echo "usage: $0 {start|stop|restart|status|logs <name>} [--core]" ;;
+  *)       echo "usage: $0 {start|stop|restart|status|logs <name>} [engine|--core]" ;;
 esac

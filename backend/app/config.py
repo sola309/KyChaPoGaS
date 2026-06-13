@@ -22,3 +22,8 @@ GEMINI_BASE_URL: str   = os.getenv("GEMINI_BASE_URL", "https://generativelanguag
 GEMINI_MODEL: str      = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 OLLAMA_URL: str        = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL: str      = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+
+# ── English TTS (capability: tts, language=en) ────────────────────────────────
+EN_TTS_PROVIDER: str   = os.getenv("EN_TTS_PROVIDER", "openai")   # openai|none
+EN_TTS_VOICE: str      = os.getenv("EN_TTS_VOICE", "alloy")
+EN_TTS_MODEL: str      = os.getenv("EN_TTS_MODEL", "tts-1")

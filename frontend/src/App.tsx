@@ -7,6 +7,7 @@ import { CollabToasts } from './components/CollabToasts'
 import { MobileNotice } from './components/MobileNotice'
 import { BrandLogo } from './components/BrandLogo'
 import { CompanionView } from './companion/CompanionView'
+import { SettingsModal } from './components/SettingsModal'
 import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
@@ -93,6 +94,7 @@ function App() {
 
   // Platform: one app active at a time (video editor / AI companion …)
   const [activeApp, setActiveApp] = useState<'editor' | 'companion'>('editor')
+  const [showSettings, setShowSettings] = useState(false)
   const APPS = [
     { id: 'editor' as const, label: '🎬 編集' },
     { id: 'companion' as const, label: '🎭 コンパニオン' },
@@ -114,8 +116,18 @@ function App() {
             }`}
           >{a.label}</button>
         ))}
-        <span className="ml-auto"><BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" /></span>
+        <span className="ml-auto flex items-center gap-2">
+          <BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" />
+          <button
+            onClick={() => setShowSettings(true)}
+            className="text-zinc-400 hover:text-zinc-100 text-sm px-1"
+            title="設定（APIキー・プロバイダ・エンジン）"
+            aria-label="設定"
+          >⚙</button>
+        </span>
       </div>
+
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Collaboration join/leave toasts */}
       <CollabToasts />

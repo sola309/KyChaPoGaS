@@ -16,12 +16,13 @@ from __future__ import annotations
 import httpx
 
 from app import config
+from app.services import settings_store as S
 
 _MODELS = {
-    "anthropic": lambda: config.LLM_MODEL,
-    "openai":    lambda: getattr(config, "OPENAI_MODEL", "gpt-4o-mini"),
-    "gemini":    lambda: getattr(config, "GEMINI_MODEL", "gemini-2.0-flash"),
-    "local":     lambda: getattr(config, "OLLAMA_MODEL", "qwen2.5:7b"),
+    "anthropic": lambda: S.get("LLM_MODEL", config.LLM_MODEL),
+    "openai":    lambda: S.get("OPENAI_MODEL", "gpt-4o-mini"),
+    "gemini":    lambda: S.get("GEMINI_MODEL", "gemini-2.0-flash"),
+    "local":     lambda: S.get("OLLAMA_MODEL", "qwen2.5:7b"),
 }
 
 
@@ -34,11 +35,12 @@ def _ollama_up() -> bool:
 
 def available_providers() -> list[str]:
     out = []
-    if config.ANTHROPIC_API_KEY and len(config.ANTHROPIC_API_KEY) > 20:
+    ak = S.get("ANTHROPIC_API_KEY", "")
+    if ak and len(ak) > 20:
         out.append("anthropic")
-    if getattr(config, "OPENAI_API_KEY", ""):
+    if S.get("OPENAI_API_KEY", ""):
         out.append("openai")
-    if getattr(config, "GEMINI_API_KEY", ""):
+    if S.get("GEMINI_API_KEY", ""):
         out.append("gemini")
     if _ollama_up():
         out.append("local")
@@ -48,8 +50,9 @@ def available_providers() -> list[str]:
 def resolve(provider: str = "auto") -> str:
     if provider and provider != "auto":
         return provider
-    if config.LLM_PROVIDER and config.LLM_PROVIDER != "auto":
-        return config.LLM_PROVIDER
+    lp = S.get("LLM_PROVIDER", "auto")
+    if lp and lp != "auto":
+        return lp
     avail = available_providers()
     for pref in ("local", "anthropic", "openai", "gemini"):
         if pref in avail:
@@ -65,18 +68,18 @@ def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
 
     if prov == "anthropic":
         import anthropic
-        if not (config.ANTHROPIC_API_KEY and len(config.ANTHROPIC_API_KEY) > 20):
+        ak = S.get("ANTHROPIC_API_KEY", "")
+        if not (ak and len(ak) > 20):
             raise RuntimeError("ANTHROPIC_API_KEY 未設定")
-        c = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        c = anthropic.Anthropic(api_key=ak)
         r = c.messages.create(model=mdl, max_tokens=max_tokens, system=system, messages=messages)
         return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
 
     # OpenAI-compatible providers (openai / gemini / local-ollama)
     if prov == "openai":
-        base, key = getattr(config, "OPENAI_BASE_URL", "https://api.openai.com/v1"), config.OPENAI_API_KEY
+        base, key = config.OPENAI_BASE_URL, S.get("OPENAI_API_KEY", "")
     elif prov == "gemini":
-        base = getattr(config, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
-        key = config.GEMINI_API_KEY
+        base, key = config.GEMINI_BASE_URL, S.get("GEMINI_API_KEY", "")
     else:  # local
         base, key = f"{config.OLLAMA_URL}/v1", "ollama"
 

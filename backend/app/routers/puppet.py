@@ -71,6 +71,7 @@ class SpeakRequest(BaseModel):
     text: str
     voice: str = ""
     emoji_style: str = ""
+    multilang: bool = True   # JA→Irodori, EN→English TTS, mixed split+concat
 
 
 @router.get("/tts/status")
@@ -86,7 +87,7 @@ async def tts_speak(req: SpeakRequest):
     from app.services import tts
     try:
         audio = await tts.synthesize(req.text, voice=req.voice, emoji_style=req.emoji_style,
-                                     response_format="wav")
+                                     multilang=req.multilang)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"TTS失敗（サーバ未起動か未対応）: {e}")
     return Response(content=audio, media_type="audio/wav")

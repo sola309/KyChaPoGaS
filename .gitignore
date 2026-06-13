@@ -64,3 +64,7 @@ tools/irodori-tts/
 
 # Ollama (binary + models, heavy)
 tools/ollama/
+
+# TTS 追加学習データ（音声素材・GitHubに上げない／READMEのみ追跡）
+training-data/*
+!training-data/README.md
