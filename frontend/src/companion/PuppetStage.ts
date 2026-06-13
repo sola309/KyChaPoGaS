@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Graphics, Assets, Matrix, type Texture } from 'pixi.js'
+import { Application, Container, Sprite, Graphics, MeshPlane, Assets, Matrix, type Texture } from 'pixi.js'
 
 /**
  * PuppetStage — rig a See-Through layer decomposition into a living 2.5D puppet.
@@ -44,7 +44,9 @@ function rig(px: number, py: number, angle: number, sx: number, sy: number, dx: 
 export class PuppetStage {
   app = new Application()
   root = new Container()
-  private sprites: { sprite: Sprite; group: string; depth: number; name: string }[] = []
+  private sprites: { sprite: Container; group: string; depth: number; name: string;
+                     mesh?: { geom: { positions: Float32Array; getBuffer: (id: string) => { update: () => void } };
+                              base: Float32Array; h: number } }[] = []
   private mouthCavity = new Graphics()
   private cw = 1280
   private ch = 1280
@@ -75,10 +77,20 @@ export class PuppetStage {
     let mouthChildIndex = -1
     for (const ly of ordered) {
       const tex: Texture = await Assets.load(baseUrl + encodeURIComponent(ly.file))
-      const s = new Sprite(tex)
-      s.anchor.set(0, 0)
-      this.root.addChild(s)
-      this.sprites.push({ sprite: s, group: ly.group, depth: ly.depth ?? 0.5, name: ly.name })
+      const entry: (typeof this.sprites)[number] = { sprite: new Sprite(tex), group: ly.group,
+        depth: ly.depth ?? 0.5, name: ly.name }
+      // Hair is a deformable MESH (vertices flow in a travelling wave) instead of
+      // a rigid sprite — true mesh deformation for natural strand motion.
+      if (ly.group === 'fronthair' || ly.group === 'backhair') {
+        const mesh = new MeshPlane({ texture: tex, verticesX: 8, verticesY: 14 })
+        const geom = mesh.geometry as unknown as { positions: Float32Array; getBuffer: (id: string) => { update: () => void } }
+        entry.sprite = mesh
+        entry.mesh = { geom, base: Float32Array.from(geom.positions), h: tex.height }
+      } else {
+        (entry.sprite as Sprite).anchor.set(0, 0)
+      }
+      this.root.addChild(entry.sprite)
+      this.sprites.push(entry)
       if (ly.group === 'mouth') mouthChildIndex = this.root.children.length - 1
     }
     // mouth cavity (procedural open-mouth) just above the closed-mouth sprite,
@@ -195,7 +207,7 @@ export class PuppetStage {
     const skirtTop = by - 120
     const mSkirt = mBody.clone().append(rig(bx, skirtTop, this.skirtA, 1, 1, 0, 0))
 
-    for (const { sprite, group, depth, name } of this.sprites) {
+    for (const { sprite, group, depth, name, mesh } of this.sprites) {
       let m: Matrix
       switch (group) {
         case 'body':      m = (name === 'bottomwear' || name === 'legwear') ? mSkirt : mBody; break
@@ -208,6 +220,7 @@ export class PuppetStage {
         default:          m = mHead
       }
       sprite.setFromMatrix(m)
+      if (mesh) this.flowHair(mesh, t, group === 'fronthair' ? 0.6 : 1.5)
     }
 
     // ── procedural open-mouth cavity (viseme) ──
@@ -224,6 +237,20 @@ export class PuppetStage {
     } else {
       g.visible = false
     }
+  }
+
+  /** travelling-wave mesh deformation: hair strands flow, stronger toward tips. */
+  private flowHair(mesh: NonNullable<(typeof this.sprites)[number]['mesh']>, t: number, amp: number) {
+    const { geom, base, h } = mesh
+    const pos = geom.positions
+    const A = 11 * amp
+    for (let i = 0; i < pos.length; i += 2) {
+      const y = base[i + 1]
+      const tip = Math.max(0, y / h)               // 0 at root → 1 at tips
+      pos[i] = base[i] + Math.sin(y * 0.012 - t * 2.4) * A * tip * tip
+      pos[i + 1] = base[i + 1] + Math.cos(y * 0.01 - t * 1.7) * 3 * tip
+    }
+    geom.getBuffer('aPosition').update()
   }
 
   private blinkSquash(t: number): number {
