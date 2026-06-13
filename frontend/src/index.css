@@ -48,6 +48,17 @@ html, body {
   height: 100%;
 }
 
+/* PWA standalone (Add to Home Screen): keep content clear of the Dynamic
+ * Island / status bar / home indicator via the safe-area insets. In normal
+ * Safari these insets are ~0, so nothing changes there. */
+.app-root {
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 body {
   margin: 0;
   background: #110d0f;          /* zinc-950 (墨桜) */

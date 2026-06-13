@@ -14,10 +14,16 @@ interface IOSVideo extends HTMLVideoElement {
   webkitSetPresentationMode?: (m: 'picture-in-picture' | 'inline') => void
   webkitSupportsPresentationMode?: (m: string) => boolean
 }
+// Accurately report whether THIS video can actually go PiP. iOS Safari does NOT
+// support PiP from a canvas captureStream MediaStream (and disables it entirely
+// in standalone PWA mode), so webkitSupportsPresentationMode returns false there
+// → the button stays hidden instead of looking dead. Desktop Chrome works.
 function pipSupported(video: IOSVideo | null): boolean {
   if (!video) return false
-  return ('pictureInPictureEnabled' in document && !(document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled === false)
-    || typeof video.webkitSupportsPresentationMode === 'function'
+  if (typeof video.webkitSupportsPresentationMode === 'function') {
+    try { return video.webkitSupportsPresentationMode('picture-in-picture') } catch { return false }
+  }
+  return !!(document as Document & { pictureInPictureEnabled?: boolean }).pictureInPictureEnabled
 }
 
 export function CompanionView() {
@@ -60,10 +66,14 @@ export function CompanionView() {
         // pipe the live canvas into the hidden video for Picture-in-Picture
         try {
           const cap = (canvasRef.current as HTMLCanvasElement & { captureStream?: (fps: number) => MediaStream })
-          if (cap.captureStream && videoRef.current) {
-            videoRef.current.srcObject = cap.captureStream(30)
-            await videoRef.current.play().catch(() => {})
-            setCanPip(pipSupported(videoRef.current as IOSVideo))
+          const v = videoRef.current
+          if (cap.captureStream && v) {
+            v.srcObject = cap.captureStream(30)
+            await v.play().catch(() => {})
+            // support is only known once the video has dimensions
+            const check = () => setCanPip(pipSupported(v as IOSVideo))
+            check()
+            v.addEventListener('loadedmetadata', check, { once: true })
           }
         } catch { /* PiP unavailable */ }
       } catch {
@@ -162,7 +172,10 @@ export function CompanionView() {
       } else {
         await video.requestPictureInPicture()                   // desktop
       }
-    } catch { /* user gesture / unsupported */ }
+    } catch {
+      useUIStore.getState().pushToast(
+        'この環境ではPiPが使えません（iOSは標準アプリ表示や配信映像のPiPに非対応）', 'info')
+    }
   }
 
   return (

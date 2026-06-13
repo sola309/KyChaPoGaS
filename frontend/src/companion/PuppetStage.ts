@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Graphics, MeshPlane, Assets, Matrix, type Texture } from 'pixi.js'
+import { Application, Container, Sprite, Graphics, MeshPlane, Assets, Matrix, Texture } from 'pixi.js'
 
 /**
  * PuppetStage — rig a See-Through layer decomposition into a living 2.5D puppet.
@@ -66,17 +66,39 @@ export class PuppetStage {
   private sTurn = 0; private sNod = 0; private sTalk = 0
 
   async init(canvas: HTMLCanvasElement, baseUrl: string, manifest: PuppetManifest) {
+    // Mobile: lower the renderer resolution, cap FPS and downscale textures to
+    // cut GPU memory + battery — the puppet is the heaviest thing a phone draws.
+    const mobile = matchMedia('(pointer: coarse)').matches || innerWidth < 820
+    const maxTex = mobile ? 768 : 0           // 0 = keep source size
     await this.app.init({ canvas, width: canvas.width, height: canvas.height,
-                          backgroundAlpha: 0, antialias: true })
-    this.cw = manifest.canvas[0]; this.ch = manifest.canvas[1]
-    this.pivots = manifest.pivots
+                          backgroundAlpha: 0, antialias: !mobile,
+                          resolution: Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 2) })
+    this.app.ticker.maxFPS = mobile ? 30 : 60
+
+    // texture-space may be downscaled on mobile → scale the manifest coords too
+    const texScale = maxTex && manifest.canvas[0] > maxTex ? maxTex / manifest.canvas[0] : 1
+    this.cw = manifest.canvas[0] * texScale
+    this.ch = manifest.canvas[1] * texScale
+    this.pivots = Object.fromEntries(Object.entries(manifest.pivots)
+      .map(([k, [x, y]]) => [k, [x * texScale, y * texScale]])) as Record<string, [number, number]>
     this.app.stage.addChild(this.root)
+
+    const loadTex = async (url: string): Promise<Texture> => {
+      const base: Texture = await Assets.load(url)
+      if (texScale === 1 || base.width <= maxTex) return base
+      // draw to a smaller canvas → cheaper texture (≈36% memory at 768²)
+      const src = base.source.resource as CanvasImageSource
+      const cv = document.createElement('canvas')
+      cv.width = Math.round(base.width * texScale); cv.height = Math.round(base.height * texScale)
+      cv.getContext('2d')!.drawImage(src, 0, 0, cv.width, cv.height)
+      return Texture.from(cv)
+    }
 
     // load + stack layers in z-order
     const ordered = [...manifest.layers].sort((a, b) => a.z - b.z)
     let mouthChildIndex = -1
     for (const ly of ordered) {
-      const tex: Texture = await Assets.load(baseUrl + encodeURIComponent(ly.file))
+      const tex: Texture = await loadTex(baseUrl + encodeURIComponent(ly.file))
       const entry: (typeof this.sprites)[number] = { sprite: new Sprite(tex), group: ly.group,
         depth: ly.depth ?? 0.5, name: ly.name }
       // Hair is a deformable MESH (vertices flow in a travelling wave) instead of
@@ -102,11 +124,19 @@ export class PuppetStage {
     // live ticker (capture path bypasses this via __puppetSeek)
     let t = 0
     this.app.ticker.add((tk) => { t += tk.deltaMS / 1000; this.update(t) })
+
+    // pause rendering when the tab/app is hidden — no battery drain in background
+    this.onVis = () => { if (document.hidden) this.app.ticker.stop(); else this.app.ticker.start() }
+    document.addEventListener('visibilitychange', this.onVis)
+
     // headless-capture hooks
     const w = window as unknown as { __puppetSeek?: (s: number) => void; __puppetStage?: PuppetStage }
     w.__puppetSeek = (sec: number) => { this.update(sec); this.app.render() }
     w.__puppetStage = this
   }
+
+  private onVis?: () => void
+  private get PARALLAX() { return 70 * (this.cw / 1280) }
 
   /** fit the 1280² puppet into the canvas (contain, anchored to bottom-centre) */
   private fit() {
@@ -124,6 +154,7 @@ export class PuppetStage {
     this.sNod  += (p.headNod  - this.sNod)  * 0.12
     this.sTalk += (p.talk     - this.sTalk) * 0.25
 
+    const S = this.cw / 1280   // pixel-distance scale (1 desktop, <1 mobile texture downscale)
     const [hx, hy] = this.pivots.head  ?? [this.cw / 2, this.ch * 0.28]
     const [ex, ey] = this.pivots.eyes  ?? [this.cw / 2, this.ch * 0.19]
     const [mx, my] = this.pivots.mouth ?? [this.cw / 2, this.ch * 0.24]
@@ -132,13 +163,13 @@ export class PuppetStage {
     // ── breathing ──
     const br = Math.sin((t / 4) * TAU)
     const breathSY = 1 + 0.012 * br
-    const bob = -2.2 * br                       // chest up → head rises
+    const bob = -2.2 * S * br                   // chest up → head rises
 
     // ── idle + head sway + user turn ──
     const swayA = 0.022 * Math.sin((t / 6) * TAU) + 0.012 * Math.sin((t / 3.7) * TAU)
     const headAngle = swayA + this.sTurn * 0.30
-    const headDx = this.sTurn * 34 + 4 * Math.sin((t / 5) * TAU)
-    const headDy = bob + this.sNod * 16
+    const headDx = (this.sTurn * 34 + 4 * Math.sin((t / 5) * TAU)) * S
+    const headDy = bob + this.sNod * 16 * S
 
     // ── hair spring physics (secondary motion / momentum) ──
     // Hair lags the head with a damped spring → natural swing + overshoot.
@@ -162,7 +193,7 @@ export class PuppetStage {
     const blink = this.blinkSquash(t)
 
     // ── gaze saccade ──
-    const gz = 6 * Math.sin((t / 7.3) * TAU) + (Math.sin(t * 1.7) > 0.97 ? 10 : 0)
+    const gz = (6 * Math.sin((t / 7.3) * TAU) + (Math.sin(t * 1.7) > 0.97 ? 10 : 0)) * S
 
     // ── mouth (lip-sync, viseme-ish) ──
     // Real audio amplitude (talkLevel) drives openness; spectral tilt (mouthWide)
@@ -174,7 +205,7 @@ export class PuppetStage {
     this.sMWide += (this.mouthWide - this.sMWide) * 0.3
     const talkEnv = this.sMOpen
     const mouthSY = 1 + 1.0 * talkEnv
-    const mouthDy = 9 * talkEnv
+    const mouthDy = 9 * S * talkEnv
 
     // ── expression offsets ──
     const expr = this.expr(p.expression)
@@ -182,7 +213,7 @@ export class PuppetStage {
     // ── idle whole-body sway on the root ──
     this.root.angle = 0
     const idleRot = 0.010 * Math.sin((t / 8) * TAU)
-    const idleDx = 6 * Math.sin((t / 9) * TAU)
+    const idleDx = 6 * Math.sin((t / 9) * TAU)   // screen-space sway (post-fit)
     // apply via root pivot (bottom centre) — re-fit position each frame
     this.fit()
     this.root.rotation = idleRot
@@ -195,16 +226,16 @@ export class PuppetStage {
     const mMouth = rig(mx, my, 0, 1 + expr.mouthSX * 0, mouthSY * expr.mouthSY, 0, mouthDy)
     // back hair driven by its spring (swings/overshoots the head)
     const mHairB = rig(hx, hy, this.hairAB + 0.03 * Math.sin((t / 5.5) * TAU), 1, 1,
-                       this.hairAB * 60, 0)
+                       this.hairAB * 60 * S, 0)
 
     // depth-parallax on head turn (2.5D): nearer layers (low depth) shift more.
     // Uses See-Through per-layer pseudo-depth — gives head-turn a pseudo-3D feel.
-    const PARALLAX = 70
+    const PARALLAX = this.PARALLAX
     const parallax = (depth: number) =>
       rig(hx, hy, headAngle, 1, 1, headDx + (0.5 - depth) * this.sTurn * PARALLAX, headDy)
 
     // skirt: swing the hem around the waist (top of the bottomwear bbox)
-    const skirtTop = by - 120
+    const skirtTop = by - 120 * S
     const mSkirt = mBody.clone().append(rig(bx, skirtTop, this.skirtA, 1, 1, 0, 0))
 
     for (const { sprite, group, depth, name, mesh } of this.sprites) {
@@ -216,19 +247,19 @@ export class PuppetStage {
         case 'eyes':      m = parallax(depth).append(mEyes); break
         case 'mouth':     m = parallax(depth).append(mMouth); break
         case 'fronthair': m = rig(hx, hy, this.hairAF + 0.04 * Math.sin((t / 4.5) * TAU),
-                                  1, 1, headDx * 1.1 + this.hairAF * 50 + (0.5 - depth) * this.sTurn * PARALLAX, headDy); break
+                                  1, 1, headDx * 1.1 + this.hairAF * 50 * S + (0.5 - depth) * this.sTurn * PARALLAX, headDy); break
         default:          m = mHead
       }
       sprite.setFromMatrix(m)
-      if (mesh) this.flowHair(mesh, t, group === 'fronthair' ? 0.6 : 1.5)
+      if (mesh) this.flowHair(mesh, t, (group === 'fronthair' ? 0.6 : 1.5) * S, S)
     }
 
     // ── procedural open-mouth cavity (viseme) ──
     const g = this.mouthCavity
     g.clear()
     if (talkEnv > 0.04) {
-      const w = 26 * (0.55 + 0.9 * this.sMWide)    // 幅: 母音で変化
-      const h = 30 * talkEnv                        // 高さ: 開き量
+      const w = 26 * S * (0.55 + 0.9 * this.sMWide) // 幅: 母音で変化
+      const h = 30 * S * talkEnv                    // 高さ: 開き量
       g.ellipse(mx, my + h * 0.35, w, h).fill({ color: 0x3a0a12, alpha: 0.92 })  // 口腔（暗）
       g.ellipse(mx, my + h * 0.7, w * 0.7, h * 0.45).fill({ color: 0x7a1428, alpha: 0.7 })  // 舌
       g.ellipse(mx, my + h * 0.95, w * 0.95, h * 0.3).fill({ color: 0xe6b8be, alpha: 0.55 }) // 下唇
@@ -240,15 +271,16 @@ export class PuppetStage {
   }
 
   /** travelling-wave mesh deformation: hair strands flow, stronger toward tips. */
-  private flowHair(mesh: NonNullable<(typeof this.sprites)[number]['mesh']>, t: number, amp: number) {
+  private flowHair(mesh: NonNullable<(typeof this.sprites)[number]['mesh']>, t: number, amp: number, s: number) {
     const { geom, base, h } = mesh
     const pos = geom.positions
     const A = 11 * amp
+    const fx = 0.012 / s, fy = 0.01 / s          // per-px wave freq (scale-invariant)
     for (let i = 0; i < pos.length; i += 2) {
       const y = base[i + 1]
       const tip = Math.max(0, y / h)               // 0 at root → 1 at tips
-      pos[i] = base[i] + Math.sin(y * 0.012 - t * 2.4) * A * tip * tip
-      pos[i + 1] = base[i + 1] + Math.cos(y * 0.01 - t * 1.7) * 3 * tip
+      pos[i] = base[i] + Math.sin(y * fx - t * 2.4) * A * tip * tip
+      pos[i + 1] = base[i + 1] + Math.cos(y * fy - t * 1.7) * 3 * s * tip
     }
     geom.getBuffer('aPosition').update()
   }
@@ -274,6 +306,7 @@ export class PuppetStage {
   }
 
   destroy() {
+    if (this.onVis) document.removeEventListener('visibilitychange', this.onVis)
     try { this.app.destroy(true, { children: true }) } catch { /* noop */ }
   }
 }
