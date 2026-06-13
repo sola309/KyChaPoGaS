@@ -34,6 +34,23 @@ GROUP = {
 psd = PSDImage.open(psd_path)
 W, H = psd.width, psd.height
 
+def mean_depth(name: str) -> float:
+    """Mean pseudo-depth (0..1) of a layer's content from its See-Through
+    *_depth.png — used for 2.5D parallax on head turn (nearer = more shift)."""
+    from PIL import Image
+    import numpy as np
+    dp = os.path.join(out_dir, f"{name}_depth.png")
+    rgba = os.path.join(out_dir, f"{name}.png")
+    if not (os.path.exists(dp) and os.path.exists(rgba)):
+        return 0.5
+    try:
+        d = np.asarray(Image.open(dp).convert("L"), dtype=float) / 255.0
+        a = np.asarray(Image.open(rgba).convert("RGBA"))[..., 3] > 16
+        return float(d[a].mean()) if a.sum() >= 4 else 0.5
+    except Exception:
+        return 0.5
+
+
 layers = []   # in z-order (bottom→top = psd order)
 bbox_by = {}
 for ly in psd:
@@ -51,7 +68,7 @@ for ly in psd:
     bbox_by[name] = bb
     layers.append({
         "name": name, "file": fname, "group": GROUP.get(name, "body"),
-        "z": len(layers), "bbox": list(bb),
+        "z": len(layers), "bbox": list(bb), "depth": round(mean_depth(name), 3),
     })
 
 def center(bb):  return [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2]

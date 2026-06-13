@@ -31,6 +31,9 @@ export function CompanionView() {
   const [canPip, setCanPip] = useState(false)
   const [speech, setSpeech] = useState('こんにちは。私が喋るとき、口が声に合わせて動くよ。')
   const [speaking, setSpeaking] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [chatLog, setChatLog] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [params, setParams] = useState<PuppetParams>({ headTurn: 0, headNod: 0, talk: 0, expression: 'neutral' })
 
   useEffect(() => {
@@ -78,38 +81,73 @@ export function CompanionView() {
   const set = (patch: Partial<PuppetParams>) => setParams(p => ({ ...p, ...patch }))
 
   // Speak: fetch TTS audio, play it, and drive the puppet's mouth from the live
-  // audio amplitude (engine-agnostic real lip-sync via Web Audio AnalyserNode).
-  const speak = async () => {
+  // audio — amplitude → open amount, spectral centroid → vowel-ish mouth width.
+  const speak = async (text?: string): Promise<void> => {
     const stage = stageRef.current
-    if (!stage || speaking || !speech.trim()) return
+    const say = (text ?? speech).trim()
+    if (!stage || !say) return
     setSpeaking(true)
     try {
       const res = await fetch('/api/puppet/tts/speak', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: speech.trim() }),
+        body: JSON.stringify({ text: say }),
       })
       if (!res.ok) throw new Error('tts')
       const buf = await res.arrayBuffer()
       const ctx = new AudioContext()
       const audio = await ctx.decodeAudioData(buf)
       const src = ctx.createBufferSource(); src.buffer = audio
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 512
       src.connect(analyser); analyser.connect(ctx.destination)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-      let raf = 0
-      const tick = () => {
-        analyser.getByteTimeDomainData(data)
-        let sum = 0
-        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v }
-        const rms = Math.sqrt(sum / data.length)            // 0..~1
-        stage.talkLevel = Math.min(1, rms * 3.2)
-        raf = requestAnimationFrame(tick)
-      }
-      src.onended = () => { cancelAnimationFrame(raf); stage.talkLevel = 0; ctx.close(); setSpeaking(false) }
-      src.start(); tick()
+      const td = new Uint8Array(analyser.fftSize)
+      const fd = new Uint8Array(analyser.frequencyBinCount)
+      await new Promise<void>((resolve) => {
+        let raf = 0
+        const tick = () => {
+          analyser.getByteTimeDomainData(td)
+          let sum = 0
+          for (let i = 0; i < td.length; i++) { const v = (td[i] - 128) / 128; sum += v * v }
+          stage.talkLevel = Math.min(1, Math.sqrt(sum / td.length) * 3.4)
+          // spectral centroid → mouth width
+          analyser.getByteFrequencyData(fd)
+          let num = 0, den = 0
+          for (let i = 0; i < fd.length; i++) { num += i * fd[i]; den += fd[i] }
+          const centroid = den > 0 ? num / den / fd.length : 0.4   // 0..1
+          stage.mouthWide = Math.min(1, Math.max(0, (centroid - 0.12) * 2.4))
+          raf = requestAnimationFrame(tick)
+        }
+        src.onended = () => { cancelAnimationFrame(raf); stage.talkLevel = 0; ctx.close(); resolve() }
+        src.start(); tick()
+      })
     } catch {
-      stage.talkLevel = 0; setSpeaking(false)
+      stage.talkLevel = 0
       useUIStore.getState().pushToast('TTSサーバが応答しません（Irodori未起動／未対応の可能性）', 'info')
+    } finally {
+      setSpeaking(false)
+    }
+  }
+
+  // Chat: user text → LLM (Kyoko persona) → reply spoken + expression
+  const send = async () => {
+    const msg = chatInput.trim()
+    if (!msg || sending) return
+    setChatInput(''); setSending(true)
+    const hist = [...chatLog, { role: 'user' as const, content: msg }]
+    setChatLog(hist)
+    try {
+      const r = await fetch('/api/companion/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg, history: chatLog.slice(-10) }),
+      })
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'chat') }
+      const { reply, expression } = await r.json()
+      setChatLog([...hist, { role: 'assistant', content: reply }])
+      set({ expression })
+      await speak(reply)
+    } catch (e) {
+      useUIStore.getState().pushToast(`対話に失敗: ${e instanceof Error ? e.message : ''}`, 'info')
+    } finally {
+      setSending(false)
     }
   }
 
@@ -163,9 +201,37 @@ export function CompanionView() {
           </select>
         </div>
 
+        {/* Conversation — talk WITH the character (LLM → speaks back) */}
+        <div className="flex flex-col gap-1">
+          <span className="text-[10px] text-zinc-500">会話（杏子と話す）</span>
+          {chatLog.length > 0 && (
+            <div className="max-h-32 overflow-y-auto flex flex-col gap-1 bg-zinc-950 rounded p-1.5 border border-zinc-800">
+              {chatLog.slice(-6).map((m, i) => (
+                <div key={i} className={`text-[11px] ${m.role === 'user' ? 'text-zinc-400 text-right' : 'text-purple-200'}`}>
+                  {m.content}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-1">
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') send() }}
+              placeholder="話しかける…"
+              className="flex-1 bg-zinc-800 text-xs text-zinc-100 rounded px-2 py-1.5 outline-none border border-zinc-700 focus:border-purple-500"
+            />
+            <button
+              onClick={send}
+              disabled={sending || speaking}
+              className="text-xs px-3 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
+            >{sending ? '…' : '送る'}</button>
+          </div>
+        </div>
+
         {/* Speak (TTS → real lip-sync) */}
         <div className="flex flex-col gap-1">
-          <span className="text-[10px] text-zinc-500">喋らせる（TTS→口が声に同期）</span>
+          <span className="text-[10px] text-zinc-500">指定セリフを喋らせる（口が声に同期）</span>
           <textarea
             value={speech}
             onChange={e => setSpeech(e.target.value)}
@@ -173,7 +239,7 @@ export function CompanionView() {
             className="bg-zinc-800 text-xs text-zinc-100 rounded px-2 py-1.5 resize-none outline-none border border-zinc-700 focus:border-purple-500"
           />
           <button
-            onClick={speak}
+            onClick={() => speak()}
             disabled={speaking}
             className="text-xs rounded py-2 font-medium bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
           >{speaking ? '🔊 喋っています…' : '🗣 喋らせる'}</button>

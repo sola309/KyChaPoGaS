@@ -1,4 +1,4 @@
-import { Application, Container, Sprite, Assets, Matrix, type Texture } from 'pixi.js'
+import { Application, Container, Sprite, Graphics, Assets, Matrix, type Texture } from 'pixi.js'
 
 /**
  * PuppetStage — rig a See-Through layer decomposition into a living 2.5D puppet.
@@ -15,7 +15,7 @@ import { Application, Container, Sprite, Assets, Matrix, type Texture } from 'pi
  * be stepped deterministically for headless capture (window.__puppetSeek).
  */
 
-export interface PuppetLayer { name: string; file: string; group: string; z: number; bbox: number[] }
+export interface PuppetLayer { name: string; file: string; group: string; z: number; bbox: number[]; depth?: number }
 export interface PuppetManifest {
   id: string; name: string; canvas: [number, number]
   pivots: Record<string, [number, number]>
@@ -44,14 +44,17 @@ function rig(px: number, py: number, angle: number, sx: number, sy: number, dx: 
 export class PuppetStage {
   app = new Application()
   root = new Container()
-  private sprites: { sprite: Sprite; group: string }[] = []
+  private sprites: { sprite: Sprite; group: string; depth: number }[] = []
+  private mouthCavity = new Graphics()
   private cw = 1280
   private ch = 1280
   private pivots: Record<string, [number, number]> = {}
   params: PuppetParams = { headTurn: 0, headNod: 0, talk: 0, expression: 'neutral' }
-  /** external lip-sync drive (0..1) — set from real TTS audio amplitude; when >0
-   *  it overrides the procedural talk envelope so the mouth matches the speech. */
+  /** external lip-sync drive (0..1) — audio amplitude → mouth open amount. */
   talkLevel = 0
+  /** mouth width 0..1 from spectral tilt (front vowels い/え wide, う/お round). */
+  mouthWide = 0.5
+  private sMOpen = 0; private sMWide = 0.5
   // smoothed values
   private sTurn = 0; private sNod = 0; private sTalk = 0
 
@@ -64,13 +67,19 @@ export class PuppetStage {
 
     // load + stack layers in z-order
     const ordered = [...manifest.layers].sort((a, b) => a.z - b.z)
+    let mouthChildIndex = -1
     for (const ly of ordered) {
       const tex: Texture = await Assets.load(baseUrl + encodeURIComponent(ly.file))
       const s = new Sprite(tex)
       s.anchor.set(0, 0)
       this.root.addChild(s)
-      this.sprites.push({ sprite: s, group: ly.group })
+      this.sprites.push({ sprite: s, group: ly.group, depth: ly.depth ?? 0.5 })
+      if (ly.group === 'mouth') mouthChildIndex = this.root.children.length - 1
     }
+    // mouth cavity (procedural open-mouth) just above the closed-mouth sprite,
+    // below front hair — so an opening mouth reveals a dark cavity.
+    if (mouthChildIndex >= 0) this.root.addChildAt(this.mouthCavity, mouthChildIndex + 1)
+    else this.root.addChild(this.mouthCavity)
     this.fit()
 
     // live ticker (capture path bypasses this via __puppetSeek)
@@ -120,14 +129,17 @@ export class PuppetStage {
     // ── gaze saccade ──
     const gz = 6 * Math.sin((t / 7.3) * TAU) + (Math.sin(t * 1.7) > 0.97 ? 10 : 0)
 
-    // ── mouth (lip-sync) ──
-    // Real audio amplitude (talkLevel) drives the mouth when speaking; otherwise
-    // fall back to a procedural envelope from the push-to-talk param.
-    const talkEnv = this.talkLevel > 0.001
+    // ── mouth (lip-sync, viseme-ish) ──
+    // Real audio amplitude (talkLevel) drives openness; spectral tilt (mouthWide)
+    // shapes width. Falls back to a procedural envelope for push-to-talk.
+    const rawOpen = this.talkLevel > 0.001
       ? this.talkLevel
       : this.sTalk * Math.abs(Math.sin(t * 9.5)) * (0.55 + 0.45 * Math.sin(t * 2.3))
-    const mouthSY = 1 + 1.2 * talkEnv
-    const mouthDy = 11 * talkEnv
+    this.sMOpen += (rawOpen - this.sMOpen) * 0.45
+    this.sMWide += (this.mouthWide - this.sMWide) * 0.3
+    const talkEnv = this.sMOpen
+    const mouthSY = 1 + 1.0 * talkEnv
+    const mouthDy = 9 * talkEnv
 
     // ── expression offsets ──
     const expr = this.expr(p.expression)
@@ -146,23 +158,43 @@ export class PuppetStage {
     const mHead = rig(hx, hy, headAngle, 1, 1, headDx, headDy)
     const mEyes = rig(ex, ey, 0, 1, blink * expr.eyeSY, gz + expr.gazeDx, expr.eyeDy)
     const mMouth = rig(mx, my, 0, 1 + expr.mouthSX * 0, mouthSY * expr.mouthSY, 0, mouthDy)
-    const mHairF = rig(hx, hy, headAngle + 0.05 * Math.sin((t / 4.5) * TAU) + this.sTurn * 0.08,
-                       1, 1, headDx * 1.1, headDy)
     const mHairB = rig(hx, hy, 0.04 * Math.sin((t / 5.5) * TAU) + this.sTurn * 0.12, 1, 1,
                        this.sTurn * 10, 0)
 
-    for (const { sprite, group } of this.sprites) {
+    // depth-parallax on head turn (2.5D): nearer layers (low depth) shift more.
+    // Uses See-Through per-layer pseudo-depth — gives head-turn a pseudo-3D feel.
+    const PARALLAX = 70
+    const parallax = (depth: number) =>
+      rig(hx, hy, headAngle, 1, 1, headDx + (0.5 - depth) * this.sTurn * PARALLAX, headDy)
+
+    for (const { sprite, group, depth } of this.sprites) {
       let m: Matrix
       switch (group) {
         case 'body':      m = mBody; break
         case 'backhair':  m = mHairB; break
-        case 'head':      m = mHead; break
-        case 'eyes':      m = mHead.clone().append(mEyes); break
-        case 'mouth':     m = mHead.clone().append(mMouth); break
-        case 'fronthair': m = mHairF; break
+        case 'head':      m = parallax(depth); break
+        case 'eyes':      m = parallax(depth).append(mEyes); break
+        case 'mouth':     m = parallax(depth).append(mMouth); break
+        case 'fronthair': m = rig(hx, hy, headAngle + 0.05 * Math.sin((t / 4.5) * TAU) + this.sTurn * 0.08,
+                                  1, 1, headDx * 1.1 + (0.5 - depth) * this.sTurn * PARALLAX, headDy); break
         default:          m = mHead
       }
       sprite.setFromMatrix(m)
+    }
+
+    // ── procedural open-mouth cavity (viseme) ──
+    const g = this.mouthCavity
+    g.clear()
+    if (talkEnv > 0.04) {
+      const w = 26 * (0.55 + 0.9 * this.sMWide)    // 幅: 母音で変化
+      const h = 30 * talkEnv                        // 高さ: 開き量
+      g.ellipse(mx, my + h * 0.35, w, h).fill({ color: 0x3a0a12, alpha: 0.92 })  // 口腔（暗）
+      g.ellipse(mx, my + h * 0.7, w * 0.7, h * 0.45).fill({ color: 0x7a1428, alpha: 0.7 })  // 舌
+      g.ellipse(mx, my + h * 0.95, w * 0.95, h * 0.3).fill({ color: 0xe6b8be, alpha: 0.55 }) // 下唇
+      g.setFromMatrix(parallax(0.4))   // 口と同じ深度で頭に追従
+      g.visible = true
+    } else {
+      g.visible = false
     }
   }
 
