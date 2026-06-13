@@ -660,7 +660,13 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
     from app.services.motion_graphics import render_html_to_video
 
     project_id = params["project_id"]
-    html = params.get("html", "")
+    # Server-side templates (single source of truth, shared by UI + AI).
+    template = params.get("template")
+    if template == "lyric_motion":
+        from app.services.lyric_motion import build_lyric_motion_html
+        html = build_lyric_motion_html(params.get("style", "pop"))
+    else:
+        html = params.get("html", "")
     if not html.strip():
         raise ValueError("html が空です")
 
@@ -673,10 +679,28 @@ async def _render_motion_graphics(job: Job, params: dict) -> None:
     # the page as window.kycha, so templates can sync to the actual music.
     duration_sec = float(params.get("duration_sec", 3.0))
     offset_sec = float(params.get("offset_sec", 0.0))   # MGをタイムラインのどこに置くか
+    lyrics = params.get("lyrics", "")
+    if not lyrics:
+        # Auto-fetch the song lyrics from the project's most recent music job.
+        try:
+            with Session(engine) as session:
+                audio_jobs = session.exec(
+                    select(Job)
+                    .where(Job.project_id == project_id)
+                    .where(Job.job_type == "generate_audio")
+                    .order_by(Job.id.desc())
+                ).all()
+            for aj in audio_jobs:
+                p = json.loads(aj.params) if isinstance(aj.params, str) else (aj.params or {})
+                if p.get("lyrics"):
+                    lyrics = p["lyrics"]
+                    break
+        except Exception as e:
+            log.warning(f"lyrics autofetch failed: {e}")
     inject: dict = {
         "duration": duration_sec, "offset": offset_sec,
         "fps": float(params.get("fps", 30)),
-        "lyrics": params.get("lyrics", ""),
+        "lyrics": lyrics,
         "bpm": None, "beats": [], "downbeats": [],
     }
     try:

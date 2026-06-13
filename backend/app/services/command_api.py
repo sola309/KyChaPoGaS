@@ -610,6 +610,59 @@ def get_beat_match_score(project_id: int, session: Session) -> dict:
     }
 
 
+def create_lyric_motion(project_id: int, session: Session,
+                        style: str = "pop",
+                        duration_sec: float | None = None,
+                        offset_sec: float = 0.0) -> dict:
+    """
+    自動リリックモーション — generate kinetic-typography lyric video synced to
+    the song's real beats. The lyrics + beat grid are auto-injected at render
+    time; the result is a TRANSPARENT clip to drop on an overlay track.
+
+    duration_sec defaults to the song length. After it completes, place the
+    asset on a video track above the base (it composites as an overlay).
+    style: pop | slide | karaoke | typewriter.
+    """
+    from app.services.lyric_motion import STYLES
+    from app.models import Project
+    if style not in STYLES:
+        return {"error": f"style must be one of {list(STYLES)}"}
+
+    project = session.get(Project, project_id)
+    if not project:
+        return {"error": f"Project {project_id} not found"}
+
+    if duration_sec is None:
+        # song length = first audio clip's asset duration, else 30s
+        a_track = session.exec(
+            select(Track).where(Track.project_id == project_id)
+            .where(Track.track_type == "audio")).first()
+        dur = 30.0
+        if a_track:
+            clip = session.exec(select(Clip).where(Clip.track_id == a_track.id)
+                                .order_by(Clip.start_frame)).first()
+            if clip and clip.asset_id:
+                asset = session.get(Asset, clip.asset_id)
+                if asset and asset.duration_sec:
+                    dur = asset.duration_sec
+        duration_sec = dur
+
+    params = {
+        "project_id": project_id,
+        "template": "lyric_motion",
+        "style": style,
+        "transparent": True,
+        "duration_sec": round(duration_sec, 3),
+        "offset_sec": offset_sec,
+        "fps": project.fps,
+        "width": project.width,
+        "height": project.height,
+    }
+    job = create_job(project_id, "render_motion_graphics", params, session)
+    return {**job, "note": "完了後、ベース上のビデオトラックに配置するとオーバーレイ合成されます",
+            "duration_sec": duration_sec, "style": style}
+
+
 def set_transform(clip_id: int, transform: str, session: Session) -> dict:
     """Set animated zoom/pan/shake on a clip. transform: preset name
     ('kenburns_in'|'kenburns_out'|'punch_in'|'punch_out'|'pan_lr'|'pan_rl'|'shake'),

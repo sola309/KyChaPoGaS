@@ -195,6 +195,22 @@ MCP_TOOLS = [
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
     mcp_types.Tool(
+        name="create_lyric_motion",
+        description=(
+            "自動リリックモーション: kinetic-typography lyric video synced to the song's real "
+            "beats (auto lyrics+beats). Returns a transparent clip — add_clip it on a video "
+            "track above the base to overlay. style: pop|slide|karaoke|typewriter."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "style":        {"type": "string", "enum": ["pop", "slide", "karaoke", "typewriter"]},
+                "duration_sec": {"type": "number"},
+                "offset_sec":   {"type": "number"},
+            },
+        },
+    ),
+    mcp_types.Tool(
         name="set_transform",
         description=(
             "Animated zoom/pan/shake on a clip (makes stills move). transform: "
@@ -344,6 +360,12 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                 return command_api.delete_clip(inp["clip_id"], session)
             case "get_beat_match_score":
                 return command_api.get_beat_match_score(project_id, session)
+            case "create_lyric_motion":
+                return command_api.create_lyric_motion(
+                    project_id, session,
+                    style=inp.get("style", "pop"),
+                    duration_sec=inp.get("duration_sec"),
+                    offset_sec=inp.get("offset_sec", 0.0))
             case "set_transform":
                 return command_api.set_transform(inp["clip_id"], inp["transform"], session)
             case "scatter_beat_effects":

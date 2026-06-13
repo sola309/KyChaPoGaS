@@ -182,6 +182,25 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
+        "name": "create_lyric_motion",
+        "description": (
+            "自動リリックモーション: generate kinetic-typography lyric video synced to the "
+            "song's REAL beats (lyrics + beat grid auto-injected). Returns a TRANSPARENT "
+            "clip — after it completes, add_clip it on a video track ABOVE the base track "
+            "to composite it as an overlay (subtitles over footage). "
+            "style: pop | slide | karaoke | typewriter. duration defaults to song length; "
+            "offset_sec = where on the timeline the clip will sit (for beat alignment)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "style":        {"type": "string", "enum": ["pop", "slide", "karaoke", "typewriter"]},
+                "duration_sec": {"type": "number"},
+                "offset_sec":   {"type": "number"},
+            },
+        },
+    },
+    {
         "name": "set_transform",
         "description": (
             "Set animated zoom/pan/shake on a clip (静止画MADの核 — makes stills move). "
@@ -393,6 +412,12 @@ def _exec_tool(
             return command_api.auto_cut_to_beats(project_id, inp["clip_id"], session)
         case "get_beat_match_score":
             return command_api.get_beat_match_score(project_id, session)
+        case "create_lyric_motion":
+            return command_api.create_lyric_motion(
+                project_id, session,
+                style=inp.get("style", "pop"),
+                duration_sec=inp.get("duration_sec"),
+                offset_sec=inp.get("offset_sec", 0.0))
         case "set_transform":
             return command_api.set_transform(inp["clip_id"], inp["transform"], session)
         case "scatter_beat_effects":

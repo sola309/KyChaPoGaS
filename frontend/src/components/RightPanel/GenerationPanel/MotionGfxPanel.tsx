@@ -11,7 +11,8 @@ import { useUIStore } from '../../../store/uiStore'
  * window.seek(t_ms) 規約) and the result lands in the asset library.
  */
 
-type Template = 'lyric' | 'title' | 'countdown' | 'beatpulse' | 'custom'
+type Template = 'lyric' | 'lyricmotion' | 'title' | 'countdown' | 'beatpulse' | 'custom'
+type LyricStyle = 'pop' | 'slide' | 'karaoke' | 'typewriter'
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -128,12 +129,34 @@ export function MotionGfxPanel() {
   const [customHtml, setCustomHtml] = useState('')
   const [customDur,  setCustomDur]  = useState(3)
   const [transparent, setTransparent] = useState(false)
+  const [lyricStyle, setLyricStyle] = useState<LyricStyle>('pop')
+  const [lmDur, setLmDur] = useState(0)         // 0 = 曲全体
+  const [lmOffset, setLmOffset] = useState(0)
   const [busy, setBusy] = useState(false)
 
   if (!activeProject) return null
 
   const handleGenerate = async () => {
     if (busy) return
+    // 自動リリックモーションはサーバ側テンプレ（歌詞/ビートを自動注入）
+    if (template === 'lyricmotion') {
+      setBusy(true)
+      try {
+        await jobsApi.create(activeProject.id, 'render_motion_graphics', {
+          project_id: activeProject.id,
+          template: 'lyric_motion',
+          style: lyricStyle,
+          transparent: true,
+          ...(lmDur > 0 ? { duration_sec: lmDur } : {}),
+          offset_sec: lmOffset,
+          fps: activeProject.fps,
+          width: activeProject.width,
+          height: activeProject.height,
+        })
+        useUIStore.getState().pushToast('リリックモーションを生成中…（楽曲の歌詞とビートに自動同期）', 'info')
+      } catch { /* interceptor */ } finally { setBusy(false) }
+      return
+    }
     let html = ''
     let duration = 0
     if (template === 'lyric') {
@@ -180,7 +203,8 @@ export function MotionGfxPanel() {
       <label className="flex flex-col gap-1">
         <span className="text-[10px] text-zinc-500">テンプレート</span>
         <select value={template} onChange={e => setTemplate(e.target.value as Template)} className={sel}>
-          <option value="lyric">歌詞スラム（最大3行）</option>
+          <option value="lyricmotion">リリックモーション（歌詞自動同期）</option>
+          <option value="lyric">歌詞スラム（最大3行・手動）</option>
           <option value="title">タイトルカード</option>
           <option value="countdown">カウントダウン</option>
           <option value="beatpulse">ビートパルス（楽曲ビート同期）</option>
@@ -220,6 +244,37 @@ export function MotionGfxPanel() {
             {[0.5, 0.7, 1.0, 1.5, 2.0].map(s => <option key={s} value={s}>{s}s</option>)}
           </select>
         </label>
+      )}
+
+      {template === 'lyricmotion' && (
+        <>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-zinc-500">スタイル</span>
+            <select value={lyricStyle} onChange={e => setLyricStyle(e.target.value as LyricStyle)} className={sel}>
+              <option value="pop">ポップ（拍で弾ける）</option>
+              <option value="slide">スライド（下から）</option>
+              <option value="karaoke">カラオケ（色が流れる）</option>
+              <option value="typewriter">タイプライター</option>
+            </select>
+          </label>
+          <div className="flex gap-2">
+            <label className="flex-1 flex flex-col gap-1">
+              <span className="text-[10px] text-zinc-500">尺(秒・0=曲全体)</span>
+              <input type="number" min={0} max={300} step={1} value={lmDur}
+                onChange={e => setLmDur(Number(e.target.value))} className={sel} />
+            </label>
+            <label className="flex-1 flex flex-col gap-1">
+              <span className="text-[10px] text-zinc-500">開始位置(秒)</span>
+              <input type="number" min={0} max={300} step={0.5} value={lmOffset}
+                onChange={e => setLmOffset(Number(e.target.value))} className={sel} />
+            </label>
+          </div>
+          <p className="text-[10px] text-zinc-600 leading-relaxed">
+            タイムラインの<b>楽曲の歌詞とビート</b>に自動同期したキネティックタイポグラフィを生成（透過）。
+            完成後、<b>2本目のVideoトラック</b>に置くと映像の上に字幕として乗ります。
+            開始位置 = タイムライン上で字幕を置くフレーム位置の秒数（ビート整合のため）。
+          </p>
+        </>
       )}
 
       {template === 'beatpulse' && (

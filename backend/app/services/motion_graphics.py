@@ -92,11 +92,20 @@ async def render_html_to_video(
                 viewport={"width": width, "height": height},
                 device_scale_factor=1,
             )
+            # Inject window.kycha by prepending a <script> into the HTML itself,
+            # so it is guaranteed to run BEFORE the page's own scripts.
+            # (add_init_script does not reliably apply to set_content documents.)
+            page_html = html
             if inject_data is not None:
-                await page.add_init_script(
-                    f"window.kycha = {json.dumps(inject_data, ensure_ascii=False)};"
-                )
-            await page.set_content(html, wait_until="load")
+                tag = (f"<script>window.kycha = "
+                       f"{json.dumps(inject_data, ensure_ascii=False)};</script>")
+                if "<head>" in page_html:
+                    page_html = page_html.replace("<head>", "<head>" + tag, 1)
+                elif "<body>" in page_html:
+                    page_html = page_html.replace("<body>", "<body>" + tag, 1)
+                else:
+                    page_html = tag + page_html
+            await page.set_content(page_html, wait_until="load")
             # Give fonts a moment to settle (deterministic content otherwise)
             await page.evaluate("document.fonts ? document.fonts.ready : null")
 
