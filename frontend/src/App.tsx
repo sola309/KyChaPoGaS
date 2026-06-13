@@ -6,6 +6,7 @@ import { GpuStatusBar } from './components/GpuStatusBar'
 import { CollabToasts } from './components/CollabToasts'
 import { MobileNotice } from './components/MobileNotice'
 import { BrandLogo } from './components/BrandLogo'
+import { CompanionView } from './companion/CompanionView'
 import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
@@ -90,10 +91,31 @@ function App() {
   const togglePanel = useUIStore(s => s.togglePanel)
   const closeDrawers = useUIStore(s => s.closeDrawers)
 
+  // Platform: one app active at a time (video editor / AI companion …)
+  const [activeApp, setActiveApp] = useState<'editor' | 'companion'>('editor')
+  const APPS = [
+    { id: 'editor' as const, label: '🎬 編集' },
+    { id: 'companion' as const, label: '🎭 コンパニオン' },
+  ]
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
       {/* GPU / VRAM status bar */}
       <GpuStatusBar />
+
+      {/* App launcher — one app active at a time */}
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
+        {APPS.map(a => (
+          <button
+            key={a.id}
+            onClick={() => setActiveApp(a.id)}
+            className={`text-[11px] px-2.5 py-1 rounded transition-colors ${
+              activeApp === a.id ? 'bg-purple-800 text-purple-100' : 'text-zinc-400 hover:bg-zinc-800'
+            }`}
+          >{a.label}</button>
+        ))}
+        <span className="ml-auto"><BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" /></span>
+      </div>
 
       {/* Collaboration join/leave toasts */}
       <CollabToasts />
@@ -118,22 +140,28 @@ function App() {
         >✨</button>
       </div>
 
-      {/* Main area (sidebar + editor) */}
-      <div className="flex flex-1 min-h-0 relative">
-        {/* Backdrop behind the mobile drawers */}
-        {(navOpen || panelOpen) && (
-          <div
-            className="lg:hidden fixed inset-0 bg-black/50 z-40"
-            onClick={closeDrawers}
+      {/* Main area — the active app */}
+      {activeApp === 'companion' ? (
+        <div className="flex flex-1 min-h-0">
+          <CompanionView />
+        </div>
+      ) : (
+        <div className="flex flex-1 min-h-0 relative">
+          {/* Backdrop behind the mobile drawers */}
+          {(navOpen || panelOpen) && (
+            <div
+              className="lg:hidden fixed inset-0 bg-black/50 z-40"
+              onClick={closeDrawers}
+            />
+          )}
+          <Sidebar
+            onOpenTerminal={() => termEnabled && setTermOpen(v => !v)}
+            termOpen={termOpen}
+            terminalEnabled={termEnabled}
           />
-        )}
-        <Sidebar
-          onOpenTerminal={() => termEnabled && setTermOpen(v => !v)}
-          termOpen={termOpen}
-          terminalEnabled={termEnabled}
-        />
-        <ProjectView />
-      </div>
+          <ProjectView />
+        </div>
+      )}
 
       {/* Bottom terminal drawer */}
       {termOpen && termEnabled && (

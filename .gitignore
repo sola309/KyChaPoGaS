@@ -55,3 +55,6 @@ outputs/
 
 # Runtime logs/pids for scripts/serve.sh
 .run/
+
+# See-Through (external clone: models+venv, heavy)
+tools/see-through/
