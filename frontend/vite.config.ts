@@ -9,9 +9,11 @@ export default defineConfig({
   // filesystem so edits are never missed — native fs events can be dropped on some
   // setups, which would silently break auto-reload. Gated by env so a one-off
   // `vite build` is NOT forced into watch mode.
+  // minify:false — private LAN app; keeps React component names readable so the
+  // UI inspect mode (🎯) can report <ClipBlock> etc. to the AI agent.
   build: process.env.KYCHAPOGAS_WATCH
-    ? { watch: { buildDelay: 200, watcher: { usePolling: true, pollInterval: 400 } } }
-    : {},
+    ? { minify: false, watch: { buildDelay: 200, watcher: { usePolling: true, pollInterval: 400 } } }
+    : { minify: false },
   server: {
     host: '0.0.0.0',
     port: 5173,

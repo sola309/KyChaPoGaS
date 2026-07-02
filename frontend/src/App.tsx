@@ -8,6 +8,7 @@ import { MobileNotice } from './components/MobileNotice'
 import { BrandLogo } from './components/BrandLogo'
 import { CompanionView } from './companion/CompanionView'
 import { SettingsModal } from './components/SettingsModal'
+import { InspectOverlay } from './components/InspectOverlay'
 import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
@@ -95,6 +96,8 @@ function App() {
   // Platform: one app active at a time (video editor / AI companion …)
   const [activeApp, setActiveApp] = useState<'editor' | 'companion'>('editor')
   const [showSettings, setShowSettings] = useState(false)
+  const inspectMode = useUIStore(s => s.inspectMode)
+  const setInspectMode = useUIStore(s => s.setInspectMode)
   const APPS = [
     { id: 'editor' as const, label: '🎬 編集' },
     { id: 'companion' as const, label: '🎭 コンパニオン' },
@@ -119,6 +122,11 @@ function App() {
         <span className="ml-auto flex items-center gap-2">
           <BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" />
           <button
+            onClick={() => setInspectMode(!inspectMode)}
+            className={`px-2 text-lg leading-none rounded ${inspectMode ? 'bg-sky-600' : 'hover:bg-zinc-700'}`}
+            title="UIインスペクトモード — クリックした要素をAIと共有"
+          >🎯</button>
+          <button
             onClick={() => setShowSettings(true)}
             className="text-zinc-400 hover:text-zinc-100 text-sm px-1"
             title="設定（APIキー・プロバイダ・エンジン）"
@@ -128,6 +136,7 @@ function App() {
       </div>
 
       {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      <InspectOverlay />
 
       {/* Collaboration join/leave toasts */}
       <CollabToasts />

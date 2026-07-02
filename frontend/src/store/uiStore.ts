@@ -11,6 +11,9 @@ interface UIState {
   toasts: Toast[]
   /** Shot Editor overlay (mad-kit clips): open with the clip's shot_id */
   shotEditor: { shotId: string } | null
+  /** UI inspect mode (🎯) — click any element to share it with the AI agent */
+  inspectMode: boolean
+  setInspectMode: (v: boolean) => void
   openShotEditor: (shotId: string) => void
   closeShotEditor: () => void
   pendingWrites: number        // in-flight edit writes (for the auto-save indicator)
@@ -31,6 +34,8 @@ let _seq = 1
 export const useUIStore = create<UIState>((set) => ({
   toasts: [],
   shotEditor: null,
+  inspectMode: false,
+  setInspectMode: (v) => set({ inspectMode: v }),
   openShotEditor: (shotId) => set({ shotEditor: { shotId } }),
   closeShotEditor: () => set({ shotEditor: null }),
   pendingWrites: 0,
