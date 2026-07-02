@@ -3,12 +3,13 @@ import { useProjectStore } from '../store/projectStore'
 import { Timeline } from '../components/Timeline/Timeline'
 import { PreviewPlayer } from '../components/Preview/PreviewPlayer'
 import { RightPanel } from '../components/RightPanel/RightPanel'
+import { ShotEditor } from '../components/ShotEditor/ShotEditor'
+import { useUIStore } from '../store/uiStore'
 import type { Asset } from '../api/client'
 import { assetsApi } from '../api/client'
 import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
 import { useCollab } from '../hooks/useCollab'
 import { CollabBar } from '../components/CollabBar'
-import { useUIStore } from '../store/uiStore'
 
 const MIN_TIMELINE_H  = 120
 const MAX_TIMELINE_H  = 600
@@ -31,6 +32,8 @@ function SaveIndicator() {
 export function ProjectView() {
   const { activeProject } = useProjectStore()
   const [assets, setAssets]       = useState<Asset[]>([])
+  const shotEditor = useUIStore(st => st.shotEditor)
+  const closeShotEditor = useUIStore(st => st.closeShotEditor)
   const [timelineH, setTimelineH] = useState(DEFAULT_TIMELINE_H)
 
   useEffect(() => {
@@ -80,6 +83,10 @@ export function ProjectView() {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {shotEditor && (
+        <ShotEditor projectId={activeProject.id} shotId={shotEditor.shotId}
+          onClose={closeShotEditor} />
+      )}
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Project header */}

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import type { Clip, Asset } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useUIStore } from '../../store/uiStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
 import { MotionCanvas } from './MotionCanvas'
@@ -38,6 +39,17 @@ interface Props {
 export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
   const snap = snapFrame ?? ((f: number) => f)
   const { moveClip, trimClip, deleteClip, projectFps, setEditingClipId } = useTimelineStore()
+  const openShotEditor = useUIStore(st => st.openShotEditor)
+  // mg_shot detection is defensive: fall back to the asset naming convention so a
+  // stale cached Clip object (no `kind` field) can never fall into delete-on-dblclick.
+  const isMgShot = clip.kind === 'mg_shot' || (asset?.name ?? '').startsWith('shot:')
+  const openEditor = () => {
+    try {
+      const sid = JSON.parse(clip.attrs_json || '{}').shot_id
+        ?? (asset?.name ?? '').replace(/^shot:/, '')
+      if (sid) openShotEditor(sid)
+    } catch { /* noop */ }
+  }
   const locked = !!remoteLock
   const { scenes, motion } = useAnalysisStore()
 
@@ -190,9 +202,25 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
         ...(remoteLock ? { outline: `2px solid ${remoteLock.color}`, outlineOffset: '-1px' }
           : remoteSelect ? { outline: `1px dashed ${remoteSelect}`, outlineOffset: '-1px' } : {}),
       }}
-      onDoubleClick={() => { if (!locked) deleteClip(clip.id) }}
-      title={remoteLock ? `${remoteLock.name} が編集中` : `${asset?.name ?? 'clip'}${isStretchable ? '（静止画: 自由に引き伸ばし可）' : ''} — ダブルクリックで削除`}
+      onDoubleClick={() => {
+        if (locked) return
+        if (isMgShot) openEditor()
+        else deleteClip(clip.id)
+      }}
+      title={remoteLock ? `${remoteLock.name} が編集中`
+        : isMgShot ? `${asset?.name ?? 'shot'} — ダブルクリック/✎でショットエディタ`
+        : `${asset?.name ?? 'clip'}${isStretchable ? '（静止画: 自由に引き伸ばし可）' : ''} — ダブルクリックで削除`}
     >
+      {/* Shot Editor button (mg_shot clips) — single-click, no dblclick ambiguity */}
+      {isMgShot && !locked && (
+        <button
+          className="absolute top-0.5 right-0.5 z-30 w-5 h-5 rounded bg-pink-600/90 hover:bg-pink-500 text-white text-[11px] leading-none flex items-center justify-center"
+          title="ショットエディタを開く"
+          onClick={e => { e.stopPropagation(); openEditor() }}
+          onDoubleClick={e => e.stopPropagation()}
+          onPointerDown={e => e.stopPropagation()}
+        >✎</button>
+      )}
       {/* Remote editor lock badge */}
       {remoteLock && (
         <span

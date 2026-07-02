@@ -166,8 +166,48 @@ async def _dispatch(job: Job) -> None:
             await _render_motion_graphics(job, params)
         case "decompose_character":
             await _decompose_character(job, params)
+        case "mad_reproxy_shot":
+            await _mad_reproxy_shot(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
+
+
+# ── mad_reproxy_shot ──────────────────────────────────────────────────────────
+
+async def _mad_reproxy_shot(job: Job, params: dict) -> None:
+    """Re-render one mad-kit shot's proxy and swap it into its asset in place
+    (the Shot Editor's fast feedback path — no full re-render needed)."""
+    import importlib.util
+    from app.services.motion_graphics import render_html_to_video
+    from app.services.thumbnail import generate_video_thumbnail
+
+    kit_dir = Path(__file__).parent.parent.parent.parent / "tools" / "mad-kit"
+    spec = importlib.util.spec_from_file_location("madkit_build", kit_dir / "build.py")
+    kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kit)
+
+    mad_path = Path(__file__).parent.parent.parent / "data" / "mad" / f"{job.project_id}.json"
+    m = json.loads(mad_path.read_text())
+    shot_id = params["shot_id"]
+    entry = m["shot_map"][shot_id]
+    project_dir, shotlist_path = Path(m["project_dir"]), Path(m["shotlist_path"])
+
+    html, _shotlist, _grid = kit.build_html(project_dir, shotlist_path, offset=entry["t0"])
+    dur = entry["t1"] - entry["t0"]
+    tmp = project_dir / "shot_proxies" / f"shot_{shot_id}.tmp.mp4"
+    await render_html_to_video(html, tmp, duration_sec=dur, fps=30, width=640, height=360,
+                               progress_cb=lambda p: _update_progress(job.id, p * 0.95))
+
+    with Session(engine) as session:
+        asset = session.get(Asset, entry["asset_id"])
+        if not asset:
+            raise ValueError(f"asset {entry['asset_id']} not found")
+        dest = Path(asset.file_path)
+        shutil.copy2(tmp, project_dir / "shot_proxies" / f"shot_{shot_id}.mp4")
+        shutil.move(str(tmp), str(dest))
+        generate_video_thumbnail(dest, asset.id)
+        _update_result_assets(job.id, [asset.id])
+    _update_progress(job.id, 1.0)
 
 
 # ── render_final ──────────────────────────────────────────────────────────────
@@ -175,7 +215,8 @@ async def _dispatch(job: Job) -> None:
 async def _render_final(job: Job, params: dict) -> None:
     from app.services.ffmpeg_render import render_timeline
 
-    project_id = params["project_id"]
+    # project_id lives on the Job; params may omit it (the render dialog sends {}).
+    project_id = params.get("project_id") or job.project_id
     with Session(engine) as session:
         project = session.get(Project, project_id)
         if not project:
@@ -815,11 +856,18 @@ async def _decompose_character(job: Job, params: dict) -> None:
     log.info("decompose_character: building puppet manifest")
     await run([st_py, str(REPO_ROOT / "scripts" / "build_puppet.py"),
                str(out_dir), str(psd), puppet_id, name], cwd=SEE_THROUGH)
-    _update_progress(job.id, 0.97)
+    _update_progress(job.id, 0.95)
 
     manifest = PUPPETS_DIR / puppet_id / "manifest.json"
     if not manifest.exists():
         raise RuntimeError("パペット・マニフェスト生成に失敗")
+
+    # 3) Rig Compiler v2 — canonical z-order, semantic depth, skin/eye/mouth rig
+    # metadata (so any decomposed character gets high-fidelity rigging).
+    log.info("decompose_character: compiling high-fidelity rig (v2)")
+    await run([st_py, str(REPO_ROOT / "scripts" / "rig_compiler.py"),
+               str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
+    _update_progress(job.id, 0.97)
 
     # record the puppet id on the job result (no asset row — puppets are their own store)
     with Session(engine) as session:

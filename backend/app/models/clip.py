@@ -29,6 +29,11 @@ class ClipBase(SQLModel):
     #   {"keyframes": [{"t":0,"scale":1.3,"x":0,"y":0}, {"t":0.25,"scale":1.0}]}
     # t = 0..1 over the clip; x/y = pan as fraction of frame (-0.5..0.5).
     transform_json: str = ""
+    # Clip kind: 'media' (plain asset) | 'mg_shot' (mad-kit shot backed by a
+    # proxy render; attrs_json carries {"shot_id": ...} so the Shot Editor /
+    # LLM tools can round-trip the clip to its shotlist entry).
+    kind: str = "media"
+    attrs_json: str = ""
 
 
 class Clip(ClipBase, table=True):
@@ -53,6 +58,8 @@ class ClipUpdate(SQLModel):
     opacity: Optional[float] = None
     blend: Optional[str] = None
     transform_json: Optional[str] = None
+    kind: Optional[str] = None
+    attrs_json: Optional[str] = None
 
 
 class ClipRead(ClipBase):

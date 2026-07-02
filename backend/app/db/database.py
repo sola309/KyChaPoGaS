@@ -59,6 +59,8 @@ def _migrate(conn) -> None:
             ("opacity",           "ALTER TABLE clip ADD COLUMN opacity FLOAT DEFAULT 1.0"),
             ("blend",             "ALTER TABLE clip ADD COLUMN blend VARCHAR DEFAULT 'normal'"),
             ("transform_json",    "ALTER TABLE clip ADD COLUMN transform_json VARCHAR DEFAULT ''"),
+            ("kind",              "ALTER TABLE clip ADD COLUMN kind VARCHAR DEFAULT 'media'"),
+            ("attrs_json",        "ALTER TABLE clip ADD COLUMN attrs_json VARCHAR DEFAULT ''"),
         ]:
             if col not in clip_cols:
                 conn.execute(text(ddl))

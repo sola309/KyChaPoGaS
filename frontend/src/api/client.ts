@@ -99,6 +99,10 @@ export interface Clip {
   blend: 'normal' | 'screen' | 'add' | 'multiply'
   /** Animated zoom/pan/shake: preset name or keyframe JSON ('' = none) */
   transform_json: string
+  /** 'media' (plain asset) | 'mg_shot' (mad-kit shot — double-click opens the Shot Editor) */
+  kind: string
+  /** JSON side-data for special kinds (mg_shot: {"shot_id": ...}) */
+  attrs_json: string
 }
 
 export interface ClipUpdate {

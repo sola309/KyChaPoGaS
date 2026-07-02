@@ -9,6 +9,10 @@ const KIND_COLOR: Record<ToastKind, string> = {
 
 interface UIState {
   toasts: Toast[]
+  /** Shot Editor overlay (mad-kit clips): open with the clip's shot_id */
+  shotEditor: { shotId: string } | null
+  openShotEditor: (shotId: string) => void
+  closeShotEditor: () => void
   pendingWrites: number        // in-flight edit writes (for the auto-save indicator)
   // Mobile/tablet off-canvas drawers (ignored on lg+ where panels are inline)
   navOpen: boolean             // left sidebar (projects)
@@ -26,6 +30,9 @@ let _seq = 1
 
 export const useUIStore = create<UIState>((set) => ({
   toasts: [],
+  shotEditor: null,
+  openShotEditor: (shotId) => set({ shotEditor: { shotId } }),
+  closeShotEditor: () => set({ shotEditor: null }),
   pendingWrites: 0,
   navOpen: false,
   panelOpen: false,
