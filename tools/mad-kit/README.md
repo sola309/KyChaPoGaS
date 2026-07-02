@@ -59,3 +59,22 @@ project dir 必須構成: `assets/`(png=透過素材, jpg=全面絵)・`beatgrid
 - カット/ポップは beatgrid の beats/downbeats に必ずスナップ(kit側で保証)
 - 書き出しは crf16 単一パス、音声は atrim+afade で終端処理
 - `final` は書き出し後にカット/ビート一致率を自動計測して表示
+
+## 解析メニュー (analyze.py)
+
+`analyze.py --list` でも一覧可能。結果は **shot_id 単位**で出るため、ショットエディタ/AI指示にそのまま使える。
+
+| 解析 | 内容 | 検出フラグ |
+|---|---|---|
+| beat_align | カットとビートの一致率(±50/±100ms)+ズレたカットの列挙 | — |
+| motion | フレーム差分エネルギー。静止区間を検出 | STATIC(1.2s以上停止) |
+| density | エッジ密度+カラフルネス | LONELY(要素が少なく寂しい) |
+| palette | 明度・彩度の統計 | DARK / DULL(くすみ) |
+| av_energy | 音楽RMS×映像モーションの相関 | AV_MISMATCH(音>画) |
+
+```bash
+$PY repo/tools/mad-kit/analyze.py --video <mp4> --project <dir> --shotlist shotlist.json
+# → <project>/analysis/analysis.md (人間/LLM向け) + analysis.json (機械向け)
+```
+
+将来追加候補: 文字可読性 / 顔検出による構図評価 / 素材重複検出 / VLMによる内容記述。
