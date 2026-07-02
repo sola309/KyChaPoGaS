@@ -31,11 +31,15 @@ log = logging.getLogger("motion_graphics")
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
 _SEEK_JS = """
-(t) => {
+async (t) => {
   document.getAnimations().forEach(a => {
     try { a.pause(); a.currentTime = t; } catch (e) {}
   });
-  if (typeof window.seek === 'function') { try { window.seek(t); } catch (e) {} }
+  if (typeof window.seek === 'function') {
+    // window.seek may return a Promise (e.g. mad-kit waiting on <video> 'seeked'
+    // events) — await it so every frame is captured fully settled.
+    try { const r = window.seek(t); if (r && typeof r.then === 'function') await r; } catch (e) {}
+  }
 }
 """
 

@@ -53,6 +53,32 @@ function img(parent, name, css) { const m = document.createElement('img');
   m.src = K.assets[name] || ''; m.style.position = 'absolute';
   if (css) Object.assign(m.style, css); parent.appendChild(m); return m; }
 function txt(parent, s, css) { const d = el(parent, { whiteSpace: 'pre', ...css }); d.textContent = s; return d; }
+// looping <video> asset. update(t) seeks it deterministically for renders;
+// in live mode it free-runs (currentTime corrections only on drift).
+const VIDEO_WAITS = [];
+function vid(parent, name, css) {
+  const v = document.createElement('video');
+  v.src = K.assets[name] || ''; v.muted = true; v.loop = true; v.playsInline = true;
+  v.preload = 'auto'; v.style.position = 'absolute';
+  if (css) Object.assign(v.style, css);
+  parent.appendChild(v);
+  const seekTo = tt => {
+    if (!isFinite(v.duration) || v.duration <= 0) return;
+    const target = tt % v.duration;
+    if (K.live) {
+      if (v.paused) v.play().catch(() => {});
+      if (Math.abs(v.currentTime - target) > 0.3) v.currentTime = target;
+    } else {
+      if (Math.abs(v.currentTime - target) < 1 / 120) return;
+      VIDEO_WAITS.push(new Promise(res => {
+        const done = () => { v.removeEventListener('seeked', done); res(); };
+        v.addEventListener('seeked', done); setTimeout(done, 400);
+      }));
+      v.currentTime = target;
+    }
+  };
+  return { v, seekTo };
+}
 // tag an element as a pickable object for the live Shot Editor.
 // path is "<shotId>:params.<jsonpath>", label a human-friendly name.
 function tag(e, ctx, sub, label) { if (!ctx || ctx.sid == null) return e;
@@ -349,7 +375,7 @@ TEMPLATES.panels_strip = (root, p, ctx) => {
     tag(inner, ctx, `panels[${i}]`, pp.asset);
     tag(txt(pn, pp.label, { left: 0, right: 0, bottom: '60px', textAlign: 'center', fontFamily: 'Mochiy', fontSize: '44px', color: PAL.wine }), ctx, `panels[${i}]`, pp.label);
     const fl = floaterLayer(pn, { n: 4, seed: i * 9 + 2, set: ['heart', 'star', 'note'], alpha: .5 });
-    return t => { const pu = outExpo(map(t, ctx.t0 + i * .19, ctx.t0 + .55 + i * .19));
+    return t => { const pu = outExpo(map(t, ctx.t0 + i * .07, ctx.t0 + .42 + i * .07));
       pn.style.transform = `translateY(${lerp(i % 2 ? -104 : 104, 0, pu)}%)`;
       inner.style.transform = `translate(-50%,-50%) translateY(${Math.sin(t * 1.8 + i) * 14}px) rotate(${Math.sin(t * 1.1 + i * 2) * 2}deg) scale(${1 + beatPulse(t, 8) * .03})`;
       fl(t); };
@@ -423,6 +449,7 @@ TEMPLATES.riser = (root, p, ctx) => {
 /* ---- lineup ---- */
 TEMPLATES.lineup = (root, p, ctx) => {
   root.style.background = PAL.pink2;
+  const flashBG = el(root, { inset: 0, background: '#fff', opacity: 0, zIndex: 1 });
   el(root, { left: 0, top: 0, width: '100%', height: '70px', background: PAL.wine });
   el(root, { left: 0, bottom: 0, width: '100%', height: '70px', background: PAL.wine });
   const amb = ambientOf(root, [{ kind: 'confetti', n: 60 }, { kind: 'sparkles', n: 14, color: '#ffb7cd' }], 99);
@@ -437,9 +464,11 @@ TEMPLATES.lineup = (root, p, ctx) => {
   });
   const title = tag(txt(root, p.title || '', { left: 0, right: 0, top: '84px', textAlign: 'center', fontFamily: 'Mochiy', fontSize: '58px', color: PAL.wine }), ctx, 'title', p.title);
   return t => { amb(t, 1);
+    flashBG.style.opacity = beatPulse(t, 10) * .28;
     items.forEach(({ wrap, m, i }) => { const uu = outBack(map(t, ctx.t0 + i * .13, ctx.t0 + .34 + i * .13), 1.2);
-      wrap.style.transform = `translateY(${lerp(500, 0, uu)}px)`;
-      m.style.transform = `translateX(-50%) scaleY(${1 - Math.abs(Math.sin(beatsFloat(t) * Math.PI)) * .04}) rotate(${Math.sin(t * 1.4 + i) * 1.6}deg)`; });
+      const hop = Math.abs(Math.sin(beatsFloat(t) * Math.PI));
+      wrap.style.transform = `translateY(${lerp(500, 0, uu) - hop * 26}px)`;
+      m.style.transform = `translateX(-50%) scaleY(${1 - hop * .07}) rotate(${Math.sin(beatsFloat(t) * Math.PI * 2 + i) * 2.6}deg)`; });
     title.style.opacity = map(t, ctx.t0 + .35, ctx.t0 + .65);
     title.style.transform = `scale(${1 + beatPulse(t, 9) * .04})`; };
 };
@@ -468,7 +497,7 @@ TEMPLATES.finale_cuts = (root, p, ctx) => {
 };
 
 /* templates continue in mad-kit-scenes.js (bespoke: intro/title/peak/breakdown/outro) */
-return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, svgEl, starPts, HEART, tag,
+return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_WAITS, svgEl, starPts, HEART, tag,
   patternBG, PATTERNS, AMBIENTS, confettiLayer, petalLayer, sparkleLayer, floaterLayer,
   nameplate, pill, cardEl, cornerRibbons, dotsRow,
   ENTERS, IDLES, EMPHS, motorize, TEMPLATES, autoEnter, ambientOf, kenburns,

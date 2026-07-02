@@ -55,14 +55,18 @@ def build_html(project: Path, shotlist_path: Path, offset: float = 0.0,
                 break
 
     assets = {}
+    video_assets = []
     for f in sorted((project / "assets").iterdir()):
-        if f.suffix.lower() in (".png", ".jpg", ".jpeg"):
+        if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".mp4", ".webm"):
+            mime = {"png": "image/png", "mp4": "video/mp4", "webm": "video/webm"}.get(f.suffix[1:].lower(), "image/jpeg")
             assets[f.stem] = (f"{asset_url_prefix}asset/{f.name}" if asset_url_prefix
-                              else b64(f, "image/png" if f.suffix == ".png" else "image/jpeg"))
+                              else b64(f, mime))
+            if f.suffix.lower() in (".mp4", ".webm"):
+                video_assets.append(f.stem)
 
     kycha = {"bpm": grid["bpm"], "duration": grid["duration"], "beats": grid["beats"],
              "downbeats": grid["downbeats"], "assets": assets, "shotlist": shotlist,
-             "offset": offset, "live": live}
+             "offset": offset, "live": live, "videoAssets": video_assets}
     live_js = (KIT_DIR / "mad-kit-live.js").read_text() if live else ""
     html = (tpl.replace("/*FONTS*/", fonts_css)
                .replace("/*KYCHA*/", "window.kycha = " + json.dumps(kycha) + ";")

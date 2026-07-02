@@ -43,10 +43,10 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
   flashAt(db(8) - .05, .35, 1);
   return t => {
     const [b1, b2, b3, b4, b5, b6, b7, b8] = [bar(1), bar(2), bar(3), bar(4), bar(5), bar(6), bar(7), db(8)];
-    ticks.forEach((tk, i) => { const bt = BEATS[i] ?? .44 + i * .372; const u = map(t, bt, bt + .18);
+    ticks.forEach((tk, i) => { const bt = .08 + i * .28; const u = map(t, bt, bt + .18);
       tk.style.opacity = t < b2 ? u : Math.max(0, 1 - map(t, b2, b2 + .3));
       tk.style.transform = `rotate(${-8 + i * 5 + Math.sin(t * 2.2 + i) * 3}deg) scale(${lerp(.4, 1, outBack(u))}) translateY(${Math.sin(t * 1.8 + i * 2) * 6}px)`; });
-    line.style.transform = `scaleX(${outExpo(map(t, b1 - .15, b1 + .45))})`;
+    line.style.transform = `scaleX(${outExpo(map(t, .55, 1.35))})`;
     line.style.opacity = t > b6 ? Math.max(0, 1 - map(t, b6, b6 + .3)) : 1;
     chibis.forEach((c, i) => { const enter = map(t, b1 + i * .19, b1 + i * .19 + 1.05);
       const exitU = map(t, b4 + i * .12, b4 + i * .12 + .8);
@@ -78,7 +78,8 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
     dots.forEach((d, i) => { const a = i / 5 * Math.PI * 2 + t * 1.6;
       d.style.transform = `translate(${Math.cos(a) * 310 - 27}px,${Math.sin(a) * 310 - 27}px) scale(${.8 + beatPulse(t) * .5})`; });
     pieText.style.opacity = map(t, b6 + .4, b6 + .8) * (1 - map(t, b7 + .8, b8));
-    root.style.background = t > b2 + .5 ? PAL.pink2 : '#fff';
+    root.style.background = t > b2 + .5 ? PAL.pink2
+      : `radial-gradient(circle at 50% ${52 + Math.sin(t * 2.4) * 3}%, #fff, #fdf3f4 ${74 + beatPulse(t, 6) * 10}%)`;
     floats(t, map(t, b3, b4) * (1 - map(t, b6, b6 + .4)));
   };
 };
@@ -212,8 +213,12 @@ TEMPLATES.profile_card = (root, p, ctx) => {
 TEMPLATES.breakdown_pan = (root, p, ctx) => {
   root.style.background = '#f6dfe6';
   const mid = ctx.t0 + (ctx.t1 - ctx.t0) / 2;
-  const im1 = M.tag(img(root, p.art1, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.88) brightness(.97)' }), ctx, 'art1', p.art1);
-  const im2 = M.tag(img(root, p.art2, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.95)', opacity: 0 }), ctx, 'art2', p.art2);
+  const isVid = n => (window.kycha.videoAssets || []).includes(n);
+  const mk1 = isVid(p.art1) ? M.vid(root, p.art1, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.92)' }) : null;
+  const mk2 = isVid(p.art2) ? M.vid(root, p.art2, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.95)' }) : null;
+  const im1 = M.tag(mk1 ? mk1.v : img(root, p.art1, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.88) brightness(.97)' }), ctx, 'art1', p.art1);
+  const im2 = M.tag(mk2 ? mk2.v : img(root, p.art2, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%', filter: 'saturate(.95)' }), ctx, 'art2', p.art2);
+  im2.style.opacity = 0;
   el(root, { inset: 0, background: 'radial-gradient(circle, transparent 55%, rgba(60,20,60,.35))' });
   const pt = petalLayer(root, { n: 30, seed: 77, zi: 20 });
   const spark = sparkleLayer(root, { n: 12, seed: 81, zi: 21, color: '#ffe3ee' });
@@ -230,6 +235,8 @@ TEMPLATES.breakdown_pan = (root, p, ctx) => {
     im1.style.opacity = 1 - map(t, mid - .5, mid + .3);
     im2.style.opacity = map(t, mid - .5, mid + .3);
     im2.style.transform = `scale(${1.12 - map(t, mid, ctx.t1) * .08}) translateX(${map(t, mid, ctx.t1) * 30}px)`;
+    if (mk1 && t < mid + .5) mk1.seekTo(t - ctx.t0);
+    if (mk2 && t > mid - .8) mk2.seekTo(t - mid + .8);
     pt(t * .6, .85); spark(t * .7, .8);
     const cu = map(tl, .8, 1.6);
     cred.style.opacity = cu * (1 - map(t, ctx.t1 - 1.6, ctx.t1 - .8));
@@ -287,7 +294,8 @@ function compile(shotlist) {
       if (on) { s.update(t); if (s.shot.template === 'breakdown_pan') anyLB = true; } }
     if (!anyLB) { M.lbT.style.height = '0px'; M.lbB.style.height = '0px'; }
     if (!scenes.some(s => t >= s.t0 && t < s.t1 && s.shot.template === 'outro_credits')) M.irisEl.style.background = 'none';
-    M.updateBands(t); M.updateFlash(t); };
+    M.updateBands(t); M.updateFlash(t);
+    if (M.VIDEO_WAITS.length) { const ws = M.VIDEO_WAITS.splice(0); return Promise.all(ws); } };
   window.seek(0);
   document.body.style.zoom = (window.innerWidth / 1920) || 1;
 }
