@@ -45,7 +45,7 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
     const [b1, b2, b3, b4, b5, b6, b7, b8] = [bar(1), bar(2), bar(3), bar(4), bar(5), bar(6), bar(7), db(8)];
     ticks.forEach((tk, i) => { const bt = .08 + i * .28; const u = map(t, bt, bt + .18);
       tk.style.opacity = t < b2 ? u : Math.max(0, 1 - map(t, b2, b2 + .3));
-      tk.style.transform = `rotate(${-8 + i * 5 + Math.sin(t * 2.2 + i) * 3}deg) scale(${lerp(.4, 1, outBack(u))}) translateY(${Math.sin(t * 1.8 + i * 2) * 6}px)`; });
+      tk.style.transform = `rotate(${-8 + i * 5 + Math.sin(t * 2.6 + i) * 6}deg) scale(${lerp(.4, 1, outBack(u)) * (1 + beatPulse(t, 8) * .12)}) translateY(${Math.sin(t * 2.1 + i * 2) * 16}px)`; });
     line.style.transform = `scaleX(${outExpo(map(t, .55, 1.35))})`;
     line.style.opacity = t > b6 ? Math.max(0, 1 - map(t, b6, b6 + .3)) : 1;
     chibis.forEach((c, i) => { const enter = map(t, b1 + i * .19, b1 + i * .19 + 1.05);
@@ -79,8 +79,8 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
       d.style.transform = `translate(${Math.cos(a) * 310 - 27}px,${Math.sin(a) * 310 - 27}px) scale(${.8 + beatPulse(t) * .5})`; });
     pieText.style.opacity = map(t, b6 + .4, b6 + .8) * (1 - map(t, b7 + .8, b8));
     root.style.background = t > b2 + .5 ? PAL.pink2
-      : `radial-gradient(circle at 50% ${52 + Math.sin(t * 2.4) * 3}%, #fff, #fdf3f4 ${74 + beatPulse(t, 6) * 10}%)`;
-    floats(t, map(t, b3, b4) * (1 - map(t, b6, b6 + .4)));
+      : `radial-gradient(circle at 50% ${52 + Math.sin(t * 2.4) * 5}%, #fff, #fbeaec ${64 + beatPulse(t, 6) * 18}%)`;
+    floats(t, Math.max(map(t, .3, 1.2) * .5, map(t, b3, b4)) * (1 - map(t, b6, b6 + .4)));
   };
 };
 
