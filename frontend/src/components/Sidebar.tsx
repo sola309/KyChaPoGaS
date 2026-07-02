@@ -18,7 +18,14 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
-  useEffect(() => { fetchProjects() }, [fetchProjects])
+  useEffect(() => {
+    fetchProjects()
+    // refetch when the tab regains focus, so projects created elsewhere (API / AI
+    // flows) show up without a manual page reload.
+    const onFocus = () => fetchProjects()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [fetchProjects])
 
   const handleCreate = async () => {
     if (!newName.trim() || submitting) return
@@ -55,11 +62,18 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
       <div className="flex-1 overflow-y-auto p-2">
         <div className="flex items-center justify-between px-2 py-1 mb-1">
           <span className="text-xs text-zinc-500 uppercase tracking-wider">Projects</span>
-          <button
-            onClick={() => { setCreating(v => !v); setError(null) }}
-            className="text-zinc-400 hover:text-white text-lg leading-none"
-            title="新規プロジェクト"
-          >+</button>
+          <span className="flex items-center gap-1">
+            <button
+              onClick={() => fetchProjects()}
+              className="text-zinc-400 hover:text-white text-sm leading-none"
+              title="一覧を更新"
+            >⟳</button>
+            <button
+              onClick={() => { setCreating(v => !v); setError(null) }}
+              className="text-zinc-400 hover:text-white text-lg leading-none"
+              title="新規プロジェクト"
+            >+</button>
+          </span>
         </div>
 
         {creating && (

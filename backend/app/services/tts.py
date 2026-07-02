@@ -43,20 +43,41 @@ def split_by_language(text: str) -> list[tuple[str, str]]:
 
 
 async def _irodori(text: str, voice: str, emoji_style: str) -> bytes:
+    import os
+    chosen = voice or S.get("TTS_DEFAULT_VOICE", config.TTS_DEFAULT_VOICE)
     payload = {
         "model": S.get("TTS_MODEL", config.TTS_MODEL),
         "input": (emoji_style + " " + text).strip() if emoji_style else text,
-        "voice": voice or S.get("TTS_DEFAULT_VOICE", config.TTS_DEFAULT_VOICE),
+        "voice": chosen,
         "response_format": "wav",
     }
+    # Apply the fine-tuned Kyoko LoRA when her voice is requested (the Irodori
+    # server loads the adapter per request on top of the base checkpoint).
+    lora_voice = S.get("TTS_LORA_VOICE", config.TTS_LORA_VOICE)
+    lora_path = S.get("TTS_LORA_ADAPTER", config.TTS_LORA_ADAPTER)
+    if lora_voice and chosen == lora_voice and lora_path and os.path.isdir(lora_path):
+        payload["lora_adapter"] = lora_path
     async with httpx.AsyncClient(timeout=120.0) as c:
         r = await c.post(f"{TTS_API_URL}/v1/audio/speech", json=payload)
         r.raise_for_status()
         return r.content
 
 
+async def _kokoro(text: str) -> bytes:
+    """Local native English TTS (Kokoro). Returns 48kHz/PCM16 WAV (matches Irodori)
+    so mixed JA+EN replies concatenate cleanly."""
+    async with httpx.AsyncClient(timeout=120.0) as c:
+        r = await c.post(f"{config.KOKORO_API_URL}/tts",
+                         json={"text": text, "voice": S.get("EN_TTS_VOICE", config.EN_TTS_VOICE)})
+        r.raise_for_status()
+        return r.content
+
+
 async def _english(text: str) -> bytes:
-    if S.get("EN_TTS_PROVIDER", config.EN_TTS_PROVIDER) != "openai":
+    provider = S.get("EN_TTS_PROVIDER", config.EN_TTS_PROVIDER)
+    if provider == "kokoro":
+        return await _kokoro(text)
+    if provider != "openai":
         raise RuntimeError("英語TTS未設定")
     key = S.get("OPENAI_API_KEY", "")
     if not key:

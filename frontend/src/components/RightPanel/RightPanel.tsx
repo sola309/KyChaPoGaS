@@ -3,10 +3,13 @@ import type { Asset } from '../../api/client'
 import { AssetPanel } from '../AssetPanel'
 import { GenerationPanel } from './GenerationPanel/GenerationPanel'
 import { JobQueuePanel } from './JobQueuePanel'
+import { LayerPanel } from './LayerPanel'
+import { StoragePanel } from './StoragePanel'
+import { MusicPanel } from './MusicPanel'
 import { useJobStore } from '../../store/jobStore'
 import { useUIStore } from '../../store/uiStore'
 
-type PanelTab = 'assets' | 'generate' | 'jobs'
+type PanelTab = 'assets' | 'layers' | 'generate' | 'music' | 'jobs' | 'storage'
 
 interface Props {
   projectId: number
@@ -16,7 +19,10 @@ interface Props {
 
 const TABS: { id: PanelTab; label: string; title: string }[] = [
   { id: 'assets',   label: '📂', title: 'アセット' },
+  { id: 'layers',   label: '🗂', title: 'レイヤー' },
   { id: 'generate', label: '✨', title: '生成' },
+  { id: 'music',    label: '🎵', title: '音楽スタジオ' },
+  { id: 'storage',  label: '💾', title: '容量' },
   { id: 'jobs',     label: '⚙',  title: 'ジョブキュー' },
 ]
 
@@ -83,8 +89,17 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
         <div className={`absolute inset-0 ${tab === 'assets'   ? '' : 'hidden'}`}>
           <AssetPanel projectId={projectId} onAssetsChange={onAssetsChange} />
         </div>
+        <div className={`absolute inset-0 ${tab === 'layers'   ? '' : 'hidden'}`}>
+          <LayerPanel assets={assets} />
+        </div>
         <div className={`absolute inset-0 ${tab === 'generate' ? '' : 'hidden'}`}>
           <GenerationPanel assets={assets} />
+        </div>
+        <div className={`absolute inset-0 ${tab === 'music'    ? '' : 'hidden'}`}>
+          <MusicPanel assets={assets} />
+        </div>
+        <div className={`absolute inset-0 ${tab === 'storage'  ? '' : 'hidden'}`}>
+          <StoragePanel projectId={projectId} assets={assets} onAssetsChange={onAssetsChange} />
         </div>
         <div className={`absolute inset-0 ${tab === 'jobs'     ? '' : 'hidden'}`}>
           <JobQueuePanel />

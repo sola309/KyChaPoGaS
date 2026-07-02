@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import type { Asset } from '../../../api/client'
 import { ImageGenPanel } from './ImageGenPanel'
-import { AudioGenPanel } from './AudioGenPanel'
 import { VideoGenPanel } from './VideoGenPanel'
 import { MotionGfxPanel } from './MotionGfxPanel'
 
-type GenTab = 'image' | 'audio' | 'video' | 'mg'
+// Music moved to its own top-level 🎵 tab (MusicPanel) for lyric/melody crafting.
+type GenTab = 'image' | 'video' | 'mg'
 
 const TABS: { id: GenTab; label: string }[] = [
   { id: 'image', label: '🖼 画像' },
-  { id: 'audio', label: '🎵 音楽' },
   { id: 'video', label: '🎬 動画' },
   { id: 'mg',    label: '⚡ MG' },
 ]
@@ -39,7 +38,6 @@ export function GenerationPanel({ assets }: { assets: Asset[] }) {
       {/* Panel content */}
       <div className="flex-1 overflow-y-auto">
         {tab === 'image' && <ImageGenPanel />}
-        {tab === 'audio' && <AudioGenPanel />}
         {tab === 'video' && <VideoGenPanel assets={assets} />}
         {tab === 'mg'    && <MotionGfxPanel />}
       </div>

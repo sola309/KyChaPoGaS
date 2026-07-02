@@ -46,16 +46,23 @@ def list_puppets():
     if not PUPPETS_DIR.exists():
         return {"puppets": []}
     out = []
-    for d in sorted(PUPPETS_DIR.iterdir()):
-        mf = d / "manifest.json"
-        if mf.is_dir() or not mf.exists():
-            continue
+    # Stable default ordering: recommended models (name without "旧") come first,
+    # then newest-built. mtime alone is fragile because every recompile rewrites
+    # manifests and would silently flip the default puppet.
+    dirs = [d for d in PUPPETS_DIR.iterdir() if (d / "manifest.json").is_file()]
+    rows = []
+    for d in dirs:
         try:
-            m = json.loads(mf.read_text(encoding="utf-8"))
-            out.append({"id": m.get("id", d.name), "name": m.get("name", d.name),
-                        "layer_count": len(m.get("layers", []))})
+            m = json.loads((d / "manifest.json").read_text(encoding="utf-8"))
         except Exception:
             continue
+        rows.append((m, m.get("name", d.name), d))
+    demoted = ("旧", "検証", "test")
+    rows.sort(key=lambda r: (any(s in r[1] for s in demoted),
+                             -(r[2] / "manifest.json").stat().st_mtime))
+    for m, name, d in rows:
+        out.append({"id": m.get("id", d.name), "name": name,
+                    "layer_count": len(m.get("layers", []))})
     return {"puppets": out}
 
 

@@ -19,6 +19,7 @@ ENGINES = {
     "comfyui": {"port": 8188, "label": "ComfyUI（画像/動画生成）",  "for": ["editor"]},
     "acestep": {"port": 7867, "label": "ACE-Step（音楽生成）",      "for": ["editor"]},
     "tts":     {"port": 8088, "label": "Irodori-TTS（音声合成）",   "for": ["companion"]},
+    "asr":     {"port": 8089, "label": "Whisper（音声入力）",       "for": ["companion"]},
     "ollama":  {"port": 11434, "label": "Ollama（ローカルLLM）",    "for": ["companion"]},
 }
 

@@ -64,6 +64,8 @@ tools/irodori-tts/
 
 # Ollama (binary + models, heavy)
 tools/ollama/
+tools/GPT-SoVITS/
+tools/kokoro-tts/
 
 # TTS 追加学習データ（音声素材・GitHubに上げない／READMEのみ追跡）
 training-data/*

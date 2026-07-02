@@ -22,8 +22,18 @@ _MODELS = {
     "anthropic": lambda: S.get("LLM_MODEL", config.LLM_MODEL),
     "openai":    lambda: S.get("OPENAI_MODEL", "gpt-4o-mini"),
     "gemini":    lambda: S.get("GEMINI_MODEL", "gemini-2.0-flash"),
-    "local":     lambda: S.get("OLLAMA_MODEL", "qwen2.5:7b"),
+    "local":     lambda: S.get("OLLAMA_MODEL", config.OLLAMA_MODEL),
 }
+
+
+def local_models() -> list[str]:
+    """Installed local (Ollama) model names, for the settings switcher."""
+    try:
+        r = httpx.get(f"{config.OLLAMA_URL}/api/tags", timeout=2.0)
+        r.raise_for_status()
+        return sorted(m["name"] for m in r.json().get("models", []))
+    except Exception:
+        return []
 
 
 def _ollama_up() -> bool:
@@ -60,6 +70,13 @@ def resolve(provider: str = "auto") -> str:
     return "local"
 
 
+import re as _re
+
+def _strip_think(text: str) -> str:
+    """Remove any <think>…</think> reasoning trace a model may inline in content."""
+    return _re.sub(r"<think>.*?</think>", "", text or "", flags=_re.S).strip()
+
+
 def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
          provider: str = "auto", model: str = "") -> str:
     """Return the assistant reply text. messages = [{role, content}, ...]."""
@@ -75,13 +92,23 @@ def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
         r = c.messages.create(model=mdl, max_tokens=max_tokens, system=system, messages=messages)
         return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
 
-    # OpenAI-compatible providers (openai / gemini / local-ollama)
+    if prov == "local":
+        # Ollama native API with think disabled: reasoning models (e.g. Nemotron-3
+        # Nano) otherwise spend the whole token budget on a hidden <think> block and
+        # return empty content. think:false is a harmless no-op for non-reasoning
+        # models (e.g. Gemma). _strip_think clears any inlined trace as a fallback.
+        msgs = ([{"role": "system", "content": system}] if system else []) + messages
+        r = httpx.post(f"{config.OLLAMA_URL}/api/chat", timeout=120.0,
+                       json={"model": mdl, "messages": msgs, "stream": False,
+                             "think": False, "options": {"num_predict": max_tokens}})
+        r.raise_for_status()
+        return _strip_think(r.json().get("message", {}).get("content", ""))
+
+    # OpenAI-compatible cloud providers (openai / gemini)
     if prov == "openai":
         base, key = config.OPENAI_BASE_URL, S.get("OPENAI_API_KEY", "")
-    elif prov == "gemini":
+    else:  # gemini
         base, key = config.GEMINI_BASE_URL, S.get("GEMINI_API_KEY", "")
-    else:  # local
-        base, key = f"{config.OLLAMA_URL}/v1", "ollama"
 
     msgs = ([{"role": "system", "content": system}] if system else []) + messages
     headers = {"Authorization": f"Bearer {key}"} if key else {}

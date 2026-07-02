@@ -23,6 +23,9 @@ export const useProjectStore = create<ProjectState>((set) => ({
     set({ loading: true, error: null })
     try {
       const projects = await projectsApi.list()
+      // newest first so freshly-created projects (incl. ones made via the API/AI)
+      // appear at the TOP of the list instead of buried under old ones.
+      projects.sort((a, b) => b.id - a.id)
       set({ projects, loading: false })
     } catch {
       set({ error: 'Failed to fetch projects', loading: false })
@@ -31,7 +34,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
 
   createProject: async (data) => {
     const project = await projectsApi.create(data)
-    set(state => ({ projects: [...state.projects, project] }))
+    set(state => ({ projects: [project, ...state.projects] }))
     return project
   },
 

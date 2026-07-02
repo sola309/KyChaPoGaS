@@ -10,6 +10,7 @@ import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
 import { SpeedCurveEditor } from './SpeedCurveEditor'
+import { ClipInspector } from './ClipInspector'
 import { RhythmLane } from './RhythmLane'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
@@ -26,7 +27,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
     tracks, clips, currentFrame, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
     loadTimeline, addTrack, addClip, splitClip,
-    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, updateClip,
+    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, updateClip, liveUpdateClip,
     selectedClipId, setSelectedClipId, syncFromServer,
   } = useTimelineStore()
 
@@ -37,6 +38,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [beatMatch, setBeatMatch] = useState<BeatMatchResult | null>(null)
   const [scoring, setScoring] = useState(false)
   const [showCurveEditor, setShowCurveEditor] = useState(false)
+  const [showInspector, setShowInspector] = useState(false)
 
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
@@ -93,6 +95,17 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const isVideoClip = selTrack?.track_type === 'video'
     && (selAsset?.asset_type === 'video'
         || (selAsset?.asset_type === 'generated' && selAsset?.duration_sec != null))
+
+  // Beat positions inside the selected clip, in clip-local t (0..1) — for the
+  // inspector's beat-snap (音ハメ). Computed from the song's real beat grid.
+  const selBeatTs = useMemo(() => {
+    if (!selectedClip) return [] as number[]
+    const { start_frame, duration_frames } = selectedClip
+    const end = start_frame + duration_frames
+    return beatFrames
+      .filter(bf => bf >= start_frame && bf <= end)
+      .map(bf => (bf - start_frame) / Math.max(1, duration_frames))
+  }, [selectedClip, beatFrames])
 
   const totalFrames = Math.max(
     MIN_TIMELINE_SECS * fps,
@@ -379,7 +392,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
               </>
             )}
 
-            {/* Transform: animated zoom/pan/shake (video & image clips) */}
+            {/* Layer transform inspector: scale/pos/rotation + keyframes + opacity/blend.
+                Quick presets stay one click away; the inspector is for precise authoring. */}
             {selectedClip && selTrack?.track_type === 'video' && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
@@ -388,11 +402,11 @@ export function Timeline({ projectId, fps, assets }: Props) {
                   value={(() => {
                     const t = selectedClip.transform_json ?? ''
                     if (!t) return ''
-                    try { return (JSON.parse(t).preset as string) ?? 'custom' } catch { return t }
+                    try { const d = JSON.parse(t); return (d.preset as string) ?? (d.keyframes ? 'custom' : '') } catch { return t }
                   })()}
                   onChange={e => updateClip(selectedClip.id, { transform_json: e.target.value })}
                   className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
-                  title="ズーム/パン/シェイク（静止画も動く・書き出しに反映）"
+                  title="プリセット（ズーム/パン/シェイク）。細かい調整は ⛭ 変形 で。"
                 >
                   <option value="">なし</option>
                   <option value="kenburns_in">ズームイン</option>
@@ -402,42 +416,29 @@ export function Timeline({ projectId, fps, assets }: Props) {
                   <option value="pan_lr">パン →</option>
                   <option value="pan_rl">パン ←</option>
                   <option value="shake">シェイク</option>
-                  {(() => {
-                    const t = selectedClip.transform_json ?? ''
-                    const known = ['', 'kenburns_in', 'kenburns_out', 'punch_in', 'punch_out', 'pan_lr', 'pan_rl', 'shake']
-                    return !known.includes(t) ? <option value={t}>カスタム</option> : null
-                  })()}
+                  <option value="custom" disabled>カスタム（⛭で編集）</option>
                 </select>
-              </>
-            )}
-
-            {/* Compositing (overlay-track clips): opacity + blend */}
-            {selectedClip && selTrack?.track_type === 'video'
-              && tracks.find(t => t.track_type === 'video')?.id !== selTrack.id && (
-              <>
-                <div className="w-px h-4 bg-zinc-700 mx-1" />
-                <span className="text-[10px] text-zinc-500">合成</span>
-                <select
-                  value={String(selectedClip.opacity ?? 1)}
-                  onChange={e => updateClip(selectedClip.id, { opacity: Number(e.target.value) })}
-                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
-                  title="不透明度"
-                >
-                  {[1, 0.75, 0.5, 0.25].map(o => (
-                    <option key={o} value={String(o)}>{Math.round(o * 100)}%</option>
-                  ))}
-                </select>
-                <select
-                  value={selectedClip.blend ?? 'normal'}
-                  onChange={e => updateClip(selectedClip.id, { blend: e.target.value as 'normal' | 'screen' | 'add' | 'multiply' })}
-                  className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
-                  title="ブレンドモード（書き出しで下のトラックと合成）"
-                >
-                  <option value="normal">通常</option>
-                  <option value="screen">スクリーン</option>
-                  <option value="add">加算</option>
-                  <option value="multiply">乗算</option>
-                </select>
+                <span className="relative">
+                  <button
+                    onClick={() => setShowInspector(v => !v)}
+                    className={`text-[11px] px-2 py-0.5 rounded border ${
+                      showInspector
+                        ? 'bg-purple-900/60 text-purple-200 border-purple-700'
+                        : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
+                    }`}
+                    title="レイヤー変形を数値＆キーフレームで編集（拡大/位置/回転/不透明度）"
+                  >⛭ 変形</button>
+                  {showInspector && selectedClip && (
+                    <ClipInspector
+                      clip={selectedClip}
+                      isOverlay={tracks.find(t => t.track_type === 'video')?.id !== selTrack.id}
+                      localT={(currentFrame - selectedClip.start_frame) / Math.max(1, selectedClip.duration_frames)}
+                      beatTs={selBeatTs}
+                      onChange={patch => liveUpdateClip(selectedClip.id, patch)}
+                      onClose={() => setShowInspector(false)}
+                    />
+                  )}
+                </span>
               </>
             )}
 

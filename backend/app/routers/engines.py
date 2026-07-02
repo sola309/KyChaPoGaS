@@ -21,6 +21,13 @@ def list_engines():
     return out
 
 
+@router.get("/llm-models")
+def llm_models():
+    """Installed local (Ollama) models — for the settings model switcher."""
+    from app.services import llm_provider
+    return {"models": llm_provider.local_models()}
+
+
 @router.post("/{name}/start")
 def start(name: str):
     return eng.start(name)

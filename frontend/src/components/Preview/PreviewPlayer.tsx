@@ -3,6 +3,7 @@ import { useTimelineStore } from '../../store/timelineStore'
 import { useProjectStore } from '../../store/projectStore'
 import type { Asset } from '../../api/client'
 import { assetsApi } from '../../api/client'
+import { evalTransform, parseElement, type TextProps, type XForm } from './transformEval'
 
 interface Props {
   assets: Asset[]
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export function PreviewPlayer({ assets, onAsset }: Props) {
-  const { tracks, clips, currentFrame, projectFps, setCurrentFrame, placeClip } = useTimelineStore()
+  const { tracks, clips, currentFrame, projectFps, setCurrentFrame, placeClip, previewHidden } = useTimelineStore()
   const { activeProject } = useProjectStore()
   const videoRef  = useRef<HTMLVideoElement>(null)
   const audioRef  = useRef<HTMLAudioElement>(null)
@@ -19,8 +20,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const [loadedAudioId, setLoadedAudioId] = useState<number | null>(null)
   const [capturing, setCapturing] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
+  const compRef = useRef<HTMLCanvasElement>(null)        // WYSIWYG compositor
+  const imgMap = useRef<Map<number, HTMLImageElement>>(new Map())
+  const [redraw, setRedraw] = useState(0)                // bumped when an image loads
   const [box, setBox] = useState({ w: 0, h: 0 })   // fitted project-frame box (px)
   const [guideMode, setGuideMode] = useState<'off' | 'thirds' | 'safe'>('off')
+  const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
 
   const projW = activeProject?.width  ?? 1280
   const projH = activeProject?.height ?? 720
@@ -39,8 +44,6 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // "generated" covers both images and videos — disambiguate by duration.
   const isVideoAsset = activeAsset?.asset_type === 'video'
     || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec != null)
-  const isImageAsset = activeAsset?.asset_type === 'image'
-    || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec == null)
 
   // First audio-track clip overlapping the playhead (the BGM to play)
   const activeAudioClip = clips.find(c => {
@@ -125,6 +128,100 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     }
   }, [playing, currentFrame, activeAudioClip, projectFps])
 
+  // ── WYSIWYG compositor ────────────────────────────────────────────────────
+  // Preload image assets so the canvas can composite them (file = full quality).
+  useEffect(() => {
+    for (const a of assets) {
+      const isImg = a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null)
+      if (isImg && !imgMap.current.has(a.id)) {
+        const im = new Image()
+        im.onload = () => setRedraw(r => r + 1)   // re-run the draw effect with fresh state
+        im.src = assetsApi.fileUrl(a.id)
+        imgMap.current.set(a.id, im)
+      }
+    }
+  }, [assets])
+
+  // Draw an asset as a LAYER: cover-fit × scale, panned by (x,y), rotated about
+  // its anchor. Mirrors the AE-style transform consumed by the render.
+  const drawLayer = (ctx: CanvasRenderingContext2D, src: CanvasImageSource,
+                     iw: number, ih: number, xf: XForm) => {
+    if (!iw || !ih) return
+    const s = Math.max(projW / iw, projH / ih) * xf.zoom
+    const dw = iw * s, dh = ih * s
+    const cx = projW / 2 + xf.x * projW
+    const cy = projH / 2 + xf.y * projH
+    const [ax, ay] = xf.anchor
+    ctx.save()
+    ctx.translate(cx, cy)
+    if (xf.rotation) ctx.rotate((xf.rotation * Math.PI) / 180)
+    ctx.drawImage(src, -dw * ax, -dh * ay, dw, dh)   // anchor maps to (cx,cy)
+    ctx.restore()
+  }
+
+  const drawText = (ctx: CanvasRenderingContext2D, el: TextProps, prog: number) => {
+    const inD = el.inDur ?? 0.3
+    const p = inD > 0 ? Math.min(1, prog / inD) : 1
+    let alpha = p, dy = 0, scale = 1
+    if (el.anim === 'rise') { dy = (1 - p) * 50 }
+    else if (el.anim === 'slam') { scale = 1 + (1 - p) * 1.4 }
+    ctx.save()
+    ctx.globalAlpha *= alpha
+    ctx.translate((el.x ?? 0.5) * projW, (el.y ?? 0.5) * projH + dy)
+    ctx.scale(scale, scale)
+    ctx.textAlign = el.align ?? 'center'; ctx.textBaseline = 'middle'
+    ctx.font = `${el.weight ?? 900} ${el.size ?? 90}px "Arial Black",Arial,sans-serif`
+    if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = (el.size ?? 90) * 0.55 }
+    ctx.fillStyle = el.color ?? '#fff'
+    ctx.fillText(el.text, 0, 0)
+    ctx.restore()
+  }
+
+  const drawComposite = () => {
+    const cv = compRef.current; if (!cv) return
+    const ctx = cv.getContext('2d'); if (!ctx) return
+    // 軽量プレビュー: cap the backing-store resolution (fill cost ∝ pixels). All
+    // draw code stays in project-frame coordinates; a base transform scales down.
+    const capW = lightPreview ? 1280 : 3840
+    const s = Math.min(1, capW / projW)
+    const cw = Math.max(1, Math.round(projW * s)), ch = Math.max(1, Math.round(projH * s))
+    if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch }
+    ctx.setTransform(s, 0, 0, s, 0, 0)                 // draw in projW×projH space
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
+    const vts = tracks.filter(t => t.track_type === 'video').sort((a, b) => a.order - b.order)
+    for (const tr of vts) {
+      if (previewHidden.includes(tr.id)) continue   // hidden in preview (not render)
+      const clip = clips.filter(c => c.track_id === tr.id)
+        .find(c => c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
+      if (!clip) continue
+      const prog = (currentFrame - clip.start_frame) / Math.max(1, clip.duration_frames)
+      const xf = evalTransform(clip.transform_json, prog, currentFrame)
+      ctx.save()
+      ctx.globalAlpha = (clip.opacity ?? 1) * (clip.asset_id == null ? 1 : xf.opacity)
+      ctx.globalCompositeOperation = clip.blend === 'screen' ? 'screen'
+        : clip.blend === 'add' ? 'lighter' : clip.blend === 'multiply' ? 'multiply' : 'source-over'
+      if (clip.asset_id == null) {
+        const el = parseElement(clip.transform_json)
+        if (el) drawText(ctx, el, prog)
+      } else {
+        const asset = assets.find(a => a.id === clip.asset_id)
+        const isImg = asset && (asset.asset_type === 'image' || (asset.asset_type === 'generated' && asset.duration_sec == null))
+        if (isImg) {
+          const im = imgMap.current.get(clip.asset_id)
+          if (im && im.complete && im.naturalWidth) drawLayer(ctx, im, im.naturalWidth, im.naturalHeight, xf)
+        } else {
+          const v = videoRef.current
+          if (v && loadedAssetId === clip.asset_id && v.readyState >= 2)
+            drawLayer(ctx, v, v.videoWidth, v.videoHeight, xf)
+        }
+      }
+      ctx.restore()
+    }
+  }
+
+  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview])
+
   // Measure the fitted project-frame box (object-contain) for the frame guides
   useEffect(() => {
     const el = canvasRef.current
@@ -205,13 +302,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     <div className="flex flex-col h-full bg-black select-none">
       {/* Canvas area */}
       <div ref={canvasRef} className="flex-1 relative flex items-center justify-center min-h-0">
-        {/* HTML5 video (always in DOM, hidden when not needed) */}
-        <video
-          ref={videoRef}
-          className={`max-w-full max-h-full object-contain ${isVideoAsset ? '' : 'hidden'}`}
-          playsInline
-          preload="auto"
-        />
+        {/* HTML5 video — hidden frame-source; the compositor draws its frame */}
+        <video ref={videoRef} className="hidden" playsInline preload="auto" />
+
+        {/* WYSIWYG compositor: all video tracks composited at the playhead
+            (transforms / opacity / blend / text) so the timeline is what-you-see. */}
+        <canvas ref={compRef} className="max-w-full max-h-full object-contain" />
 
         {/* Hidden audio element for BGM playback */}
         <audio ref={audioRef} preload="auto" className="hidden" />
@@ -240,15 +336,6 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
               </>
             )}
           </div>
-        )}
-
-        {/* Image preview */}
-        {isImageAsset && activeClip?.asset_id != null && (
-          <img
-            src={assetsApi.thumbnailUrl(activeClip.asset_id)}
-            alt={activeAsset?.name}
-            className="max-w-full max-h-full object-contain"
-          />
         )}
 
         {/* Empty state */}
@@ -295,8 +382,14 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         )}
 
         <button
+          onClick={() => setLightPreview(v => !v)}
+          className={`ml-auto text-[10px] px-2 py-0.5 rounded ${lightPreview ? 'bg-emerald-800 text-emerald-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          title="軽量プレビュー: 描画解像度を下げて動作を軽く（書き出し画質は不変）"
+        >⚡ {lightPreview ? '軽量' : '高画質'}</button>
+
+        <button
           onClick={cycleGuide}
-          className={`ml-auto text-[10px] px-2 py-0.5 rounded ${guideMode !== 'off' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          className={`text-[10px] px-2 py-0.5 rounded ${guideMode !== 'off' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           title="フレーム枠ガイド: なし → 三分割 → セーフエリア"
         >⊞ {guideMode === 'off' ? 'ガイド' : guideMode === 'thirds' ? '三分割' : 'セーフ'}</button>
 

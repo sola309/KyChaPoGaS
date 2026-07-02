@@ -24,7 +24,12 @@ KEYS = {
     "ANTHROPIC_API_KEY": True, "OPENAI_API_KEY": True, "GEMINI_API_KEY": True,
     "OPENAI_MODEL": False, "GEMINI_MODEL": False, "OLLAMA_MODEL": False,
     "TTS_DEFAULT_VOICE": False,
+    "TTS_LORA_VOICE": False, "TTS_LORA_ADAPTER": False,
     "EN_TTS_PROVIDER": False, "EN_TTS_VOICE": False,
+    "COMPANION_BASE_PROMPT": False,   # fixed base prompt for generating 杏子 images
+    "COMPANION_GEN_SCENE": False,     # scene/quality tail (editable, decomposition-friendly)
+    "COMPANION_GEN_NEGATIVE": False,  # negative prompt for generation
+    "RENDER_ENCODER": False,          # auto|nvenc|x264 — video render encoder
 }
 SECRET = {k for k, sec in KEYS.items() if sec}
 

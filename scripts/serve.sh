@@ -106,6 +106,15 @@ start() {
         env IRODORI_DEFAULT_VOICE=kyoko_ref \
         "$ROOT/tools/irodori-tts/.venv/bin/python" -m irodori_openai_tts --host 0.0.0.0 --port 8088
     fi
+    if [ -f "$ROOT/tools/asr/server.py" ] && [ -d "$ROOT/tools/irodori-tts/.venv" ]; then
+      spawn asr 8089 "$ROOT/tools/asr" \
+        "$ROOT/tools/irodori-tts/.venv/bin/python" server.py --host 0.0.0.0 --port 8089
+    fi
+    if [ -f "$ROOT/tools/kokoro-tts/server.py" ] && [ -d "$ROOT/tools/kokoro-tts/.venv" ]; then
+      spawn kokoro 8090 "$ROOT/tools/kokoro-tts" \
+        env CUDA_VISIBLE_DEVICES="" \
+        "$ROOT/tools/kokoro-tts/.venv/bin/python" -m uvicorn server:app --host 127.0.0.1 --port 8090
+    fi
     if [ -x "$ROOT/tools/ollama/bin/ollama" ]; then
       spawn ollama 11434 "$ROOT/tools/ollama" \
         env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$ROOT/tools/ollama/models" \
@@ -157,6 +166,8 @@ start_one() {
     tts)     spawn tts 8088 "$ROOT/tools/irodori-tts" \
                env IRODORI_DEFAULT_VOICE=kyoko_ref \
                "$ROOT/tools/irodori-tts/.venv/bin/python" -m irodori_openai_tts --host 0.0.0.0 --port 8088 ;;
+    asr)     spawn asr 8089 "$ROOT/tools/asr" \
+               "$ROOT/tools/irodori-tts/.venv/bin/python" server.py --host 0.0.0.0 --port 8089 ;;
     ollama)  spawn ollama 11434 "$ROOT/tools/ollama" \
                env OLLAMA_HOST=127.0.0.1:11434 OLLAMA_MODELS="$ROOT/tools/ollama/models" \
                "$ROOT/tools/ollama/bin/ollama" serve ;;
@@ -166,7 +177,7 @@ start_one() {
 stop_one() {
   local p
   case "$1" in
-    comfyui) p=8188 ;; acestep) p=7867 ;; tts) p=8088 ;; ollama) p=11434 ;;
+    comfyui) p=8188 ;; acestep) p=7867 ;; tts) p=8088 ;; asr) p=8089 ;; kokoro) p=8090 ;; ollama) p=11434 ;;
     *) echo "unknown engine: $1"; return 1 ;;
   esac
   fuser -k ${p}/tcp >/dev/null 2>&1 && echo "stopped $1 (:$p)" || echo "$1 not running"

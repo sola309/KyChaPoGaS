@@ -43,6 +43,10 @@ interface TimelineState {
   deleteClip: (clipId: number) => Promise<void>
   splitClip: (clipId: number, splitFrame: number) => Promise<void>
   updateClip: (clipId: number, data: ClipUpdate) => Promise<void>
+  // Optimistic + debounced persist — for live slider/keyframe scrubbing in the
+  // inspector. Local state updates synchronously (no await → no focus loss / jank);
+  // the server PATCH is coalesced to the last value after ~200ms idle.
+  liveUpdateClip: (clipId: number, data: ClipUpdate) => void
   setClipSpeed: (clipId: number, speed: number, ease?: SpeedEase) => Promise<void>
   undo: () => Promise<void>
   redo: () => Promise<void>
@@ -50,6 +54,9 @@ interface TimelineState {
   setZoom: (pixelsPerFrame: number) => void
   setSelectedClipId: (id: number | null) => void
   setEditingClipId: (id: number | null) => void
+  // Preview-only layer visibility (declutter / lighten preview; does NOT affect render)
+  previewHidden: number[]                 // track ids hidden in the compositor
+  toggleTrackHidden: (trackId: number) => void
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => {
@@ -66,6 +73,10 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     set(s => ({ clips: localUpdate(s.clips, clipId, data) }))
   }
 
+  // Debounce state for liveUpdateClip (closure-scoped, not store state).
+  const liveTimers: Record<number, ReturnType<typeof setTimeout>> = {}
+  const livePending: Record<number, ClipUpdate> = {}
+
   return {
     tracks: [],
     clips: [],
@@ -79,6 +90,13 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     redoStack: [],
     canUndo: false,
     canRedo: false,
+    previewHidden: [],
+
+    toggleTrackHidden: (trackId) => set(s => ({
+      previewHidden: s.previewHidden.includes(trackId)
+        ? s.previewHidden.filter(id => id !== trackId)
+        : [...s.previewHidden, trackId],
+    })),
 
     loadTimeline: async (projectId, fps) => {
       set({ loading: true, projectFps: fps })
@@ -312,6 +330,22 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       const updated = await clipsApi.update(clipId, data)
       set(s => ({ clips: s.clips.map(c => c.id === clipId ? updated : c) }))
       notifyEdit()
+    },
+
+    liveUpdateClip: (clipId, data) => {
+      applyLocal(clipId, data)                                  // instant, no await
+      livePending[clipId] = { ...(livePending[clipId] ?? {}), ...data }
+      if (liveTimers[clipId]) clearTimeout(liveTimers[clipId])
+      liveTimers[clipId] = setTimeout(async () => {
+        const d = livePending[clipId]
+        delete livePending[clipId]; delete liveTimers[clipId]
+        try {
+          const updated = await clipsApi.update(clipId, d)
+          // reconcile only if no newer edit landed while the PATCH was in flight
+          if (!livePending[clipId]) set(s => ({ clips: s.clips.map(c => c.id === clipId ? updated : c) }))
+        } catch { /* keep optimistic state */ }
+        notifyEdit()
+      }, 200)
     },
 
     // Change playback speed; the source span stays fixed so the timeline

@@ -18,6 +18,7 @@ const LLM_PROVIDERS = [
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [data, setData] = useState<SettingsData | null>(null)
   const [eng, setEng] = useState<EnginesData | null>(null)
+  const [localModels, setLocalModels] = useState<string[]>([])
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
@@ -27,7 +28,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const loadEngines = useCallback(() => {
     fetch('/api/engines/').then(r => r.json()).then(setEng).catch(() => {})
   }, [])
-  useEffect(() => { loadSettings(); loadEngines() }, [loadSettings, loadEngines])
+  const loadLocalModels = useCallback(() => {
+    fetch('/api/engines/llm-models').then(r => r.json()).then(d => setLocalModels(d.models ?? [])).catch(() => {})
+  }, [])
+  useEffect(() => { loadSettings(); loadEngines(); loadLocalModels() }, [loadSettings, loadEngines, loadLocalModels])
 
   const val = (k: string) => draft[k] ?? data?.settings[k] ?? ''
   const set = (k: string, v: string) => setDraft(d => ({ ...d, [k]: v }))
@@ -81,12 +85,27 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 onChange={e => set(k, e.target.value)} className={inp} autoComplete="off" />
             </label>
           ))}
-          <div className="grid grid-cols-3 gap-2">
-            {[['OPENAI_MODEL', 'OpenAIモデル'], ['GEMINI_MODEL', 'Geminiモデル'], ['OLLAMA_MODEL', 'ローカルモデル']].map(([k, lbl]) => (
+          <div className="grid grid-cols-2 gap-2">
+            {[['OPENAI_MODEL', 'OpenAIモデル'], ['GEMINI_MODEL', 'Geminiモデル']].map(([k, lbl]) => (
               <label key={k}><span className="text-[10px] text-zinc-500">{lbl}</span>
                 <input value={val(k)} onChange={e => set(k, e.target.value)} className={inp} /></label>
             ))}
           </div>
+          <label className="block mt-2">
+            <span className="text-[10px] text-zinc-500">ローカルモデル（Ollama・インストール済みから選択）</span>
+            {localModels.length > 0 ? (
+              <select value={val('OLLAMA_MODEL')} onChange={e => set('OLLAMA_MODEL', e.target.value)} className={inp}>
+                {/* current value may omit the :latest tag the registry reports → match loosely */}
+                {!localModels.some(m => m.replace(/:latest$/, '') === val('OLLAMA_MODEL').replace(/:latest$/, '')) && val('OLLAMA_MODEL') && (
+                  <option value={val('OLLAMA_MODEL')}>{val('OLLAMA_MODEL')}（未DL）</option>
+                )}
+                {localModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            ) : (
+              <input value={val('OLLAMA_MODEL')} onChange={e => set('OLLAMA_MODEL', e.target.value)} className={inp}
+                placeholder="例: nemotron-nano" />
+            )}
+          </label>
         </section>
 
         {/* TTS */}
