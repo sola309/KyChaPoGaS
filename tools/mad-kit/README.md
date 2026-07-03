@@ -78,3 +78,20 @@ $PY repo/tools/mad-kit/analyze.py --video <mp4> --project <dir> --shotlist shotl
 ```
 
 将来追加候補: 文字可読性 / 顔検出による構図評価 / 素材重複検出 / VLMによる内容記述。
+
+## parallax_scene — マルチプレーンカメラ (2026-07 追加)
+
+疑似3Dカメラ。レイヤを奥行き(depth)に配置し、仮想カメラの移動で視差を生む。
+depth>0=奥 / 0=主役面 / depth<0=カメラ手前。静止時の見た目はdepth 0と同じ(WYSIWYG)。
+
+- `camera`: プリセット名 or キーフレーム配列 `[{at:0..1|"db:N", x,y,z,yaw,pitch,roll,ease}]`
+  - プリセット: `dolly_in` `dolly_out` `pan_l` `pan_r` `crane_up` `crane_down` `orbit` `pass_through` `push_beat` `still`
+- `bg`: `{asset}` or `{asset, video:true}` or `{pattern, color}`(最奥、自動で112%オーバースキャン)
+- `layers`: 中景 `[{asset, depth:420, x,y,h, video?, idles?}]`
+- `subjects`/`subject`: 主役(showcase系と同じ座標感覚、enter/idle/db強調は自動)
+- `fg`: 前景 `[{asset, depth:-240, x,y,h}]` — 通り抜け感の主成分
+- `ornaments`: nameplate/pill/chibi/テキスト(depth指定可)
+- `sway:false` で手持ち風微揺れOFF、`dbKick:false` で小節頭のZパンチOFF
+- 粒子は自動で2深度(奥+手前)に分かれて視差する
+
+他テンプレでも `MK.cameraRig(root, {camera:'orbit'})` で同じリグを使える。

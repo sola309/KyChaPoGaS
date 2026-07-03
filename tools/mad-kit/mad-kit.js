@@ -239,6 +239,62 @@ function motorize(elm, spec, t0) {
   };
 }
 
+/* ============ F2. multiplane camera ============ */
+// cameraRig: perspective camera over depth-sorted layers (擬似3Dカメラワークの心臓部)。
+//   depth > 0 = 奥(背景側), depth < 0 = 手前(カメラ側)。
+//   各レイヤは translateZ(-depth) scale((P+depth)/P) で置くので、カメラ静止時の
+//   見た目は depth 0 と同一(WYSIWYG)。カメラが動いた時だけ視差が現れる。
+// camera path: [{at, x, y, z, yaw, pitch, roll, ease}] — at は 0..1(ショット内正規化)
+//   または "db:N"(絶対拍)。z>0 でドリーイン。
+const CAM_PRESETS = {
+  dolly_in:   [{ at: 0, z: 0, y: 18 }, { at: 1, z: 300, y: -14, ease: 'inOutCubic' }],
+  dolly_out:  [{ at: 0, z: 280, y: -10 }, { at: 1, z: -60, y: 12, ease: 'inOutCubic' }],
+  pan_l:      [{ at: 0, x: 210, z: 60 }, { at: 1, x: -210, z: 60, ease: 'inOutCubic' }],
+  pan_r:      [{ at: 0, x: -210, z: 60 }, { at: 1, x: 210, z: 60, ease: 'inOutCubic' }],
+  crane_up:   [{ at: 0, y: 190, z: 40, pitch: -3 }, { at: 1, y: -150, z: 120, pitch: 2.5, ease: 'inOutCubic' }],
+  crane_down: [{ at: 0, y: -170, z: 40, pitch: 2.5 }, { at: 1, y: 150, z: 120, pitch: -3, ease: 'inOutCubic' }],
+  orbit:      [{ at: 0, yaw: -7, x: -120, z: 90 }, { at: 1, yaw: 7, x: 120, z: 90, ease: 'inOutCubic' }],
+  pass_through: [{ at: 0, z: -80 }, { at: .82, z: 620, ease: 'inCubic' }, { at: 1, z: 1150, ease: 'inCubic' }],
+  push_beat:  [{ at: 0, z: 40 }, { at: 1, z: 200, ease: 'linear' }],
+  still:      [{ at: 0 }, { at: 1 }],
+};
+function cameraRig(root, opts = {}) {
+  const P = opts.persp ?? 1200;
+  root.style.perspective = P + 'px';
+  root.style.perspectiveOrigin = '50% 50%';
+  const world = el(root, { inset: 0, transformStyle: 'preserve-3d' });
+  function layer(depth = 0, css) {
+    const L = el(world, { inset: 0, ...css });
+    const s = (P + depth) / P;
+    if (depth) L.style.transform = `translateZ(${-depth}px) scale(${s})`;
+    L.dataset.mkDepth = depth;
+    return L;
+  }
+  const path = (typeof opts.camera === 'string' ? CAM_PRESETS[opts.camera] : opts.camera) || CAM_PRESETS.dolly_in;
+  const sway = opts.sway === false ? null : { x: 6, y: 4, roll: .3, rate: .5, ...(opts.sway || {}) };
+  const dbKick = opts.dbKick === false ? null : { z: 26, d: 6, ...(opts.dbKick || {}) };
+  const CH = ['x', 'y', 'z', 'yaw', 'pitch', 'roll'];
+  function evalPath(t, t0, t1) {
+    const abs = v => typeof v === 'string' ? T(v) : t0 + v * (t1 - t0);
+    const ts = path.map(k => abs(k.at ?? 0));
+    let i = 0; while (i < path.length - 1 && t >= ts[i + 1]) i++;
+    const j = Math.min(i + 1, path.length - 1);
+    const a = path[i], b = path[j];
+    const u = ts[j] <= ts[i] ? 1 : (EASE[b.ease || 'inOutCubic'] || inOutCubic)(map(t, ts[i], ts[j]));
+    const c = {}; for (const k of CH) c[k] = lerp(a[k] ?? 0, b[k] ?? (a[k] ?? 0), u);
+    return c;
+  }
+  function update(t, t0, t1) {
+    const c = evalPath(t, t0, t1);
+    if (sway) { c.x += Math.sin(t * sway.rate * 2.1) * sway.x; c.y += Math.cos(t * sway.rate * 1.7) * sway.y;
+      c.roll += Math.sin(t * sway.rate * 1.3) * sway.roll; }
+    if (dbKick) c.z += dbPulse(t, dbKick.d) * dbKick.z;
+    world.style.transform = `rotateX(${-c.pitch}deg) rotateY(${-c.yaw}deg) rotate(${-c.roll}deg) translate3d(${-c.x}px,${-c.y}px,${c.z}px)`;
+    return c;
+  }
+  return { world, layer, update, P };
+}
+
 /* ============ G. global overlays ============ */
 const stage = document.getElementById('stage');
 const scenesRoot = document.getElementById('scenes');
@@ -452,6 +508,87 @@ TEMPLATES.riser = (root, p, ctx) => {
     wh.style.opacity = inCubic(map(t, ctx.t1 - .45, ctx.t1)); };
 };
 
+/* ---- parallax_scene: マルチプレーンカメラの標準テンプレート ----
+   bg(最奥) / layers(中景) / subjects(主役 depth0) / fg(前景=カメラ手前) を
+   仮想カメラが移動して視差を生む。camera: プリセット名 or キーフレーム配列。
+   例: { "template": "parallax_scene", "params": {
+     "bg": { "pattern": "soft" }, "camera": "dolly_in",
+     "layers": [{ "asset": "loop_dusk.webm", "depth": 520, "video": true }],
+     "subjects": [{ "asset": "fb_pocky_cut.png", "x": 700, "y": 200, "h": 860 }],
+     "fg": [{ "asset": "chibi_run.png", "depth": -240, "x": 120, "y": 700, "h": 300 }],
+     "ornaments": [{ "kind": "nameplate", "text": "杏子", "x": 1300, "y": 640, "depth": -120 }] } } */
+TEMPLATES.parallax_scene = (root, p, ctx) => {
+  const rig = cameraRig(root, { persp: p.persp, camera: p.camera || 'dolly_in',
+    sway: p.sway, dbKick: p.dbKick });
+  const vids = [], ups = [];
+
+  // 最奥: パターン or 画像 or 動画 (深度ぶん拡大されるので端は見えない)
+  const bgDepth = p.bgDepth ?? 780;
+  const bgL = rig.layer(bgDepth);
+  if (p.bg?.asset) {
+    if (p.bg.video) { const { v, seekTo } = vid(bgL, p.bg.asset, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%' }); vids.push(seekTo); tag(v, ctx, 'bg', p.bg.asset); }
+    else tag(img(bgL, p.bg.asset, { width: '112%', height: '112%', objectFit: 'cover', left: '-6%', top: '-6%' }), ctx, 'bg', p.bg.asset);
+  } else {
+    ups.push(patternBG(bgL, p.bg?.pattern || 'soft', p.bg?.color));
+  }
+
+  // 中景レイヤ群
+  (p.layers || []).forEach((L, i) => {
+    const lay = rig.layer(L.depth ?? 420);
+    let e;
+    if (L.video) { const { v, seekTo } = vid(lay, L.asset, { height: (L.h ?? 1080) + 'px', left: (L.x ?? 0) + 'px', top: (L.y ?? 0) + 'px', objectFit: 'cover' }); vids.push(seekTo); e = v; }
+    else e = img(lay, L.asset, { height: (L.h ?? 1080) + 'px', left: (L.x ?? 0) + 'px', top: (L.y ?? 0) + 'px' });
+    tag(e, ctx, `layers[${i}]`, L.asset);
+    if (L.idles) ups.push(motorize(e, { x: 0, y: 0, idles: L.idles }, ctx.t0));
+  });
+
+  // 主役 (depth 0 — 構図はshowcase系と同じ座標感覚)
+  const subL = rig.layer(0);
+  (p.subjects || (p.subject ? [p.subject] : [])).forEach((sp, i) => {
+    const m = img(subL, sp.asset, { height: (sp.h ?? 860) + 'px', left: (sp.x ?? 640) + 'px', top: (sp.y ?? 220) + 'px', zIndex: 8 });
+    tag(m, ctx, p.subjects ? `subjects[${i}]` : 'subject', sp.asset);
+    ups.push(motorize(m, { origin: '50% 100%',
+      enter: { kind: sp.enter || autoEnter(ctx.idx + i), at: .05 + i * .19, dur: .55 },
+      idles: sp.idles || [{ kind: 'breath' }, { kind: 'sway', amp: 1.2, rate: .9, ph: i }],
+      emph: { kind: 'punch_db', amp: .03 } }, ctx.t0));
+  });
+
+  // 飾り (depth指定可、既定は主役と同面)
+  (p.ornaments || []).forEach((o, i) => {
+    const lay = o.depth ? rig.layer(o.depth) : subL;
+    let e;
+    if (o.kind === 'nameplate') e = nameplate(lay, o.text, { left: o.x + 'px', top: o.y + 'px', zIndex: 10, ...(o.css || {}) });
+    else if (o.kind === 'pill') e = pill(lay, o.text, { left: o.x + 'px', top: o.y + 'px', zIndex: 10 });
+    else if (o.kind === 'chibi') e = img(lay, o.asset, { height: (o.h ?? 180) + 'px', left: o.x + 'px', top: o.y + 'px', zIndex: 9 });
+    else e = txt(lay, o.text || '★', { left: o.x + 'px', top: o.y + 'px', zIndex: 9, fontFamily: 'Mochiy', fontSize: (o.size ?? 46) + 'px', color: o.color || PAL.wine });
+    tag(e, ctx, `ornaments[${i}]`, o.text || o.asset || o.kind);
+    ups.push(motorize(e, { enter: { kind: o.enter || 'pop', at: .3 + i * .186, dur: .34 },
+      idles: o.kind === 'chibi' ? [{ kind: 'hop_beat', amp: 26 }] : [{ kind: 'bob', amp: 7, rate: 1.6, ph: i * 1.7 }] }, ctx.t0));
+  });
+
+  // 前景 (カメラ手前を横切る要素 — 通り抜け感の主成分)
+  (p.fg || []).forEach((f, i) => {
+    const lay = rig.layer(f.depth ?? -240);
+    const e = img(lay, f.asset, { height: (f.h ?? 320) + 'px', left: (f.x ?? 100) + 'px', top: (f.y ?? 640) + 'px', opacity: f.alpha ?? .96 });
+    tag(e, ctx, `fg[${i}]`, f.asset);
+    ups.push(motorize(e, { idles: f.idles || [{ kind: 'float', amp: 20, ph: i * 2.4 }, { kind: 'sway', amp: 3, ph: i }] }, ctx.t0));
+  });
+
+  // 粒子を2深度に分けて撒く: 視差する粒子は「空間がある」感を一気に上げる
+  if (p.ambient !== 'none') {
+    const far = ambientOf(rig.layer(p.bgDepth ? bgDepth * .55 : 430), p.ambient || { kind: 'petals', n: 16 }, ctx.idx * 29 + 1);
+    const near = ambientOf(rig.layer(-160), p.ambientNear || { kind: 'sparkles', n: 10 }, ctx.idx * 29 + 8);
+    ups.push(t => { far(t, 1); near(t, .85); });
+  }
+
+  return t => {
+    rig.update(t, ctx.t0, ctx.t1);
+    const tt = t - ctx.t0;
+    vids.forEach(sk => sk(tt));
+    ups.forEach(u => u(t));
+  };
+};
+
 /* ---- lineup ---- */
 TEMPLATES.lineup = (root, p, ctx) => {
   root.style.background = PAL.pink2;
@@ -507,6 +644,7 @@ return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_W
   patternBG, PATTERNS, AMBIENTS, confettiLayer, petalLayer, sparkleLayer, floaterLayer,
   nameplate, pill, cardEl, cornerRibbons, dotsRow,
   ENTERS, IDLES, EMPHS, motorize, TEMPLATES, autoEnter, ambientOf, kenburns,
+  cameraRig, CAM_PRESETS,
   BEATS, DBS, db, T, beatAfter, beatPulse, dbPulse, beatsFloat, lastLE,
   stage, scenesRoot, flashEl, lbT, lbB, irisEl, FLASHES, BANDCUTS, flashAt, updateBands, updateFlash };
 })();

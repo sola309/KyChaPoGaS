@@ -80,7 +80,8 @@ def check(shotlist: dict) -> list[str]:
     errs = []
     known = ["mg_intro", "title_card", "showcase_pattern", "showcase_card", "showcase_fullbleed",
              "panels_strip", "bands_repeat", "cv_card", "rapid_cuts", "riser", "mg_peak",
-             "profile_card", "breakdown_pan", "finale_cuts", "lineup", "outro_credits"]
+             "profile_card", "breakdown_pan", "finale_cuts", "lineup", "outro_credits",
+             "parallax_scene"]
     for i, s in enumerate(shotlist.get("shots", [])):
         where = f"shots[{i}] (id={s.get('id', '?')})"
         if s.get("template") not in known:
