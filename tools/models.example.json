@@ -116,5 +116,39 @@
       "size_gb": 0.33,
       "enabled": false
     }
+  ],
+  "video": [
+    {
+      "name": "Wan2.2 S2V 14B fp8 (音声駆動=歌わせる)",
+      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors",
+      "dest": "tools/comfyui/models/diffusion_models/wan2.2_s2v_14B_fp8_scaled.safetensors",
+      "size_gb": 15.3,
+      "enabled": false,
+      "_note": "Wan2.5はAPI限定のためローカル代替: S2V=音声駆動/Animate=参照動画転写 (ComfyUI 0.27対応)"
+    },
+    {
+      "name": "wav2vec2 audio encoder (S2V用)",
+      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors",
+      "dest": "tools/comfyui/models/audio_encoders/wav2vec2_large_english_fp16.safetensors",
+      "size_gb": 0.6,
+      "enabled": false,
+      "_note": "Wan2.5はAPI限定のためローカル代替: S2V=音声駆動/Animate=参照動画転写 (ComfyUI 0.27対応)"
+    },
+    {
+      "name": "Wan2.2 Animate 14B bf16 (モーション転写)",
+      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/diffusion_models/wan2.2_animate_14B_bf16.safetensors",
+      "dest": "tools/comfyui/models/diffusion_models/wan2.2_animate_14B_bf16.safetensors",
+      "size_gb": 32.2,
+      "enabled": false,
+      "_note": "Wan2.5はAPI限定のためローカル代替: S2V=音声駆動/Animate=参照動画転写 (ComfyUI 0.27対応)"
+    },
+    {
+      "name": "Wan2.2 Animate relight LoRA",
+      "url": "https://huggingface.co/Comfy-Org/Wan_2.2_ComfyUI_Repackaged/resolve/main/split_files/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors",
+      "dest": "tools/comfyui/models/loras/wan2.2_animate_14B_relight_lora_bf16.safetensors",
+      "size_gb": 1.3,
+      "enabled": false,
+      "_note": "Wan2.5はAPI限定のためローカル代替: S2V=音声駆動/Animate=参照動画転写 (ComfyUI 0.27対応)"
+    }
   ]
 }

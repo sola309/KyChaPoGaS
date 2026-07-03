@@ -36,7 +36,7 @@ PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
 # レーン並列: 重いGPUジョブ(動画/音楽/最終レンダー/分解)と軽いジョブ(画像/解析/プロキシ)を
 # 1本ずつ同時に走らせる。128GBユニファイドメモリの余力を活かしつつ、VRAMゲートで安全側に倒す。
 LANE_HEAVY = {"generate_video_i2v", "generate_audio", "render_final",
-              "precompose", "decompose_character"}
+              "precompose", "decompose_character", "mad_shot_takes"}
 
 
 def _lane_of(job_type: str) -> str:
@@ -185,6 +185,10 @@ async def _dispatch(job: Job) -> None:
             await _cutout(job, params)
         case "interpolate":
             await _interpolate(job, params)
+        case "vlm_review":
+            await _vlm_review(job, params)
+        case "mad_shot_takes":
+            await _mad_shot_takes(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -224,6 +228,68 @@ async def _mad_reproxy_shot(job: Job, params: dict) -> None:
         shutil.move(str(tmp), str(dest))
         generate_video_thumbnail(dest, asset.id)
         _update_result_assets(job.id, [asset.id])
+    _update_progress(job.id, 1.0)
+
+
+async def _mad_shot_takes(job: Job, params: dict) -> None:
+    """テイク比較: 1ショットをバリエーション違いで4連プロキシ生成。
+    vary="camera"(parallax系) or "enter"(登場モーション)。result_jsonに
+    各テイクのパッチとプロキシURLを返し、UI/AI指示側が選んで適用する。"""
+    import importlib.util
+    import tempfile
+    from app.services.motion_graphics import render_html_to_video
+
+    kit_dir = Path(__file__).parent.parent.parent.parent / "tools" / "mad-kit"
+    spec = importlib.util.spec_from_file_location("madkit_build", kit_dir / "build.py")
+    kit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(kit)
+
+    mad_path = Path(__file__).parent.parent.parent / "data" / "mad" / f"{job.project_id}.json"
+    m = json.loads(mad_path.read_text())
+    shot_id = params["shot_id"]
+    entry = m["shot_map"][shot_id]
+    project_dir, shotlist_path = Path(m["project_dir"]), Path(m["shotlist_path"])
+
+    vary = params.get("vary", "camera")
+    VARIANTS = {
+        "camera": [{"params": {"camera": c}} for c in ("dolly_in", "pass_through", "orbit", "crane_up")],
+        "enter": [{"params": {"subjects": None}, "_enter": e} for e in ("rise_pop", "drop_bounce", "spin_in", "flip_in")],
+        "fx": [{"fx": [{"kind": k, "on": "db"}]} for k in ("rgb_shift", "glitch", "shake", "manga_flash")],
+    }[vary if vary in ("camera", "enter", "fx") else "camera"]
+
+    sl = json.loads(shotlist_path.read_text())
+    idx = next(i for i, s in enumerate(sl["shots"]) if str(s.get("id")) == str(shot_id))
+    takes_dir = project_dir / "shot_proxies" / "takes"
+    takes_dir.mkdir(parents=True, exist_ok=True)
+    dur = entry["t1"] - entry["t0"]
+    results = []
+    for k, patch in enumerate(VARIANTS):
+        sl2 = json.loads(json.dumps(sl))
+        shot = sl2["shots"][idx]
+        if "params" in patch and patch["params"]:
+            shot.setdefault("params", {}).update(patch["params"])
+        if "_enter" in patch:
+            for sub in (shot.get("params", {}).get("subjects") or []):
+                sub["enter"] = patch["_enter"]
+        if "fx" in patch:
+            shot["fx"] = patch["fx"]
+        with tempfile.NamedTemporaryFile("w", suffix=".json", dir=str(shotlist_path.parent),
+                                         delete=False) as tf:
+            json.dump(sl2, tf, ensure_ascii=False)
+            tmp_sl = Path(tf.name)
+        try:
+            html, _s, _g = kit.build_html(project_dir, tmp_sl, offset=entry["t0"])
+            out = takes_dir / f"shot_{shot_id}_take{k}.mp4"
+            await render_html_to_video(html, out, duration_sec=dur, fps=30, width=640, height=360,
+                                       progress_cb=lambda p, k=k: _update_progress(job.id, (k + p) / len(VARIANTS)))
+            results.append({"take": k, "patch": {kk: vv for kk, vv in patch.items() if not kk.startswith("_")},
+                            "enter": patch.get("_enter"), "file": str(out)})
+        finally:
+            tmp_sl.unlink(missing_ok=True)
+    with Session(engine) as session:
+        j = session.get(Job, job.id)
+        j.result_json = json.dumps({"vary": vary, "takes": results}, ensure_ascii=False)
+        session.add(j); session.commit()
     _update_progress(job.id, 1.0)
 
 
@@ -971,6 +1037,28 @@ async def _create_proxy(job: Job, params: dict) -> None:
 
 
 # ── Asset registration ────────────────────────────────────────────────────────
+
+async def _vlm_review(job: Job, params: dict) -> None:
+    """レンダー動画をローカルVLMで意味QA→コメントキューに自動起票(lightレーン)。"""
+    from app.services.ffmpeg_render import FFMPEG
+    from app.services import vlm_review as V
+
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src, project_id = Path(asset.file_path), asset.project_id
+    _update_progress(job.id, 0.05)
+    findings = await asyncio.to_thread(
+        V.review_video, src, str(FFMPEG), int(params.get("frames", 12)))
+    n = V.file_comments(project_id, findings, src.stem)
+    _update_progress(job.id, 1.0)
+    with Session(engine) as session:
+        j = session.get(Job, job.id)
+        j.result_json = json.dumps({"findings": findings, "comments_filed": n},
+                                   ensure_ascii=False)
+        session.add(j); session.commit()
+
 
 async def _interpolate(job: Job, params: dict) -> None:
     """

@@ -326,3 +326,51 @@ def interpolate(asset_id: int, req: InterpolateRequest, session: Session = Depen
     return _create_job(session, asset.project_id, "interpolate", {
         "project_id": asset.project_id, "asset_id": asset_id, "fps": req.fps,
     })
+
+
+class VlmReviewRequest(_BM):
+    frames: int = 12
+
+
+@router.post("/{asset_id}/vlm-review", status_code=201)
+def vlm_review(asset_id: int, req: VlmReviewRequest, session: Session = Depends(get_session)):
+    """レンダー動画をローカルVLMで意味QA(可読性/寂しさ/破綻)→コメント自動起票。"""
+    from app.routers.generation import _create_job
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="asset not found")
+    return _create_job(session, asset.project_id, "vlm_review", {
+        "project_id": asset.project_id, "asset_id": asset_id, "frames": req.frames,
+    })
+
+
+@router.get("/library/search")
+def library_search(q: str = "", kind: str = "", limit: int = 60,
+                   session: Session = Depends(get_session)):
+    """プロジェクト横断の素材検索。q=名前/来歴の部分一致、kind=cutout|interpolate|generated等。
+    切り抜き済み・補間済み素材を別プロジェクトから再利用するための土台。"""
+    from sqlmodel import select as _select
+    rows = session.exec(_select(Asset).order_by(Asset.id.desc())).all()
+    out = []
+    for a in rows:
+        gp = a.gen_params_json or ""
+        if kind:
+            src_kind = ""
+            try:
+                import json as _j
+                src_kind = "cutout" if "src_asset_id" in gp and "model" in gp else ""
+                d = _j.loads(gp) if gp else {}
+                if d.get("method") == "minterpolate":
+                    src_kind = "interpolate"
+            except Exception:
+                pass
+            if kind not in (src_kind, a.asset_type or ""):
+                continue
+        if q and q.lower() not in (a.name or "").lower() and q.lower() not in gp.lower():
+            continue
+        out.append({"id": a.id, "project_id": a.project_id, "name": a.name,
+                    "asset_type": a.asset_type, "width": a.width, "height": a.height,
+                    "duration_sec": a.duration_sec})
+        if len(out) >= limit:
+            break
+    return {"items": out}

@@ -309,3 +309,10 @@ def instruct(pid: int, req: InstructRequest, background: BackgroundTasks):
     if engine != "local" and "local" in avail:
         background.add_task(_shadow_eval, shot, req.object_path, req.instruction, new_shot)
     return {"ok": True, "shot": new_shot, "engine": engine}
+
+
+@router.post("/{pid}/shots/{shot_id}/takes", response_model=JobRead, status_code=201)
+def shot_takes(pid: int, shot_id: str, vary: str = "camera",
+               session: Session = Depends(get_session)):
+    """テイク比較: このショットをバリエーション4種で連続プロキシ生成(camera/enter/fx)。"""
+    return _create_job(session, pid, "mad_shot_takes", {"shot_id": shot_id, "vary": vary})
