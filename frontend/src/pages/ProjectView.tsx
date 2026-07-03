@@ -6,7 +6,7 @@ import { RightPanel } from '../components/RightPanel/RightPanel'
 import { ShotEditor } from '../components/ShotEditor/ShotEditor'
 import { useUIStore } from '../store/uiStore'
 import type { Asset } from '../api/client'
-import { assetsApi } from '../api/client'
+import { assetsApi, api } from '../api/client'
 import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
 import { useCollab } from '../hooks/useCollab'
 import { CollabBar } from '../components/CollabBar'
@@ -97,6 +97,14 @@ export function ProjectView() {
             <span>{activeProject.width} × {activeProject.height}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <button
+              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5"
+              title="プロジェクト一式を .kycha.zip に書き出し(別ストレージ保管用)"
+              onClick={async () => {
+                const r = await api.post(`/projects/${activeProject.id}/export`)
+                window.open(r.data.download, '_blank')
+              }}
+            >📦 書き出し</button>
             <SaveIndicator />
             <CollabBar />
           </div>

@@ -1,3 +1,4 @@
+import { api } from '../api/client'
 import { useEffect, useState } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { useUIStore } from '../store/uiStore'
@@ -68,6 +69,19 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
               className="text-zinc-400 hover:text-white text-sm leading-none"
               title="一覧を更新"
             >⟳</button>
+            <label className="text-zinc-400 hover:text-white text-sm leading-none cursor-pointer" title="プロジェクトをインポート (.kycha.zip)">
+              📥
+              <input type="file" accept=".zip" className="hidden"
+                onChange={async e => {
+                  const f = e.target.files?.[0]; if (!f) return
+                  const fd = new FormData(); fd.append('file', f)
+                  try {
+                    await api.post('/projects/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+                    fetchProjects()
+                  } catch { alert('インポートに失敗しました') }
+                  e.target.value = ''
+                }} />
+            </label>
             <button
               onClick={() => { setCreating(v => !v); setError(null) }}
               className="text-zinc-400 hover:text-white text-lg leading-none"
