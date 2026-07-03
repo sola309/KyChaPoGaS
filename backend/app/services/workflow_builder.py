@@ -414,6 +414,64 @@ def build_wan22_video(
     return wf
 
 
+# ── Wan2.2 S2V: 音声駆動ビデオ(歌わせる/喋らせる) ────────────────────────────
+
+WAN22_S2V_UNET = "wan2.2_s2v_14B_fp8_scaled.safetensors"
+WAN22_S2V_AUDIO_ENC = "wav2vec2_large_english_fp16.safetensors"
+
+
+def build_wan22_s2v(
+    ref_image_name: str,          # ComfyUI /upload/image 済みの参照画像(歌わせたいキャラ)
+    audio_name: str,              # ComfyUI input/ に置いた音声ファイル名(wav)
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 640,
+    height: int = 640,
+    length: int = 77,             # 4n+1
+    seed: int = -1,
+    steps: int = 20,
+    cfg: float = 6.0,
+    shift: float = 8.0,
+) -> dict:
+    """
+    Wan2.2 S2V (Sound-to-Video): 参照画像+音声 → リップシンク/演技付き動画。
+    出力はSaveImage(フレーム列) — 既存のWan経路と同じくFFmpegで結合する。
+    """
+    s = _seed(seed)
+    width, height = _round_to(width, 16), _round_to(height, 16)
+    length = _round_to(length - 1, 4) + 1
+    return {
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": WAN22_TEXT_ENCODER, "type": "wan"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": WAN22_VAE}},
+        "pos":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
+        "neg":  {"class_type": "CLIPTextEncode",
+                 "inputs": {"text": negative_prompt or "low quality, static, blurry, deformed",
+                            "clip": ["clip", 0]}},
+        "img":  {"class_type": "LoadImage", "inputs": {"image": ref_image_name}},
+        "aud":  {"class_type": "LoadAudio", "inputs": {"audio": audio_name}},
+        "aenc_l": {"class_type": "AudioEncoderLoader",
+                   "inputs": {"audio_encoder_name": WAN22_S2V_AUDIO_ENC}},
+        "aenc": {"class_type": "AudioEncoderEncode",
+                 "inputs": {"audio_encoder": ["aenc_l", 0], "audio": ["aud", 0]}},
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": WAN22_S2V_UNET, "weight_dtype": "default"}},
+        "model": {"class_type": "ModelSamplingSD3", "inputs": {"model": ["unet", 0], "shift": shift}},
+        "cond": {"class_type": "WanSoundImageToVideo", "inputs": {
+            "positive": ["pos", 0], "negative": ["neg", 0], "vae": ["vae", 0],
+            "width": width, "height": height, "length": length, "batch_size": 1,
+            "audio_encoder_output": ["aenc", 0], "ref_image": ["img", 0]}},
+        "ksampler": {"class_type": "KSampler", "inputs": {
+            "seed": s, "steps": steps, "cfg": cfg,
+            "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+            "model": ["model", 0], "positive": ["cond", 0], "negative": ["cond", 1],
+            "latent_image": ["cond", 2]}},
+        "decode": {"class_type": "VAEDecode", "inputs": {"samples": ["ksampler", 0], "vae": ["vae", 0]}},
+        "save": {"class_type": "SaveImage",
+                 "inputs": {"filename_prefix": "kychapogas_s2v", "images": ["decode", 0]}},
+    }
+
+
 # ── Model type detection helper ───────────────────────────────────────────────
 
 def detect_model_type(model_id: str) -> str:

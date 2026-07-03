@@ -35,8 +35,8 @@ PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
 
 # レーン並列: 重いGPUジョブ(動画/音楽/最終レンダー/分解)と軽いジョブ(画像/解析/プロキシ)を
 # 1本ずつ同時に走らせる。128GBユニファイドメモリの余力を活かしつつ、VRAMゲートで安全側に倒す。
-LANE_HEAVY = {"generate_video_i2v", "generate_audio", "render_final",
-              "precompose", "decompose_character", "mad_shot_takes"}
+LANE_HEAVY = {"generate_video_i2v", "generate_video_s2v", "generate_audio",
+              "render_final", "precompose", "decompose_character", "mad_shot_takes"}
 
 
 def _lane_of(job_type: str) -> str:
@@ -165,6 +165,8 @@ async def _dispatch(job: Job) -> None:
             await _generate_image(job, params)
         case "generate_video_i2v":
             await _generate_video_i2v(job, params)
+        case "generate_video_s2v":
+            await _generate_video_s2v(job, params)
         case "generate_audio":
             await _generate_audio(job, params)
         case "analyze_audio":
@@ -540,6 +542,63 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
 # ── generate_video_i2v: Wan2.2 (first/last frame) ─────────────────────────────
 
 WAN22_FPS = 16   # Wan2.2 native frame rate
+
+
+async def _generate_video_s2v(job: Job, params: dict) -> None:
+    """Wan2.2 S2V: 参照画像+音声 → リップシンク/演技付き動画(歌わせる)。
+    params: {image_asset_id, audio_asset_id, prompt, length, width, height, seed}
+    出力動画に音声もmuxして登録する。"""
+    from app.services.comfyui import comfyui
+    from app.services.workflow_builder import build_wan22_s2v
+    from app.services.ffmpeg_render import FFMPEG
+
+    project_id = params["project_id"]
+    with Session(engine) as session:
+        img = session.get(Asset, params["image_asset_id"])
+        aud = session.get(Asset, params["audio_asset_id"])
+        if not img or not aud:
+            raise ValueError("image_asset_id / audio_asset_id が見つかりません")
+        img_path, aud_path = Path(img.file_path), Path(aud.file_path)
+
+    if not await comfyui.is_available():
+        raise RuntimeError("ComfyUI が起動していません")
+    up_img = (await comfyui.upload_image(img_path)).get("name", img_path.name)
+    # 音声もComfyUIのinputへ(upload/imageエンドポイントはファイル種別を問わない)
+    up_aud = (await comfyui.upload_image(aud_path)).get("name", aud_path.name)
+    _update_progress(job.id, 0.05)
+
+    wf = build_wan22_s2v(
+        up_img, up_aud, params.get("prompt", ""), params.get("negative_prompt", ""),
+        int(params.get("width", 640)), int(params.get("height", 640)),
+        int(params.get("length", 77)), int(params.get("seed", -1)),
+        steps=int(params.get("steps", 20)))
+    prompt_id = await comfyui.submit(wf)
+    outputs = await comfyui.wait_for_outputs(
+        prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.85))
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    frames = []
+    for i, out in enumerate(outputs):
+        fp = dest_dir / f"s2v_{job.id}_{i:05d}.png"
+        await comfyui.download_output(out, fp)
+        frames.append(fp)
+    if not frames:
+        raise RuntimeError("S2V がフレームを出力しませんでした")
+    silent = await _frames_to_video(frames, dest_dir, WAN22_FPS, job.id)
+    # 音声mux(生成尺で切る)
+    final = dest_dir / f"s2v_{job.id}.mp4"
+    proc = await asyncio.create_subprocess_exec(
+        str(FFMPEG), "-y", "-i", str(silent), "-i", str(aud_path),
+        "-c:v", "copy", "-c:a", "aac", "-shortest", str(final),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    await proc.communicate()
+    out_path = final if final.exists() else silent
+    asset_id = _register_asset(project_id, out_path, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    for fp in frames:
+        fp.unlink(missing_ok=True)
+    log.info(f"S2V done → {out_path.name}")
 
 
 async def _generate_video_wan22(job: Job, params: dict) -> None:
