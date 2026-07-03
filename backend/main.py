@@ -14,7 +14,7 @@ from app.db.database import create_db_and_tables
 from app.routers import (projects, assets, tracks, clips, jobs, generation, llm, system,
                          analysis, puppet, companion, settings as settings_router, engines as engines_router,
                          mad as mad_router, inspect as inspect_router, comments as comments_router,
-                         music as music_router)
+                         music as music_router, lora as lora_router)
 from app.services import job_runner
 
 logging.basicConfig(level=logging.INFO)
@@ -94,6 +94,7 @@ app.include_router(mad_router.router, prefix="/api")
 app.include_router(inspect_router.router, prefix="/api")
 app.include_router(comments_router.router, prefix="/api")
 app.include_router(music_router.router, prefix="/api")
+app.include_router(lora_router.router, prefix="/api")
 
 
 @app.get("/api/build-id")

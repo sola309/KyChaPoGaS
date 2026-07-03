@@ -58,7 +58,8 @@ def generate(req: GenerateRequest, session: Session = Depends(get_session)):
     jobs = []
     base_seed = req.seed if req.seed >= 0 else 10007
     for i in range(max(1, min(req.variants, 4))):
-        params = {"prompt": req.caption, "lyrics": req.lyrics,
+        params = {"project_id": pid,
+                  "prompt": req.caption, "lyrics": req.lyrics,
                   "duration_sec": req.duration_sec, "vocal_language": req.vocal_language,
                   "instrumental": req.instrumental, "seed": base_seed + i * 111}
         if req.bpm:
