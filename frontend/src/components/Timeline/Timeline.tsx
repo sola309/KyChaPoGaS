@@ -182,6 +182,42 @@ export function Timeline({ projectId, fps, assets }: Props) {
     }
   }, [pixelsPerFrame, setZoom])
 
+  // ── Pinch zoom (タッチ2本指) ───────────────────────────────────────────
+  const pinchRef = useRef<{ d: number; ppf: number; frameAt: number } | null>(null)
+  const activePointers = useRef(new Map<number, { x: number; y: number }>())
+  const handlePinchDown = useCallback((e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch') return
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (activePointers.current.size === 2) {
+      const [a, b] = [...activePointers.current.values()]
+      const sc = scrollRef.current
+      const midX = (a.x + b.x) / 2 - (sc?.getBoundingClientRect().left ?? 0)
+      pinchRef.current = {
+        d: Math.hypot(a.x - b.x, a.y - b.y), ppf: pixelsPerFrame,
+        frameAt: ((sc?.scrollLeft ?? 0) + midX - LABEL_WIDTH) / pixelsPerFrame,
+      }
+    }
+  }, [pixelsPerFrame])
+  const handlePinchMove = useCallback((e: React.PointerEvent) => {
+    if (!activePointers.current.has(e.pointerId)) return
+    activePointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const p = pinchRef.current
+    if (p && activePointers.current.size === 2) {
+      const [a, b] = [...activePointers.current.values()]
+      const next = Math.min(20, Math.max(0.05, p.ppf * (Math.hypot(a.x - b.x, a.y - b.y) / p.d)))
+      const sc = scrollRef.current
+      if (sc) {
+        const midX = (a.x + b.x) / 2 - sc.getBoundingClientRect().left
+        requestAnimationFrame(() => { sc.scrollLeft = Math.max(0, p.frameAt * next - midX + LABEL_WIDTH) })
+      }
+      setZoom(next)
+    }
+  }, [setZoom])
+  const handlePinchUp = useCallback((e: React.PointerEvent) => {
+    activePointers.current.delete(e.pointerId)
+    if (activePointers.current.size < 2) pinchRef.current = null
+  }, [])
+
   // ── Drop asset ────────────────────────────────────────────────────────
   const handleDropAsset = async (trackId: number, assetId: number, startFrame: number) => {
     const asset = assets.find(a => a.id === assetId)
@@ -558,7 +594,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
       </div>
 
       {/* Scrollable area */}
-      <div className="flex-1 overflow-auto" ref={scrollRef} onWheel={handleWheel}>
+      <div className="flex-1 overflow-auto" ref={scrollRef} onWheel={handleWheel}
+        onPointerDown={handlePinchDown} onPointerMove={handlePinchMove}
+        onPointerUp={handlePinchUp} onPointerCancel={handlePinchUp}
+        style={{ touchAction: 'pan-x pan-y' }}>
         <div className="flex flex-col min-h-full relative">
           {/* Ruler row */}
           <div className="flex flex-shrink-0 sticky top-0 z-10 bg-zinc-900">

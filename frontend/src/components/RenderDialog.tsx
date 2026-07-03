@@ -14,10 +14,16 @@ export function RenderDialog({ onClose }: Props) {
   const [width,  setWidth]  = useState(activeProject?.width  ?? 1920)
   const [height, setHeight] = useState(activeProject?.height ?? 1080)
   const [fps,    setFps]    = useState(activeProject?.fps    ?? 30)
+  const [review, setReview] = useState(false)   // 720pレビュー(高速エンコード)
   const [busy,   setBusy]   = useState(false)
   const [error,  setError]  = useState<string | null>(null)
 
   if (!activeProject) return null
+
+  const applyPreset = (p: 'review' | 'final') => {
+    if (p === 'review') { setWidth(1280); setHeight(720); setReview(true) }
+    else { setWidth(activeProject.width ?? 1920); setHeight(activeProject.height ?? 1080); setReview(false) }
+  }
 
   const handleRender = async () => {
     setBusy(true)
@@ -26,6 +32,7 @@ export function RenderDialog({ onClose }: Props) {
       await jobsApi.create(activeProject.id, 'render_final', {
         project_id: activeProject.id,
         width, height, fps,
+        ...(review ? { encoder: 'x264_fast' } : {}),
       })
       onClose()
     } catch (e: unknown) {
@@ -52,6 +59,18 @@ export function RenderDialog({ onClose }: Props) {
             レンダリング実行中 ({runningRenders.length}件)
           </div>
         )}
+
+        {/* Presets */}
+        <div className="flex gap-2 mb-3">
+          <button onClick={() => applyPreset('review')}
+            className={`flex-1 py-1.5 rounded text-xs border ${review ? 'bg-amber-800/50 border-amber-600 text-amber-200' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}>
+            📱 720pレビュー(速い)
+          </button>
+          <button onClick={() => applyPreset('final')}
+            className={`flex-1 py-1.5 rounded text-xs border ${!review ? 'bg-purple-800/50 border-purple-600 text-purple-200' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}>
+            🎬 本番品質
+          </button>
+        </div>
 
         {/* Settings */}
         <div className="space-y-3">

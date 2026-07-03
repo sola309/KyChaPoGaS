@@ -24,7 +24,7 @@ export function TrackLane({
   track, clips, assets, pixelsPerFrame, totalWidth,
   selectedClipId, onSelectClip, onDropAsset, snapFrame,
 }: Props) {
-  const { deleteTrack } = useTimelineStore()
+  const { deleteTrack, setCurrentFrame } = useTimelineStore()
   const others = useCollabStore(s => s.others)
 
   // Remote collaborators' selection / active-edit per clip id
@@ -79,6 +79,13 @@ export function TrackLane({
         style={{ width: totalWidth, height }}
         onDragOver={e => e.preventDefault()}
         onDrop={handleDrop}
+        onClick={e => {
+          // 空白部クリックでシーク(クリップ上のクリックは各ブロックが処理)
+          if (e.target !== e.currentTarget) return
+          const rect = e.currentTarget.getBoundingClientRect()
+          const f = Math.max(0, Math.round((e.clientX - rect.left) / pixelsPerFrame))
+          setCurrentFrame(snapFrame ? snapFrame(f) : f)
+        }}
       >
         {/* Centre line */}
         {!isRef && (

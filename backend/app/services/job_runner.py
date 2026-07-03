@@ -253,6 +253,7 @@ async def _render_final(job: Job, params: dict) -> None:
         tracks=tracks_d, clips=clips_d, assets=assets_d,
         fps=fps, width=width, height=height,
         progress_cb=progress_cb,
+        encoder=params.get("encoder"),
     )
 
 
@@ -281,6 +282,7 @@ async def _precompose(job: Job, params: dict) -> None:
         tracks=tracks_d, clips=clips_d, assets=assets_d,
         fps=fps, width=width, height=height,
         progress_cb=progress_cb,
+        encoder=params.get("encoder"),
     )
     asset_id = _register_asset(project_id, output, "generated", params)
     _update_result_assets(job.id, [asset_id])

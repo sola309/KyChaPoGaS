@@ -94,7 +94,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       if (video.paused) video.play().catch(() => {})
     } else {
       if (!video.paused) video.pause()
-      if (Math.abs(video.currentTime - assetTime) > 0.04) video.currentTime = Math.max(0, assetTime)  // scrub
+      // フレーム精度スクラブ: 半フレーム許容 + 境界丸め回避の微小オフセット
+      const target = Math.max(0, assetTime) + 1e-4
+      if (Math.abs(video.currentTime - target) > 0.5 / projectFps) video.currentTime = target
     }
   }, [currentFrame, playing, activeClip, projectFps, loadedAssetId, isVideoAsset])
 

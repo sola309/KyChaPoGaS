@@ -896,18 +896,20 @@ async def render_timeline(
     width: int,
     height: int,
     progress_cb=None,
+    encoder: str | None = None,
 ) -> Path:
     """
     Render the timeline to an MP4 file.
     Returns the output file path.
     """
-    # Pick CPU (x264) or GPU (nvenc) encoder for this render (setting-driven).
+    # Pick CPU (x264) or GPU (nvenc) encoder for this render.
+    # encoder引数(ジョブ単位の上書き — 720pレビュー等) > 設定 > config の順。
     try:
         from app import config
         from app.services import settings_store as _S
-        backend = configure_encoder(_S.get("RENDER_ENCODER", config.RENDER_ENCODER))
+        backend = configure_encoder(encoder or _S.get("RENDER_ENCODER", config.RENDER_ENCODER))
     except Exception:
-        backend = configure_encoder("x264")
+        backend = configure_encoder(encoder or "x264")
     import logging as _lg
     _lg.getLogger(__name__).info(f"render encoder = {backend} ({FFMPEG})")
 
