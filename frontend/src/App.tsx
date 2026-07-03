@@ -10,6 +10,7 @@ import { CompanionView } from './companion/CompanionView'
 import { SettingsModal } from './components/SettingsModal'
 import { InspectOverlay } from './components/InspectOverlay'
 import { MusicStudio } from './components/Music/MusicStudio'
+import { CompositionStudio } from './components/Composition/CompositionStudio'
 import { useUIStore } from './store/uiStore'
 
 const MIN_TERM_H  = 160
@@ -95,12 +96,13 @@ function App() {
   const closeDrawers = useUIStore(s => s.closeDrawers)
 
   // Platform: one app active at a time (video editor / AI companion …)
-  const [activeApp, setActiveApp] = useState<'editor' | 'companion' | 'music'>('editor')
+  const [activeApp, setActiveApp] = useState<'editor' | 'companion' | 'music' | 'compose'>('editor')
   const [showSettings, setShowSettings] = useState(false)
   const inspectMode = useUIStore(s => s.inspectMode)
   const setInspectMode = useUIStore(s => s.setInspectMode)
   const APPS = [
     { id: 'editor' as const, label: '🎬 編集' },
+    { id: 'compose' as const, label: '📝 構成' },
     { id: 'music' as const, label: '🎵 音楽' },
     { id: 'companion' as const, label: '🎭 コンパニオン' },
   ]
@@ -170,6 +172,8 @@ function App() {
         </div>
       ) : activeApp === 'music' ? (
         <MusicStudio />
+      ) : activeApp === 'compose' ? (
+        <CompositionStudio />
       ) : (
         <div className="flex flex-1 min-h-0 relative">
           {/* Backdrop behind the mobile drawers */}

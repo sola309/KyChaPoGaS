@@ -19,6 +19,8 @@ interface Proposal { caption?: string; lyrics?: string; bpm?: number; duration_s
 
 export function MusicStudio() {
   const pushToast = useUIStore(s => s.pushToast)
+  const musicDraft = useUIStore(s => s.musicDraft)
+  const setMusicDraft = useUIStore(s => s.setMusicDraft)
   const [songs, setSongs] = useState<Song[]>([])
   const [projectId, setProjectId] = useState<number | null>(null)
   const [jobs, setJobs] = useState<Array<Record<string, unknown>>>([])
@@ -46,6 +48,17 @@ export function MusicStudio() {
     }
   }, [])
   useEffect(() => { void load() }, [load])
+  // 構成タブからの展開を受け取る
+  useEffect(() => {
+    if (!musicDraft) return
+    if (musicDraft.caption) setCaption(musicDraft.caption)
+    if (musicDraft.lyrics) setLyrics(musicDraft.lyrics)
+    if (musicDraft.bpm) setBpm(String(musicDraft.bpm))
+    if (musicDraft.duration_sec) setDuration(musicDraft.duration_sec)
+    setMusicDraft(null)
+    pushToast('構成シートから生成条件を展開しました', 'success')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [musicDraft])
   useEffect(() => {
     const t = setInterval(() => { void load() }, 4000)
     return () => clearInterval(t)

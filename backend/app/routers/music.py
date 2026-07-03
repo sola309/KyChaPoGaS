@@ -168,13 +168,15 @@ class MusicChatRequest(BaseModel):
     messages: list[dict]
 
 
-MUSIC_DIRECTOR = """あなたはMAD動画のための音楽ディレクターです。ユーザーと相談しながら曲の方向性を詰めます。
-できること: 曲調/ジャンル/BPM/キーの提案、歌詞の作詞(構造タグ [verse][pre-chorus][chorus][bridge][outro] 付き)、
-音ハメしやすさの観点(はっきりしたキック、明確なサビ、ブレイクの有無)からの助言。
-生成に進める提案がまとまったら、必ず次の形式のブロックを返答の最後に付けること:
-```song
-{"caption": "英語のスタイル記述(ジャンル,雰囲気,楽器,テンポ感)", "lyrics": "[verse]\\n...", "bpm": 120, "duration_sec": 104}
+MUSIC_DIRECTOR = """あなたはMAD動画のための音楽ディレクター兼構成作家です。ユーザーと相談しながら
+**まず構成(セクション割り・各部の役割・盛り上がり曲線)を固め**、その上で歌詞やスタイルを詰めます。
+観点: 音ハメしやすさ(はっきりしたキック、明確なサビ頭、ブレイクの有無)、MADの映像構成との対応。
+構成が動いたら、毎回**構成シート全体**を次の形式で返答の最後に付けること:
+```comp
+{"title":"...","concept":"英語のスタイル記述","bpm_target":120,
+ "sections":[{"tag":"[verse]","name":"Aメロ","bars":8,"energy":0.4,"mood":"...","visual":"映像の意図","lyrics":"歌詞(あれば)"}]}
 ```
+生成に進める段階では ```song ブロック({"caption","lyrics","bpm","duration_sec"})も付ける。
 日本語で簡潔に話すこと。"""
 
 
@@ -184,11 +186,164 @@ def music_chat(req: MusicChatRequest):
     provider = "anthropic" if "anthropic" in available_providers() else "local"
     reply = chat(req.messages, system=MUSIC_DIRECTOR, max_tokens=2000,
                  provider=provider, temperature=0.6)
-    proposal = None
-    if "```song" in reply:
+    def _block(kind):
+        if f"```{kind}" not in reply:
+            return None
         try:
-            frag = reply.split("```song")[1].split("```")[0]
-            proposal = json.loads(frag[frag.find("{"): frag.rfind("}") + 1])
+            frag = reply.split(f"```{kind}")[1].split("```")[0]
+            return json.loads(frag[frag.find("{"): frag.rfind("}") + 1])
         except Exception:
-            proposal = None
-    return {"reply": reply, "proposal": proposal, "engine": provider}
+            return None
+    return {"reply": reply, "proposal": _block("song"), "sheet": _block("comp"),
+            "engine": provider}
+
+
+# ── 構成シート(composition sheet): 曲と映像の上流にある共有文書 ──────────────
+#
+# sheet = {"format_version":1, "title", "concept", "bpm_target",
+#          "sections":[{"tag":"[verse]","name":"Aメロ","bars":8,"energy":0.4,
+#                       "mood":"...","visual":"...","lyrics":"..."}]}
+# 構成→歌詞/captionの導出、生成曲とのズレ検証、shotlist雛形化を提供する。
+
+COMP_DIR = BACKEND / "data" / "music_compositions"
+
+
+class Sheet(BaseModel):
+    format_version: int = 1
+    title: str = ""
+    concept: str = ""
+    bpm_target: int | None = None
+    sections: list[dict] = []
+
+
+@router.get("/compositions")
+def list_compositions():
+    COMP_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    for f in sorted(COMP_DIR.glob("*.json")):
+        d = json.loads(f.read_text())
+        out.append({"id": f.stem, "title": d.get("title", f.stem),
+                    "sections": len(d.get("sections", []))})
+    return out
+
+
+@router.get("/compositions/{cid}")
+def get_composition(cid: str):
+    f = COMP_DIR / f"{cid}.json"
+    if not f.exists():
+        raise HTTPException(404, "composition not found")
+    return json.loads(f.read_text())
+
+
+@router.put("/compositions/{cid}")
+def put_composition(cid: str, sheet: Sheet):
+    COMP_DIR.mkdir(parents=True, exist_ok=True)
+    (COMP_DIR / f"{cid}.json").write_text(
+        json.dumps(sheet.model_dump(), ensure_ascii=False, indent=1))
+    return {"ok": True}
+
+
+def _sheet_duration(sheet: dict) -> tuple[float, float]:
+    bpm = sheet.get("bpm_target") or 120
+    bar = 60.0 / bpm * 4
+    total = sum(int(s.get("bars", 8)) for s in sheet.get("sections", [])) * bar
+    return bar, total
+
+
+@router.post("/compositions/{cid}/derive")
+def derive(cid: str):
+    """構成シート → 生成フォーム(caption / 構造タグ付き歌詞 / BPM / 長さ)。"""
+    sheet = get_composition(cid)
+    bar, total = _sheet_duration(sheet)
+    parts = []
+    for sec in sheet.get("sections", []):
+        tag = sec.get("tag") or "[verse]"
+        body = (sec.get("lyrics") or "").strip()
+        parts.append(f"{tag}\n{body}" if body else tag)
+    lyrics = "\n\n".join(parts)
+    moods = ", ".join(dict.fromkeys(
+        m for s in sheet.get("sections", []) if (m := s.get("mood", "").strip())))
+    caption = sheet.get("concept", "")
+    if moods:
+        caption = f"{caption}, {moods}" if caption else moods
+    return {"caption": caption, "lyrics": lyrics,
+            "bpm": sheet.get("bpm_target"),
+            "duration_sec": round(min(max(total, 30), 240), 1),
+            "bar_sec": round(bar, 3)}
+
+
+@router.post("/compositions/{cid}/verify/{aid}")
+def verify(cid: str, aid: int, session: Session = Depends(get_session)):
+    """生成曲が構成シートの意図(盛り上がり位置)に合っているかを検証。"""
+    sheet = get_composition(cid)
+    ap = ANALYSIS_DIR / f"{aid}.json"
+    if not ap.exists():
+        analyze(aid, session)
+    an = json.loads(ap.read_text())
+    bar = 60.0 / an["bpm"] * 4
+    # シート上の各セクションの想定時間範囲(実測BPMで換算)と実測energyを突き合わせ
+    t = 0.0
+    rows, gaps = [], 0
+    import numpy as np
+    for sec in sheet.get("sections", []):
+        dur = int(sec.get("bars", 8)) * bar
+        t0, t1 = t, t + dur
+        # 実測: この範囲に重なるsectionsのenergy加重平均
+        es, ws = [], []
+        for m in an["sections"]:
+            ov = max(0.0, min(t1, m["t1"]) - max(t0, m["t0"]))
+            if ov > 0:
+                es.append(m["energy"]); ws.append(ov)
+        measured = round(float(np.average(es, weights=ws)), 2) if es else None
+        want = sec.get("energy")
+        ok = (measured is None or want is None or abs(measured - float(want)) <= 0.25)
+        if not ok:
+            gaps += 1
+        rows.append({"name": sec.get("name"), "t0": round(t0, 1), "t1": round(t1, 1),
+                     "want_energy": want, "measured_energy": measured, "ok": ok})
+        t = t1
+    return {"bpm_measured": an["bpm"], "duration_measured": an["duration_sec"],
+            "duration_planned": round(t, 1), "mismatches": gaps, "sections": rows,
+            "hint": "ズレが大きい区間は Repaint(部分再生成)か構成シート側の調整を検討"}
+
+
+@router.post("/compositions/{cid}/to_shotlist/{aid}")
+def to_shotlist(cid: str, aid: int, session: Session = Depends(get_session)):
+    """構成シート+実測ビートから mad-kit shotlist の雛形を生成して返す(保存はしない)。"""
+    sheet = get_composition(cid)
+    a = session.get(Asset, aid)
+    if not a:
+        raise HTTPException(404, "asset not found")
+    ap = ANALYSIS_DIR / f"{aid}.json"
+    if not ap.exists():
+        analyze(aid, session)
+    an = json.loads(ap.read_text())
+    bar = 60.0 / an["bpm"] * 4
+    # energy→テンプレ候補の対応(構成力の既定値)
+    def tpl_for(sec, i, n):
+        e = float(sec.get("energy") or 0.5)
+        tag = (sec.get("tag") or "").lower()
+        if i == 0:
+            return "mg_intro"
+        if i == n - 1:
+            return "outro_credits"
+        if "chorus" in tag and e >= 0.7:
+            return "mg_peak"
+        if e >= 0.75:
+            return "finale_cuts"
+        if e <= 0.35:
+            return "breakdown_pan"
+        return "showcase_pattern"
+    shots, b = [], 0
+    secs = sheet.get("sections", [])
+    for i, sec in enumerate(secs):
+        bars = int(sec.get("bars", 8))
+        shots.append({"id": f"s{i:02d}_{(sec.get('name') or 'sec').replace(' ', '')[:8]}",
+                      "template": tpl_for(sec, i, len(secs)),
+                      "from": f"db:{b}", "to": f"db:{b + bars}",
+                      "params": {"_note": f"{sec.get('name')} / {sec.get('mood', '')} / 映像意図: {sec.get('visual', '')}"}})
+        b += bars
+    return {"meta": {"title": sheet.get("title", cid), "music": f"asset:{aid}",
+                     "end_sec": an["duration_sec"]},
+            "shots": shots,
+            "note": "雛形です。paramsは各テンプレのREADME仕様に沿って肉付けしてください(AI/手動)。"}

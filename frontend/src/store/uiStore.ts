@@ -14,6 +14,9 @@ interface UIState {
   /** UI inspect mode (🎯) — click any element to share it with the AI agent */
   inspectMode: boolean
   setInspectMode: (v: boolean) => void
+  /** 構成タブ→音楽タブへ生成条件を受け渡すドラフト */
+  musicDraft: { caption?: string; lyrics?: string; bpm?: number | null; duration_sec?: number } | null
+  setMusicDraft: (d: UIState['musicDraft']) => void
   openShotEditor: (shotId: string) => void
   closeShotEditor: () => void
   pendingWrites: number        // in-flight edit writes (for the auto-save indicator)
@@ -36,6 +39,8 @@ export const useUIStore = create<UIState>((set) => ({
   shotEditor: null,
   inspectMode: false,
   setInspectMode: (v) => set({ inspectMode: v }),
+  musicDraft: null,
+  setMusicDraft: (d) => set({ musicDraft: d }),
   openShotEditor: (shotId) => set({ shotEditor: { shotId } }),
   closeShotEditor: () => set({ shotEditor: null }),
   pendingWrites: 0,
