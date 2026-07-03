@@ -200,6 +200,7 @@ const ENTERS = {
   spin_in:  (u)    => ({ s: outBack(u, 1.1), r: lerp(-160, 0, outExpo(u)), o: u > 0 ? 1 : 0 }),
   fade_zoom:(u)    => ({ s: lerp(1.25, 1, outCubic(u)), o: outCubic(u) }),
   tilt_in:  (u, o) => ({ y: lerp(o.dist ?? 220, 0, outExpo(u)), r: lerp(o.rot ?? -12, 0, outExpo(u)), o: clamp(u * 2) }),
+  flip_in:  (u, o) => ({ ry: lerp(o.deg ?? 75, 0, outCubic(u)), o: clamp(u * 3) }),
 };
 const IDLES = {
   breath: (t, o) => ({ s: 1 + Math.sin(t * (o.rate ?? 1.6) + (o.ph ?? 0)) * (o.amp ?? .008) }),
@@ -210,6 +211,8 @@ const IDLES = {
   pulse_beat:(t, o) => ({ s: 1 + beatPulse(t, 8) * (o.amp ?? .05) }),
   wiggle_beat:(t, o) => ({ r: Math.sin(beatsFloat(t) * Math.PI * 2) * (o.amp ?? 2) }),
   spin:   (t, o) => ({ r: t * (o.rate ?? 30) }),
+  sway3d: (t, o) => ({ ry: Math.sin(t * (o.rate ?? .8) + (o.ph ?? 0)) * (o.amp ?? 6),
+                       rx: Math.cos(t * .6 + (o.ph ?? 0)) * (o.amp ?? 6) * .35 }),
 };
 const EMPHS = {
   punch_db: (t, o) => ({ s: 1 + dbPulse(t, 5.5) * (o.amp ?? .055) }),
@@ -223,12 +226,15 @@ function motorize(elm, spec, t0) {
   const emp = spec.emph ? { f: EMPHS[spec.emph.kind] || EMPHS.none, o: spec.emph } : null;
   if (spec.origin) elm.style.transformOrigin = spec.origin;
   return t => {
-    let x = spec.x ?? 0, y = spec.y ?? 0, s = spec.s ?? 1, r = spec.r ?? 0, sy = 1, o = 1;
+    let x = spec.x ?? 0, y = spec.y ?? 0, s = spec.s ?? 1, r = spec.r ?? 0, sy = 1, o = 1, rx = 0, ry = 0;
     if (ent) { const at = t0 + (ent.o.at ?? 0), u = map(t, at, at + (ent.o.dur ?? .55));
-      const d = ent.f(u, ent.o); x += d.x ?? 0; y += d.y ?? 0; s *= d.s ?? 1; r += d.r ?? 0; o = Math.min(o, d.o ?? 1); }
-    for (const { f, o: oo } of idles) { const d = f(t, oo); x += d.x ?? 0; y += d.y ?? 0; s *= d.s ?? 1; r += d.r ?? 0; sy *= d.sy ?? 1; }
+      const d = ent.f(u, ent.o); x += d.x ?? 0; y += d.y ?? 0; s *= d.s ?? 1; r += d.r ?? 0;
+      rx += d.rx ?? 0; ry += d.ry ?? 0; o = Math.min(o, d.o ?? 1); }
+    for (const { f, o: oo } of idles) { const d = f(t, oo); x += d.x ?? 0; y += d.y ?? 0; s *= d.s ?? 1;
+      r += d.r ?? 0; rx += d.rx ?? 0; ry += d.ry ?? 0; sy *= d.sy ?? 1; }
     if (emp) { const d = emp.f(t, emp.o); s *= d.s ?? 1; r += d.r ?? 0; }
-    elm.style.transform = `translate(${x}px,${y}px) rotate(${r}deg) scale(${s}) scaleY(${sy})`;
+    const p3 = (rx || ry) ? `perspective(${spec.persp ?? 1100}px) ` : '';
+    elm.style.transform = `${p3}translate(${x}px,${y}px) rotateX(${rx}deg) rotateY(${ry}deg) rotate(${r}deg) scale(${s}) scaleY(${sy})`;
     elm.style.opacity = o;
   };
 }
@@ -327,7 +333,7 @@ TEMPLATES.showcase_card = (root, p, ctx) => {
       idles: [{ kind: 'float', amp: 14, ph: i * 2 }, { kind: 'sway', amp: 4, ph: i }] }, ctx.t0); });
   return t => { drift(t); amb(t, 1);
     const cu = outExpo(map(t, ctx.t0, ctx.t0 + .6));
-    c.style.transform = `translateY(${lerp(200, 0, cu)}px) rotate(${lerp(rot * 2.2, rot, cu)}deg) translateX(${Math.sin(t * .8) * 6}px)`;
+    c.style.transform = `perspective(1300px) translateY(${lerp(200, 0, cu)}px) rotateY(${Math.sin(t * .75) * 5.5}deg) rotateX(${Math.cos(t * .55) * 2.2}deg) rotate(${lerp(rot * 2.2, rot, cu)}deg) translateX(${Math.sin(t * .8) * 6}px)`;
     c.style.opacity = clamp(cu * 2);
     im.style.transform = `scale(${1.13 - map(t, ctx.t0, ctx.t1) * .09})`;
     if (typo) { typo.style.opacity = map(t, ctx.t0 + .35, ctx.t0 + .7);
@@ -339,7 +345,7 @@ TEMPLATES.showcase_card = (root, p, ctx) => {
 /* ---- showcase_fullbleed: full art + punch + frame + optional speedlines ---- */
 TEMPLATES.showcase_fullbleed = (root, p, ctx) => {
   root.style.background = '#111';
-  const im = img(root, p.asset, { width: '106%', height: '106%', objectFit: 'cover', left: '-3%', top: '-3%' });
+  const im = img(root, p.asset, { width: '116%', height: '116%', objectFit: 'cover', left: '-8%', top: '-8%' });
   tag(im, ctx, 'asset', p.asset);
   const vig = el(root, { inset: 0, zIndex: 3, background: `radial-gradient(circle, transparent 55%, ${p.vignette || 'rgba(160,20,50,.5)'})` });
   let speed = null;
@@ -355,7 +361,7 @@ TEMPLATES.showcase_fullbleed = (root, p, ctx) => {
   const amb = ambientOf(root, p.ambient || { kind: 'sparkles', n: 18 }, ctx.idx * 13 + 9);
   const kb = kenburns(im, ctx.idx, .07);
   return t => { const u = map(t, ctx.t0, ctx.t1);
-    im.style.transform = `scale(${1.06 + u * .06 + dbPulse(t) * .055}) rotate(${(u - .5) * (p.rock ?? 1.2)}deg)`;
+    im.style.transform = `perspective(1600px) rotateY(${Math.sin(t * .5 + ctx.idx) * 2}deg) rotateX(${Math.cos(t * .4) * 1}deg) scale(${1.06 + u * .06 + dbPulse(t) * .055}) rotate(${(u - .5) * (p.rock ?? 1.2)}deg)`;
     if (speed) { speed.style.opacity = .22 + beatPulse(t) * .55; speed.style.transform = `rotate(${t * 14}deg)`; }
     corners.forEach((c, i) => { c.style.opacity = map(t, ctx.t0 + .1 + i * .09, ctx.t0 + .3 + i * .09);
       c.style.transform = `translate(${Math.sin(t * 1.5 + i) * 4}px,${Math.cos(t * 1.3 + i) * 4}px)`; });
@@ -376,7 +382,7 @@ TEMPLATES.panels_strip = (root, p, ctx) => {
     tag(txt(pn, pp.label, { left: 0, right: 0, bottom: '60px', textAlign: 'center', fontFamily: 'Mochiy', fontSize: '44px', color: PAL.wine }), ctx, `panels[${i}]`, pp.label);
     const fl = floaterLayer(pn, { n: 4, seed: i * 9 + 2, set: ['heart', 'star', 'note'], alpha: .5 });
     return t => { const pu = outExpo(map(t, ctx.t0 + i * .07, ctx.t0 + .42 + i * .07));
-      pn.style.transform = `translateY(${lerp(i % 2 ? -104 : 104, 0, pu)}%)`;
+      pn.style.transform = `perspective(1400px) translateY(${lerp(i % 2 ? -104 : 104, 0, pu)}%) rotateY(${(1 - pu) * (i % 2 ? -40 : 40) + Math.sin(t * .7 + i * 2) * 2.5}deg)`;
       inner.style.transform = `translate(-50%,-50%) translateY(${Math.sin(t * 1.8 + i) * 14}px) rotate(${Math.sin(t * 1.1 + i * 2) * 2}deg) scale(${1 + beatPulse(t, 8) * .03})`;
       fl(t); };
   });
@@ -429,7 +435,7 @@ TEMPLATES.rapid_cuts = (root, p, ctx) => {
     const k = Math.min(p.arts.length - 1, Math.floor((t - ctx.t0) / seg));
     imgs.forEach((m, i) => m.style.display = i === k ? 'block' : 'none');
     const lt = ctx.t0 + k * seg, lu = map(t, lt, lt + seg);
-    imgs[k].style.transform = `scale(${1.16 - outCubic(lu) * .09}) rotate(${(lu - .5) * 1.4}deg)`;
+    imgs[k].style.transform = `scale(${1.18 - outCubic(lu) * .08}) rotate(${(lu - .5) * 1.4}deg)`;
     label.textContent = (p.labels || [])[k] ?? '';
     label.style.transform = `scale(${outBack(map(t, lt, lt + .2), 2)})`;
     const ru = map(t, lt, lt + .45); ring.style.transform = `scale(${1 + ru * 5})`; ring.style.opacity = ru < 1 ? (1 - ru) * .9 : 0; };
@@ -477,7 +483,7 @@ TEMPLATES.lineup = (root, p, ctx) => {
 TEMPLATES.finale_cuts = (root, p, ctx) => {
   root.style.background = '#fff';
   const slides = p.arts.map(n => { const wrap = el(root, { inset: 0, overflow: 'hidden', display: 'none' });
-    const m = img(wrap, n, { width: '106%', height: '106%', objectFit: 'cover', left: '-3%', top: '-3%' });
+    const m = img(wrap, n, { width: '114%', height: '114%', objectFit: 'cover', left: '-7%', top: '-7%' });
     const ring = el(wrap, { left: '50%', top: '50%', width: '300px', height: '300px', margin: '-150px', border: '20px solid #fff', borderRadius: '50%', zIndex: 5, opacity: 0 });
     return { wrap, m, ring }; });
   const conf = confettiLayer(root, { n: 130, seed: 99, zi: 40 });

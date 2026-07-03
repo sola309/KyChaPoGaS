@@ -46,6 +46,8 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
   const [dirty, setDirty] = useState(false)
   const [instruction, setInstruction] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [comments, setComments] = useState<Array<Record<string, unknown>>>([])
+  const [commentText, setCommentText] = useState('')
   const pushToast = useUIStore(s => s.pushToast)
 
   const shot = useMemo(() => shotlist?.shots.find(s => s.id === shotId) ?? null, [shotlist, shotId])
@@ -65,6 +67,26 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
   useEffect(() => {
     if (shot) setParamsText(JSON.stringify(shot.params, null, 2))
   }, [shot])
+
+  const loadComments = useCallback(() => {
+    api.get(`/comments/${projectId}`).then(r =>
+      setComments(r.data.filter((c: Record<string, unknown>) => c.shot_id === shotId)))
+      .catch(() => {})
+  }, [projectId, shotId])
+  useEffect(() => { loadComments() }, [loadComments])
+
+  async function addComment() {
+    if (!commentText.trim()) return
+    await api.post(`/comments/${projectId}`, {
+      t_sec: Math.round(t * 100) / 100, text: commentText, shot_id: shotId,
+      object_path: pick ? pick.path.split(':')[1] : null,
+    })
+    setCommentText(''); loadComments()
+  }
+  async function resolveComment(cid: unknown) {
+    await api.patch(`/comments/${projectId}/${cid}`, { status: 'resolved' })
+    loadComments()
+  }
 
   const post = useCallback((msg: Record<string, unknown>) => {
     iframe.current?.contentWindow?.postMessage(msg, '*')
@@ -234,6 +256,36 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
                 重い指示(画像の再生成・新演出)はターミナルパネルのClaude Codeへ:
                 「プロジェクト{projectId} の shot {shotId} の {pick ? pick.path.split(':')[1] : '…'} を◯◯して」
               </div>
+            </div>
+            {/* timeline comments (async instruction queue for the agent) */}
+            <div className="border-t border-neutral-700 p-3 max-h-56 overflow-y-auto">
+              <div className="text-xs text-neutral-400 mb-1">
+                📍 コメント(現在時刻{pick ? '+選択オブジェクト' : ''}にピン留め — AIが後でまとめて対応)
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input value={commentText} onChange={e => setCommentText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void addComment() }}
+                  placeholder="例: ここ寂しいので何か足して"
+                  className="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1.5 text-sm" />
+                <button onClick={() => void addComment()}
+                  className="px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-sm">📍</button>
+              </div>
+              {comments.map(c => (
+                <div key={String(c.id)} className={`text-xs rounded p-2 mb-1.5 border ${c.status === 'resolved' ? 'border-neutral-800 text-neutral-500' : 'border-amber-800/60 text-neutral-200 bg-amber-950/20'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-400">#{String(c.id)}</span>
+                    <span className="text-neutral-500">{Number(c.t_sec).toFixed(1)}s</span>
+                    {typeof c.object_path === 'string' && c.object_path && <span className="text-sky-400 truncate">{String(c.object_path)}</span>}
+                    <div className="flex-1" />
+                    {c.status !== 'resolved' && (
+                      <button onClick={() => void resolveComment(c.id)} className="text-neutral-500 hover:text-emerald-400">✓解決</button>
+                    )}
+                  </div>
+                  <div className="mt-1">{String(c.text)}</div>
+                  {typeof c.reply === 'string' && c.reply && <div className="mt-1 text-emerald-300/90">↳ {String(c.reply)}</div>}
+                </div>
+              ))}
+              {!comments.length && <div className="text-[11px] text-neutral-600">コメントはまだありません</div>}
             </div>
           </div>
         </div>
