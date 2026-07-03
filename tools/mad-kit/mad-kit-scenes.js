@@ -51,7 +51,7 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
     line.style.opacity = t > b6 ? Math.max(0, 1 - map(t, b6, b6 + .3)) : 1;
     chibis.forEach((c, i) => { const enter = map(t, b1 + i * .19, b1 + i * .19 + 1.05);
       const exitU = map(t, b4 + i * .12, b4 + i * .12 + .8);
-      const x = lerp(W + 140, 460 + i * 330, outCubic(enter)) - inCubic(exitU) * (W * .8 + 400);
+      const x = lerp(W + 140 + i * 120, 300 + i * 470, outCubic(enter)) - inCubic(exitU) * (W * .8 + 400);
       const bf = beatsFloat(t), hop = Math.abs(Math.sin(bf * Math.PI));
       const y = 820 - 236 - hop * (t > b2 ? 90 : 30);
       const rot = t < b2 ? -enter * 720 : Math.sin(bf * Math.PI * 2) * 8;

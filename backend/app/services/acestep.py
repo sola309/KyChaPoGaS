@@ -48,6 +48,8 @@ class AceStepConnector:
         vocal_language: str = "en",
         instrumental: Optional[bool] = None,
         seed: int = -1,
+        bpm: Optional[int] = None,
+        key: Optional[str] = None,
         guidance_scale: float = 7.0,
         audio_format: str = "wav",   # wav avoids the optional torchcodec MP3 encoder
     ) -> bytes:
@@ -65,6 +67,11 @@ class AceStepConnector:
         }
         if instrumental is not None:
             audio_config["instrumental"] = instrumental
+        # ACE-Step 1.5 metadata pinning (adapter未対応でも無害)
+        if bpm:
+            audio_config["bpm"] = int(bpm)
+        if key:
+            audio_config["key"] = key
 
         payload: dict = {
             "messages": [{"role": "user", "content": caption or "a song"}],

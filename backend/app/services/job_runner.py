@@ -587,6 +587,7 @@ async def _generate_audio(job: Job, params: dict) -> None:
     audio_bytes = await acestep.generate(
         caption=caption, lyrics=lyrics, duration_sec=duration,
         vocal_language=vocal_lang, instrumental=instrumental, seed=seed,
+        bpm=params.get("bpm"), key=params.get("key"),
     )
     _update_progress(job.id, 0.9)
 
