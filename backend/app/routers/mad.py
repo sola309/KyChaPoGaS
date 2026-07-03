@@ -173,6 +173,9 @@ def instruct(pid: int, req: InstructRequest):
     if new_shot.get("id") != shot["id"] or new_shot.get("template") != shot["template"]:
         raise HTTPException(422, {"error": "id/templateが変更されていたため破棄しました", "raw": raw[:400]})
     new_shot["from"], new_shot["to"] = shot["from"], shot["to"]   # timing is clip-owned
+    # LLMがshotトップレベルに置いた迷子キーは params に畳み込む(サイレント無効の防止)
+    for k in [k for k in list(new_shot.keys()) if k not in ("id", "template", "from", "to", "transition", "params")]:
+        new_shot.setdefault("params", {})[k] = new_shot.pop(k)
 
     idx = shotlist["shots"].index(shot)
     candidate = json.loads(json.dumps(shotlist))

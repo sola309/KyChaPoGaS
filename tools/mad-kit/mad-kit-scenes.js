@@ -34,12 +34,13 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
   const stars = []; const starPos = [[260, 210], [1660, 260], [420, 800], [1500, 820], [960, 160], [180, 560], [1740, 620]];
   for (let i = 0; i < 7; i++) { const R = 90 + (i % 3) * 70;
     stars.push(svgEl(root, R * 2 + 20, R * 2 + 20, `<polygon points="${starPts(R + 10, R + 10, R, R * .42)}" fill="none" stroke="#fff" stroke-width="10" stroke-linejoin="round"/>`, { zIndex: 9 })); }
-  const pieWrap = el(root, { left: '50%', top: '50%', zIndex: 12, width: '760px', height: '760px', marginLeft: '-380px', marginTop: '-380px' });
+  const pieWrap = el(root, { left: '50%', top: '45%', zIndex: 12, width: '620px', height: '620px', marginLeft: '-310px', marginTop: '-310px' });
   el(pieWrap, { inset: 0, borderRadius: '50%', background: '#fff', boxShadow: '0 0 0 26px rgba(255,255,255,.35)' });
   const pie = el(pieWrap, { inset: '60px', borderRadius: '50%' });
   const dots = []; for (let i = 0; i < 5; i++) dots.push(el(pieWrap, { width: '54px', height: '54px', borderRadius: '50%', background: PAL.wine, left: '50%', top: '50%' }));
-  const pieText = M.tag(txt(root, p.pieText || 'Pocky & Pretz Day — 11.11', { left: 0, right: 0, top: '76%', textAlign: 'center', fontSize: '40px', color: PAL.wine, fontFamily: 'Yusei', zIndex: 13, opacity: 0 }), ctx, 'pieText', 'テキスト');
+  const pieText = M.tag(txt(root, p.pieText || 'Pocky & Pretz Day — 11.11', { left: '50%', top: '86%', fontSize: '40px', color: PAL.wine, fontFamily: 'Yusei', zIndex: 13, opacity: 0, background: 'rgba(255,255,255,.94)', padding: '10px 42px', borderRadius: '999px', boxShadow: '0 10px 30px rgba(120,30,60,.25)', transform: 'translateX(-50%)' }), ctx, 'pieText', 'テキスト');
   const floats = floaterLayer(root, { n: 8, seed: 12, zi: 7, set: ['heart', 'star', 'note'], alpha: .7 });
+  const userAmb = p.ambient ? ambientOf(root, p.ambient, 121) : null;
   flashAt(db(8) - .05, .35, 1);
   return t => {
     const [b1, b2, b3, b4, b5, b6, b7, b8] = [bar(1), bar(2), bar(3), bar(4), bar(5), bar(6), bar(7), db(8)];
@@ -76,11 +77,12 @@ TEMPLATES.mg_intro = (root, p, ctx) => {
     pieWrap.style.transform = `scale(${pu * (1 - .86 * inCubic(map(t, b7 + .55, b8 - .05)))})`;
     pieWrap.style.opacity = pu > 0 ? 1 : 0;
     dots.forEach((d, i) => { const a = i / 5 * Math.PI * 2 + t * 1.6;
-      d.style.transform = `translate(${Math.cos(a) * 310 - 27}px,${Math.sin(a) * 310 - 27}px) scale(${.8 + beatPulse(t) * .5})`; });
+      d.style.transform = `translate(${Math.cos(a) * 252 - 27}px,${Math.sin(a) * 252 - 27}px) scale(${.8 + beatPulse(t) * .5})`; });
     pieText.style.opacity = map(t, b6 + .4, b6 + .8) * (1 - map(t, b7 + .8, b8));
     root.style.background = t > b2 + .5 ? PAL.pink2
       : `radial-gradient(circle at 50% ${52 + Math.sin(t * 2.4) * 5}%, #fff, #fbeaec ${64 + beatPulse(t, 6) * 18}%)`;
     floats(t, Math.max(map(t, .3, 1.2) * .5, map(t, b3, b4)) * (1 - map(t, b6, b6 + .4)));
+    if (userAmb) userAmb(t, map(t, .3, 1.2) * .8);
   };
 };
 
