@@ -21,6 +21,8 @@ export function LoraLab() {
   const pushToast = useUIStore(s => s.pushToast)
   const [loras, setLoras] = useState<LoraFile[]>([])
   const [datasets, setDatasets] = useState<Dataset[]>([])
+  const [models, setModels] = useState<string[]>([])
+  const [model, setModel] = useState('waiNSFWIllustrious')
   const [items, setItems] = useState<GalleryItem[]>([])
   const [prompt, setPrompt] = useState('1girl, sakura kyoko, mahou shoujo madoka magica, aoki ume, masterpiece, best quality, solo, red hair, red eyes, long hair, ponytail, casual clothes, smile')
   const [lora, setLora] = useState<string>('')
@@ -34,7 +36,7 @@ export function LoraLab() {
 
   const load = useCallback(async () => {
     const r = await api.get('/lora/list')
-    setLoras(r.data.loras); setDatasets(r.data.datasets)
+    setLoras(r.data.loras); setDatasets(r.data.datasets); setModels(r.data.models ?? [])
     const g = await api.get('/lora/gallery')
     setItems(g.data.items)
   }, [])
@@ -49,7 +51,7 @@ export function LoraLab() {
     try {
       const [w, h] = size.split('x').map(Number)
       await api.post('/lora/test', {
-        prompt, width: w, height: h,
+        prompt, model, width: w, height: h,
         seed: seed ? Number(seed) : -1,
         lora: lora || null, strength, sweep: sweep && !!lora, count,
       })
@@ -93,6 +95,17 @@ export function LoraLab() {
       {/* 中: テスト生成フォーム */}
       <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r border-zinc-800 lg:overflow-y-auto p-3 space-y-3 flex-shrink-0 lg:flex-shrink">
         <div className="text-zinc-300 font-bold">🎨 生成テスト</div>
+        <label className="text-xs text-zinc-400 block">ベースモデル
+          <select value={model} onChange={e => setModel(e.target.value)}
+            className="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 font-mono text-[12px]">
+            {(models.length ? models : [model]).map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {model.startsWith('krea2') && (
+            <span className="text-[10px] text-amber-400/80 block mt-0.5">
+              Krea 2はdanbooruタグ非対応 — 自然文プロンプト推奨(SDXL系LoRAは効きません)
+            </span>
+          )}
+        </label>
         <label className="text-xs text-zinc-400 block">プロンプト
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={5}
             className="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded p-2 text-[13px]" />

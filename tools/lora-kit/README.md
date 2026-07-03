@@ -54,3 +54,11 @@ repo/backend/.venv/bin/python repo/tools/lora-kit/grid.py --lora madoka_wr \
 - 公開前: PV/KVのスクリーンショットから新衣装データセットを作成(15枚程度から試行)
 - 公開後: 円盤/配信画質で再学習して差し替え
 - 命名: `<char>_wr`(例: madoka_wr, homura_wr_devil, shichouka)
+
+## Krea 2 評価トラック(2026-07 追加)
+
+- 推論: ComfyUI 0.27 ネイティブ対応。LoRA Lab のベースモデルで `krea2_turbo`(8step) / `krea2_raw`(28step) を選択。
+  danbooruタグ非対応 — **自然文プロンプト**で書く。SDXL系LoRAは効かない(公式LoRA例: loras/krea2/)。
+- 学習: musubi-tuner(`scripts/setup_musubi.sh` 参照)。networks.lora_krea2 / dim32 / krea2_shift。
+  学習には raw **bf16**(24.5GB)+ TE bf16(8.3GB)が別途必要(スクリプト内にDLコマンド)。
+- 位置づけ: 本命は Illustrious系(タグ制御・キャラ再現の実績)。Krea 2 は画質/自然文理解の評価枠。

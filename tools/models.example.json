@@ -42,20 +42,44 @@
       "_note": "キャラタグ知識が薄いためLoRA前提。画風はクリーン"
     },
     {
-      "name": "Krea 2 RAW (12B DiT・LoRA学習用ベース)",
-      "url": "https://huggingface.co/krea-ai/krea-2 (直リンク要確認: Qwen Image VAE + Qwen3-VL TE も必要)",
-      "dest": "tools/comfyui/models/diffusion_models/krea-2-raw.safetensors",
-      "size_gb": 24.0,
+      "name": "Krea 2 Turbo fp8 (8step高速推論)",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+      "dest": "tools/comfyui/models/diffusion_models/krea2_turbo_fp8_scaled.safetensors",
+      "size_gb": 12.2,
       "enabled": false,
-      "_note": "2026-05-12公開のオープンウェイト。RAW=LoRA学習用(musubi-tuner, 96GB VRAM実証)/Turbo=8step高速推論。ComfyUI 0.26.0+必須。アニメ含む広様式・プロンプト追従◎。キャラタグ知識はIllustrious系に劣る想定→キャラはLoRA前提"
+      "_note": "Krea 2評価トラック(2026-05オープンウェイト, 12B DiT, ComfyUI 0.26+)"
     },
     {
-      "name": "Krea 2 Turbo (8step蒸留・高速推論)",
-      "url": "https://huggingface.co/krea-ai/krea-2 (直リンク要確認)",
-      "dest": "tools/comfyui/models/diffusion_models/krea-2-turbo.safetensors",
-      "size_gb": 24.0,
+      "name": "Krea 2 RAW fp8 (LoRA学習ベース)",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/diffusion_models/krea2_raw_fp8_scaled.safetensors",
+      "dest": "tools/comfyui/models/diffusion_models/krea2_raw_fp8_scaled.safetensors",
+      "size_gb": 12.2,
       "enabled": false,
-      "_note": "RAWで学習したLoRAをTurboで高速実行する二段構成が公式推奨"
+      "_note": "Krea 2評価トラック(2026-05オープンウェイト, 12B DiT, ComfyUI 0.26+)"
+    },
+    {
+      "name": "Qwen3-VL 4B fp8 (Krea2用TE)",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "dest": "tools/comfyui/models/text_encoders/qwen3vl_4b_fp8_scaled.safetensors",
+      "size_gb": 4.9,
+      "enabled": false,
+      "_note": "Krea 2評価トラック(2026-05オープンウェイト, 12B DiT, ComfyUI 0.26+)"
+    },
+    {
+      "name": "Qwen Image VAE (Krea2用)",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/vae/qwen_image_vae.safetensors",
+      "dest": "tools/comfyui/models/vae/qwen_image_vae.safetensors",
+      "size_gb": 0.2,
+      "enabled": false,
+      "_note": "Krea 2評価トラック(2026-05オープンウェイト, 12B DiT, ComfyUI 0.26+)"
+    },
+    {
+      "name": "Krea2 RetroAnime LoRA (公式スタイル)",
+      "url": "https://huggingface.co/Comfy-Org/Krea-2/resolve/main/loras/krea2_retroanime.safetensors",
+      "dest": "tools/comfyui/models/loras/krea2/krea2_retroanime.safetensors",
+      "size_gb": 0.4,
+      "enabled": false,
+      "_note": "Krea 2評価トラック(2026-05オープンウェイト, 12B DiT, ComfyUI 0.26+)"
     }
   ],
   "video_i2v": [

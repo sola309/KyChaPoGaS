@@ -113,6 +113,66 @@ def build_sdxl_txt2img(
 
 
 
+# ── Text-to-Image: Krea 2 (12B DiT, Qwen3-VL TE, Qwen Image VAE) ─────────────
+
+def build_krea2_txt2img(
+    unet_filename: str,          # krea2_turbo_fp8_scaled / krea2_raw_fp8_scaled
+    te_filename: str,            # qwen3vl_4b_fp8_scaled.safetensors
+    vae_filename: str,           # qwen_image_vae.safetensors
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 1024,
+    height: int = 1024,
+    seed: int = -1,
+    steps: int | None = None,
+    cfg: float | None = None,
+    loras: list | None = None,   # [(lora_filename, strength)] — LoraLoaderModelOnly チェーン
+) -> dict:
+    """
+    Krea 2 text-to-image (ComfyUI 0.26+ ネイティブ対応, CLIPType "krea2")。
+    Turbo(蒸留)は 8step/cfg1.0、RAW は 28step/cfg4.0 を既定にする。
+    shift(1.15)はモデル定義側に内蔵なので ModelSampling ノードは不要。
+    """
+    turbo = "turbo" in unet_filename.lower()
+    steps = steps if steps is not None else (8 if turbo else 28)
+    cfg = cfg if cfg is not None else (1.0 if turbo else 4.0)
+    s = _seed(seed)
+    wf = {
+        "1": {"class_type": "UNETLoader",
+              "inputs": {"unet_name": unet_filename, "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader",
+              "inputs": {"clip_name": te_filename, "type": "krea2", "device": "default"}},
+        "3": {"class_type": "VAELoader",
+              "inputs": {"vae_name": vae_filename}},
+        "4": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": prompt, "clip": ["2", 0]}},
+        "5": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": negative_prompt, "clip": ["2", 0]}},
+        # Krea 2 の latent は Wan21 系16ch — Qwen Image と同じく SD3 latent ノードで良い
+        "6": {"class_type": "EmptySD3LatentImage",
+              "inputs": {"width": width, "height": height, "batch_size": 1}},
+        "7": {"class_type": "KSampler",
+              "inputs": {"seed": s, "steps": steps, "cfg": cfg,
+                         "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+                         "model": ["1", 0], "positive": ["4", 0], "negative": ["5", 0],
+                         "latent_image": ["6", 0]}},
+        "8": {"class_type": "VAEDecode",
+              "inputs": {"samples": ["7", 0], "vae": ["3", 0]}},
+        "9": {"class_type": "SaveImage",
+              "inputs": {"filename_prefix": "kychapogas_krea2_", "images": ["8", 0]}},
+    }
+    prev = ["1", 0]
+    for i, (lname, strength) in enumerate(loras or []):
+        nid = f"lora{i}"
+        wf[nid] = {"class_type": "LoraLoaderModelOnly",
+                   "inputs": {"lora_name": lname, "strength_model": float(strength),
+                              "model": prev}}
+        prev = [nid, 0]
+    if prev != ["1", 0]:
+        wf["7"]["inputs"]["model"] = prev
+    return wf
+
+
 # ── Text-to-Image: FLUX.1 ─────────────────────────────────────────────────────
 
 def build_flux_txt2img(
@@ -359,6 +419,8 @@ def build_wan22_video(
 def detect_model_type(model_id: str) -> str:
     """Heuristic to determine workflow type from model ID."""
     m = model_id.lower()
+    if any(k in m for k in ("krea2", "krea-2", "krea 2")):
+        return "krea2"
     if any(k in m for k in ("flux", "flux1")):
         return "flux"
     if any(k in m for k in ("svd", "svd_xt", "stable-video")):

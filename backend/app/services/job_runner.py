@@ -291,7 +291,7 @@ async def _precompose(job: Job, params: dict) -> None:
 async def _generate_image(job: Job, params: dict) -> None:
     from app.services.comfyui import comfyui
     from app.services.workflow_builder import (
-        build_sdxl_txt2img, build_flux_txt2img, detect_model_type
+        build_sdxl_txt2img, build_flux_txt2img, build_krea2_txt2img, detect_model_type
     )
 
     if not await comfyui.is_available():
@@ -309,7 +309,28 @@ async def _generate_image(job: Job, params: dict) -> None:
 
     model_type = detect_model_type(model_id)
 
-    if model_type == "flux":
+    if model_type == "krea2":
+        # Krea 2 — UNET(diffusion_models) + Qwen3-VL TE + Qwen Image VAE の分離ロード
+        unet_models = await comfyui.list_unet_models()
+        # "krea2_turbo" / "krea2_raw" の指定を尊重。無印 "krea2" は turbo を優先
+        want = model_id.lower()
+        unet = next((m for m in unet_models if want in m.lower()), "") or \
+               next((m for m in unet_models if "krea2_turbo" in m.lower()), "") or \
+               next((m for m in unet_models if "krea2" in m.lower()), "")
+        if not unet:
+            raise RuntimeError("Krea 2 のモデルが見つかりません(install_models.py 未実行?)")
+        clip_models = await comfyui.list_clip_models()
+        te = next((m for m in clip_models if "qwen3vl" in m.lower()), "")
+        vae_list = await comfyui._object_info_options("VAELoader", "vae_name")
+        vae = next((v for v in vae_list if "qwen_image_vae" in v.lower()), "")
+        if not te or not vae:
+            raise RuntimeError("Krea 2 用の TE/VAE が見つかりません(qwen3vl / qwen_image_vae)")
+        loras = [(l[0], float(l[1])) for l in (params.get("loras") or [])]
+        workflow = build_krea2_txt2img(unet, te, vae, prompt, neg_prompt,
+                                       width, height, seed,
+                                       steps=params.get("steps"), cfg=params.get("cfg"),
+                                       loras=loras or None)
+    elif model_type == "flux":
         # FLUX needs separate UNET / CLIP / VAE
         checkpoints = await comfyui.list_checkpoints()
         unet_models = await comfyui.list_unet_models()

@@ -100,7 +100,8 @@ def download(url: str, dest: Path, dry_run: bool) -> None:
     tmp = dest.with_suffix(dest.suffix + ".part")
     try:
         req = urllib.request.Request(fetch_url, headers=headers)
-        with urllib.request.urlopen(req) as resp:
+        # timeout: 接続が黙って死ぬと read() が永久ブロックするため(HF CDNで実際に発生)
+        with urllib.request.urlopen(req, timeout=60) as resp:
             total = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
             chunk = 1024 * 256

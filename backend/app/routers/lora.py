@@ -25,6 +25,8 @@ LAB_NAME = "🧪 LoRA Lab"
 REPO = Path(__file__).resolve().parent.parent.parent.parent
 LORAS_DIR = REPO / "tools" / "comfyui" / "models" / "loras"
 DATASETS_DIR = REPO / "tools" / "lora-kit" / "datasets"
+CKPT_DIR = REPO / "tools" / "comfyui" / "models" / "checkpoints"
+DIFFUSION_DIR = REPO / "tools" / "comfyui" / "models" / "diffusion_models"
 
 
 def lab_id(session: Session) -> int:
@@ -55,7 +57,16 @@ def list_loras():
                 trained = (LORAS_DIR / f"{d.name}.safetensors").exists()
                 datasets.append({"name": d.name, "raw_images": raw,
                                  "prepared": prepared, "trained": trained})
-    return {"loras": loras, "datasets": datasets}
+    # ベースモデル一覧: checkpoints はファイル名(拡張子なし)、Krea 2 は種別キーで指定
+    models = []
+    if CKPT_DIR.exists():
+        models += [f.stem for f in sorted(CKPT_DIR.glob("*.safetensors"))]
+    if DIFFUSION_DIR.exists():
+        if any(DIFFUSION_DIR.glob("krea2_turbo*")):
+            models.append("krea2_turbo")
+        if any(DIFFUSION_DIR.glob("krea2_raw*")):
+            models.append("krea2_raw")
+    return {"loras": loras, "datasets": datasets, "models": models}
 
 
 class TestRequest(BaseModel):
