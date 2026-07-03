@@ -75,8 +75,19 @@ def build_sdxl_txt2img(
             "inputs": {"filename_prefix": "kychapogas_img_", "images": ["6", 0]},
         },
     }
+    # v-predictionモデル(NoobAI vPred等): サンプリング設定を合わせないと彩度が破綻する
+    if "vpred" in model_filename.lower() or "v_pred" in model_filename.lower():
+        wf["vpred"] = {"class_type": "ModelSamplingDiscrete",
+                       "inputs": {"model": ["1", 0], "sampling": "v_prediction", "zsnr": True}}
+        wf["rescale"] = {"class_type": "RescaleCFG",
+                         "inputs": {"model": ["vpred", 0], "multiplier": 0.7}}
+        for node in wf.values():
+            ins = node.get("inputs", {})
+            if ins.get("model") == ["1", 0] and node["class_type"] not in ("ModelSamplingDiscrete",):
+                ins["model"] = ["rescale", 0]
     # LoRAチェーン: model/clip を LoraLoader 経由に差し替える
     if loras:
+        vpred_on = "vpred" in wf
         prev_model, prev_clip = ["1", 0], ["1", 1]
         for i, (lname, strength) in enumerate(loras):
             nid = f"lora{i}"
@@ -88,9 +99,15 @@ def build_sdxl_txt2img(
             prev_model, prev_clip = [nid, 0], [nid, 1]
         for node in wf.values():
             ins = node.get("inputs", {})
-            if ins.get("model") == ["1", 0] and node["class_type"] != "LoraLoader":
+            if node["class_type"] == "LoraLoader":
+                continue
+            if vpred_on:
+                # vpredチェーンの根本(ModelSamplingDiscreteの入力)をLoRA出力に付け替える
+                if node["class_type"] == "ModelSamplingDiscrete" and ins.get("model") == ["1", 0]:
+                    ins["model"] = prev_model
+            elif ins.get("model") == ["1", 0]:
                 ins["model"] = prev_model
-            if ins.get("clip") == ["1", 1] and node["class_type"] != "LoraLoader":
+            if ins.get("clip") == ["1", 1]:
                 ins["clip"] = prev_clip
     return wf
 

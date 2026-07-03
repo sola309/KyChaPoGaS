@@ -40,6 +40,22 @@
       "size_gb": 6.9,
       "enabled": false,
       "_note": "キャラタグ知識が薄いためLoRA前提。画風はクリーン"
+    },
+    {
+      "name": "Krea 2 RAW (12B DiT・LoRA学習用ベース)",
+      "url": "https://huggingface.co/krea-ai/krea-2 (直リンク要確認: Qwen Image VAE + Qwen3-VL TE も必要)",
+      "dest": "tools/comfyui/models/diffusion_models/krea-2-raw.safetensors",
+      "size_gb": 24.0,
+      "enabled": false,
+      "_note": "2026-05-12公開のオープンウェイト。RAW=LoRA学習用(musubi-tuner, 96GB VRAM実証)/Turbo=8step高速推論。ComfyUI 0.26.0+必須。アニメ含む広様式・プロンプト追従◎。キャラタグ知識はIllustrious系に劣る想定→キャラはLoRA前提"
+    },
+    {
+      "name": "Krea 2 Turbo (8step蒸留・高速推論)",
+      "url": "https://huggingface.co/krea-ai/krea-2 (直リンク要確認)",
+      "dest": "tools/comfyui/models/diffusion_models/krea-2-turbo.safetensors",
+      "size_gb": 24.0,
+      "enabled": false,
+      "_note": "RAWで学習したLoRAをTurboで高速実行する二段構成が公式推奨"
     }
   ],
   "video_i2v": [
