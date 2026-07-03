@@ -16,3 +16,5 @@ POST /api/assets/{id}/cutout  {"model":"isnet-anime","bg":"white"}
 ```
 
 AI指示・シートからは「この画像を切り抜いて」で cutout ジョブを投入する。
+
+- bleed.py: 縁にミラーのりしろ+外周ぼかし(パン/視差の切れ目対策)。`bleed.py IN.jpg --frac 0.10`
