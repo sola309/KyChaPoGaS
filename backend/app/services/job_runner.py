@@ -580,8 +580,12 @@ async def _generate_video_s2v(job: Job, params: dict) -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     frames = []
     for i, out in enumerate(outputs):
+        fn = out["filename"] if isinstance(out, dict) else str(out)
+        p = await comfyui.download_output(fn, out.get("subfolder", "") if isinstance(out, dict) else "",
+                                          out.get("type", "output") if isinstance(out, dict) else "output",
+                                          dest_dir)
         fp = dest_dir / f"s2v_{job.id}_{i:05d}.png"
-        await comfyui.download_output(out, fp)
+        p.rename(fp)
         frames.append(fp)
     if not frames:
         raise RuntimeError("S2V がフレームを出力しませんでした")
