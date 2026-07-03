@@ -181,6 +181,8 @@ async def _dispatch(job: Job) -> None:
             await _decompose_character(job, params)
         case "mad_reproxy_shot":
             await _mad_reproxy_shot(job, params)
+        case "cutout":
+            await _cutout(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -965,6 +967,44 @@ async def _create_proxy(job: Job, params: dict) -> None:
 
 
 # ── Asset registration ────────────────────────────────────────────────────────
+
+async def _cutout(job: Job, params: dict) -> None:
+    """
+    高品質切り抜き: アセット画像 → 透過PNG(マッティング+デフリンジ+影抑制)。
+    tools/cutout-kit を同一venvで直接呼ぶ(CPU、数秒)。
+    """
+    import sys
+    kit = REPO_ROOT / "tools" / "cutout-kit"
+    if str(kit) not in sys.path:
+        sys.path.insert(0, str(kit))
+    from cutout import cut_image, crop_alpha  # noqa: E402
+    from PIL import Image
+
+    project_id = params["project_id"]
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src = Path(asset.file_path)
+    _update_progress(job.id, 0.1)
+
+    model = params.get("model", "isnet-anime")
+    im = await asyncio.to_thread(
+        cut_image, Image.open(src), model,
+        params.get("bg", "white"), float(params.get("feather", 1.0)))
+    if params.get("crop", True):
+        im = crop_alpha(im)
+    _update_progress(job.id, 0.9)
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"{src.stem}_cut_{job.id}.png"
+    im.save(out)
+    asset_id = _register_asset(project_id, out, "cutout",
+                               {"src_asset_id": params["asset_id"], "model": model,
+                                "bg": params.get("bg", "white")})
+    _update_result_assets(job.id, [asset_id])
+
 
 def _register_asset(project_id: int, file_path: Path, source: str, gen_params: dict) -> int:
     """Register a generated file as an Asset in the DB. Returns asset_id."""

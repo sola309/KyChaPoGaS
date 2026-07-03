@@ -288,3 +288,25 @@ def regenerate(asset_id: int, req: RegenerateRequest, session: Session = Depends
     params["project_id"] = asset.project_id
     params.setdefault("_lab", {})["regenerated_from"] = asset_id
     return _create_job(session, asset.project_id, job_type, params)
+
+
+# ── 高品質切り抜き(マッティング+デフリンジ) ─────────────────────────────────
+
+class CutoutRequest(_BM):
+    model: str = "isnet-anime"      # isnet-anime(アニメ生成) / birefnet-general(写真・汎用)
+    bg: str = "white"               # 生成時の背景色。写真は "none"
+    feather: float = 1.0
+    crop: bool = True
+
+
+@router.post("/{asset_id}/cutout", status_code=201)
+def cutout(asset_id: int, req: CutoutRequest, session: Session = Depends(get_session)):
+    """画像アセット → 透過PNGアセット(新規登録)。lightレーンで数秒。"""
+    from app.routers.generation import _create_job
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="asset not found")
+    return _create_job(session, asset.project_id, "cutout", {
+        "project_id": asset.project_id, "asset_id": asset_id,
+        "model": req.model, "bg": req.bg, "feather": req.feather, "crop": req.crop,
+    })
