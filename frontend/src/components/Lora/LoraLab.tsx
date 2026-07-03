@@ -161,7 +161,15 @@ export function LoraLab() {
                   ⏳ {Math.round((it.progress ?? 0) * 100)}%
                 </div>
               )}
-              <div className="p-1.5 text-[10px] text-zinc-400 leading-relaxed">
+              <div className="p-1.5 text-[10px] text-zinc-400 leading-relaxed relative">
+                {it.status === 'completed' && it.asset_ids[0] && (
+                  <button title="同条件で再生成(新シード)"
+                    onClick={async () => {
+                      try { await api.post(`/assets/${it.asset_ids[0]}/regenerate`, {}) ; pushToast('再生成を投入しました', 'success'); }
+                      catch { pushToast('再生成に失敗', 'error') }
+                    }}
+                    className="absolute right-1 top-1 px-1.5 rounded bg-zinc-800 hover:bg-emerald-700">♻</button>
+                )}
                 {it.lora
                   ? <span className="text-purple-300">{it.lora.replace('.safetensors', '')} @{it.strength}</span>
                   : <span className="text-zinc-500">base</span>}

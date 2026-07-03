@@ -142,6 +142,16 @@ export function CompositionStudio() {
               </label>
               <button onClick={() => void save()} disabled={!dirty}
                 className="px-4 py-2 rounded bg-purple-700 hover:bg-purple-600 disabled:opacity-40 font-bold">保存</button>
+              <button title="直前の保存状態に戻す"
+                onClick={async () => {
+                  if (!cid) return
+                  try {
+                    const r = await api.post(`/music/compositions/${cid}/undo`)
+                    setSheet({ ...EMPTY, ...r.data }); setDirty(false)
+                    pushToast('1つ前の状態に戻しました', 'success')
+                  } catch { pushToast('戻せる履歴がありません', 'info') }
+                }}
+                className="px-3 py-2 rounded bg-zinc-700 hover:bg-zinc-600">↩</button>
             </div>
             <textarea value={sheet.concept} onChange={e => patch({ concept: e.target.value })}
               placeholder="コンセプト(スタイル記述 / 英語推奨)" rows={2}

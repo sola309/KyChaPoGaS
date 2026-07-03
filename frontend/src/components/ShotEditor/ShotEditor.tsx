@@ -235,8 +235,20 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
                 onChange={e => { setParamsText(e.target.value); setDirty(true) }}
                 spellCheck={false}
                 className="flex-1 min-h-0 bg-neutral-950 border border-neutral-700 rounded p-2 text-xs font-mono text-neutral-200 resize-none" />
-              <button onClick={applyParams} disabled={!dirty}
-                className="mt-2 px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-sm">適用(ライブ反映)</button>
+              <div className="flex gap-2 mt-2">
+                <button onClick={applyParams} disabled={!dirty}
+                  className="flex-1 px-3 py-1.5 rounded bg-sky-700 hover:bg-sky-600 disabled:opacity-40 text-sm">適用(ライブ反映)</button>
+                <button title="直前の保存状態に戻す"
+                  onClick={async () => {
+                    try {
+                      const r = await api.post(`/mad/${projectId}/shotlist/undo`)
+                      setShotlist(r.data.shotlist)
+                      post({ mk: 'shotlist', shotlist: r.data.shotlist })
+                      pushToast('1つ前の状態に戻しました', 'success')
+                    } catch { pushToast('戻せる履歴がありません', 'info') }
+                  }}
+                  className="px-3 py-1.5 rounded bg-neutral-700 hover:bg-neutral-600 text-sm">↩</button>
+              </div>
             </div>
             {/* AI instruction */}
             <div className="border-t border-neutral-700 p-3">

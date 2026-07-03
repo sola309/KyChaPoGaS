@@ -55,6 +55,30 @@ def _map(pid: int) -> dict:
     return json.loads(f.read_text())
 
 
+
+def _snapshot(path: Path, keep: int = 20) -> None:
+    """保存前に現状をhistoryへ退避(Undo用)。"""
+    if not path.exists():
+        return
+    from datetime import datetime
+    hdir = path.parent / f".{path.stem}.history"
+    hdir.mkdir(exist_ok=True)
+    (hdir / f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json").write_text(path.read_text())
+    snaps = sorted(hdir.glob("*.json"))
+    for old in snaps[:-keep]:
+        old.unlink()
+
+
+def _undo_file(path: Path) -> bool:
+    hdir = path.parent / f".{path.stem}.history"
+    snaps = sorted(hdir.glob("*.json")) if hdir.exists() else []
+    if not snaps:
+        return False
+    path.write_text(snaps[-1].read_text())
+    snaps[-1].unlink()
+    return True
+
+
 @router.get("/templates")
 def templates_reference():
     readme = (KIT_DIR / "README.md")
@@ -78,8 +102,18 @@ def put_shotlist(pid: int, shotlist: dict):
     errs = _kit().check(shotlist)
     if errs:
         raise HTTPException(400, {"errors": errs})
-    Path(m["shotlist_path"]).write_text(json.dumps(shotlist, ensure_ascii=False, indent=2))
+    path = Path(m["shotlist_path"])
+    _snapshot(path)
+    path.write_text(json.dumps(shotlist, ensure_ascii=False, indent=2))
     return {"ok": True}
+
+
+@router.post("/{pid}/shotlist/undo")
+def undo_shotlist(pid: int):
+    m = _map(pid)
+    if not _undo_file(Path(m["shotlist_path"])):
+        raise HTTPException(404, "履歴がありません")
+    return {"ok": True, "shotlist": json.loads(Path(m["shotlist_path"]).read_text())}
 
 
 @router.get("/{pid}/scene.html")
@@ -267,6 +301,7 @@ def instruct(pid: int, req: InstructRequest, background: BackgroundTasks):
         _eval_log({"lane": "main", "engine": engine, "instruction": req.instruction,
                    "shot_id": req.shot_id, "ok": False, "errors": errs[:3]})
         raise HTTPException(422, {"error": "検証エラー", "errors": errs})
+    _snapshot(shotlist_path)
     shotlist_path.write_text(json.dumps(candidate, ensure_ascii=False, indent=2))
     _eval_log({"lane": "main", "engine": engine, "instruction": req.instruction,
                "shot_id": req.shot_id, "ok": True, "latency_s": round(dt, 1)})

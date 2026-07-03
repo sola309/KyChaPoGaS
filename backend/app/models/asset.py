@@ -14,6 +14,9 @@ class AssetBase(SQLModel):
     file_size_bytes: Optional[int] = None
     # Low-res proxy for lightweight preview/scrubbing (final render uses the original).
     proxy_path: Optional[str] = None
+    # 生成来歴(要件7.4): 生成ジョブのパラメータJSON(prompt/seed/model/loras等)。
+    # 「同条件で再生成」「条件を変えて再生成」の根拠になる。インポート時も保持される。
+    gen_params_json: str = ""
 
 
 class Asset(AssetBase, table=True):

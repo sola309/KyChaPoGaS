@@ -238,10 +238,21 @@ def get_composition(cid: str):
 
 @router.put("/compositions/{cid}")
 def put_composition(cid: str, sheet: Sheet):
+    from app.routers.mad import _snapshot
     COMP_DIR.mkdir(parents=True, exist_ok=True)
-    (COMP_DIR / f"{cid}.json").write_text(
-        json.dumps(sheet.model_dump(), ensure_ascii=False, indent=1))
+    path = COMP_DIR / f"{cid}.json"
+    _snapshot(path)
+    path.write_text(json.dumps(sheet.model_dump(), ensure_ascii=False, indent=1))
     return {"ok": True}
+
+
+@router.post("/compositions/{cid}/undo")
+def undo_composition(cid: str):
+    from app.routers.mad import _undo_file
+    path = COMP_DIR / f"{cid}.json"
+    if not _undo_file(path):
+        raise HTTPException(404, "履歴がありません")
+    return json.loads(path.read_text())
 
 
 def _sheet_duration(sheet: dict) -> tuple[float, float]:

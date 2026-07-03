@@ -33,50 +33,63 @@ GENERATED_DIR = Path(__file__).parent.parent.parent / "data" / "generated"
 PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
 
 
+# レーン並列: 重いGPUジョブ(動画/音楽/最終レンダー/分解)と軽いジョブ(画像/解析/プロキシ)を
+# 1本ずつ同時に走らせる。128GBユニファイドメモリの余力を活かしつつ、VRAMゲートで安全側に倒す。
+LANE_HEAVY = {"generate_video_i2v", "generate_audio", "render_final",
+              "precompose", "decompose_character"}
+
+
+def _lane_of(job_type: str) -> str:
+    return "heavy" if job_type in LANE_HEAVY else "light"
+
+
 async def run_forever() -> None:
-    log.info("Job runner started")
+    log.info("Job runner started (lanes: heavy / light)")
+    running: dict[str, asyncio.Task] = {}
     while True:
         try:
-            await _poll_once()
+            for lane in ("heavy", "light"):
+                t = running.get(lane)
+                if t and not t.done():
+                    continue
+                job = _claim_next(lane)
+                if job:
+                    running[lane] = asyncio.create_task(_run_job(job))
         except Exception as e:
             log.error(f"Job runner error: {e}")
         await asyncio.sleep(2)
 
 
-async def _poll_once() -> None:
+def _claim_next(lane: str) -> Job | None:
+    """このレーンの先頭pendingジョブをrunningに遷移して返す(無ければNone)。"""
     from app.services.gpu_monitor import estimate_vram_mb, is_vram_sufficient
 
     with Session(engine) as session:
-        job = session.exec(
-            select(Job)
-            .where(Job.status == "pending")
-            .order_by(Job.created_at)
-        ).first()
+        pendings = session.exec(
+            select(Job).where(Job.status == "pending").order_by(Job.created_at)
+        ).all()
+        job = next((j for j in pendings if _lane_of(j.job_type) == lane), None)
         if not job:
-            return
+            return None
 
         params = json.loads(job.params)
         estimated_mb = estimate_vram_mb(job.job_type, params)
-
-        # If this is a GPU-heavy job and VRAM is insufficient, skip for now
         if estimated_mb > 512 and not is_vram_sufficient(estimated_mb):
-            log.info(
-                f"Job id={job.id} deferred — VRAM insufficient "
-                f"(need ~{estimated_mb} MB)"
-            )
-            return
+            log.info(f"Job id={job.id} deferred — VRAM insufficient (need ~{estimated_mb} MB)")
+            return None
 
-        log.info(f"Starting job id={job.id} type={job.job_type}")
+        log.info(f"Starting job id={job.id} type={job.job_type} lane={lane}")
         job.status = "running"
         job.started_at = datetime.utcnow()
         job.vram_estimated_mb = estimated_mb
         session.add(job)
         session.commit()
         session.refresh(job)
+        return job
 
-    # Start background VRAM sampler
+
+async def _run_job(job: Job) -> None:
     vram_sampler = asyncio.create_task(_sample_vram(job.id))
-
     try:
         await _dispatch(job)
         vram_sampler.cancel()
@@ -938,6 +951,7 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
     from app.services.thumbnail import generate_video_thumbnail, generate_image_thumbnail
 
     info = probe(file_path)
+    slim = {k: v for k, v in (gen_params or {}).items() if k != "keyframes"}
     asset = Asset(
         project_id=project_id,
         name=file_path.name,
@@ -947,6 +961,7 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
         width=info.width,
         height=info.height,
         file_size_bytes=info.file_size_bytes,
+        gen_params_json=json.dumps(slim, ensure_ascii=False),
     )
 
     with Session(engine) as session:

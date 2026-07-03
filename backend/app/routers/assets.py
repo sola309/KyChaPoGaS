@@ -256,3 +256,35 @@ def delete_asset(asset_id: int, session: Session = Depends(get_session)):
         thumb.unlink()
     session.delete(asset)
     session.commit()
+
+
+# ── 生成来歴からの再生成(要件7.4) ────────────────────────────────────────────
+
+from pydantic import BaseModel as _BM
+
+
+class RegenerateRequest(_BM):
+    prompt_override: str | None = None
+    seed: int | None = None          # None → 新しいシード(元seed+1000)
+
+
+@router.post("/{asset_id}/regenerate", status_code=201)
+def regenerate(asset_id: int, req: RegenerateRequest, session: Session = Depends(get_session)):
+    """このアセットの生成条件(gen_params_json)を元に新しい生成ジョブを投入する。"""
+    import json as _json
+    from app.routers.generation import _create_job
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="asset not found")
+    if not asset.gen_params_json:
+        raise HTTPException(status_code=400, detail="このアセットには生成来歴がありません(手動アップロード等)")
+    params = _json.loads(asset.gen_params_json)
+    job_type = ("generate_audio" if "lyrics" in params
+                else "generate_video_i2v" if params.get("model", "").startswith("wan")
+                else "generate_image")
+    if req.prompt_override:
+        params["prompt"] = req.prompt_override
+    params["seed"] = req.seed if req.seed is not None else int(params.get("seed", 0) or 0) + 1000
+    params["project_id"] = asset.project_id
+    params.setdefault("_lab", {})["regenerated_from"] = asset_id
+    return _create_job(session, asset.project_id, job_type, params)
