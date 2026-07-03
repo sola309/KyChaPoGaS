@@ -1,7 +1,6 @@
 {
   "_comment": "モデル定義ファイル。このファイルをコピーして scripts/models.local.json を作り、自分の環境に合わせて編集してください。models.local.json は .gitignore されます。",
   "_usage": "python scripts/install_models.py",
-
   "image": [
     {
       "name": "WAI Illustrious v17.0 (アニメ)",
@@ -25,9 +24,24 @@
       "dest": "tools/comfyui/models/checkpoints/sd_xl_base_1.0.safetensors",
       "size_gb": 6.5,
       "enabled": false
+    },
+    {
+      "name": "NoobAI-XL (Illustrious派生・作風広い)",
+      "url": "https://civitai.com/api/download/models/1190596",
+      "dest": "tools/comfyui/models/checkpoints/noobaiXL_vPred10.safetensors",
+      "size_gb": 6.9,
+      "enabled": false,
+      "_note": "Civitai model 833294 (NoobAI-XL)。要CIVITAI_TOKEN。Illustrious系LoRAと互換性高"
+    },
+    {
+      "name": "Animagine XL 4.0 (クリーン・キャラ知識薄)",
+      "url": "https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/main/animagine-xl-4.0.safetensors",
+      "dest": "tools/comfyui/models/checkpoints/animagine-xl-4.0.safetensors",
+      "size_gb": 6.9,
+      "enabled": false,
+      "_note": "キャラタグ知識が薄いためLoRA前提。画風はクリーン"
     }
   ],
-
   "video_i2v": [
     {
       "name": "CogVideoX-5b-I2V",
@@ -45,7 +59,6 @@
       "enabled": false
     }
   ],
-
   "audio": [
     {
       "name": "MusicGen Small",
@@ -55,7 +68,6 @@
       "enabled": false
     }
   ],
-
   "vae": [
     {
       "name": "SDXL VAE",

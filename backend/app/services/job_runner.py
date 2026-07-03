@@ -311,7 +311,9 @@ async def _generate_image(job: Job, params: dict) -> None:
         # SDXL / SD1.5 — use checkpoint directly
         checkpoints = await comfyui.list_checkpoints()
         ckpt = next((c for c in checkpoints if model_id.lower() in c.lower()), checkpoints[0] if checkpoints else model_id)
-        workflow = build_sdxl_txt2img(ckpt, prompt, neg_prompt, width, height, seed)
+        loras = [(l[0], float(l[1])) for l in (params.get("loras") or [])]
+        workflow = build_sdxl_txt2img(ckpt, prompt, neg_prompt, width, height, seed,
+                                      loras=loras or None)
 
     _update_progress(job.id, 0.05)
 

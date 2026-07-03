@@ -30,13 +30,14 @@ def build_sdxl_txt2img(
     seed: int = -1,
     steps: int = 25,
     cfg: float = 7.0,
+    loras: list | None = None,   # [(lora_filename, strength)] — チェーン適用
 ) -> dict:
     """
     Standard SDXL/SD1.5 text-to-image workflow.
     Works with any checkpoint loadable by CheckpointLoaderSimple.
     """
     s = _seed(seed)
-    return {
+    wf = {
         "1": {
             "class_type": "CheckpointLoaderSimple",
             "inputs": {"ckpt_name": model_filename},
@@ -74,6 +75,25 @@ def build_sdxl_txt2img(
             "inputs": {"filename_prefix": "kychapogas_img_", "images": ["6", 0]},
         },
     }
+    # LoRAチェーン: model/clip を LoraLoader 経由に差し替える
+    if loras:
+        prev_model, prev_clip = ["1", 0], ["1", 1]
+        for i, (lname, strength) in enumerate(loras):
+            nid = f"lora{i}"
+            wf[nid] = {"class_type": "LoraLoader",
+                       "inputs": {"model": prev_model, "clip": prev_clip,
+                                  "lora_name": lname,
+                                  "strength_model": float(strength),
+                                  "strength_clip": float(strength)}}
+            prev_model, prev_clip = [nid, 0], [nid, 1]
+        for node in wf.values():
+            ins = node.get("inputs", {})
+            if ins.get("model") == ["1", 0] and node["class_type"] != "LoraLoader":
+                ins["model"] = prev_model
+            if ins.get("clip") == ["1", 1] and node["class_type"] != "LoraLoader":
+                ins["clip"] = prev_clip
+    return wf
+
 
 
 # ── Text-to-Image: FLUX.1 ─────────────────────────────────────────────────────

@@ -71,6 +71,8 @@ class ImageGenRequest(BaseModel):
     width: int = 1024
     height: int = 1024
     seed: int = -1   # -1 = random
+    # LoRA適用: [["file.safetensors", 0.8], ...](lora-kitの成果物)
+    loras: list | None = None
 
 
 @router.post("/image", response_model=JobRead, status_code=201)
