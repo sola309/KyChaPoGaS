@@ -283,7 +283,10 @@ function compile(shotlist) {
     const root = el(M.scenesRoot, { inset: 0, display: 'none', overflow: 'hidden' }, 'scene');
     const tpl = TEMPLATES[shot.template];
     if (!tpl) { console.error('unknown template', shot.template); return; }
-    const update = tpl(root, shot.params || {}, { t0, t1, idx, sid: shot.id, fromBar: shot.params?.fromBar });
+    const ctx = { t0, t1, idx, sid: shot.id, fromBar: shot.params?.fromBar };
+    const tplUp = tpl(root, shot.params || {}, ctx);
+    const fxUp = shot.fx ? M.fxAttach(root, shot.fx, ctx) : null;
+    const update = fxUp ? (t => { tplUp(t); fxUp(t); }) : tplUp;
     if (shot.transition === 'bandwipe') BANDCUTS.push(t0);
     if (shot.transition === 'flash') flashAt(t0 - .02, .28, .85);
     scenes.push({ t0, t1, root, update, shot });

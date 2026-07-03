@@ -260,9 +260,13 @@ const CAM_PRESETS = {
 };
 function cameraRig(root, opts = {}) {
   const P = opts.persp ?? 1200;
-  root.style.perspective = P + 'px';
-  root.style.perspectiveOrigin = '50% 50%';
-  const world = el(root, { inset: 0, transformStyle: 'preserve-3d' });
+  // perspectiveはroot直付けせず専用コンテナに隔離する:
+  // rootに付けると兄弟のFXオーバーレイまで3D文脈に取り込まれ、
+  // 手前レイヤ(depth<0)より奥と判定されて描画順が壊れる
+  const viewport = el(root, { inset: 0, zIndex: 0 });
+  viewport.style.perspective = P + 'px';
+  viewport.style.perspectiveOrigin = '50% 50%';
+  const world = el(viewport, { inset: 0, transformStyle: 'preserve-3d' });
   function layer(depth = 0, css) {
     const L = el(world, { inset: 0, ...css });
     const s = (P + depth) / P;
@@ -639,12 +643,129 @@ TEMPLATES.finale_cuts = (root, p, ctx) => {
     chb.forEach((c, i) => c.style.transform = `translateY(${-Math.abs(Math.sin(beatsFloat(t) * Math.PI)) * 40}px) rotate(${Math.sin(t * 2 + i) * 8}deg)`); };
 };
 
+/* ============ I. FX — MAD定番エフェクト(shot単位で合成可能) ============
+   shotlist: "fx": [{kind, on, amp, ...}] — on: "db"(小節頭) | "beat" | [秒...] | "always"
+   すべて決定論(tの純関数)。SVGフィルタはdefsを共有し、per-shotでパラメータ更新。 */
+let _fxDefs = null, _fxSeq = 0;
+function _fxSvg() {
+  if (_fxDefs) return _fxDefs;
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('width', 0); s.setAttribute('height', 0);
+  s.style.position = 'absolute';
+  document.body.appendChild(s);
+  _fxDefs = s; return s;
+}
+// トリガー包絡線: on指定 → 0..1 の強度(直近イベントからの減衰)
+function _fxEnv(on, t, ctx, decay = 6) {
+  if (on === 'always') return 1;
+  if (Array.isArray(on)) { let e = 0;
+    for (const v of on) { const tv = T(v); if (t >= tv) e = Math.max(e, Math.exp(-(t - tv) * decay)); }
+    return e; }
+  if (on === 'beat') return beatPulse(t, decay);
+  return dbPulse(t, decay);   // 既定 "db"
+}
+const FXS = {
+  // 歪みグリッチ: feTurbulence+feDisplacementMap + 時々の色反転コマ
+  glitch(root, o, ctx) {
+    const id = `mkfx${_fxSeq++}`;
+    _fxSvg().innerHTML += `<filter id="${id}" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0 0.12" numOctaves="1" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0" xChannelSelector="R" yChannelSelector="G"/></filter>`;
+    const disp = () => _fxDefs.querySelector(`#${id} feDisplacementMap`);
+    return t => { const e = _fxEnv(o.on, t, ctx, o.decay ?? 7) * (o.amp ?? 1);
+      const d = disp(); if (!d) return;
+      d.setAttribute('scale', String(e * 90));
+      const fr = Math.floor(t * 30);
+      root.style.filter = e > .04 ? `url(#${id})${(fr % 7 === 0 && e > .5) ? ' invert(1) hue-rotate(90deg)' : ''}` : '';
+    };
+  },
+  // RGBずれ(色収差): R/Bチャンネルを左右にオフセットして再合成
+  rgb_shift(root, o, ctx) {
+    const id = `mkfx${_fxSeq++}`;
+    _fxSvg().innerHTML += `<filter id="${id}" x="-5%" y="-5%" width="110%" height="110%">
+      <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r"/>
+      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g"/>
+      <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="b"/>
+      <feOffset in="r" dx="0" result="ro"/><feOffset in="b" dx="0" result="bo"/>
+      <feBlend in="ro" in2="g" mode="screen" result="rg"/><feBlend in="rg" in2="bo" mode="screen"/></filter>`;
+    const offs = () => _fxDefs.querySelectorAll(`#${id} feOffset`);
+    return t => { const e = _fxEnv(o.on, t, ctx, o.decay ?? 8) * (o.amp ?? 1);
+      const [ro, bo] = offs(); if (!ro) return;
+      ro.setAttribute('dx', String(e * (o.px ?? 14))); bo.setAttribute('dx', String(-e * (o.px ?? 14)));
+      if (!root.style.filter.includes('mkfx')) root.style.filter = e > .02 ? `url(#${id})` : '';
+      else if (e <= .02 && root.style.filter === `url(#${id})`) root.style.filter = '';
+    };
+  },
+  // 集中線
+  speedlines(root, o, ctx) {
+    const e = el(root, { inset: '-200px', zIndex: o.zi ?? 60, pointerEvents: 'none',
+      background: `repeating-conic-gradient(from 0deg at 50% 50%, rgba(${o.rgb ?? '255,255,255'},0) 0deg 5deg, rgba(${o.rgb ?? '255,255,255'},.55) 5deg 6.2deg)`,
+      WebkitMaskImage: `radial-gradient(circle, transparent ${o.hole ?? 36}%, black ${o.edge ?? 74}%)` });
+    return t => { const en = _fxEnv(o.on ?? 'always', t, ctx, o.decay ?? 5) * (o.amp ?? 1);
+      e.style.opacity = en * .9; e.style.transform = `rotate(${t * (o.spin ?? 16)}deg)`; };
+  },
+  // ベタフラッシュ(漫画の放射ベタ) — イベント瞬間だけ出る
+  manga_flash(root, o, ctx) {
+    const spikes = [];
+    const rnd = rng32(o.seed ?? 11);
+    let path = '';
+    for (let i = 0; i < (o.n ?? 26); i++) { const a0 = (i / (o.n ?? 26)) * 360 + rnd() * 6;
+      const a1 = a0 + 2.4 + rnd() * 3.6, R = 1600;
+      const x0 = 960 + R * Math.cos(a0 * Math.PI / 180), y0 = 540 + R * Math.sin(a0 * Math.PI / 180);
+      const x1 = 960 + R * Math.cos(a1 * Math.PI / 180), y1 = 540 + R * Math.sin(a1 * Math.PI / 180);
+      path += `M960 540 L${x0.toFixed(0)} ${y0.toFixed(0)} L${x1.toFixed(0)} ${y1.toFixed(0)} Z `; }
+    const e = svgEl(root, W, H, `<path d="${path}" fill="${o.color ?? '#111'}"/>`,
+      { inset: 0, zIndex: o.zi ?? 61, pointerEvents: 'none' });
+    return t => { const en = _fxEnv(o.on, t, ctx, o.decay ?? 10) * (o.amp ?? 1);
+      e.style.opacity = en > .25 ? .95 : 0;
+      e.style.transform = `scale(${1 + (1 - Math.min(en, 1)) * .25}) rotate(${Math.floor(t * 18) % 2 ? 3 : 0}deg)`; };
+  },
+  // 画面シェイク
+  shake(root, o, ctx) {
+    const r = rng32(o.seed ?? 5);
+    const jx = [], jy = []; for (let i = 0; i < 64; i++) { jx.push((r() - .5) * 2); jy.push((r() - .5) * 2); }
+    return t => { const e = _fxEnv(o.on, t, ctx, o.decay ?? 9) * (o.amp ?? 1);
+      const k = Math.floor(t * 60) % 64;
+      root.style.translate = e > .02 ? `${jx[k] * e * (o.px ?? 22)}px ${jy[k] * e * (o.px ?? 22)}px` : ''; };
+  },
+  // 衝撃波リング
+  shockwave(root, o, ctx) {
+    const ring = el(root, { left: (o.x ?? 960) + 'px', top: (o.y ?? 540) + 'px', width: '120px', height: '120px',
+      margin: '-60px', borderRadius: '50%', zIndex: o.zi ?? 59, pointerEvents: 'none',
+      border: `${o.w ?? 16}px solid ${o.color ?? 'rgba(255,255,255,.9)'}` });
+    const times = Array.isArray(o.on) ? o.on.map(T) : DBS;
+    return t => { let u = 1; for (const tv of times) if (t >= tv) u = Math.min(u, (t - tv) / (o.dur ?? .5));
+      ring.style.opacity = u < 1 ? (1 - u) : 0; ring.style.transform = `scale(${1 + outCubic(Math.min(u, 1)) * (o.grow ?? 11)})`; };
+  },
+  // フィルムグレイン
+  grain(root, o, ctx) {
+    const id = `mkfx${_fxSeq++}`;
+    _fxSvg().innerHTML += `<filter id="${id}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.6 0"/></filter>`;
+    const e = el(root, { inset: '-80px', zIndex: o.zi ?? 70, pointerEvents: 'none',
+      filter: `url(#${id})`, opacity: o.amp ?? .14, mixBlendMode: 'overlay' });
+    return t => { const k = Math.floor(t * 24);
+      e.style.transform = `translate(${(k * 37) % 60 - 30}px, ${(k * 53) % 60 - 30}px)`; };
+  },
+  // ビネット明滅
+  vignette_pulse(root, o, ctx) {
+    const e = el(root, { inset: 0, zIndex: o.zi ?? 58, pointerEvents: 'none',
+      background: `radial-gradient(circle, transparent 52%, ${o.color ?? 'rgba(120,10,40,.55)'})` });
+    return t => { e.style.opacity = .4 + _fxEnv(o.on ?? 'db', t, ctx, o.decay ?? 5) * .6 * (o.amp ?? 1); };
+  },
+};
+// attach: fxリストをshot rootへ。テンプレupdateの後に呼ぶ更新関数を返す
+function fxAttach(root, list, ctx) {
+  const ups = (list || []).map(o => (FXS[o.kind] || (() => () => {}))(root, o, ctx)).filter(Boolean);
+  return t => ups.forEach(u => u(t));
+}
+
 /* templates continue in mad-kit-scenes.js (bespoke: intro/title/peak/breakdown/outro) */
 return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_WAITS, svgEl, starPts, HEART, tag,
   patternBG, PATTERNS, AMBIENTS, confettiLayer, petalLayer, sparkleLayer, floaterLayer,
   nameplate, pill, cardEl, cornerRibbons, dotsRow,
   ENTERS, IDLES, EMPHS, motorize, TEMPLATES, autoEnter, ambientOf, kenburns,
-  cameraRig, CAM_PRESETS,
+  cameraRig, CAM_PRESETS, FXS, fxAttach,
   BEATS, DBS, db, T, beatAfter, beatPulse, dbPulse, beatsFloat, lastLE,
   stage, scenesRoot, flashEl, lbT, lbB, irisEl, FLASHES, BANDCUTS, flashAt, updateBands, updateFlash };
 })();

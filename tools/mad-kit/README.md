@@ -95,3 +95,24 @@ depth>0=奥 / 0=主役面 / depth<0=カメラ手前。静止時の見た目はde
 - 粒子は自動で2深度(奥+手前)に分かれて視差する
 
 他テンプレでも `MK.cameraRig(root, {camera:'orbit'})` で同じリグを使える。
+
+## FX — MADエフェクト (2026-07 追加)
+
+任意のショットに `"fx": [...]` で合成(テンプレ不問、決定論)。
+
+| kind | 説明 | 主パラメータ |
+|---|---|---|
+| glitch | 歪みグリッチ+色反転コマ | on, amp, decay |
+| rgb_shift | RGBずれ(色収差) | on, amp, px(ずれ量) |
+| speedlines | 集中線 | on(既定always), amp, hole, edge, spin, rgb |
+| manga_flash | 漫画の放射ベタフラ | on, color, n(本数) |
+| shake | 画面シェイク | on, amp, px |
+| shockwave | 衝撃波リング | on(時刻配列 or 全DB), x, y, dur, grow |
+| grain | フィルムグレイン | amp(不透明度) |
+| vignette_pulse | ビネット明滅 | on, color, amp |
+
+`on`: "db"(小節頭・既定) / "beat" / [秒 or "db:N", ...] / "always"。
+例: `"fx": [{"kind":"rgb_shift","on":"db"},{"kind":"grain","amp":0.14}]`
+
+実装メモ: perspective(cameraRig)はrig内コンテナに隔離してあるので、FXオーバーレイの
+z-indexは通常の2Dスタッキングで機能する(rootにperspectiveを付けると壊れる)。
