@@ -10,6 +10,7 @@ class JobBase(SQLModel):
     status: str = "pending"   # pending | running | completed | failed | cancelled
     params: str = "{}"        # JSON string
     result_asset_ids: str = "[]"  # JSON array
+    result_json: str = ""     # ジョブ固有の構造化結果(takes/vlm_review等)
     progress: float = 0.0
     error_msg: Optional[str] = None
     vram_estimated_mb: Optional[int] = None   # pre-run VRAM estimate
@@ -36,6 +37,7 @@ class JobRead(SQLModel):
     status: str
     params: dict
     result_asset_ids: list[int]
+    result_json: str = ""
     progress: float
     error_msg: Optional[str]
     vram_estimated_mb: Optional[int]
@@ -53,6 +55,7 @@ class JobRead(SQLModel):
             status=job.status,
             params=json.loads(job.params),
             result_asset_ids=json.loads(job.result_asset_ids),
+            result_json=job.result_json or "",
             progress=job.progress,
             error_msg=job.error_msg,
             vram_estimated_mb=job.vram_estimated_mb,

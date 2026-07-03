@@ -32,6 +32,9 @@ def _migrate(conn) -> None:
         if "vram_peak_mb" not in job_cols:
             conn.execute(text("ALTER TABLE job ADD COLUMN vram_peak_mb INTEGER"))
             log.info("Migration: added job.vram_peak_mb")
+        if "result_json" not in job_cols:
+            conn.execute(text("ALTER TABLE job ADD COLUMN result_json VARCHAR DEFAULT ''"))
+            log.info("Migration: added job.result_json")
 
     # ── Phase D: clip speed / time-remap columns ──────────────────────────
     if "clip" in tables:
