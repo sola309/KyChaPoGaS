@@ -78,7 +78,7 @@ def _strip_think(text: str) -> str:
 
 
 def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
-         provider: str = "auto", model: str = "") -> str:
+         provider: str = "auto", model: str = "", temperature: float | None = None) -> str:
     """Return the assistant reply text. messages = [{role, content}, ...]."""
     prov = resolve(provider)
     mdl = model or _MODELS.get(prov, _MODELS["local"])()
@@ -89,7 +89,8 @@ def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
         if not (ak and len(ak) > 20):
             raise RuntimeError("ANTHROPIC_API_KEY 未設定")
         c = anthropic.Anthropic(api_key=ak)
-        r = c.messages.create(model=mdl, max_tokens=max_tokens, system=system, messages=messages)
+        r = c.messages.create(model=mdl, max_tokens=max_tokens, system=system, messages=messages,
+                              **({"temperature": temperature} if temperature is not None else {}))
         return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
 
     if prov == "local":
@@ -100,7 +101,8 @@ def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
         msgs = ([{"role": "system", "content": system}] if system else []) + messages
         r = httpx.post(f"{config.OLLAMA_URL}/api/chat", timeout=120.0,
                        json={"model": mdl, "messages": msgs, "stream": False,
-                             "think": False, "options": {"num_predict": max_tokens}})
+                             "think": False, "options": {"num_predict": max_tokens,
+                                         **({"temperature": temperature} if temperature is not None else {})}})
         r.raise_for_status()
         return _strip_think(r.json().get("message", {}).get("content", ""))
 
@@ -113,6 +115,6 @@ def chat(messages: list[dict], system: str = "", max_tokens: int = 400,
     msgs = ([{"role": "system", "content": system}] if system else []) + messages
     headers = {"Authorization": f"Bearer {key}"} if key else {}
     r = httpx.post(f"{base}/chat/completions", headers=headers, timeout=120.0,
-                   json={"model": mdl, "messages": msgs, "max_tokens": max_tokens})
+                   json={"model": mdl, "messages": msgs, "max_tokens": max_tokens, **({"temperature": temperature} if temperature is not None else {})})
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]

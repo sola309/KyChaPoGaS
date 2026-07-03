@@ -165,8 +165,7 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
       setShotlist(sl.data)
       post({ mk: 'shotlist', shotlist: sl.data })
       setInstruction('')
-      pushToast('編集を適用しました', 'success')
-      void res
+      pushToast(`編集を適用しました (engine: ${res.data.engine ?? '?'})`, 'success')
     } catch (e: unknown) {
       const detail = (e as { response?: { data?: { detail?: { error?: string } } } })?.response?.data?.detail
       pushToast(detail?.error ?? 'AI編集に失敗しました', 'error')
