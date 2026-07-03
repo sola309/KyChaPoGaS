@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/uiStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
 import { MotionCanvas } from './MotionCanvas'
+import { allKeyframeTimes, removeKeyframe, TPROPS } from '../Preview/transformEval'
 
 const CLIP_COLORS: Record<string, string> = {
   video:     'bg-blue-800 border-blue-600',
@@ -38,7 +39,7 @@ interface Props {
 
 export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
   const snap = snapFrame ?? ((f: number) => f)
-  const { moveClip, trimClip, deleteClip, projectFps, setEditingClipId } = useTimelineStore()
+  const { moveClip, trimClip, deleteClip, projectFps, setEditingClipId, updateClip, setCurrentFrame } = useTimelineStore()
   const openShotEditor = useUIStore(st => st.openShotEditor)
   // mg_shot detection is defensive: fall back to the asset naming convention so a
   // stale cached Clip object (no `kind` field) can never fall into delete-on-dblclick.
@@ -248,6 +249,25 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
           height={Math.max(8, Math.round((trackHeight - 8) * 0.45))}
         />
       )}
+
+      {/* キーフレーム◆マーカー(選択時のみ): クリック=ジャンプ / Shift+クリック=削除 */}
+      {selected && allKeyframeTimes(clip.transform_json ?? '').map(kt => (
+        <div key={kt}
+          className="absolute z-20 w-2.5 h-2.5 rotate-45 bg-purple-300 border border-purple-600 cursor-pointer hover:bg-white"
+          style={{ left: kt * width - 5, bottom: 1 }}
+          title={`キーフレーム ${(kt * 100).toFixed(0)}% (Shift+クリックで削除)`}
+          onClick={e => {
+            e.stopPropagation()
+            if (e.shiftKey) {
+              let tj = clip.transform_json ?? ''
+              for (const p of TPROPS) tj = removeKeyframe(tj, p, kt)
+              updateClip(clip.id, { transform_json: tj })
+            } else {
+              setCurrentFrame(clip.start_frame + Math.round(kt * clip.duration_frames))
+            }
+          }}
+        />
+      ))}
 
       {/* Transition-in indicator (◣ at the head of the clip) */}
       {clip.transition_in && (
