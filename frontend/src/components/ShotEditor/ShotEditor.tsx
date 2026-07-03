@@ -197,9 +197,9 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
           <button onClick={onClose} className="px-3 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-sm">閉じる</button>
         </div>
 
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
           {/* live scene */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-[50vh] lg:min-h-0">
             <div className="flex-1 bg-black relative">
               <iframe ref={iframe} title="shot-scene"
                 src={`/api/mad/${projectId}/scene.html`}
@@ -222,7 +222,7 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
           </div>
 
           {/* inspector */}
-          <div className="w-96 border-l border-neutral-700 flex flex-col min-h-0">
+          <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-neutral-700 flex flex-col min-h-0 flex-shrink-0 lg:flex-shrink">
             <div className="px-3 py-2 border-b border-neutral-800">
               <div className="text-xs text-neutral-400">選択中のオブジェクト(クリックで選択・ドラッグで移動)</div>
               <div className="text-sm text-sky-300 mt-1 break-all">

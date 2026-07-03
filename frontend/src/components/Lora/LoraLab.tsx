@@ -59,9 +59,9 @@ export function LoraLab() {
   }
 
   return (
-    <div className="flex-1 flex min-h-0 text-sm">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-0 text-sm overflow-y-auto lg:overflow-hidden">
       {/* 左: LoRA / データセット */}
-      <div className="w-72 border-r border-zinc-800 overflow-y-auto p-3 space-y-4">
+      <div className="w-full lg:w-72 border-b lg:border-b-0 lg:border-r border-zinc-800 lg:overflow-y-auto p-3 space-y-4 flex-shrink-0 lg:flex-shrink">
         <div>
           <div className="text-zinc-300 font-bold mb-2">📦 学習済みLoRA</div>
           {!loras.length && <div className="text-xs text-zinc-500">まだありません(lora-kitで学習)</div>}
@@ -91,7 +91,7 @@ export function LoraLab() {
       </div>
 
       {/* 中: テスト生成フォーム */}
-      <div className="w-96 border-r border-zinc-800 overflow-y-auto p-3 space-y-3">
+      <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r border-zinc-800 lg:overflow-y-auto p-3 space-y-3 flex-shrink-0 lg:flex-shrink">
         <div className="text-zinc-300 font-bold">🎨 生成テスト</div>
         <label className="text-xs text-zinc-400 block">プロンプト
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={5}
@@ -145,7 +145,7 @@ export function LoraLab() {
       </div>
 
       {/* 右: ギャラリー */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 lg:overflow-y-auto p-3">
         <div className="text-zinc-300 font-bold mb-2">🖼 ギャラリー</div>
         <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3">
           {items.map(it => (

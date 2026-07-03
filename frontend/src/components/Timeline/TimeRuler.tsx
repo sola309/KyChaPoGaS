@@ -20,9 +20,18 @@ export function TimeRuler({ pixelsPerFrame, fps, totalWidth, currentFrame, onSee
     return Array.from({ length: count }, (_, i) => i * interval)
   }, [pixelsPerSecond, totalWidth])
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const x = e.nativeEvent.offsetX
-    onSeek(Math.round(x / pixelsPerFrame))
+  // press-and-drag scrubbing (pointer events → mouse and touch both work)
+  const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    onSeek(Math.max(0, Math.round(x / pixelsPerFrame)))
+  }
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrub(e)
+  }
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons & 1) scrub(e)
   }
 
   const fmt = (sec: number) => {
@@ -33,9 +42,10 @@ export function TimeRuler({ pixelsPerFrame, fps, totalWidth, currentFrame, onSee
 
   return (
     <div
-      className="relative h-7 bg-zinc-900 border-b border-zinc-700 select-none cursor-pointer flex-shrink-0"
-      style={{ width: totalWidth }}
-      onClick={handleClick}
+      className="relative h-7 bg-zinc-900 border-b border-zinc-700 select-none cursor-ew-resize flex-shrink-0"
+      style={{ width: totalWidth, touchAction: 'none' }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
     >
       {marks.map(sec => (
         <div

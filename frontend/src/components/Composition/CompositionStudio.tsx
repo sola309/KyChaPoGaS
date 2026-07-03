@@ -110,9 +110,9 @@ export function CompositionStudio() {
   const totalBars = sheet.sections.reduce((a, s) => a + (s.bars || 0), 0)
   const barSec = sheet.bpm_target ? 240 / sheet.bpm_target : 2
   return (
-    <div className="flex-1 flex min-h-0 text-sm">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-0 text-sm overflow-y-auto lg:overflow-hidden">
       {/* 左: シート一覧 */}
-      <div className="w-56 border-r border-zinc-800 flex flex-col">
+      <div className="w-full lg:w-56 border-b lg:border-b-0 lg:border-r border-zinc-800 flex flex-col max-h-[30vh] lg:max-h-none flex-shrink-0 lg:flex-shrink">
         <div className="px-3 py-2 border-b border-zinc-800 flex items-center">
           <span className="text-zinc-300 font-bold">構成シート</span>
           <button onClick={createNew} className="ml-auto text-zinc-400 hover:text-white text-lg" title="新規">+</button>
@@ -128,7 +128,7 @@ export function CompositionStudio() {
       </div>
 
       {/* 中: シートエディタ */}
-      <div className="flex-1 border-r border-zinc-800 overflow-y-auto p-4 space-y-3 min-w-0">
+      <div className="flex-1 lg:border-r border-zinc-800 lg:overflow-y-auto p-4 space-y-3 min-w-0">
         {!cid ? (
           <div className="text-zinc-500 text-xs mt-8 text-center">左の「+」で新規作成、または既存シートを選択</div>
         ) : (
@@ -208,7 +208,7 @@ export function CompositionStudio() {
       </div>
 
       {/* 右: 構成作家AI */}
-      <div className="w-96 flex flex-col min-h-0">
+      <div className="w-full lg:w-96 border-t lg:border-t-0 border-zinc-800 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none flex-shrink-0 lg:flex-shrink">
         <div className="px-3 py-2 border-b border-zinc-800 text-zinc-300 font-bold">✍️ 構成作家AI</div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {!msgs.length && (

@@ -276,6 +276,19 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     return () => cancelAnimationFrame(raf)
   }, [playing, projectFps])
 
+  // Space: グローバル再生/停止(入力中は無効)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      e.preventDefault()
+      setPlaying(p => !p)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const togglePlay = () => setPlaying(p => !p)
 
   const goToStart = () => {

@@ -32,6 +32,20 @@ export function Timeline({ projectId, fps, assets }: Props) {
   } = useTimelineStore()
 
   const scrollRef      = useRef<HTMLDivElement>(null)
+
+  // 再生追従: プレイヘッドが可視範囲から出たらスクロールして追いかける
+  // (停止中に手でスクロールして離れても、currentFrameが動かない限り介入しない)
+  useEffect(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const x = LABEL_WIDTH + currentFrame * pixelsPerFrame
+    const viewL = sc.scrollLeft + LABEL_WIDTH
+    const viewR = sc.scrollLeft + sc.clientWidth
+    if (x < viewL + 8 || x > viewR - 40) {
+      sc.scrollLeft = Math.max(0, x - LABEL_WIDTH - sc.clientWidth * 0.3)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentFrame, pixelsPerFrame])
   const containerRef   = useRef<HTMLDivElement>(null)
   const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -134,20 +148,37 @@ export function Timeline({ projectId, fps, assets }: Props) {
       }
       return
     }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      const step = (e.shiftKey ? 10 : 1) * (e.key === 'ArrowLeft' ? -1 : 1)
+      setCurrentFrame(Math.max(0, currentFrame + step))
+      return
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedClipId !== null) {
         deleteClip(selectedClipId)
         setSelectedClipId(null)
       }
     }
-  }, [selectedClipId, currentFrame, splitClip, deleteClip, undo, redo])
+  }, [selectedClipId, currentFrame, splitClip, deleteClip, undo, redo, setCurrentFrame])
 
   // ── Wheel zoom ────────────────────────────────────────────────────────
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault()
       const delta = e.deltaY > 0 ? 0.85 : 1.18
-      setZoom(pixelsPerFrame * delta)
+      const next = pixelsPerFrame * delta
+      // ズーム時はカーソル位置のフレームを画面上で固定(視点が飛ばない)
+      const sc = scrollRef.current
+      if (sc) {
+        const rect = sc.getBoundingClientRect()
+        const mouseX = e.clientX - rect.left
+        const frameAt = (sc.scrollLeft + mouseX - LABEL_WIDTH) / pixelsPerFrame
+        requestAnimationFrame(() => {
+          sc.scrollLeft = Math.max(0, frameAt * next - mouseX + LABEL_WIDTH)
+        })
+      }
+      setZoom(next)
     }
   }, [pixelsPerFrame, setZoom])
 

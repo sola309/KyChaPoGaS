@@ -121,9 +121,9 @@ export function MusicStudio() {
   const scoreColor = (v: number) => v >= 70 ? 'text-emerald-400' : v >= 45 ? 'text-amber-400' : 'text-red-400'
 
   return (
-    <div className="flex-1 flex min-h-0 text-sm">
+    <div className="flex-1 flex flex-col lg:flex-row min-h-0 text-sm overflow-y-auto lg:overflow-hidden">
       {/* ── 左: 音楽ディレクターAI ── */}
-      <div className="w-96 border-r border-zinc-800 flex flex-col min-h-0">
+      <div className="w-full lg:w-96 border-b lg:border-b-0 lg:border-r border-zinc-800 flex flex-col min-h-0 max-h-[45vh] lg:max-h-none flex-shrink-0 lg:flex-shrink">
         <div className="px-3 py-2 border-b border-zinc-800 text-zinc-300 font-bold">🎼 音楽ディレクター</div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {!msgs.length && (
@@ -163,7 +163,7 @@ export function MusicStudio() {
       </div>
 
       {/* ── 中: 生成フォーム ── */}
-      <div className="w-[420px] border-r border-zinc-800 flex flex-col min-h-0 overflow-y-auto p-3 gap-3">
+      <div className="w-full lg:w-[420px] border-b lg:border-b-0 lg:border-r border-zinc-800 flex flex-col lg:min-h-0 lg:overflow-y-auto p-3 gap-3 flex-shrink-0 lg:flex-shrink">
         <div className="text-zinc-300 font-bold">🎹 生成 (ACE-Step 1.5)</div>
         <label className="text-xs text-zinc-400">スタイル(caption / 英語)
           <textarea value={caption} onChange={e => setCaption(e.target.value)} rows={3}
@@ -215,7 +215,7 @@ export function MusicStudio() {
       </div>
 
       {/* ── 右: 曲ライブラリ ── */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-3 gap-3">
+      <div className="flex-1 flex flex-col lg:min-h-0 lg:overflow-y-auto p-3 gap-3">
         <div className="text-zinc-300 font-bold">📚 曲ライブラリ {projectId ? `(project ${projectId})` : ''}</div>
         {!songs.length && <div className="text-xs text-zinc-500">まだ曲がありません。左で相談 → 中央で生成。</div>}
         {songs.map(s => (
