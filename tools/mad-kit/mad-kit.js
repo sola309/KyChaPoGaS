@@ -31,6 +31,15 @@ function rng32(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6D2
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 const BEATS = K.beats, DBS = K.downbeats;
+// ステム音量エンベロープ(stem-kit/separate.pyがbeatgridに書く): 0..1、既定30Hz
+const STEMS = K.stems || {}, STEMS_HZ = K.stemsHz || 30;
+function stemLevel(name, t) {
+  const env = STEMS[name === 'vocal' ? 'vocals' : name];
+  if (!env) return 0;
+  const i = t * STEMS_HZ, i0 = Math.floor(i);
+  const a = env[Math.min(i0, env.length - 1)] ?? 0, b = env[Math.min(i0 + 1, env.length - 1)] ?? a;
+  return a + (b - a) * (i - i0);
+}
 function lastLE(arr, t) { let lo = 0, hi = arr.length - 1, r = -1;
   while (lo <= hi) { const m = (lo + hi) >> 1; if (arr[m] <= t) { r = m; lo = m + 1; } else hi = m - 1; } return r; }
 const beatPulse = (t, d = 7) => { const i = lastLE(BEATS, t); return i < 0 ? 0 : Math.exp(-(t - BEATS[i]) * d); };
@@ -213,6 +222,9 @@ const IDLES = {
   spin:   (t, o) => ({ r: t * (o.rate ?? 30) }),
   sway3d: (t, o) => ({ ry: Math.sin(t * (o.rate ?? .8) + (o.ph ?? 0)) * (o.amp ?? 6),
                        rx: Math.cos(t * .6 + (o.ph ?? 0)) * (o.amp ?? 6) * .35 }),
+  // ステム反応: 指定ステムの音量で膨らむ/跳ねる(stem: vocal|drums|bass|other)
+  stem_pump: (t, o) => ({ s: 1 + stemLevel(o.stem ?? 'drums', t) * (o.amp ?? .07) }),
+  stem_bob:  (t, o) => ({ y: -stemLevel(o.stem ?? 'bass', t) * (o.amp ?? 22) }),
 };
 const EMPHS = {
   punch_db: (t, o) => ({ s: 1 + dbPulse(t, 5.5) * (o.amp ?? .055) }),
@@ -292,7 +304,7 @@ function cameraRig(root, opts = {}) {
     const c = evalPath(t, t0, t1);
     if (sway) { c.x += Math.sin(t * sway.rate * 2.1) * sway.x; c.y += Math.cos(t * sway.rate * 1.7) * sway.y;
       c.roll += Math.sin(t * sway.rate * 1.3) * sway.roll; }
-    if (dbKick) c.z += dbPulse(t, dbKick.d) * dbKick.z;
+    if (dbKick) c.z += (dbKick.stem ? stemLevel(dbKick.stem, t) : dbPulse(t, dbKick.d)) * dbKick.z;
     world.style.transform = `rotateX(${-c.pitch}deg) rotateY(${-c.yaw}deg) rotate(${-c.roll}deg) translate3d(${-c.x}px,${-c.y}px,${c.z}px)`;
     return c;
   }
@@ -662,6 +674,8 @@ function _fxEnv(on, t, ctx, decay = 6) {
     for (const v of on) { const tv = T(v); if (t >= tv) e = Math.max(e, Math.exp(-(t - tv) * decay)); }
     return e; }
   if (on === 'beat') return beatPulse(t, decay);
+  // ステム名: そのステムの音量エンベロープが直接強度になる(vocal/drums/bass/other)
+  if (typeof on === 'string' && (on in STEMS || on === 'vocal')) return stemLevel(on, t);
   return dbPulse(t, decay);   // 既定 "db"
 }
 const FXS = {
@@ -766,6 +780,6 @@ return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_W
   nameplate, pill, cardEl, cornerRibbons, dotsRow,
   ENTERS, IDLES, EMPHS, motorize, TEMPLATES, autoEnter, ambientOf, kenburns,
   cameraRig, CAM_PRESETS, FXS, fxAttach,
-  BEATS, DBS, db, T, beatAfter, beatPulse, dbPulse, beatsFloat, lastLE,
+  BEATS, DBS, db, T, beatAfter, beatPulse, dbPulse, beatsFloat, lastLE, stemLevel, STEMS,
   stage, scenesRoot, flashEl, lbT, lbB, irisEl, FLASHES, BANDCUTS, flashAt, updateBands, updateFlash };
 })();

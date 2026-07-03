@@ -183,6 +183,8 @@ async def _dispatch(job: Job) -> None:
             await _mad_reproxy_shot(job, params)
         case "cutout":
             await _cutout(job, params)
+        case "interpolate":
+            await _interpolate(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -969,6 +971,45 @@ async def _create_proxy(job: Job, params: dict) -> None:
 
 
 # ── Asset registration ────────────────────────────────────────────────────────
+
+async def _interpolate(job: Job, params: dict) -> None:
+    """
+    フレーム補間: 低fpsの生成動画(Wan等)を滑らかな高fpsへ。
+    まずは ffmpeg minterpolate(動き補償)。RIFE系への昇格パスは stem-kit venv(torch)
+    + Practical-RIFE を想定(tools/README参照)。
+    """
+    from app.services.ffmpeg_render import FFMPEG
+
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src = Path(asset.file_path)
+        project_id = asset.project_id
+
+    fps = int(params.get("fps", 60))
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    is_webm = src.suffix.lower() == ".webm"
+    out = dest_dir / f"{src.stem}_{fps}fps_{job.id}{'.webm' if is_webm else '.mp4'}"
+
+    vcodec = (["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "24", "-pix_fmt", "yuva420p"]
+              if is_webm else ["-c:v", "libx264", "-crf", "16", "-preset", "medium"])
+    cmd = [str(FFMPEG), "-y", "-i", str(src),
+           "-vf", f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
+           *vcodec, "-an", str(out)]
+    _update_progress(job.id, 0.1)
+    proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.STDOUT)
+    o, _ = await proc.communicate()
+    if proc.returncode != 0 or not out.exists():
+        raise RuntimeError(f"minterpolate failed:\n{o.decode(errors='replace')[-800:]}")
+    _update_progress(job.id, 0.95)
+    asset_id = _register_asset(project_id, out, "interpolate",
+                               {"src_asset_id": params["asset_id"], "fps": fps,
+                                "method": "minterpolate"})
+    _update_result_assets(job.id, [asset_id])
+
 
 async def _cutout(job: Job, params: dict) -> None:
     """

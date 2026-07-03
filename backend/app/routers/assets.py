@@ -310,3 +310,19 @@ def cutout(asset_id: int, req: CutoutRequest, session: Session = Depends(get_ses
         "project_id": asset.project_id, "asset_id": asset_id,
         "model": req.model, "bg": req.bg, "feather": req.feather, "crop": req.crop,
     })
+
+
+class InterpolateRequest(_BM):
+    fps: int = 60
+
+
+@router.post("/{asset_id}/interpolate", status_code=201)
+def interpolate(asset_id: int, req: InterpolateRequest, session: Session = Depends(get_session)):
+    """低fps生成動画→高fps補間(minterpolate)。webmは透過保持。"""
+    from app.routers.generation import _create_job
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="asset not found")
+    return _create_job(session, asset.project_id, "interpolate", {
+        "project_id": asset.project_id, "asset_id": asset_id, "fps": req.fps,
+    })

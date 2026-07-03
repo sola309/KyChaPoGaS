@@ -65,7 +65,8 @@ def build_html(project: Path, shotlist_path: Path, offset: float = 0.0,
                 video_assets.append(f.stem)
 
     kycha = {"bpm": grid["bpm"], "duration": grid["duration"], "beats": grid["beats"],
-             "downbeats": grid["downbeats"], "assets": assets, "shotlist": shotlist,
+             "downbeats": grid["downbeats"], "stems": grid.get("stems"),
+             "stemsHz": grid.get("stemsHz", 30), "assets": assets, "shotlist": shotlist,
              "offset": offset, "live": live, "videoAssets": video_assets}
     live_js = (KIT_DIR / "mad-kit-live.js").read_text() if live else ""
     html = (tpl.replace("/*FONTS*/", fonts_css)
