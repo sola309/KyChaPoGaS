@@ -93,6 +93,7 @@ export class PuppetStage {
   private mouthW = 60   // mouth layer width (texture px) — scales the viseme cavity
   private headR = 200   // cylinder radius for yaw = face half-width / sin(edge) (texture px)
   private faceL = 1e9; private faceR = -1e9   // face x-extent accumulator (init)
+  private faceDepth = 0.5                      // 顔レイヤの意味的深度(前髪のヨー同期用)
   private yawPhi = 0    // current yaw angle (rad), set each frame
   private yawCx = 0     // yaw axis x in root space, set each frame
   private pivots: Record<string, [number, number]> = {}
@@ -185,6 +186,7 @@ export class PuppetStage {
       // older manifests so any puppet still rigs sensibly.
       entry.sway = ly.sway ?? this.fallbackSway(ly.name, ly.group)
       // face groups accumulate the x-extent → cylinder radius for the yaw warp
+      if (ly.name === 'face') this.faceDepth = entry.depth
       const onFace = ly.group === 'head' || ly.group === 'eyes' || ly.group === 'mouth'
       if (onFace && entry.bbox) {
         this.faceL = Math.min(this.faceL, entry.bbox[0])
@@ -525,7 +527,9 @@ export class PuppetStage {
         }
         if (sway.type === 'hair') {                       // tip-sway (row-weighted)
           // front hair rides on the face → full yaw; back hair sits behind → partial.
-          this.verletHair(mesh, pinM, t, S, wind, sway.amp, undefined, group === 'backhair' ? 0.55 : 1)
+          this.verletHair(mesh, pinM, t, S, wind, sway.amp, undefined,
+            group === 'backhair' ? 0.55 : 1,
+            group === 'fronthair' ? this.faceDepth : entry.depth)
           sprite.setFromMatrix(IDENTITY); continue
         }
         if (sway.type === 'cloth') {                      // hem-sway (bbox-weighted)
@@ -668,7 +672,7 @@ export class PuppetStage {
    * its drawn position on the head plus a wind-bend, a slow flutter and a per-strand
    * travelling-wave ripple — all growing toward the tips. Smooth (no jelly) but the
    * long length and tips genuinely flow. Top ~10% stays rigid on the head. */
-  private verletHair(mesh: MeshData, headM: Matrix, t: number, S: number, wind: number, amp = 1, bbox?: number[], yawAmt = 0) {
+  private verletHair(mesh: MeshData, headM: Matrix, t: number, S: number, wind: number, amp = 1, bbox?: number[], yawAmt = 0, depth = 0.5) {
     const { base, vx, vy, geom } = mesh
     const pos = geom.positions
     const a = headM.a, b = headM.b, c = headM.c, d = headM.d, e = headM.tx, f = headM.ty
@@ -702,17 +706,28 @@ export class PuppetStage {
       const k = 0.30 - 0.16 * tip
       const damp = 2 * Math.sqrt(k) * 0.9
       const inertia = swing * 0.55                    // 毛先ほど頭の動きに遅れる
+      // ★根本ハードピン: 上部は頭皮に完全固定(pin=1)、毛先に向かって物理へランプ。
+      // 全行をバネ追従にすると根本まで頭に遅れて「髪と顔がズレる」— それの根治。
+      const pinT = Math.min(1, Math.max(0, (tip - 0.28) / 0.30))     // 0=固定 .. 1=物理
+      const pin = pinT * pinT * (3 - 2 * pinT)
       for (let col = 0; col < vx; col++) {
         const i = (row * vx + col) * 2
         const wave = Math.sin(base[i + 1] * 0.02 - t * 2.4 + col * 0.6) * 5 * S * swing  // strand ripple
         const tgx = a * base[i] + c * base[i + 1] + e + windBend + wave
         const tgy = b * base[i] + d * base[i + 1] + f + gravBend
+        if (pin <= 0) {                                // 頭皮: 物理なし・完全追従
+          cur[i] = tgx; cur[i + 1] = tgy; vel[i] = 0; vel[i + 1] = 0
+          continue
+        }
         vel[i]     = (vel[i]     + (tgx - cur[i]) * k - headVx * inertia * k) * (1 - damp)
         vel[i + 1] = (vel[i + 1] + (tgy - cur[i + 1]) * k - headVy * inertia * k * 0.6) * (1 - damp)
         // 発散ガード(タブ復帰などの巨大dt対策): 速度と乖離をクランプ
         const mv = 30 * S
         vel[i] = Math.max(-mv, Math.min(mv, vel[i])); vel[i + 1] = Math.max(-mv, Math.min(mv, vel[i + 1]))
-        cur[i] += vel[i]; cur[i + 1] += vel[i + 1]
+        const sx = cur[i] + vel[i], sy = cur[i + 1] + vel[i + 1]
+        // 物理結果と剛体追従をピン率でブレンド → 根本側は常に頭皮に密着
+        cur[i] = tgx + (sx - tgx) * pin
+        cur[i + 1] = tgy + (sy - tgy) * pin
         const dxx = cur[i] - tgx, dyy = cur[i + 1] - tgy, lim = 90 * S * Math.max(swing, .12)
         if (Math.abs(dxx) > lim) cur[i] = tgx + Math.sign(dxx) * lim
         if (Math.abs(dyy) > lim) cur[i + 1] = tgy + Math.sign(dyy) * lim
@@ -720,8 +735,10 @@ export class PuppetStage {
     }
     if (yawAmt > 0 && this.yawPhi !== 0) {
       // ride the head's cylinder yaw (front hair fully, back hair partly)
+      // + 顔と同じ深度パララックス(無いと前髪だけヨーで取り残されてズレる)
+      const dpx = this.yawPhi * (0.5 - depth) * this.headR * 0.30 * yawAmt
       for (let i = 0; i < pos.length; i += 2) {
-        pos[i] = cur[i] + (this.yawMapX(cur[i]) - cur[i]) * yawAmt
+        pos[i] = cur[i] + (this.yawMapX(cur[i]) - cur[i]) * yawAmt + dpx
         pos[i + 1] = cur[i + 1]
       }
     } else {

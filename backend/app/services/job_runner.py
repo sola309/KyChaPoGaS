@@ -1041,6 +1041,24 @@ async def _decompose_character(job: Job, params: dict) -> None:
     log.info("decompose_character: compiling high-fidelity rig (v2)")
     await run([st_py, str(REPO_ROOT / "scripts" / "rig_compiler.py"),
                str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
+    _update_progress(job.id, 0.9)
+
+    # 4) 描き差分(口形素あいうえお+閉眼/半眼)を自動生成 — 新規作成をワンパスで完結。
+    # ComfyUIが落ちている場合はスキップ(後から face_variants.py で追加可能)。
+    from app.services.comfyui import comfyui as _comfy
+    if await _comfy.is_available():
+        log.info("decompose_character: generating face variants (visemes/eyelids)")
+        backend_py = REPO_ROOT / "backend" / ".venv" / "bin" / "python"
+        base_tags = params.get("base_tags",
+                               "1girl, anime, masterpiece, best quality, flat color")
+        try:
+            await run([backend_py, str(REPO_ROOT / "scripts" / "face_variants.py"),
+                       "--puppet", puppet_id, "--model", "waiNSFWIllustrious_v170.safetensors",
+                       "--base-tags", base_tags], cwd=REPO_ROOT)
+        except Exception as e:
+            log.warning(f"face variants failed (rig自体は完成、後から追加可): {e}")
+    else:
+        log.warning("ComfyUI停止中のためface variantsをスキップ(後から追加可)")
     _update_progress(job.id, 0.97)
 
     # record the puppet id on the job result (no asset row — puppets are their own store)
