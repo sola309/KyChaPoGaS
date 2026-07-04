@@ -519,10 +519,7 @@ export class PuppetStage {
       if (sway && mesh) {
         const pinM = sway.pin === 'body' ? mBody : mHead
         if (sway.type === 'neck' && entry.bbox) {
-          // body's displacement of the neck base (breathing/lean) — the neck bottom rides it
-          const nbdx = mBody.a * hx + mBody.c * hy + mBody.tx - hx
-          const nbdy = mBody.b * hx + mBody.d * hy + mBody.ty - hy
-          this.warpNeck(entry, hx, hy, headAngle, headDx, headDy, nbdx, nbdy)
+          this.warpNeck(entry, mHead, mBody)
           sprite.setFromMatrix(IDENTITY); continue
         }
         if (sway.type === 'hair') {                       // tip-sway (row-weighted)
@@ -610,30 +607,29 @@ export class PuppetStage {
   /** Neck joint: blend each vertex from the body transform (bottom, welded to the
    * shoulders) to the head transform (top), so the neck stretches/bends to follow
    * a turning head without a gap. Vertices end in root-local space → IDENTITY. */
-  private warpNeck(entry: SpriteEntry, hx: number, hy: number,
-                   ang: number, hdx: number, hdy: number, bdx: number, bdy: number) {
+  private warpNeck(entry: SpriteEntry, mHead: Matrix, mBody: Matrix) {
+    // 厳密な頂点ブレンド: 下端=mBodyの完全アフィン(胴体レイヤと同一式=継ぎ目ゼロ)、
+    // 上端=mHeadの完全アフィン+ヨー(顔レイヤと同一式)。旧実装は下端を
+    // 「頭ピボットで測った胴体変位の一律加算」で近似しており、呼吸スケールや
+    // リーン回転で胴体と首下端が食い違っていた(首と胴のズレの正体)。
     const { geom, base } = entry.mesh!
     const bb = entry.bbox!
     const pos = geom.positions
     const top = bb[1], bot = bb[3], span = Math.max(1, bot - top)
+    const ba = mBody.a, bbm = mBody.b, bc = mBody.c, bd = mBody.d, be = mBody.tx, bf = mBody.ty
+    const ha = mHead.a, hb = mHead.b, hc = mHead.c, hd = mHead.d, he = mHead.tx, hf = mHead.ty
     for (let i = 0; i < pos.length; i += 2) {
       const x = base[i], y = base[i + 1]
       let w = (bot - y) / span            // 1 at neck top (head) .. 0 at bottom (body)
       w = w < 0 ? 0 : w > 1 ? 1 : w
       w = w * w * (3 - 2 * w)             // smoothstep
-      // BEND: rotate the vertex around the neck base by the head angle × w — the
-      // base stays vertical, the top reaches the full head angle (smooth, no fold).
-      const a = ang * w, ca = Math.cos(a), sa = Math.sin(a)
-      const dx = x - hx, dy = y - hy
-      const rx = hx + dx * ca - dy * sa
-      const ry = hy + dx * sa + dy * ca
-      // SHIFT: bottom rides the body's motion (breathing/lean), top the head's.
-      let nx = rx + bdx + (hdx - bdx) * w
-      const ny = ry + bdy + (hdy - bdy) * w
-      // top of the neck follows the head's cylinder yaw (blends to 0 at the body)
-      nx += (this.yawMapX(nx) - nx) * w
-      pos[i] = nx
-      pos[i + 1] = ny
+      const bx = ba * x + bc * y + be, by = bbm * x + bd * y + bf
+      let hxv = ha * x + hc * y + he
+      const hyv = hb * x + hd * y + hf
+      // 頭側はヨー+顔と同じ深度シフトまで完全一致(顎の継ぎ目ゼロ)
+      hxv = this.yawMapX(hxv) + this.yawPhi * (0.5 - this.faceDepth) * this.headR * 0.30
+      pos[i] = bx + (hxv - bx) * w
+      pos[i + 1] = by + (hyv - by) * w
     }
     geom.getBuffer('aPosition').update()
   }

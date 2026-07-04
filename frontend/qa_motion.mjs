@@ -35,7 +35,23 @@ for (let i = 0; i < N; i++) {
     const pick = (pred) => s.sprites.find(pred)
     const fh = pick(e => e.name === 'front hair')
     const face = pick(e => e.name === 'face')
+    const neck = pick(e => e.name === 'neck')
+    const top = pick(e => e.name === 'topwear')
     const out = {}
+    if (neck?.mesh && top?.mesh) {
+      // 首下端中央の実描画位置 vs 胴(topwear)の同一base点(線形補間 — アフィンなので厳密)
+      const nm = neck.mesh, vy = nm.vy, vx = nm.vx
+      const ni = ((vy - 1) * vx + Math.floor(vx / 2)) * 2
+      const x0 = nm.base[ni], y0 = nm.base[ni + 1]
+      out.neckB = [nm.geom.positions[ni], nm.geom.positions[ni + 1]]
+      const tm = top.mesh, tb = tm.base, tp = tm.geom.positions
+      let best = 0, bd = 1e9
+      for (let k = 0; k < tb.length; k += 2) {
+        const d = (tb[k] - x0) ** 2 + (tb[k + 1] - y0) ** 2
+        if (d < bd) { bd = d; best = k }
+      }
+      out.torso = [tp[best] + (x0 - tb[best]), tp[best + 1] + (y0 - tb[best + 1])]
+    }
     if (fh?.mesh && face?.mesh) {
       // 同一基準点比較: 顔row0中央頂点のbase Xを、髪row0で線形補間して評価
       // 両メッシュが厳密に共有する基準点 = row0 col0 (同一base座標、補間誤差なし)
@@ -47,14 +63,18 @@ for (let i = 0; i < N; i++) {
   rows.push(m)
   if (i % 10 === 0) await canvas.screenshot({ path: `${OUT}/m${String(i).padStart(2, '0')}.png` })
 }
-let maxDiv = 0, sum = 0, n = 0
-for (let i = 1; i < rows.length; i++) {
-  const a = rows[i], b = rows[i - 1]
-  if (!a.hair || !a.face || !b.hair || !b.face) continue
-  const dh = [a.hair[0] - b.hair[0], a.hair[1] - b.hair[1]]
-  const df = [a.face[0] - b.face[0], a.face[1] - b.face[1]]
-  const div = Math.hypot(dh[0] - df[0], dh[1] - df[1])
-  maxDiv = Math.max(maxDiv, div); sum += div; n++
+function report(label, key1, key2) {
+  let maxDiv = 0, sum = 0, n = 0
+  for (let i = 1; i < rows.length; i++) {
+    const a = rows[i], b = rows[i - 1]
+    if (!a[key1] || !a[key2] || !b[key1] || !b[key2]) continue
+    const d1 = [a[key1][0] - b[key1][0], a[key1][1] - b[key1][1]]
+    const d2 = [a[key2][0] - b[key2][0], a[key2][1] - b[key2][1]]
+    const div = Math.hypot(d1[0] - d2[0], d1[1] - d2[1])
+    maxDiv = Math.max(maxDiv, div); sum += div; n++
+  }
+  console.log(`${label}: max=${maxDiv.toFixed(2)}px mean=${(sum / Math.max(1, n)).toFixed(2)}px over ${n} frames`)
 }
-console.log(`hair-root vs face divergence: max=${maxDiv.toFixed(2)}px mean=${(sum / n).toFixed(2)}px over ${n} frames`)
+report('hair-root vs face', 'hair', 'face')
+report('neck-bottom vs torso', 'neckB', 'torso')
 await browser.close()
