@@ -27,9 +27,10 @@ export interface RigMeta {
   meshGroups: string[]
   // v3: face_variants.py が生成する描き差分(口形素/まぶた) — Live2D流ブレンドシェイプ
   variants?: { mouth?: Record<string, string>; eyes?: Record<string, string>
-               mouthHalf?: Record<string, string> }
+               mouthHalf?: Record<string, string>; mouthSmile?: Record<string, string> }
   // v4: THA3で焼いた中割りフレームバンク(瞬き) — bake_face_bank.py
-  thaBank?: { eyeBlink?: string[]; mouth?: Record<string, string[]>; eyeHappy?: string | null }
+  thaBank?: { eyeBlink?: string[]; mouth?: Record<string, string[]>; eyeHappy?: string | null
+              gaze?: Record<string, string> }
 }
 export interface PuppetManifest {
   id: string; name: string; canvas: [number, number]
@@ -88,6 +89,7 @@ export class PuppetStage {
   // v3 描き差分スプライト(フルキャンバスのパッチ、head変換+ヨーに追従)
   private varMouth = new Map<string, { sprite: Sprite; mesh: MeshData }>()
   private varMouthHalf = new Map<string, { sprite: Sprite; mesh: MeshData }>()  // 半開(3段口パク)
+  private varMouthSmile = new Map<string, { sprite: Sprite; mesh: MeshData }>() // 笑い口セット
   private varEyes = new Map<string, { sprite: Sprite; mesh: MeshData }>()
   private vMouthA: Record<string, number> = {}   // 口形素アルファ(0/1ハードスイッチ)
   private visemeCur = ''; private visemeHold = 0  // 現在の口形素と保持フレーム数
@@ -99,8 +101,15 @@ export class PuppetStage {
   private mouthPrev: { sprite: Sprite; mesh: MeshData } | null = null
   private mouthTrans = 1                           // 0→1 遷移進行
   private lastT = -1
+  // C: フレーズ境界ジェスチャ / E: アイドル仕草
+  private wasTalking = false
+  private phraseBlinkAt = -9      // 息継ぎ瞬きの開始時刻
+  private phraseGazeSeed = 1
+  private idleActUntil = 0; private idleActKind = 0; private idleNextAt = 14
+  private idleClose = 0
   private blinkBank: { sprite: Sprite; mesh: MeshData }[] = []  // THA3瞬き中割り
   private happyEye: { sprite: Sprite; mesh: MeshData } | null = null  // にっこり閉じ目(^^)
+  private gazeBank = new Map<string, { sprite: Sprite; mesh: MeshData }>()  // 描かれた視線8方位
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
   private cw = 1280
@@ -259,6 +268,7 @@ export class PuppetStage {
       }
       for (const [k, rel] of Object.entries(variants.mouth ?? {})) { this.varMouth.set(k, await loadVar(rel)); this.vMouthA[k] = 0 }
       for (const [k, rel] of Object.entries(variants.mouthHalf ?? {})) { this.varMouthHalf.set(k, await loadVar(rel)) }
+      for (const [k, rel] of Object.entries(variants.mouthSmile ?? {})) { this.varMouthSmile.set(k, await loadVar(rel)) }
       for (const [k, rel] of Object.entries(variants.eyes ?? {})) { this.varEyes.set(k, await loadVar(rel)); this.vEyesA[k] = 0 }
     }
     // v4: THA3瞬きバンク(中割りスプライト列 — インデックス再生、クロスフェード無し)
@@ -283,6 +293,17 @@ export class PuppetStage {
       mesh.alpha = 0
       this.root.addChildAt(mesh, fhIdx)
       this.happyEye = { sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } }
+    }
+    for (const [k, rel] of Object.entries(manifest.rig?.thaBank?.gaze ?? {})) {
+      let fhIdx = this.root.children.length
+      for (let i = 0; i < this.sprites.length; i++)
+        if (this.sprites[i].group === 'fronthair') { fhIdx = this.root.getChildIndex(this.sprites[i].sprite); break }
+      const tex = await loadTex(baseUrl + rel.split('/').map(encodeURIComponent).join('/'))
+      const mesh = new MeshPlane({ texture: tex, verticesX: 12, verticesY: 12 })
+      const geom = mesh.geometry as unknown as MeshData['geom']
+      mesh.alpha = 0
+      this.root.addChildAt(mesh, fhIdx)
+      this.gazeBank.set(k, { sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } })
     }
     this.fit()
 
@@ -506,6 +527,17 @@ export class PuppetStage {
     headAngle += this.slowTalk * 0.010 * Math.sin(t * 1.4 + 1)
     // 語気の表情: 強い所で眉が上がり、目がわずかに細まる(棒読み顔の解消)
     const talkExpr = this.slowTalk * (0.5 + 0.5 * Math.sin(t * 1.1 + 2))
+    // ── C: フレーズ境界(息継ぎ) — 人間は文末で瞬き・視線を動かす ──
+    const talkingNow = talkEnv > 0.09
+    if (this.wasTalking && !talkingNow && this.slowTalk > 0.12) {
+      this.phraseBlinkAt = t
+      this.phraseGazeSeed = (this.phraseGazeSeed * 1103515245 + 12345) & 0x7fffffff
+      const gx = ((this.phraseGazeSeed % 200) / 100 - 1) * 0.5
+      const gy = (((this.phraseGazeSeed >> 8) % 100) / 100 - 0.5) * 0.3
+      this.setLook(gx, gy)
+    }
+    this.wasTalking = talkingNow
+    const phraseBlink = this.blinkShape(Math.min(1, Math.max(0, (t - this.phraseBlinkAt) / 0.22)))
 
     const active: Expression = this.transientT > 0 ? this.transientExpr : p.expression
     if (active !== this.lastExpr) { this.exprI = 1; this.lastExpr = active }
@@ -517,8 +549,26 @@ export class PuppetStage {
     if (this.revealAt < 0) this.revealAt = t
     this.root.alpha = Math.min(1, (t - this.revealAt) / 0.45)
 
+    // ── E: アイドル仕草 — ときどき伸び/見回し/ふぅ(目閉じ) ──
+    if (t > this.idleNextAt && this.talkLevel < 0.02) {
+      this.idleActKind = Math.floor((t * 7919) % 3)
+      this.idleActUntil = t + 1.6
+      this.idleNextAt = t + 14 + ((t * 104729) % 16)
+    }
+    let idleActRot = 0
+    if (t < this.idleActUntil) {
+      const u = 1 - (this.idleActUntil - t) / 1.6
+      const bell = Math.sin(Math.min(1, Math.max(0, u)) * Math.PI)
+      if (this.idleActKind === 0) { idleActRot = 0.02 * bell }                    // 伸び
+      else if (this.idleActKind === 1) { this.setLook(Math.sin(u * TAU) * 0.8, -0.1) }  // 見回し
+      else { this.idleClose = bell }                                              // ふぅ(目を閉じる)
+    } else {
+      this.idleClose = 0
+      if (this.idleActKind === 1 && t < this.idleActUntil + 0.5) this.clearLook()
+    }
+
     this.root.angle = 0
-    const idleRot = 0.010 * Math.sin((t / 8) * TAU)
+    const idleRot = 0.010 * Math.sin((t / 8) * TAU) + idleActRot
     const idleDx = 6 * Math.sin((t / 9) * TAU)
     this.fit()
     this.root.rotation = idleRot
@@ -549,7 +599,9 @@ export class PuppetStage {
     // Blink + squint by vertically squashing the WHOLE eye group (sclera, lashes
     // and iris together) around the eye pivot — the classic anime close. No skin
     // overlay, so no rectangular "frame" at the lids. Brows are NOT squashed.
-    const eyeClose = Math.max(blinkCl, expr.lidClose, talkExpr * 0.16)   // 0 open .. 1 closed
+    const eyeClose = Math.max(blinkCl, expr.lidClose, talkExpr * 0.16,
+                              (t - this.phraseBlinkAt) < 0.22 ? phraseBlink : 0,
+                              this.idleClose)
     // v3: 描きまぶた差分があるときは「絵」で閉じる(スカッシュは補助程度に残す)
     let vEyesClosed = 0, vEyesHalf = 0
     let blinkFrame = -1, happyOn = false
@@ -643,8 +695,11 @@ export class PuppetStage {
     // ── 口形遷移モーフ ──────────────────────────────────────────────
     const dt = this.lastT < 0 ? 1 / 60 : Math.min(0.05, Math.max(0.001, t - this.lastT))
     this.lastT = t
+    const smiley = (active === 'smile' || active === 'shy') && this.varMouthSmile.size > 0
     const target = this.visemeCur === '' ? null
-      : (this.visemeFull ? this.varMouth.get(this.visemeCur) : this.varMouthHalf.get(this.visemeCur)) ?? null
+      : (this.visemeFull
+          ? (smiley ? this.varMouthSmile.get(this.visemeCur) : this.varMouth.get(this.visemeCur))
+          : this.varMouthHalf.get(this.visemeCur)) ?? null
     if (target !== this.mouthShown) {
       this.mouthPrev = this.mouthShown
       this.mouthShown = target
@@ -661,6 +716,7 @@ export class PuppetStage {
     // 全口スプライトをリセット
     for (const [, v] of this.varMouth) (v.sprite as Sprite).alpha = 0
     for (const [, v] of this.varMouthHalf) (v.sprite as Sprite).alpha = 0
+    for (const [, v] of this.varMouthSmile) (v.sprite as Sprite).alpha = 0
     // 入ってくる口: 口ピボット周りで縦に"開いていく"(0.72→1) — 中間の動きを作る
     if (this.mouthShown) {
       const spr = this.mouthShown.sprite as Sprite
@@ -690,6 +746,19 @@ export class PuppetStage {
     if (this.happyEye) {
       (this.happyEye.sprite as Sprite).alpha = happyOn ? 1 : 0
       if (happyOn) this.warpFace(this.happyEye.mesh, mHead, this.faceDepth)
+    }
+    // 描かれた視線: しっかり視線が振れた時だけバンク(白目とハイライトが正しい)。
+    // 微小視線・サッケードは従来の瞳スライドが担当。目を閉じている間は出さない。
+    let gazeKey = ''
+    if (this.gazeBank.size && eyeClose < 0.3 && !happyOn) {
+      const gx = Math.abs(this.sLookX) > 0.42 ? Math.sign(this.sLookX) : 0
+      const gy = Math.abs(this.sLookY) > 0.38 ? Math.sign(this.sLookY) : 0
+      if (gx !== 0 || gy !== 0) gazeKey = `${gx},${gy}`
+    }
+    for (const [k, g] of this.gazeBank) {
+      const on = k === gazeKey
+      ;(g.sprite as Sprite).alpha = on ? 1 : 0
+      if (on) this.warpFace(g.mesh, mHead, this.faceDepth)
     }
     this.drawMouthCavity(talkEnv * procM, mx, my, mHead)
   }

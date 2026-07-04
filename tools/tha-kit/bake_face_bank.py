@@ -116,6 +116,16 @@ def main():
     res = pose_image(eye_happy_wink_left=1.0, eye_happy_wink_right=1.0)
     bank["eyeHappy"] = region_patch(res, rig["eye"]["region"], (0.18, 0.6, 0.6), "eye_happy.png")
 
+    print("baking gaze frames…")
+    bank["gaze"] = {}
+    for gx in (-1, 0, 1):
+        for gy in (-1, 0, 1):
+            if gx == 0 and gy == 0:
+                continue
+            res = pose_image(iris_rotation_y=gx * 0.7, iris_rotation_x=gy * 0.5)
+            bank["gaze"][f"{gx},{gy}"] = region_patch(
+                res, rig["eye"]["region"], (0.18, 0.6, 0.6), f"gaze_{gx}_{gy}.png")
+
     print("baking viseme frames…")
     for v, pname in VOWELS.items():
         frames = []

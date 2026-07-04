@@ -37,6 +37,12 @@ VARIANTS = {
     "mouth_u_h": ("tiny pursed lips, very small open mouth", "mouth"),
     "mouth_e_h": ("slightly parted lips, relaxed", "mouth"),
     "mouth_o_h": ("small round open mouth", "mouth"),
+    # 笑い口セット(表情smile/shy時の口パク用)
+    "mouth_a_s": ("wide open smiling mouth, happy singing, cheerful", "mouth"),
+    "mouth_i_s": ("big happy grin, smiling teeth", "mouth"),
+    "mouth_u_s": ("small happy open mouth, cheerful pout", "mouth"),
+    "mouth_e_s": ("happy relaxed open mouth, smiling", "mouth"),
+    "mouth_o_s": ("happy round open mouth, delighted", "mouth"),
     "eyes_closed": ("eyes closed, gentle curved closed eyelids, peaceful expression", "eyes"),
     "eyes_half": ("half-closed eyes, sleepy relaxed eyelids", "eyes"),
 }
@@ -136,6 +142,8 @@ def main():
             patch.save(vdir / f"{name}.png")
             if name.endswith("_h"):
                 out_meta.setdefault("mouthHalf", {})[name.split("_")[1]] = f"variants/{name}.png"
+            elif name.endswith("_s"):
+                out_meta.setdefault("mouthSmile", {})[name.split("_")[1]] = f"variants/{name}.png"
             else:
                 out_meta.setdefault(kind, {})[name.split("_", 1)[1]] = f"variants/{name}.png"
             print(f"  → variants/{name}.png bbox={bbox}")

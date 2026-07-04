@@ -138,7 +138,7 @@ export function CompanionView() {
 
   // Speak: fetch TTS audio, play it, and drive the puppet's mouth from the live
   // audio — amplitude → open amount, spectral centroid → vowel-ish mouth width.
-  const speak = async (text?: string): Promise<void> => {
+  const speak = async (text?: string, segments?: { text: string; expression: string }[]): Promise<void> => {
     const stage = stageRef.current
     const say = (text ?? speech).trim()
     if (!stage || !say) return
@@ -157,6 +157,17 @@ export function CompanionView() {
       src.connect(analyser); analyser.connect(ctx.destination)
       const td = new Uint8Array(analyser.fftSize)
       const fd = new Uint8Array(analyser.frequencyBinCount)
+      // 感情タイムライン: 文字数比で各セグメントの開始時刻を割り当て
+      const timers: number[] = []
+      if (segments && segments.length > 1) {
+        const total = segments.reduce((a, sg) => a + sg.text.length, 0) || 1
+        let acc = 0
+        for (const sg of segments) {
+          const at = (acc / total) * audio.duration * 1000
+          timers.push(window.setTimeout(() => set({ expression: sg.expression as Expression }), at))
+          acc += sg.text.length
+        }
+      }
       await new Promise<void>((resolve) => {
         let raf = 0
         const tick = () => {
@@ -172,7 +183,7 @@ export function CompanionView() {
           stage.mouthWide = Math.min(1, Math.max(0, (centroid - 0.12) * 2.4))
           raf = requestAnimationFrame(tick)
         }
-        src.onended = () => { cancelAnimationFrame(raf); stage.talkLevel = 0; ctx.close(); resolve() }
+        src.onended = () => { cancelAnimationFrame(raf); timers.forEach(clearTimeout); stage.talkLevel = 0; ctx.close(); resolve() }
         src.start(); tick()
       })
     } catch {
@@ -237,11 +248,11 @@ export function CompanionView() {
                                mode: tutorRef.current ? 'english_tutor' : 'companion' }),
       })
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || 'chat') }
-      const { reply, expression } = await r.json()
+      const { reply, expression, segments } = await r.json()
       if (stageRef.current) stageRef.current.thinking = false
       setChatLog([...hist, { role: 'assistant', content: reply }])
-      set({ expression })
-      await speak(reply)
+      set({ expression: (segments?.[0]?.expression ?? expression) })
+      await speak(reply, segments)
     } catch (e) {
       useUIStore.getState().pushToast(`対話に失敗: ${e instanceof Error ? e.message : ''}`, 'info')
     } finally {
