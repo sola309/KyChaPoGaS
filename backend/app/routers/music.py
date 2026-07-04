@@ -83,6 +83,14 @@ def songs(session: Session = Depends(get_session)):
             continue
         d = {"id": a.id, "name": a.name, "duration_sec": a.duration_sec,
              "created_at": a.created_at.isoformat(timespec="seconds") if a.created_at else None}
+        # 歌詞・生成条件(議論用にUIへ)
+        try:
+            gp = json.loads(a.gen_params_json or "{}")
+            d["lyrics"] = gp.get("lyrics") or ""
+            d["caption"] = gp.get("prompt") or ""
+            d["bpm"] = gp.get("bpm"); d["key"] = gp.get("key"); d["seed"] = gp.get("seed")
+        except Exception:
+            d["lyrics"] = ""; d["caption"] = "" 
         ap = ANALYSIS_DIR / f"{a.id}.json"
         d["analysis"] = json.loads(ap.read_text()) if ap.exists() else None
         out.append(d)

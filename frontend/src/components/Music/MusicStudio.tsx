@@ -12,7 +12,8 @@ import { useUIStore } from '../../store/uiStore'
 interface Song {
   id: number; name: string; duration_sec: number | null; created_at: string | null
   analysis: null | { bpm: number; toriyasusa: number; beat_stability_cv: number
-    energy_contrast: number; punch: number; sections: Array<{ t0: number; t1: number; energy: number }> }
+    energy_contrast: number; punch: number; sections: Array<{ t0: number; t1: number; energy: number   lyrics?: string; caption?: string; bpm?: number | null; key?: string | null; seed?: number | null
+}> }
 }
 interface Msg { role: 'user' | 'assistant'; content: string }
 interface Proposal { caption?: string; lyrics?: string; bpm?: number; duration_sec?: number }
@@ -238,6 +239,16 @@ export function MusicStudio() {
               )}
             </div>
             <audio controls preload="none" src={`/api/assets/${s.id}/file`} className="w-full h-9" />
+            {s.lyrics && (
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer text-zinc-400 hover:text-zinc-200 select-none">
+                  📝 歌詞 {s.key ? `· ${s.key}` : ''} {s.bpm ? `· ${s.bpm}bpm` : ''} {s.seed != null ? `· seed ${s.seed}` : ''}
+                </summary>
+                <pre className="mt-1 p-2 rounded bg-zinc-950 text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed">{s.lyrics}</pre>
+                <button onClick={() => setLyrics(s.lyrics ?? '')}
+                  className="mt-1 px-2 py-0.5 rounded bg-zinc-800 hover:bg-purple-800 text-[11px]">↪ この歌詞をエディタへ(修正して再生成)</button>
+              </details>
+            )}
             {s.analysis && (
               <div className="mt-2 flex items-center gap-2">
                 {/* energy bar (盛り上がりマップ) */}
