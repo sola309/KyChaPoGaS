@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 const EXEC = '/home/kigarashi309/.cache/ms-playwright/chromium-1223/chrome-linux/chrome'
-const URL = (process.env.QA_URL || 'http://localhost:8002') + '/?puppet=recipe_kyoko'
+const URL = (process.env.QA_URL || 'http://localhost:8002') + '/?puppet=kyoko_v3'
 const OUT = '/tmp/rigqa3'
 mkdirSync(OUT, { recursive: true })
 const browser = await chromium.launch({ executablePath: EXEC,
