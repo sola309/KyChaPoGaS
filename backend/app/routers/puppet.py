@@ -26,6 +26,7 @@ class DecomposeRequest(BaseModel):
     asset_id: int
     puppet_id: str | None = None
     name: str | None = None
+    base_tags: str | None = None   # 差分生成(face_variants)用のキャラ固有タグ
 
 
 @router.post("/decompose", status_code=201)
