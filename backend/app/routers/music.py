@@ -177,7 +177,15 @@ class MusicChatRequest(BaseModel):
     messages: list[dict]
 
 
-MUSIC_DIRECTOR = """あなたはMAD動画のための音楽ディレクター兼構成作家です。ユーザーと相談しながら
+MUSIC_DIRECTOR = """
+【作詞規範(必須)】歌詞はメロディの設計図。以下を守る:
+- フレーズは半角スペースで区切り、Aメロ5-7/プレ7-5/サビ8-8を基本形に
+- 対になる行はモーラ数を±1で揃える(1番2番も同じ)
+- サビ頭はあ段で立ち上げ、行末は伸ばせる母音(あ/お/え段・長音)
+- う段・促音「っ」を強拍やロングトーン位置に置かない
+- 読みが揺れる漢字はひらがなに開く(運命→さだめ 等)
+- 完成後は POST /music/lyrics/check で必ず検査(score 85+を出荷基準に)
+あなたはMAD動画のための音楽ディレクター兼構成作家です。ユーザーと相談しながら
 **まず構成(セクション割り・各部の役割・盛り上がり曲線)を固め**、その上で歌詞やスタイルを詰めます。
 観点: 音ハメしやすさ(はっきりしたキック、明確なサビ頭、ブレイクの有無)、MADの映像構成との対応。
 構成が動いたら、毎回**構成シート全体**を次の形式で返答の最後に付けること:
@@ -392,3 +400,14 @@ def repaint(aid: int, req: RepaintRequest, session: Session = Depends(get_sessio
             "repaint_src_asset": aid, "repaint_start": req.start_sec, "repaint_end": req.end_sec,
         }))
     return jobs
+
+
+class LyricsCheckRequest(BaseModel):
+    lyrics: str
+
+
+@router.post("/lyrics/check")
+def lyrics_check(req: LyricsCheckRequest):
+    """作詞リンター: モーラ設計(譜割り)の検査。メロディに乗らない歌詞を事前に潰す。"""
+    from app.services.lyric_craft import check as _check
+    return _check(req.lyrics)

@@ -28,6 +28,8 @@ export function MusicStudio() {
   // form
   const [caption, setCaption] = useState('up-tempo J-pop idol anime song, cute energetic female vocal, bright sparkling synth, four-on-the-floor kick, catchy melodic chorus, clean mix')
   const [lyrics, setLyrics] = useState('')
+  const [lyricCheck, setLyricCheck] = useState<null | { score: number; warnings: string[]
+    sections: { tag: string; lines: { text: string; phrases: number[]; head_vowel: string; tail_vowel: string }[] }[] }>(null)
   const [bpm, setBpm] = useState<string>('')
   const [duration, setDuration] = useState(104)
   const [variants, setVariants] = useState(2)
@@ -174,6 +176,29 @@ export function MusicStudio() {
           <textarea value={lyrics} onChange={e => setLyrics(e.target.value)} rows={10}
             placeholder={'[verse]\n...\n\n[chorus]\n...'}
             className="mt-1 w-full bg-zinc-900 border border-zinc-700 rounded p-2 text-[13px] font-mono" />
+        <div className="flex items-center gap-2 mt-1">
+          <button onClick={async () => {
+            const r = await api.post('/music/lyrics/check', { lyrics })
+            setLyricCheck(r.data)
+          }} className="px-2.5 py-1 rounded bg-teal-800 hover:bg-teal-700 text-xs">🩺 譜割りチェック</button>
+          {lyricCheck && <span className={`text-xs font-bold ${lyricCheck.score >= 85 ? 'text-emerald-400' : lyricCheck.score >= 70 ? 'text-amber-400' : 'text-red-400'}`}>score {lyricCheck.score}</span>}
+        </div>
+        {lyricCheck && (
+          <div className="mt-1 text-[11px] leading-relaxed bg-zinc-950 rounded p-2 max-h-48 overflow-y-auto">
+            {lyricCheck.warnings.map((w, i) => <div key={i} className="text-amber-400">⚠ {w}</div>)}
+            {lyricCheck.sections.map((sec, i) => (
+              <div key={i} className="mt-1">
+                <span className="text-purple-300">[{sec.tag}]</span>
+                {sec.lines.map((l, j) => (
+                  <div key={j} className="text-zinc-400 flex gap-2">
+                    <span className="text-zinc-600 w-14 shrink-0">{l.phrases.join('+')}</span>
+                    <span className="truncate">{l.text}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
         </label>
         <div className="flex gap-3">
           <label className="text-xs text-zinc-400 flex-1">BPM(空=おまかせ)
