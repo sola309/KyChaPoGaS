@@ -125,6 +125,7 @@ export class PuppetStage {
   params: PuppetParams = { headTurn: 0, headNod: 0, talk: 0, expression: 'neutral' }
   /** external lip-sync drive (0..1) — audio amplitude → mouth open amount. */
   talkLevel = 0
+  mouthRange = 0.75   // 感情による開口の最大幅(0..1) — 静かな感情では大きく開かない
   /** mouth width 0..1 from spectral tilt (front vowels い/え wide, う/お round). */
   mouthWide = 0.5
   private sMOpen = 0; private sMWide = 0.5
@@ -497,7 +498,7 @@ export class PuppetStage {
       // ハードスイッチ+ヒステリシス: クロスフェードは唇が二重に見える(不気味さの
       // 正体)。選択口形素をアルファ1で即置換、切替は8フレーム最低保持で
       // パタつきを防ぐ。開口が小さいときはベースの閉じ口(素の絵)を見せる。
-      const open = talkEnv, wide = this.sMWide
+      const open = talkEnv * this.mouthRange, wide = this.sMWide
       // 段(閉/半開/全開)はヒステリシス遷移: 上がる閾値と下がる閾値を離して
       // 音節ごとの高速往復を殺す(アニメの口パクは形を保持する)
       if (this.mouthStep === 0) { if (open > 0.16) this.mouthStep = 1 }

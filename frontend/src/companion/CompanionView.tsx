@@ -138,7 +138,19 @@ export function CompanionView() {
 
   // Speak: fetch TTS audio, play it, and drive the puppet's mouth from the live
   // audio — amplitude → open amount, spectral centroid → vowel-ish mouth width.
-  const speak = async (text?: string, segments?: { text: string; expression: string }[]): Promise<void> => {
+  // 感情ごとの開口レンジ(テンションが低い感情は口を大きく開けない)と声の感情
+  const MOUTH_RANGE: Record<string, number> = {
+    neutral: 0.72, smile: 0.85, angry: 1.0, surprised: 1.0, sad: 0.5, smug: 0.7, shy: 0.55,
+  }
+  const VOICE_EMOJI: Record<string, string> = {
+    neutral: '', smile: '😊', angry: '💢', surprised: '😲', sad: '😢', smug: '😏', shy: '😳',
+  }
+  const applyExpr = (e: string) => {
+    set({ expression: e as Expression })
+    if (stageRef.current) stageRef.current.mouthRange = MOUTH_RANGE[e] ?? 0.75
+  }
+
+  const speak = async (text?: string, segments?: { text: string; expression: string }[], voiceExpr?: string): Promise<void> => {
     const stage = stageRef.current
     const say = (text ?? speech).trim()
     if (!stage || !say) return
@@ -146,7 +158,7 @@ export function CompanionView() {
     try {
       const res = await fetch('/api/puppet/tts/speak', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: say }),
+        body: JSON.stringify({ text: say, emoji_style: VOICE_EMOJI[voiceExpr ?? ''] ?? '' }),
       })
       if (!res.ok) throw new Error('tts')
       const buf = await res.arrayBuffer()
@@ -164,7 +176,7 @@ export function CompanionView() {
         let acc = 0
         for (const sg of segments) {
           const at = (acc / total) * audio.duration * 1000
-          timers.push(window.setTimeout(() => set({ expression: sg.expression as Expression }), at))
+          timers.push(window.setTimeout(() => applyExpr(sg.expression), at))
           acc += sg.text.length
         }
       }
@@ -174,7 +186,7 @@ export function CompanionView() {
           analyser.getByteTimeDomainData(td)
           let sum = 0
           for (let i = 0; i < td.length; i++) { const v = (td[i] - 128) / 128; sum += v * v }
-          stage.talkLevel = Math.min(1, Math.sqrt(sum / td.length) * 3.4)
+          stage.talkLevel = Math.tanh(Math.sqrt(sum / td.length) * 3.0)
           // spectral centroid → mouth width
           analyser.getByteFrequencyData(fd)
           let num = 0, den = 0
@@ -251,8 +263,8 @@ export function CompanionView() {
       const { reply, expression, segments } = await r.json()
       if (stageRef.current) stageRef.current.thinking = false
       setChatLog([...hist, { role: 'assistant', content: reply }])
-      set({ expression: (segments?.[0]?.expression ?? expression) })
-      await speak(reply, segments)
+      applyExpr(segments?.[0]?.expression ?? expression)
+      await speak(reply, segments, expression)
     } catch (e) {
       useUIStore.getState().pushToast(`対話に失敗: ${e instanceof Error ? e.message : ''}`, 'info')
     } finally {
