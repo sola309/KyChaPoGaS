@@ -11,9 +11,9 @@ import { useUIStore } from '../../store/uiStore'
 
 interface Song {
   id: number; name: string; duration_sec: number | null; created_at: string | null
+  lyrics?: string; caption?: string; bpm?: number | null; key?: string | null; seed?: number | null
   analysis: null | { bpm: number; toriyasusa: number; beat_stability_cv: number
-    energy_contrast: number; punch: number; sections: Array<{ t0: number; t1: number; energy: number   lyrics?: string; caption?: string; bpm?: number | null; key?: string | null; seed?: number | null
-}> }
+    energy_contrast: number; punch: number; sections: Array<{ t0: number; t1: number; energy: number }> }
 }
 interface Msg { role: 'user' | 'assistant'; content: string }
 interface Proposal { caption?: string; lyrics?: string; bpm?: number; duration_sec?: number }

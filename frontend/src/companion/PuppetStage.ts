@@ -142,7 +142,6 @@ export class PuppetStage {
   // expression intensity — ramps to 1 when set, then relaxes toward a floor
   private exprI = 0; private lastExpr: Expression = 'neutral'
   // emphasis nods while speaking (driven by talk envelope onset)
-  private emph = 0; private lastTalkEnv = 0
   // user view transform — zoom (×base-fit) and pan (renderer px) so the user can
   // enlarge/move the model (esp. on phones where a full body is tiny).
   private viewZoom = 1; private viewPanX = 0; private viewPanY = 0
@@ -522,7 +521,6 @@ export class PuppetStage {
     // 話し身振り: 音節ごとのキックは頭がカクつく(まばたきまで巻き添えに見える)。
     // ゆっくり平滑したエネルギーで、低周波のうなずき/揺れだけを乗せる。
     this.slowTalk += (talkEnv - this.slowTalk) * 0.06
-    this.lastTalkEnv = talkEnv
     headDy += this.slowTalk * (3.5 * S) * Math.sin(t * 1.9)
     headAngle += this.slowTalk * 0.010 * Math.sin(t * 1.4 + 1)
     // 語気の表情: 強い所で眉が上がり、目がわずかに細まる(棒読み顔の解消)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { PuppetStage, type PuppetManifest, type PuppetParams } from './PuppetStage'
+import { PuppetStage, type PuppetManifest, type PuppetParams, type Expression } from './PuppetStage'
 import { useUIStore } from '../store/uiStore'
 
 // Fixed default base prompt for generating 杏子 images (mirrors backend config;

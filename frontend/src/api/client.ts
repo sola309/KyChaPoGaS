@@ -123,9 +123,10 @@ export interface ClipUpdate {
 
 // extras are optional on create (backend defaults)
 export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
-  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'>
+  | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'
+  | 'kind' | 'attrs_json'>
   & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
-  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'>>
+  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json' | 'kind' | 'attrs_json'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
