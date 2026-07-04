@@ -94,6 +94,11 @@ export class PuppetStage {
   private visemeFull = false                       // 全開段か(false=半開段)
   private slowTalk = 0                             // 低周波の発話エネルギー(身振り用)
   private mouthStep = 0                            // 0=閉 1=半開 2=全開(ヒステリシス)
+  // 口形遷移モーフ: 切替を"動き"にする(90msの縦スケール+短フェード)
+  private mouthShown: { sprite: Sprite; mesh: MeshData } | null = null
+  private mouthPrev: { sprite: Sprite; mesh: MeshData } | null = null
+  private mouthTrans = 1                           // 0→1 遷移進行
+  private lastT = -1
   private blinkBank: { sprite: Sprite; mesh: MeshData }[] = []  // THA3瞬き中割り
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
@@ -616,15 +621,37 @@ export class PuppetStage {
     }
 
     // v3: 差分スプライト(フルキャンバスパッチ)はheadアフィン+ヨーワープに追従
-    for (const [k, v] of this.varMouth) {
-      (v.sprite as Sprite).alpha = this.vMouthA[k] ?? 0
-      if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
+    // ── 口形遷移モーフ ──────────────────────────────────────────────
+    const dt = this.lastT < 0 ? 1 / 60 : Math.min(0.05, Math.max(0.001, t - this.lastT))
+    this.lastT = t
+    const target = this.visemeCur === '' ? null
+      : (this.visemeFull ? this.varMouth.get(this.visemeCur) : this.varMouthHalf.get(this.visemeCur)) ?? null
+    if (target !== this.mouthShown) {
+      this.mouthPrev = this.mouthShown
+      this.mouthShown = target
+      this.mouthTrans = 0
     }
-    for (const [k, v] of this.varMouthHalf) {
-      const on = k === this.visemeCur && !this.visemeFull
-      ;(v.sprite as Sprite).alpha = on ? 1 : 0
-      if (on) this.warpFace(v.mesh, mHead)
+    this.mouthTrans = Math.min(1, this.mouthTrans + dt / 0.09)
+    const u = this.mouthTrans, eIn = u * u * (3 - 2 * u)
+    // 全口スプライトをリセット
+    for (const [, v] of this.varMouth) (v.sprite as Sprite).alpha = 0
+    for (const [, v] of this.varMouthHalf) (v.sprite as Sprite).alpha = 0
+    // 入ってくる口: 口ピボット周りで縦に"開いていく"(0.72→1) — 中間の動きを作る
+    if (this.mouthShown) {
+      const spr = this.mouthShown.sprite as Sprite
+      spr.alpha = Math.min(1, eIn * 1.6)
+      const sy = 0.72 + 0.28 * eIn
+      const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
+      this.warpFace(this.mouthShown.mesh, mm)
     }
+    // 出ていく口: 縦に閉じながら短く消える
+    if (this.mouthPrev && u < 1) {
+      const spr = this.mouthPrev.sprite as Sprite
+      spr.alpha = Math.max(spr.alpha, 1 - eIn)
+      const sy = 1 - 0.3 * eIn
+      const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
+      this.warpFace(this.mouthPrev.mesh, mm)
+    } else if (u >= 1) this.mouthPrev = null
     for (const [k, v] of this.varEyes) {
       (v.sprite as Sprite).alpha = this.blinkBank.length ? 0 : (this.vEyesA[k] ?? 0)
       if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
