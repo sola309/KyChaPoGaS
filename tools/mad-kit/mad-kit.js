@@ -358,6 +358,7 @@ TEMPLATES.showcase_pattern = (root, p, ctx) => {
   const subs = (p.subjects || [p.subject]).filter(Boolean).map((sp, i) => {
     const m = img(root, sp.asset, { height: (sp.h ?? 860) + 'px', left: (sp.x ?? 640) + 'px', top: (sp.y ?? 220) + 'px', zIndex: 8 });
     tag(m, ctx, p.subjects ? `subjects[${i}]` : 'subject', sp.asset);
+    integrate(m, { rim: sp.rim });
     return motorize(m, { origin: '50% 100%', enter: { kind: sp.enter || autoEnter(ctx.idx + i), at: .05 + i * .19, dur: .55 },
       idles: [{ kind: 'breath' }, { kind: 'sway', amp: 1.2, rate: .9, ph: i }], emph: { kind: 'punch_db', amp: .03 } }, ctx.t0);
   });
@@ -488,6 +489,7 @@ TEMPLATES.cv_card = (root, p, ctx) => {
     e2.style.position = 'relative'; return tag(e2, ctx, `chips[${(p.chips||[]).indexOf(c)}]`, c); });
   const gl = img(root, p.asset, { height: '92%', left: '52%', bottom: '-40px', zIndex: 3 });
   tag(gl, ctx, 'asset', p.asset);
+  integrate(gl, { rim: p.rim });
   const amb = ambientOf(root, { kind: 'floaters', n: 6, set: ['heart', 'star'], alpha: .5 }, 91);
   return t => { left.style.transform = `translateX(${lerp(-100, 0, outExpo(map(t, ctx.t0, ctx.t0 + .5)))}%)`;
     lines.forEach((e2, i) => { const u = map(t, ctx.t0 + .25 + i * .14, ctx.t0 + .55 + i * .14);
@@ -563,6 +565,7 @@ TEMPLATES.parallax_scene = (root, p, ctx) => {
   (p.subjects || (p.subject ? [p.subject] : [])).forEach((sp, i) => {
     const m = img(subL, sp.asset, { height: (sp.h ?? 860) + 'px', left: (sp.x ?? 640) + 'px', top: (sp.y ?? 220) + 'px', zIndex: 8 });
     tag(m, ctx, p.subjects ? `subjects[${i}]` : 'subject', sp.asset);
+    integrate(m, { rim: sp.rim });
     ups.push(motorize(m, { origin: '50% 100%',
       enter: { kind: sp.enter || autoEnter(ctx.idx + i), at: .05 + i * .19, dur: .55 },
       idles: sp.idles || [{ kind: 'breath' }, { kind: 'sway', amp: 1.2, rate: .9, ph: i }],
@@ -617,6 +620,7 @@ TEMPLATES.lineup = (root, p, ctx) => {
     const wrap = el(root, { left: (110 + i * cw) + 'px', top: '190px', width: (cw - 20) + 'px', textAlign: 'center' });
     const m = img(wrap, a, { position: 'relative', height: '640px', left: '50%' }); m.style.position = 'relative';
     tag(m, ctx, `assets[${i}]`, a);
+    integrate(m, { shadowY: 18, shadowBlur: 14 });
     const tagEl = txt(wrap, p.tags?.[i] ?? p.tag ?? '佐倉杏子', { position: 'relative', marginTop: '14px', fontFamily: 'Mochiy', fontSize: '34px',
       color: PAL.wine, background: '#fff', display: 'inline-block', padding: '4px 22px', borderRadius: '999px' });
     tagEl.style.position = 'relative'; return { wrap, m, i };
@@ -774,6 +778,50 @@ function fxAttach(root, list, ctx) {
   return t => ups.forEach(u => u(t));
 }
 
+/* ============ J. color script(グレード)+ 統合パス ============
+   shotlist.meta.grade: [{from, to, filter, wash, washBlend, washAlpha}]
+   全ショットの上に共通の色調整+ウォッシュ+極薄グレインを一枚掛けして
+   「1本の映像」にする(色彩設計)。区間はfrom/to(秒 or "db:N")、補間はクロスフェード。 */
+let _gradeWash = null, _grainEl = null;
+function initGrade() {
+  if (_gradeWash) return;
+  _gradeWash = el(stage, { inset: 0, zIndex: 73, pointerEvents: 'none' });
+  const id = `mkgrain_g`;
+  _fxSvg().innerHTML += `<filter id="${id}"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5"/>
+    <feColorMatrix type="matrix" values="0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.5 0"/></filter>`;
+  _grainEl = el(stage, { inset: '-80px', zIndex: 74, pointerEvents: 'none',
+    filter: `url(#${id})`, mixBlendMode: 'overlay', opacity: 0 });
+}
+function updateGrade(t) {
+  const meta = (K.shotlist && K.shotlist.meta) || {};
+  const grades = meta.grade;
+  if (!grades || !grades.length) return;
+  initGrade();
+  // アクティブ区間(端0.8秒でクロスフェード)
+  let cur = null, a = 1;
+  for (const g of grades) {
+    const f = T(g.from), to = T(g.to);
+    if (t >= f && t < to) { cur = g; a = Math.min(1, (t - f) / .8, (to - t) / .8); break; }
+  }
+  // #scenesはサイズ0コンテナなのでfilterを掛けると全消えする(Chromium) — #stageに掛ける
+  stage.style.filter = cur?.filter || '';
+  if (cur?.wash) {
+    _gradeWash.style.background = cur.wash;
+    _gradeWash.style.mixBlendMode = cur.washBlend || 'soft-light';
+    _gradeWash.style.opacity = (cur.washAlpha ?? .5) * clamp(a);
+  } else _gradeWash.style.opacity = 0;
+  _grainEl.style.opacity = meta.grain ?? 0;
+  if (_grainEl.style.opacity > 0) { const k = Math.floor(t * 24);
+    _grainEl.style.transform = `translate(${(k * 37) % 60 - 30}px, ${(k * 53) % 60 - 30}px)`; }
+}
+// 統合パス: 被写体に接地影+リムライトをCSS filterで(transform追従・追加DOM不要)
+function integrate(imgEl, o = {}) {
+  const sh = o.shadow === false ? '' : `drop-shadow(0 ${o.shadowY ?? 26}px ${o.shadowBlur ?? 20}px rgba(70,15,35,${o.shadowAlpha ?? .32}))`;
+  const rim = o.rim ? ` drop-shadow(0 0 ${o.rimBlur ?? 16}px ${o.rim})` : '';
+  imgEl.style.filter = `${sh}${rim}`;
+  return imgEl;
+}
+
 /* templates continue in mad-kit-scenes.js (bespoke: intro/title/peak/breakdown/outro) */
 return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_WAITS, svgEl, starPts, HEART, tag,
   patternBG, PATTERNS, AMBIENTS, confettiLayer, petalLayer, sparkleLayer, floaterLayer,
@@ -781,5 +829,6 @@ return { K, W, H, PAL, EASE, clamp, lerp, map, rng32, el, img, txt, vid, VIDEO_W
   ENTERS, IDLES, EMPHS, motorize, TEMPLATES, autoEnter, ambientOf, kenburns,
   cameraRig, CAM_PRESETS, FXS, fxAttach,
   BEATS, DBS, db, T, beatAfter, beatPulse, dbPulse, beatsFloat, lastLE, stemLevel, STEMS,
+  updateGrade, integrate,
   stage, scenesRoot, flashEl, lbT, lbB, irisEl, FLASHES, BANDCUTS, flashAt, updateBands, updateFlash };
 })();

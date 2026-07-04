@@ -276,11 +276,28 @@ TEMPLATES.outro_credits = (root, p, ctx) => {
 };
 
 /* ============ compiler ============ */
+// シームレストランジション: 新ショットがclip-pathで前ショットの上に開く。
+// "iris" | "iris:cx,cy"(%) — 円形リビール / "wipe_diag" — 槍の角度の斜めワイプ
+const REVEAL_DUR = 0.55;
+function revealClip(kind, u) {
+  const e = M.EASE.inOutCubic(u);
+  if (kind.startsWith('iris')) {
+    const m = /iris:([\d.]+),([\d.]+)/.exec(kind);
+    const cx = m ? m[1] : 50, cy = m ? m[2] : 50;
+    return `circle(${e * 130}% at ${cx}% ${cy}%)`;
+  }
+  // 斜めワイプ(-30°): 進行に応じて帯が右下から画面を覆う
+  const p = -40 + e * 190;
+  return `polygon(${p - 60}% 0%, ${p + 40}% 0%, ${p + 100}% 100%, ${p}% 100%)`
+    .replace(/(-?[\d.]+)%/g, (s, n) => `${Math.max(-100, Math.min(220, +n))}%`);
+}
+
 function compile(shotlist) {
   const scenes = [];
   shotlist.shots.forEach((shot, idx) => {
     const t0 = T(shot.from), t1 = T(shot.to);
     const root = el(M.scenesRoot, { inset: 0, display: 'none', overflow: 'hidden' }, 'scene');
+    root.style.zIndex = idx;   // リビール中は後続ショットが上
     const tpl = TEMPLATES[shot.template];
     if (!tpl) { console.error('unknown template', shot.template); return; }
     const ctx = { t0, t1, idx, sid: shot.id, fromBar: shot.params?.fromBar };
@@ -289,14 +306,22 @@ function compile(shotlist) {
     const update = fxUp ? (t => { tplUp(t); fxUp(t); }) : tplUp;
     if (shot.transition === 'bandwipe') BANDCUTS.push(t0);
     if (shot.transition === 'flash') flashAt(t0 - .02, .28, .85);
-    scenes.push({ t0, t1, root, update, shot });
+    const reveal = /^(iris|wipe_diag)/.test(shot.transition || '') ? shot.transition : null;
+    scenes.push({ t0, t1, root, update, shot, reveal });
   });
+  // 後続がリビールなら前ショットの表示をREVEAL_DUR延長(下地として残す)
+  scenes.forEach((s, i) => { s.holdUntil = scenes[i + 1]?.reveal ? s.t1 + REVEAL_DUR : s.t1; });
   const lbReset = new Set(shotlist.shots.filter(s => s.template === 'breakdown_pan').map((s, i) => i));
   window.seek = ms => { const t = ms / 1000 + (window.kycha.offset || 0);
     let anyLB = false;
-    for (const s of scenes) { const on = t >= s.t0 && t < s.t1;
+    for (const s of scenes) { const on = t >= s.t0 && t < s.holdUntil;
       s.root.style.display = on ? 'block' : 'none';
-      if (on) { s.update(t); if (s.shot.template === 'breakdown_pan') anyLB = true; } }
+      if (on) {
+        if (s.reveal) { const u = (t - s.t0) / REVEAL_DUR;
+          s.root.style.clipPath = u < 1 ? revealClip(s.reveal, Math.max(0, u)) : 'none'; }
+        s.update(Math.min(t, s.t1 - 1e-3));
+        if (s.shot.template === 'breakdown_pan' && t < s.t1) anyLB = true; } }
+    M.updateGrade(t);
     if (!anyLB) { M.lbT.style.height = '0px'; M.lbB.style.height = '0px'; }
     if (!scenes.some(s => t >= s.t0 && t < s.t1 && s.shot.template === 'outro_credits')) M.irisEl.style.background = 'none';
     M.updateBands(t); M.updateFlash(t);
