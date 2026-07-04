@@ -179,6 +179,31 @@ def _clip_backfill(puppet_dir, by_name) -> None:
             print(f"  [backfill-clip] {lname}: {before}px を首の背側として除去")
 
 
+def _fade_bottom_edge(puppet_dir, by_name, ramp: int = 60) -> None:
+    """キャンバス下端で切れているレイヤ(髪・胴)に下端アルファフェードを焼き込む。
+    揺れで持ち上がっても「フラットな切り口」が見えず自然に消える(.orig冪等)。"""
+    import numpy as np
+    from PIL import Image
+    from pathlib import Path
+    nd = Path(puppet_dir)
+    for name, ly in by_name.items():
+        fp = nd / ly["file"]
+        orig = fp.with_suffix(".fade_orig.png")
+        src = orig if orig.exists() else fp
+        im = Image.open(src).convert("RGBA")
+        arr = np.asarray(im).copy()
+        h = arr.shape[0]
+        if (arr[-3:, :, 3] > 32).sum() < 40:      # 下端に接していないレイヤは対象外
+            continue
+        if not orig.exists():
+            im.save(orig)
+        grad = np.linspace(1.0, 0.0, ramp)[:, None]
+        band = arr[h - ramp:, :, 3].astype(np.float32) * grad
+        arr[h - ramp:, :, 3] = band.astype(np.uint8)
+        Image.fromarray(arr).save(fp)
+        print(f"  [bottom-fade] {name}: 下端{ramp}pxをフェード")
+
+
 def compile_rig(puppet_dir: str) -> dict:
     mpath = os.path.join(puppet_dir, "manifest.json")
     # one-time backup of the original (v1) manifest before we rewrite it
@@ -309,6 +334,7 @@ def compile_rig(puppet_dir: str) -> dict:
 
     _clean_halos(puppet_dir, by_name)   # strip faint-alpha halos from eye layers
     _clip_backfill(puppet_dir, by_name) # 首の背側に補完された布の除去
+    _fade_bottom_edge(puppet_dir, by_name)  # 下端切り口のフェード(ポートレート対応)
 
     # per-layer sway classification (hair / hanging cloth / rigid) → runtime physics
     for l in layers:

@@ -81,10 +81,12 @@ export class PuppetStage {
   app = new Application()
   root = new Container()
   private sprites: SpriteEntry[] = []
+  private revealAt = 0           // <0: 未開始 / それ以外: フェード開始時刻
   // v3 描き差分スプライト(フルキャンバスのパッチ、head変換+ヨーに追従)
   private varMouth = new Map<string, { sprite: Sprite; mesh: MeshData }>()
   private varEyes = new Map<string, { sprite: Sprite; mesh: MeshData }>()
-  private vMouthA: Record<string, number> = {}   // 口形素アルファ(平滑)
+  private vMouthA: Record<string, number> = {}   // 口形素アルファ(0/1ハードスイッチ)
+  private visemeCur = ''; private visemeHold = 0  // 現在の口形素と保持フレーム数
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
   private cw = 1280
@@ -176,6 +178,7 @@ export class PuppetStage {
       return Texture.from(cv)
     }
 
+    this.root.alpha = 0            // 全レイヤ搭載完了までステージを見せない
     const ordered = [...manifest.layers].sort((a, b) => a.z - b.z)
     let mouthChildIndex = -1
     for (const ly of ordered) {
@@ -246,6 +249,7 @@ export class PuppetStage {
     this.fit()
 
     let t = 0
+    this.revealAt = -1             // 次のupdateからフェードイン開始
     this.app.ticker.add((tk) => { t += tk.deltaMS / 1000; this.update(t) })
     this.onVis = () => { if (document.hidden) this.app.ticker.stop(); else this.app.ticker.start() }
     document.addEventListener('visibilitychange', this.onVis)
@@ -270,8 +274,9 @@ export class PuppetStage {
     const cw = this.app.renderer.width, chh = this.app.renderer.height
     const scale = this.baseFit() * this.viewZoom
     this.root.scale.set(scale)
+    // 下端は4%オーバースキャン: 切り口(ポートレート素体の裾)を常に画面外へ
     this.root.position.set((cw - this.cw * scale) / 2 + this.viewPanX,
-                           chh - this.ch * scale + this.viewPanY)
+                           chh - this.ch * scale + this.viewPanY + 0.04 * this.ch * scale)
   }
 
   // ── user view controls (zoom / pan) ────────────────────────────────────────
@@ -430,16 +435,19 @@ export class PuppetStage {
     // 差分があるときは手続き変形(縦伸ばし+疑似口腔)をブレンド率ぶん退避させる。
     let vMouthSum = 0
     if (this.varMouth.size) {
+      // ハードスイッチ+ヒステリシス: クロスフェードは唇が二重に見える(不気味さの
+      // 正体)。選択口形素をアルファ1で即置換、切替は8フレーム最低保持で
+      // パタつきを防ぐ。開口が小さいときはベースの閉じ口(素の絵)を見せる。
       const open = talkEnv, wide = this.sMWide
-      const pick = open < 0.1 ? '' :
+      const pick = open < 0.12 ? '' :
         wide > 0.5 ? (open > 0.55 ? 'a' : 'i')
                    : (open > 0.62 ? 'a' : open > 0.36 ? 'o' : open > 0.18 ? 'u' : 'e')
-      for (const k of this.varMouth.keys()) {
-        const target = k === pick ? Math.min(1, (open - 0.06) / 0.22) : 0
-        this.vMouthA[k] += (target - this.vMouthA[k]) * 0.5
-        vMouthSum += this.vMouthA[k]
+      this.visemeHold++
+      if (pick !== this.visemeCur && (this.visemeHold >= 8 || pick === '' || this.visemeCur === '')) {
+        this.visemeCur = pick; this.visemeHold = 0
       }
-      vMouthSum = Math.min(1, vMouthSum)
+      for (const k of this.varMouth.keys()) this.vMouthA[k] = k === this.visemeCur ? 1 : 0
+      vMouthSum = this.visemeCur ? 1 : 0
     }
     const procM = 1 - vMouthSum                  // 手続き口の残量
     const mouthSY = 1 + 0.45 * talkEnv * procM   // closed-mouth sprite opens modestly
@@ -456,6 +464,10 @@ export class PuppetStage {
     const floor = active === 'neutral' ? 0 : 0.45
     this.exprI += (floor - this.exprI) * 0.012
     const expr = this.expr(active, this.exprI)
+
+    // ロード完了後のフェードイン(0.45s)
+    if (this.revealAt < 0) this.revealAt = t
+    this.root.alpha = Math.min(1, (t - this.revealAt) / 0.45)
 
     this.root.angle = 0
     const idleRot = 0.010 * Math.sin((t / 8) * TAU)
@@ -493,14 +505,15 @@ export class PuppetStage {
     // v3: 描きまぶた差分があるときは「絵」で閉じる(スカッシュは補助程度に残す)
     let vEyesClosed = 0, vEyesHalf = 0
     if (this.varEyes.size) {
-      const closed = this.varEyes.has('closed') ? Math.min(1, Math.max(0, (eyeClose - 0.45) / 0.25)) : 0
-      const half = this.varEyes.has('half')
-        ? Math.max(0, 1 - Math.abs(eyeClose - 0.42) / 0.28) * (1 - closed) : 0
-      this.vEyesA['closed'] = (this.vEyesA['closed'] ?? 0) * 0.45 + closed * 0.55
-      this.vEyesA['half'] = (this.vEyesA['half'] ?? 0) * 0.45 + half * 0.55
-      vEyesClosed = this.vEyesA['closed']; vEyesHalf = this.vEyesA['half']
+      // ハードスイッチ(アルファ0/1のみ): クロスフェードは開き目と閉じ目が
+      // 半透明で重なりゴーストになる(不自然さの正体)。Live2D/アニメ同様の
+      // スプライト切替 — 開(<0.3) / 半眼(0.3-0.72) / 閉(>0.72)。
+      if (eyeClose > 0.72 && this.varEyes.has('closed')) vEyesClosed = 1
+      else if (eyeClose > 0.3 && this.varEyes.has('half')) vEyesHalf = 1
+      this.vEyesA['closed'] = vEyesClosed
+      this.vEyesA['half'] = vEyesHalf
     }
-    const squashAmt = 0.94 * (1 - Math.max(vEyesClosed, vEyesHalf) * 0.8)
+    const squashAmt = 0.94 * (1 - Math.max(vEyesClosed, vEyesHalf) * 0.9)
     const eyeSY = Math.max(0.06, 1 - eyeClose * squashAmt)
     const mEyes = rig(ex, ey, 0, 1, eyeSY, 0, eyeDy + lookEyeDy)
     // brows ride with the eyes plus expression raise/tilt (#6 — now visible after z-fix)
@@ -747,12 +760,21 @@ export class PuppetStage {
     geom.getBuffer('aPosition').update()
   }
 
+  /** アニメ的な非対称ブリンク波形: 速閉→保持→緩開(0..1)。 */
+  private blinkShape(p: number): number {
+    if (p <= 0) return 0
+    if (p < 0.30) { const u = p / 0.30; return u * u }          // 加速して閉じる
+    if (p < 0.45) return 1                                       // 閉眼保持
+    const u = (p - 0.45) / 0.55
+    return 1 - u * u * (3 - 2 * u)                               // なめらかに開く
+  }
+
   /** 0 (open) .. 1 (closed) — drives the eye squash for blinks. */
   private blinkClose(t: number): number {
-    const period = 3.3, ph = t % period, dur = 0.14
-    if (ph < dur) return Math.sin((ph / dur) * Math.PI)
-    if (ph > 0.19 && ph < 0.19 + dur && (Math.floor(t / period) % 4 === 0))
-      return Math.sin(((ph - 0.19) / dur) * Math.PI)
+    const period = 3.3, ph = t % period, dur = 0.22
+    if (ph < dur) return this.blinkShape(ph / dur)
+    if (ph > 0.27 && ph < 0.27 + dur && (Math.floor(t / period) % 4 === 0))
+      return this.blinkShape((ph - 0.27) / dur)
     return 0
   }
 
