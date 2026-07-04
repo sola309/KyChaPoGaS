@@ -2,8 +2,8 @@
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 const EXEC = '/home/kigarashi309/.cache/ms-playwright/chromium-1223/chrome-linux/chrome'
-const URL = (process.env.QA_URL || 'http://localhost:8002') + '/?puppet=kyoko_v3'
-const OUT = '/tmp/rigqa3'
+const URL = (process.env.QA_URL || 'http://localhost:8002') + '/?puppet=' + (process.argv[2] || 'kyoko_v3')
+const OUT = '/tmp/rigqa3_' + (process.argv[2] || 'kyoko_v3')
 mkdirSync(OUT, { recursive: true })
 const browser = await chromium.launch({ executablePath: EXEC,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--no-sandbox'] })
@@ -33,7 +33,7 @@ await shot('02_viseme_a', () => { const s = window.__puppetStage; s.talkLevel = 
 await shot('03_viseme_i', () => { const s = window.__puppetStage; s.talkLevel = 0.4; s.mouthWide = 0.9; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(3.0) })
 await shot('04_viseme_u', () => { const s = window.__puppetStage; s.talkLevel = 0.28; s.mouthWide = 0.1; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(4.0) })
 await shot('05_viseme_o', () => { const s = window.__puppetStage; s.talkLevel = 0.5; s.mouthWide = 0.2; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(5.0) })
-await shot('06_eyes_closed', () => { const s = window.__puppetStage; s.talkLevel = 0; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(3.28) })
+await shot('06_eyes_closed', () => { const s = window.__puppetStage; s.talkLevel = 0; for (let k = 0; k < 25; k++) window.__puppetSeek(3.37) })
 await shot('07_yaw_right', () => { const s = window.__puppetStage; s.params.headTurn = 1; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(7.0, 40) })
 await shot('08_yaw_left', () => { const s = window.__puppetStage; s.params.headTurn = -1; ((from, n = 20) => { for (let k = 0; k < n; k++) window.__puppetSeek(from + k * 0.033) })(9.0, 40) })
 await browser.close()
