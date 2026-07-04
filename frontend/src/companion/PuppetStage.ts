@@ -26,7 +26,10 @@ export interface RigMeta {
   cheek: { left: Pt; right: Pt } | null
   meshGroups: string[]
   // v3: face_variants.py が生成する描き差分(口形素/まぶた) — Live2D流ブレンドシェイプ
-  variants?: { mouth?: Record<string, string>; eyes?: Record<string, string> }
+  variants?: { mouth?: Record<string, string>; eyes?: Record<string, string>
+               mouthHalf?: Record<string, string> }
+  // v4: THA3で焼いた中割りフレームバンク(瞬き) — bake_face_bank.py
+  thaBank?: { eyeBlink?: string[]; mouth?: Record<string, string[]> }
 }
 export interface PuppetManifest {
   id: string; name: string; canvas: [number, number]
@@ -84,9 +87,12 @@ export class PuppetStage {
   private revealAt = 0           // <0: 未開始 / それ以外: フェード開始時刻
   // v3 描き差分スプライト(フルキャンバスのパッチ、head変換+ヨーに追従)
   private varMouth = new Map<string, { sprite: Sprite; mesh: MeshData }>()
+  private varMouthHalf = new Map<string, { sprite: Sprite; mesh: MeshData }>()  // 半開(3段口パク)
   private varEyes = new Map<string, { sprite: Sprite; mesh: MeshData }>()
   private vMouthA: Record<string, number> = {}   // 口形素アルファ(0/1ハードスイッチ)
   private visemeCur = ''; private visemeHold = 0  // 現在の口形素と保持フレーム数
+  private visemeFull = false                       // 全開段か(false=半開段)
+  private blinkBank: { sprite: Sprite; mesh: MeshData }[] = []  // THA3瞬き中割り
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
   private cw = 1280
@@ -244,7 +250,20 @@ export class PuppetStage {
         return { sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } }
       }
       for (const [k, rel] of Object.entries(variants.mouth ?? {})) { this.varMouth.set(k, await loadVar(rel)); this.vMouthA[k] = 0 }
+      for (const [k, rel] of Object.entries(variants.mouthHalf ?? {})) { this.varMouthHalf.set(k, await loadVar(rel)) }
       for (const [k, rel] of Object.entries(variants.eyes ?? {})) { this.varEyes.set(k, await loadVar(rel)); this.vEyesA[k] = 0 }
+    }
+    // v4: THA3瞬きバンク(中割りスプライト列 — インデックス再生、クロスフェード無し)
+    for (const rel of manifest.rig?.thaBank?.eyeBlink ?? []) {
+      let fhIdx = this.root.children.length
+      for (let i = 0; i < this.sprites.length; i++)
+        if (this.sprites[i].group === 'fronthair') { fhIdx = this.root.getChildIndex(this.sprites[i].sprite); break }
+      const tex = await loadTex(baseUrl + rel.split('/').map(encodeURIComponent).join('/'))
+      const mesh = new MeshPlane({ texture: tex, verticesX: 12, verticesY: 12 })
+      const geom = mesh.geometry as unknown as MeshData['geom']
+      mesh.alpha = 0
+      this.root.addChildAt(mesh, fhIdx)
+      this.blinkBank.push({ sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } })
     }
     this.fit()
 
@@ -446,7 +465,9 @@ export class PuppetStage {
       if (pick !== this.visemeCur && (this.visemeHold >= 8 || pick === '' || this.visemeCur === '')) {
         this.visemeCur = pick; this.visemeHold = 0
       }
-      for (const k of this.varMouth.keys()) this.vMouthA[k] = k === this.visemeCur ? 1 : 0
+      // アニメ標準3段: 閉(素の絵) / 半開 / 全開 — 開口量で段を選ぶ
+      this.visemeFull = this.visemeCur !== '' && (this.varMouthHalf.size === 0 || open > 0.42)
+      for (const k of this.varMouth.keys()) this.vMouthA[k] = (k === this.visemeCur && this.visemeFull) ? 1 : 0
       vMouthSum = this.visemeCur ? 1 : 0
     }
     const procM = 1 - vMouthSum                  // 手続き口の残量
@@ -504,7 +525,12 @@ export class PuppetStage {
     const eyeClose = Math.max(blinkCl, expr.lidClose)   // 0 open .. 1 closed
     // v3: 描きまぶた差分があるときは「絵」で閉じる(スカッシュは補助程度に残す)
     let vEyesClosed = 0, vEyesHalf = 0
-    if (this.varEyes.size) {
+    let blinkFrame = -1
+    if (this.blinkBank.length) {
+      // THA3中割り: eyeClose(0..1)→フレームindex。0.12未満は素の絵。
+      if (eyeClose > 0.12) blinkFrame = Math.min(this.blinkBank.length - 1,
+        Math.floor(eyeClose * this.blinkBank.length))
+    } else if (this.varEyes.size) {
       // ハードスイッチ(アルファ0/1のみ): クロスフェードは開き目と閉じ目が
       // 半透明で重なりゴーストになる(不自然さの正体)。Live2D/アニメ同様の
       // スプライト切替 — 開(<0.3) / 半眼(0.3-0.72) / 閉(>0.72)。
@@ -513,7 +539,9 @@ export class PuppetStage {
       this.vEyesA['closed'] = vEyesClosed
       this.vEyesA['half'] = vEyesHalf
     }
-    const squashAmt = 0.94 * (1 - Math.max(vEyesClosed, vEyesHalf) * 0.9)
+    const squashAmt = this.blinkBank.length
+      ? (blinkFrame >= 0 ? 0.08 : 0.94 * Math.min(1, eyeClose / 0.12))
+      : 0.94 * (1 - Math.max(vEyesClosed, vEyesHalf) * 0.9)
     const eyeSY = Math.max(0.06, 1 - eyeClose * squashAmt)
     const mEyes = rig(ex, ey, 0, 1, eyeSY, 0, eyeDy + lookEyeDy)
     // brows ride with the eyes plus expression raise/tilt (#6 — now visible after z-fix)
@@ -584,9 +612,19 @@ export class PuppetStage {
       (v.sprite as Sprite).alpha = this.vMouthA[k] ?? 0
       if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
     }
+    for (const [k, v] of this.varMouthHalf) {
+      const on = k === this.visemeCur && !this.visemeFull
+      ;(v.sprite as Sprite).alpha = on ? 1 : 0
+      if (on) this.warpFace(v.mesh, mHead)
+    }
     for (const [k, v] of this.varEyes) {
-      (v.sprite as Sprite).alpha = this.vEyesA[k] ?? 0
+      (v.sprite as Sprite).alpha = this.blinkBank.length ? 0 : (this.vEyesA[k] ?? 0)
       if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
+    }
+    for (let i = 0; i < this.blinkBank.length; i++) {
+      const b = this.blinkBank[i]
+      ;(b.sprite as Sprite).alpha = i === blinkFrame ? 1 : 0
+      if (i === blinkFrame) this.warpFace(b.mesh, mHead, this.faceDepth)
     }
     this.drawMouthCavity(talkEnv * procM, mx, my, mHead)
   }

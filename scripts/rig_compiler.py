@@ -345,6 +345,14 @@ def compile_rig(puppet_dir: str) -> dict:
             l.pop("sway", None)
 
     m["version"] = 2
+    # 再コンパイルで生成物メタ(描き差分/THAバンク)を失わない
+    try:
+        _prev = json.loads((Path(puppet_dir) / "manifest.json").read_text())
+        for _k in ("variants", "thaBank"):
+            if _k in _prev.get("rig", {}) and _k not in rig:
+                rig[_k] = _prev["rig"][_k]
+    except Exception:
+        pass
     m["rig"] = rig
     m["layers"] = layers
     # preserve a user-edited display name across recompiles (v1 backup has the original)

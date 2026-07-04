@@ -32,6 +32,11 @@ VARIANTS = {
     "mouth_u": ("small puckered lips, tiny round open mouth, whistling", "mouth"),
     "mouth_e": ("half-open mouth, relaxed jaw, slight smile", "mouth"),
     "mouth_o": ("round wide open mouth, surprised, singing o vowel", "mouth"),
+    "mouth_a_h": ("slightly open mouth, small open mouth, talking", "mouth"),
+    "mouth_i_h": ("slight smile with teeth barely visible, small grin", "mouth"),
+    "mouth_u_h": ("tiny pursed lips, very small open mouth", "mouth"),
+    "mouth_e_h": ("slightly parted lips, relaxed", "mouth"),
+    "mouth_o_h": ("small round open mouth", "mouth"),
     "eyes_closed": ("eyes closed, gentle curved closed eyelids, peaceful expression", "eyes"),
     "eyes_half": ("half-closed eyes, sleepy relaxed eyelids", "eyes"),
 }
@@ -129,7 +134,10 @@ def main():
             patch.paste(result, (0, 0))
             patch.putalpha(mask)
             patch.save(vdir / f"{name}.png")
-            out_meta.setdefault(kind, {})[name.split("_", 1)[1]] = f"variants/{name}.png"
+            if name.endswith("_h"):
+                out_meta.setdefault("mouthHalf", {})[name.split("_")[1]] = f"variants/{name}.png"
+            else:
+                out_meta.setdefault(kind, {})[name.split("_", 1)[1]] = f"variants/{name}.png"
             print(f"  → variants/{name}.png bbox={bbox}")
 
     m["rig"]["variants"] = out_meta
