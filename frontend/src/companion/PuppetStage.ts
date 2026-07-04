@@ -100,7 +100,6 @@ export class PuppetStage {
   private mouthShown: { sprite: Sprite; mesh: MeshData } | null = null
   private mouthPrev: { sprite: Sprite; mesh: MeshData } | null = null
   private mouthTrans = 1                           // 0→1 遷移進行
-  private lastT = -1
   // C: フレーズ境界ジェスチャ / E: アイドル仕草
   private wasTalking = false
   private phraseBlinkAt = -9      // 息継ぎ瞬きの開始時刻
@@ -693,9 +692,7 @@ export class PuppetStage {
     }
 
     // v3: 差分スプライト(フルキャンバスパッチ)はheadアフィン+ヨーワープに追従
-    // ── 口形遷移モーフ ──────────────────────────────────────────────
-    const dt = this.lastT < 0 ? 1 / 60 : Math.min(0.05, Math.max(0.001, t - this.lastT))
-    this.lastT = t
+    // ── 口形遷移モーフ ── (dtはupdate()冒頭のポークばね用を再利用)
     const smiley = (active === 'smile' || active === 'shy') && this.varMouthSmile.size > 0
     const target = this.visemeCur === '' ? null
       : (this.visemeFull
