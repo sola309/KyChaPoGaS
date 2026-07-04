@@ -387,7 +387,7 @@ export class PuppetStage {
     const [bx, by] = this.pivots.body  ?? [this.cw / 2, this.ch * 0.80]
 
     const br = Math.sin((t / 4) * TAU)
-    const breathSY = 1 + 0.012 * br
+    const breathSY = 1 + 0.007 * br   // Live2D流: 呼吸は小振幅
     const bob = -2.2 * S * br
 
     const swayA = 0.022 * Math.sin((t / 6) * TAU) + 0.012 * Math.sin((t / 3.7) * TAU)
@@ -472,6 +472,10 @@ export class PuppetStage {
     const leanRot = this.sLookX * 0.018 + 0.004 * Math.sin((t / 7) * TAU)
     const leanDx = (this.sLookX * 6 + this.sTurn * 7) * S
     const mBody = rig(bx, by, leanRot, 1, breathSY, leanDx, bob * 0.5)
+    // Live2D流の呼吸結合: 頭は「胴が首根(頭ピボット)に与える変位」に乗る。
+    // これまで頭が呼吸から独立しており、肩だけ上下して首が浮いて見えた。
+    const rideX = mBody.a * hx + mBody.c * hy + mBody.tx - hx
+    const rideY = mBody.b * hx + mBody.d * hy + mBody.ty - hy
     // ── head yaw via cylinder warp ────────────────────────────────────────────
     // The base head transform carries NO turn (idle bob + translate only). The turn
     // is a per-vertex cylindrical remap applied AFTER this affine (see yawMapX), so
@@ -480,7 +484,7 @@ export class PuppetStage {
     // zero inter-layer drift. yawCx tracks the slide so the axis stays on the face.
     this.yawPhi = this.sTurn * YAW_MAX
     this.yawCx = hx + headDx
-    const mHead = rig(hx, hy, headAngle, 1, 1, headDx, headDy)
+    const mHead = rig(hx, hy, headAngle, 1, 1, headDx + rideX, headDy + rideY)
     const eyeDy = expr.eyeDy * S
     // Blink + squint by vertically squashing the WHOLE eye group (sclera, lashes
     // and iris together) around the eye pivot — the classic anime close. No skin

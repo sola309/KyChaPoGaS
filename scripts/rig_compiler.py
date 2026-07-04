@@ -141,6 +141,44 @@ def _classify_sway(name: str, puppet_dir: str, file: str):
     return None
 
 
+def _clip_backfill(puppet_dir, by_name) -> None:
+    """服の遮蔽補完(背側の布)が首より手前に描画される問題のクリップ。
+    首シルエット内(下端際を除く)に重なる topwear/neckwear の画素は
+    「首の後ろの布」なので透明化する(.orig から冪等に再クリップ)。"""
+    import numpy as np
+    from PIL import Image
+    from pathlib import Path
+    neck = by_name.get("neck")
+    if not neck:
+        return
+    nd = Path(puppet_dir)
+    na = np.asarray(Image.open(nd / neck["file"]).convert("RGBA"))[:, :, 3]
+    nb = neck.get("bbox")
+    if nb is None:
+        return
+    guard_y = int(nb[3] - (nb[3] - nb[1]) * 0.22)   # 首下端22%は襟前面が正当に重なる
+    mask = (na > 200)
+    mask[guard_y:, :] = False
+    if not mask.any():
+        return
+    for lname in ("topwear", "neckwear"):
+        ly = by_name.get(lname)
+        if not ly:
+            continue
+        fp = nd / ly["file"]
+        orig = fp.with_suffix(".clip_orig.png")
+        src = orig if orig.exists() else fp
+        im = Image.open(src).convert("RGBA")
+        if not orig.exists():
+            im.save(orig)
+        arr = np.asarray(im).copy()
+        before = int((arr[:, :, 3] > 0)[mask].sum())
+        arr[:, :, 3][mask] = 0
+        if before:
+            Image.fromarray(arr).save(fp)
+            print(f"  [backfill-clip] {lname}: {before}px を首の背側として除去")
+
+
 def compile_rig(puppet_dir: str) -> dict:
     mpath = os.path.join(puppet_dir, "manifest.json")
     # one-time backup of the original (v1) manifest before we rewrite it
@@ -270,6 +308,7 @@ def compile_rig(puppet_dir: str) -> dict:
     }
 
     _clean_halos(puppet_dir, by_name)   # strip faint-alpha halos from eye layers
+    _clip_backfill(puppet_dir, by_name) # 首の背側に補完された布の除去
 
     # per-layer sway classification (hair / hanging cloth / rigid) → runtime physics
     for l in layers:
