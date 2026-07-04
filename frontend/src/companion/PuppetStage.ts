@@ -92,6 +92,8 @@ export class PuppetStage {
   private vMouthA: Record<string, number> = {}   // 口形素アルファ(0/1ハードスイッチ)
   private visemeCur = ''; private visemeHold = 0  // 現在の口形素と保持フレーム数
   private visemeFull = false                       // 全開段か(false=半開段)
+  private slowTalk = 0                             // 低周波の発話エネルギー(身振り用)
+  private mouthStep = 0                            // 0=閉 1=半開 2=全開(ヒステリシス)
   private blinkBank: { sprite: Sprite; mesh: MeshData }[] = []  // THA3瞬き中割り
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
@@ -447,7 +449,7 @@ export class PuppetStage {
     const rawOpen = this.talkLevel > 0.001
       ? this.talkLevel
       : this.sTalk * Math.abs(Math.sin(t * 9.5)) * (0.55 + 0.45 * Math.sin(t * 2.3))
-    this.sMOpen += (rawOpen - this.sMOpen) * 0.45
+    this.sMOpen += (rawOpen - this.sMOpen) * (rawOpen > this.sMOpen ? 0.5 : 0.13)
     this.sMWide += (this.mouthWide - this.sMWide) * 0.3
     const talkEnv = this.sMOpen
     // ── v3 口形素: 開口量×口幅ヒントから あ/い/う/え/お を選び描き差分をクロスフェード。
@@ -458,15 +460,20 @@ export class PuppetStage {
       // 正体)。選択口形素をアルファ1で即置換、切替は8フレーム最低保持で
       // パタつきを防ぐ。開口が小さいときはベースの閉じ口(素の絵)を見せる。
       const open = talkEnv, wide = this.sMWide
-      const pick = open < 0.12 ? '' :
+      // 段(閉/半開/全開)はヒステリシス遷移: 上がる閾値と下がる閾値を離して
+      // 音節ごとの高速往復を殺す(アニメの口パクは形を保持する)
+      if (this.mouthStep === 0) { if (open > 0.16) this.mouthStep = 1 }
+      else if (this.mouthStep === 1) { if (open > 0.5) this.mouthStep = 2; else if (open < 0.07) this.mouthStep = 0 }
+      else { if (open < 0.32) this.mouthStep = 1 }
+      // 母音は0.15秒最低保持。閉時のみ即時解除
+      const pick = this.mouthStep === 0 ? '' :
         wide > 0.5 ? (open > 0.55 ? 'a' : 'i')
                    : (open > 0.62 ? 'a' : open > 0.36 ? 'o' : open > 0.18 ? 'u' : 'e')
       this.visemeHold++
-      if (pick !== this.visemeCur && (this.visemeHold >= 8 || pick === '' || this.visemeCur === '')) {
+      if (pick !== this.visemeCur && (this.visemeHold >= 9 || pick === '' || this.visemeCur === '')) {
         this.visemeCur = pick; this.visemeHold = 0
       }
-      // アニメ標準3段: 閉(素の絵) / 半開 / 全開 — 開口量で段を選ぶ
-      this.visemeFull = this.visemeCur !== '' && (this.varMouthHalf.size === 0 || open > 0.42)
+      this.visemeFull = this.visemeCur !== '' && (this.varMouthHalf.size === 0 || this.mouthStep === 2)
       for (const k of this.varMouth.keys()) this.vMouthA[k] = (k === this.visemeCur && this.visemeFull) ? 1 : 0
       vMouthSum = this.visemeCur ? 1 : 0
     }
@@ -474,11 +481,12 @@ export class PuppetStage {
     const mouthSY = 1 + 0.45 * talkEnv * procM   // closed-mouth sprite opens modestly
     const mouthDy = 4 * S * talkEnv * procM
 
-    const talkOnset = Math.max(0, talkEnv - this.lastTalkEnv)
+    // 話し身振り: 音節ごとのキックは頭がカクつく(まばたきまで巻き添えに見える)。
+    // ゆっくり平滑したエネルギーで、低周波のうなずき/揺れだけを乗せる。
+    this.slowTalk += (talkEnv - this.slowTalk) * 0.06
     this.lastTalkEnv = talkEnv
-    this.emph = this.emph * 0.88 + talkOnset * 5
-    headDy += this.emph * 4 * S
-    headAngle += this.emph * 0.012
+    headDy += this.slowTalk * (3.5 * S) * Math.sin(t * 1.9)
+    headAngle += this.slowTalk * 0.010 * Math.sin(t * 1.4 + 1)
 
     const active: Expression = this.transientT > 0 ? this.transientExpr : p.expression
     if (active !== this.lastExpr) { this.exprI = 1; this.lastExpr = active }
