@@ -29,7 +29,7 @@ export interface RigMeta {
   variants?: { mouth?: Record<string, string>; eyes?: Record<string, string>
                mouthHalf?: Record<string, string> }
   // v4: THA3で焼いた中割りフレームバンク(瞬き) — bake_face_bank.py
-  thaBank?: { eyeBlink?: string[]; mouth?: Record<string, string[]> }
+  thaBank?: { eyeBlink?: string[]; mouth?: Record<string, string[]>; eyeHappy?: string | null }
 }
 export interface PuppetManifest {
   id: string; name: string; canvas: [number, number]
@@ -100,6 +100,7 @@ export class PuppetStage {
   private mouthTrans = 1                           // 0→1 遷移進行
   private lastT = -1
   private blinkBank: { sprite: Sprite; mesh: MeshData }[] = []  // THA3瞬き中割り
+  private happyEye: { sprite: Sprite; mesh: MeshData } | null = null  // にっこり閉じ目(^^)
   private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
   private cw = 1280
@@ -271,6 +272,17 @@ export class PuppetStage {
       mesh.alpha = 0
       this.root.addChildAt(mesh, fhIdx)
       this.blinkBank.push({ sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } })
+    }
+    if (manifest.rig?.thaBank?.eyeHappy) {
+      let fhIdx = this.root.children.length
+      for (let i = 0; i < this.sprites.length; i++)
+        if (this.sprites[i].group === 'fronthair') { fhIdx = this.root.getChildIndex(this.sprites[i].sprite); break }
+      const tex = await loadTex(baseUrl + manifest.rig.thaBank.eyeHappy.split('/').map(encodeURIComponent).join('/'))
+      const mesh = new MeshPlane({ texture: tex, verticesX: 12, verticesY: 12 })
+      const geom = mesh.geometry as unknown as MeshData['geom']
+      mesh.alpha = 0
+      this.root.addChildAt(mesh, fhIdx)
+      this.happyEye = { sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } }
     }
     this.fit()
 
@@ -492,6 +504,8 @@ export class PuppetStage {
     this.lastTalkEnv = talkEnv
     headDy += this.slowTalk * (3.5 * S) * Math.sin(t * 1.9)
     headAngle += this.slowTalk * 0.010 * Math.sin(t * 1.4 + 1)
+    // 語気の表情: 強い所で眉が上がり、目がわずかに細まる(棒読み顔の解消)
+    const talkExpr = this.slowTalk * (0.5 + 0.5 * Math.sin(t * 1.1 + 2))
 
     const active: Expression = this.transientT > 0 ? this.transientExpr : p.expression
     if (active !== this.lastExpr) { this.exprI = 1; this.lastExpr = active }
@@ -535,14 +549,18 @@ export class PuppetStage {
     // Blink + squint by vertically squashing the WHOLE eye group (sclera, lashes
     // and iris together) around the eye pivot — the classic anime close. No skin
     // overlay, so no rectangular "frame" at the lids. Brows are NOT squashed.
-    const eyeClose = Math.max(blinkCl, expr.lidClose)   // 0 open .. 1 closed
+    const eyeClose = Math.max(blinkCl, expr.lidClose, talkExpr * 0.16)   // 0 open .. 1 closed
     // v3: 描きまぶた差分があるときは「絵」で閉じる(スカッシュは補助程度に残す)
     let vEyesClosed = 0, vEyesHalf = 0
-    let blinkFrame = -1
+    let blinkFrame = -1, happyOn = false
     if (this.blinkBank.length) {
       // THA3中割り: eyeClose(0..1)→フレームindex。0.12未満は素の絵。
       if (eyeClose > 0.12) blinkFrame = Math.min(this.blinkBank.length - 1,
         Math.floor(eyeClose * this.blinkBank.length))
+      // 笑顔系の深い閉じはにっこり閉じ目(^^)に差し替え
+      if (this.happyEye && (active === 'smile' || active === 'shy') && eyeClose > 0.8) {
+        happyOn = true; blinkFrame = -1
+      }
     } else if (this.varEyes.size) {
       // ハードスイッチ(アルファ0/1のみ): クロスフェードは開き目と閉じ目が
       // 半透明で重なりゴーストになる(不自然さの正体)。Live2D/アニメ同様の
@@ -558,7 +576,8 @@ export class PuppetStage {
     const eyeSY = Math.max(0.06, 1 - eyeClose * squashAmt)
     const mEyes = rig(ex, ey, 0, 1, eyeSY, 0, eyeDy + lookEyeDy)
     // brows ride with the eyes plus expression raise/tilt (#6 — now visible after z-fix)
-    const mBrow = rig(ex, ey, expr.browRot, 1, 1, 0, eyeDy + expr.browDy * S)
+    const mBrow = rig(ex, ey, expr.browRot, 1, 1, 0,
+                      eyeDy + expr.browDy * S - talkExpr * 3.5 * S)
     const mMouth = rig(mx, my, 0, 1 + expr.mouthSX, mouthSY * expr.mouthSY, 0, mouthDy)
 
     // pupils: a small CLAMPED offset within the sclera (gaze + look + expression
@@ -630,6 +649,12 @@ export class PuppetStage {
       this.mouthPrev = this.mouthShown
       this.mouthShown = target
       this.mouthTrans = 0
+      // 入る口を出る口より上に(painter's order) — 遷移中も唇線は常に1系統だけ見える
+      if (target && this.mouthPrev) {
+        const ti = this.root.getChildIndex(target.sprite)
+        const pi = this.root.getChildIndex(this.mouthPrev.sprite)
+        if (ti < pi) this.root.setChildIndex(target.sprite, pi)
+      }
     }
     this.mouthTrans = Math.min(1, this.mouthTrans + dt / 0.09)
     const u = this.mouthTrans, eIn = u * u * (3 - 2 * u)
@@ -639,15 +664,16 @@ export class PuppetStage {
     // 入ってくる口: 口ピボット周りで縦に"開いていく"(0.72→1) — 中間の動きを作る
     if (this.mouthShown) {
       const spr = this.mouthShown.sprite as Sprite
-      spr.alpha = Math.min(1, eIn * 1.6)
-      const sy = 0.72 + 0.28 * eIn
+      // 前の口が下に居る間は即不透明(共存ゴーストなし)。閉→開のときだけ極短フェード
+      spr.alpha = this.mouthPrev ? 1 : Math.min(1, u * 3)
+      const sy = 0.72 + 0.28 * eIn        // "開いていく"モーフはそのまま
       const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
       this.warpFace(this.mouthShown.mesh, mm)
     }
-    // 出ていく口: 縦に閉じながら短く消える
+    // 出ていく口: 入る口の下で閉じつつ、後半で消える(唇線は常に1系統)
     if (this.mouthPrev && u < 1) {
       const spr = this.mouthPrev.sprite as Sprite
-      spr.alpha = Math.max(spr.alpha, 1 - eIn)
+      spr.alpha = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45
       const sy = 1 - 0.3 * eIn
       const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
       this.warpFace(this.mouthPrev.mesh, mm)
@@ -660,6 +686,10 @@ export class PuppetStage {
       const b = this.blinkBank[i]
       ;(b.sprite as Sprite).alpha = i === blinkFrame ? 1 : 0
       if (i === blinkFrame) this.warpFace(b.mesh, mHead, this.faceDepth)
+    }
+    if (this.happyEye) {
+      (this.happyEye.sprite as Sprite).alpha = happyOn ? 1 : 0
+      if (happyOn) this.warpFace(this.happyEye.mesh, mHead, this.faceDepth)
     }
     this.drawMouthCavity(talkEnv * procM, mx, my, mHead)
   }

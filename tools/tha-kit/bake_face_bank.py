@@ -112,6 +112,10 @@ def main():
         res = pose_image(eye_wink_left=k, eye_wink_right=k)
         bank["eyeBlink"].append(region_patch(res, rig["eye"]["region"], (0.18, 0.6, 0.6),
                                              f"blink_{i}.png"))
+    print("baking happy-wink eyes…")
+    res = pose_image(eye_happy_wink_left=1.0, eye_happy_wink_right=1.0)
+    bank["eyeHappy"] = region_patch(res, rig["eye"]["region"], (0.18, 0.6, 0.6), "eye_happy.png")
+
     print("baking viseme frames…")
     for v, pname in VOWELS.items():
         frames = []
