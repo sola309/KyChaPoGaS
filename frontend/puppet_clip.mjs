@@ -35,7 +35,6 @@ const MOTIONS = {
 }
 const fn = (MOTIONS[motion] || MOTIONS.idle).toString()
 
-const canvas = page.locator('canvas').first()
 const n = Math.round(dur * fps)
 // 内部平滑状態を落ち着かせるプリロール
 await page.evaluate(`(() => { const f = ${fn}; for (let k = 0; k < 45; k++) {
@@ -50,7 +49,13 @@ for (let i = 0; i < n; i++) {
     s.params = { headTurn: p.turn, headNod: p.nod, talk: p.talk, expression: p.expr }
     s.talkLevel = p.level ?? 0; if (p.wide !== undefined) s.mouthWide = p.wide
     window.__puppetSeek(1.0 + ${t}) })()`)
-  await canvas.screenshot({ path: `${OUT}/f${String(i).padStart(5, '0')}.png`, omitBackground: true })
+  // WebGLから直接抽出(真の透過)。canvas要素のスクショはページ背景が焼き込まれる。
+  const b64 = await page.evaluate(async () => {
+    const s = window.__puppetStage
+    return await s.app.renderer.extract.base64({ target: s.app.stage, format: 'png' })
+  })
+  const { writeFileSync } = await import('node:fs')
+  writeFileSync(`${OUT}/f${String(i).padStart(5, '0')}.png`, Buffer.from(b64.split(',')[1], 'base64'))
   if (i % 30 === 0) console.log(`frame ${i}/${n}`)
 }
 await browser.close()

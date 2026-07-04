@@ -1116,7 +1116,7 @@ async def _puppet_clip(job: Job, params: dict) -> None:
 
     with tempfile.TemporaryDirectory(prefix="puppet_clip_") as td:
         proc = await asyncio.create_subprocess_exec(
-            "node", str(REPO_ROOT / "scripts" / "puppet_clip.mjs"),
+            "node", str(REPO_ROOT / "frontend" / "puppet_clip.mjs"),
             pid, motion, str(dur), str(fps), td,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             cwd=str(REPO_ROOT / "frontend"))
