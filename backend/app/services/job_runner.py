@@ -757,11 +757,22 @@ async def _generate_audio(job: Job, params: dict) -> None:
     seed       = int(params.get("seed", -1))
 
     _update_progress(job.id, 0.1)
-    audio_bytes = await acestep.generate(
-        caption=caption, lyrics=lyrics, duration_sec=duration,
-        vocal_language=vocal_lang, instrumental=instrumental, seed=seed,
-        bpm=params.get("bpm"), key=params.get("key"),
-    )
+    if params.get("repaint_src_asset"):
+        # Repaint: 既存曲の区間だけを文脈保持で描き直す(一体感を保った過激化)
+        with Session(engine) as session:
+            src = session.get(Asset, int(params["repaint_src_asset"]))
+            if not src:
+                raise ValueError("repaint元アセットが見つかりません")
+            src_bytes = Path(src.file_path).read_bytes()
+        audio_bytes = await acestep.repaint(
+            src_bytes, float(params["repaint_start"]), float(params["repaint_end"]),
+            caption=caption, lyrics=lyrics, vocal_language=vocal_lang, seed=seed)
+    else:
+        audio_bytes = await acestep.generate(
+            caption=caption, lyrics=lyrics, duration_sec=duration,
+            vocal_language=vocal_lang, instrumental=instrumental, seed=seed,
+            bpm=params.get("bpm"), key=params.get("key"),
+        )
     _update_progress(job.id, 0.9)
 
     dest_dir = GENERATED_DIR / str(project_id)

@@ -367,3 +367,28 @@ def to_shotlist(cid: str, aid: int, session: Session = Depends(get_session)):
                      "end_sec": an["duration_sec"]},
             "shots": shots,
             "note": "雛形です。paramsは各テンプレのREADME仕様に沿って肉付けしてください(AI/手動)。"}
+
+
+class RepaintRequest(BaseModel):
+    start_sec: float
+    end_sec: float
+    caption: str
+    lyrics: str = ""
+    seed: int = -1
+    variants: int = 1
+
+
+@router.post("/songs/{aid}/repaint", response_model=list[JobRead], status_code=201)
+def repaint(aid: int, req: RepaintRequest, session: Session = Depends(get_session)):
+    """区間Repaint: 声・音色の文脈を保ったまま[start,end]だけ描き直す(ACE-Step 1.5)。
+    転調・ジャンル豹変を「一体の楽曲のまま」作る、AI音楽ならではの編集。"""
+    pid = studio_id(session)
+    jobs = []
+    base_seed = req.seed if req.seed >= 0 else 30011
+    for i in range(max(1, min(req.variants, 4))):
+        jobs.append(_create_job(session, pid, "generate_audio", {
+            "project_id": pid, "prompt": req.caption, "lyrics": req.lyrics,
+            "vocal_language": "ja", "seed": base_seed + i * 111,
+            "repaint_src_asset": aid, "repaint_start": req.start_sec, "repaint_end": req.end_sec,
+        }))
+    return jobs
