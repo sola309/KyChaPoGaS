@@ -85,7 +85,11 @@ export function CompanionView() {
   useEffect(() => {
     fetch('/api/puppet/').then(r => r.json()).then(d => {
       setPuppets(d.puppets ?? [])
-      if (d.puppets?.[0]) setPid(d.puppets[0].id)
+      // ?puppet=<id> で初期パペット指定(QA/深リンク用)
+      const want = new URLSearchParams(location.search).get('puppet')
+      const hit = want ? (d.puppets ?? []).find((p: { id: string }) => p.id === want) : null
+      if (hit) setPid(hit.id)
+      else if (d.puppets?.[0]) setPid(d.puppets[0].id)
     }).catch(() => setError('パペット一覧の取得に失敗'))
   }, [])
 

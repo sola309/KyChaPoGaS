@@ -25,6 +25,8 @@ export interface RigMeta {
   brow: { left: Pt; right: Pt } | null
   cheek: { left: Pt; right: Pt } | null
   meshGroups: string[]
+  // v3: face_variants.py が生成する描き差分(口形素/まぶた) — Live2D流ブレンドシェイプ
+  variants?: { mouth?: Record<string, string>; eyes?: Record<string, string> }
 }
 export interface PuppetManifest {
   id: string; name: string; canvas: [number, number]
@@ -51,7 +53,7 @@ const UNIT_REF = 1190
 // Max yaw angle (rad) at slider ±1. Kept deliberately SMALL: a flat single-image head
 // can't truly yaw, so we only hint at it (gentle cylinder parallax) — small + never
 // broken beats large + uncanny. Raise later if a face-splitting pipeline lands.
-const YAW_MAX = 0.30
+const YAW_MAX = 0.42   // 描き差分(variants)+深度パララックス導入で拡大(v3)
 
 function rig(px: number, py: number, angle: number, sx: number, sy: number, dx: number, dy: number): Matrix {
   // PIXI matrix ops are left-multiply → result = T2·R·S·T1 (pivot transform)
@@ -66,7 +68,7 @@ function rig(px: number, py: number, angle: number, sx: number, sy: number, dx: 
 interface MeshData {
   geom: { positions: Float32Array; getBuffer: (id: string) => { update: () => void } }
   base: Float32Array; h: number; vx: number; vy: number
-  verlet?: { cur: Float32Array; prev: Float32Array; init: boolean }
+  verlet?: { cur: Float32Array; vel: Float32Array; init: boolean; prevE?: number; prevF?: number }
 }
 interface SpriteEntry {
   sprite: Container; group: string; depth: number; name: string
@@ -79,6 +81,11 @@ export class PuppetStage {
   app = new Application()
   root = new Container()
   private sprites: SpriteEntry[] = []
+  // v3 描き差分スプライト(フルキャンバスのパッチ、head変換+ヨーに追従)
+  private varMouth = new Map<string, { sprite: Sprite; mesh: MeshData }>()
+  private varEyes = new Map<string, { sprite: Sprite; mesh: MeshData }>()
+  private vMouthA: Record<string, number> = {}   // 口形素アルファ(平滑)
+  private vEyesA: Record<string, number> = {}
   private mouthCavity = new Graphics()
   private cw = 1280
   private ch = 1280
@@ -215,6 +222,25 @@ export class PuppetStage {
     // mouth cavity just above the closed-mouth sprite
     if (mouthChildIndex >= 0) this.root.addChildAt(this.mouthCavity, mouthChildIndex + 1)
     else this.root.addChild(this.mouthCavity)
+
+    // ── v3: 描き差分(口形素/まぶた)を前髪の直下へ ────────────────────────────
+    // フルキャンバスのパッチ画像。head変換+ヨーワープに追従させるためメッシュ化。
+    const variants = manifest.rig?.variants
+    if (variants) {
+      let fhIdx = this.root.children.length
+      for (let i = 0; i < this.sprites.length; i++)
+        if (this.sprites[i].group === 'fronthair') { fhIdx = this.root.getChildIndex(this.sprites[i].sprite); break }
+      const loadVar = async (rel: string) => {
+        const tex = await loadTex(baseUrl + rel.split('/').map(encodeURIComponent).join('/'))
+        const mesh = new MeshPlane({ texture: tex, verticesX: 12, verticesY: 12 })
+        const geom = mesh.geometry as unknown as MeshData['geom']
+        mesh.alpha = 0
+        this.root.addChildAt(mesh, fhIdx)
+        return { sprite: mesh as unknown as Sprite, mesh: { geom, base: Float32Array.from(geom.positions), h: tex.height, vx: 12, vy: 12 } }
+      }
+      for (const [k, rel] of Object.entries(variants.mouth ?? {})) { this.varMouth.set(k, await loadVar(rel)); this.vMouthA[k] = 0 }
+      for (const [k, rel] of Object.entries(variants.eyes ?? {})) { this.varEyes.set(k, await loadVar(rel)); this.vEyesA[k] = 0 }
+    }
     this.fit()
 
     let t = 0
@@ -398,8 +424,24 @@ export class PuppetStage {
     this.sMOpen += (rawOpen - this.sMOpen) * 0.45
     this.sMWide += (this.mouthWide - this.sMWide) * 0.3
     const talkEnv = this.sMOpen
-    const mouthSY = 1 + 0.45 * talkEnv          // closed-mouth sprite opens modestly
-    const mouthDy = 4 * S * talkEnv
+    // ── v3 口形素: 開口量×口幅ヒントから あ/い/う/え/お を選び描き差分をクロスフェード。
+    // 差分があるときは手続き変形(縦伸ばし+疑似口腔)をブレンド率ぶん退避させる。
+    let vMouthSum = 0
+    if (this.varMouth.size) {
+      const open = talkEnv, wide = this.sMWide
+      const pick = open < 0.1 ? '' :
+        wide > 0.5 ? (open > 0.55 ? 'a' : 'i')
+                   : (open > 0.62 ? 'a' : open > 0.36 ? 'o' : open > 0.18 ? 'u' : 'e')
+      for (const k of this.varMouth.keys()) {
+        const target = k === pick ? Math.min(1, (open - 0.06) / 0.22) : 0
+        this.vMouthA[k] += (target - this.vMouthA[k]) * 0.5
+        vMouthSum += this.vMouthA[k]
+      }
+      vMouthSum = Math.min(1, vMouthSum)
+    }
+    const procM = 1 - vMouthSum                  // 手続き口の残量
+    const mouthSY = 1 + 0.45 * talkEnv * procM   // closed-mouth sprite opens modestly
+    const mouthDy = 4 * S * talkEnv * procM
 
     const talkOnset = Math.max(0, talkEnv - this.lastTalkEnv)
     this.lastTalkEnv = talkEnv
@@ -442,7 +484,18 @@ export class PuppetStage {
     // and iris together) around the eye pivot — the classic anime close. No skin
     // overlay, so no rectangular "frame" at the lids. Brows are NOT squashed.
     const eyeClose = Math.max(blinkCl, expr.lidClose)   // 0 open .. 1 closed
-    const eyeSY = Math.max(0.06, 1 - eyeClose * 0.94)
+    // v3: 描きまぶた差分があるときは「絵」で閉じる(スカッシュは補助程度に残す)
+    let vEyesClosed = 0, vEyesHalf = 0
+    if (this.varEyes.size) {
+      const closed = this.varEyes.has('closed') ? Math.min(1, Math.max(0, (eyeClose - 0.45) / 0.25)) : 0
+      const half = this.varEyes.has('half')
+        ? Math.max(0, 1 - Math.abs(eyeClose - 0.42) / 0.28) * (1 - closed) : 0
+      this.vEyesA['closed'] = (this.vEyesA['closed'] ?? 0) * 0.45 + closed * 0.55
+      this.vEyesA['half'] = (this.vEyesA['half'] ?? 0) * 0.45 + half * 0.55
+      vEyesClosed = this.vEyesA['closed']; vEyesHalf = this.vEyesA['half']
+    }
+    const squashAmt = 0.94 * (1 - Math.max(vEyesClosed, vEyesHalf) * 0.8)
+    const eyeSY = Math.max(0.06, 1 - eyeClose * squashAmt)
     const mEyes = rig(ex, ey, 0, 1, eyeSY, 0, eyeDy + lookEyeDy)
     // brows ride with the eyes plus expression raise/tilt (#6 — now visible after z-fix)
     const mBrow = rig(ex, ey, expr.browRot, 1, 1, 0, eyeDy + expr.browDy * S)
@@ -489,7 +542,7 @@ export class PuppetStage {
           else                         m = mHead.clone().append(mEyes)
         } else if (group === 'mouth') { m = mHead.clone().append(mMouth) }
         else                          { m = mHead }
-        this.warpFace(mesh, m)
+        this.warpFace(mesh, m, entry.depth)
         sprite.setFromMatrix(IDENTITY); continue
       }
       // Plain rigid sprites (body / clothing / un-meshed fallback head parts).
@@ -508,7 +561,16 @@ export class PuppetStage {
       sprite.setFromMatrix(m)
     }
 
-    this.drawMouthCavity(talkEnv, mx, my, mHead)
+    // v3: 差分スプライト(フルキャンバスパッチ)はheadアフィン+ヨーワープに追従
+    for (const [k, v] of this.varMouth) {
+      (v.sprite as Sprite).alpha = this.vMouthA[k] ?? 0
+      if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
+    }
+    for (const [k, v] of this.varEyes) {
+      (v.sprite as Sprite).alpha = this.vEyesA[k] ?? 0
+      if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
+    }
+    this.drawMouthCavity(talkEnv * procM, mx, my, mHead)
   }
 
   /** Viseme mouth cavity — scaled to the character's actual mouth width so a small
@@ -587,13 +649,16 @@ export class PuppetStage {
 
   /** A face part: apply its affine (head translate + per-part expression), then the
    * shared cylinder yaw, per vertex. Vertices end in root-local space → IDENTITY. */
-  private warpFace(mesh: MeshData, m: Matrix) {
+  private warpFace(mesh: MeshData, m: Matrix, depth = 0.5) {
     const { geom, base } = mesh
     const pos = geom.positions
     const a = m.a, b = m.b, c = m.c, d = m.d, e = m.tx, f = m.ty
+    // 深度パララックス: 手前のパーツ(鼻・口・目)ほどヨーで大きく流れる。
+    // See-Through深度(rig_compilerの意味的深度, 0=近…1=遠)を利用。
+    const dpx = this.yawPhi * (0.5 - depth) * this.headR * 0.30
     for (let i = 0; i < pos.length; i += 2) {
       const wx = a * base[i] + c * base[i + 1] + e
-      pos[i] = this.yawMapX(wx)
+      pos[i] = this.yawMapX(wx) + dpx
       pos[i + 1] = b * base[i] + d * base[i + 1] + f
     }
     geom.getBuffer('aPosition').update()
@@ -608,8 +673,8 @@ export class PuppetStage {
     const pos = geom.positions
     const a = headM.a, b = headM.b, c = headM.c, d = headM.d, e = headM.tx, f = headM.ty
     let st = mesh.verlet
-    if (!st) st = mesh.verlet = { cur: new Float32Array(pos.length), prev: new Float32Array(pos.length), init: false }
-    const { cur } = st
+    if (!st) st = mesh.verlet = { cur: new Float32Array(pos.length), vel: new Float32Array(pos.length), init: false }
+    const { cur, vel } = st
     if (!st.init) {
       for (let i = 0; i < pos.length; i += 2) {
         cur[i] = a * base[i] + c * base[i + 1] + e
@@ -617,6 +682,10 @@ export class PuppetStage {
       }
       st.init = true
     }
+    // ピンの平行移動速度 → 毛先への慣性キック(急に振り向くと髪が遅れてついてくる)
+    const headVx = st.prevE === undefined ? 0 : e - st.prevE
+    const headVy = st.prevF === undefined ? 0 : f - st.prevF
+    st.prevE = e; st.prevF = f
     // root→tip weight: by row for hair, or by Y within the bbox for cloth (so the
     // skirt waist is rigid and only the hem flares, regardless of where it sits).
     const bTop = bbox ? bbox[1] : 0, bSpan = bbox ? Math.max(1, bbox[3] - bbox[1]) : 1
@@ -629,14 +698,24 @@ export class PuppetStage {
       const swing = sw * sw * (3 - 2 * sw) * amp      // smoothstep: most of the length sways (amp: bangs gentler)
       const windBend = (wind * 52 + flutter) * S * swing   // bulk sway + slow flutter
       const gravBend = 13 * S * swing                 // droop
-      const follow = 0.5 - 0.18 * tip                 // tips ease a touch slower → trailing lag
+      // ばね定数: 根本ほど硬い。減衰は臨界の~0.9(わずかなオーバーシュート=毛先の追い越し)
+      const k = 0.30 - 0.16 * tip
+      const damp = 2 * Math.sqrt(k) * 0.9
+      const inertia = swing * 0.55                    // 毛先ほど頭の動きに遅れる
       for (let col = 0; col < vx; col++) {
         const i = (row * vx + col) * 2
         const wave = Math.sin(base[i + 1] * 0.02 - t * 2.4 + col * 0.6) * 5 * S * swing  // strand ripple
         const tgx = a * base[i] + c * base[i + 1] + e + windBend + wave
         const tgy = b * base[i] + d * base[i + 1] + f + gravBend
-        cur[i] += (tgx - cur[i]) * follow
-        cur[i + 1] += (tgy - cur[i + 1]) * follow
+        vel[i]     = (vel[i]     + (tgx - cur[i]) * k - headVx * inertia * k) * (1 - damp)
+        vel[i + 1] = (vel[i + 1] + (tgy - cur[i + 1]) * k - headVy * inertia * k * 0.6) * (1 - damp)
+        // 発散ガード(タブ復帰などの巨大dt対策): 速度と乖離をクランプ
+        const mv = 30 * S
+        vel[i] = Math.max(-mv, Math.min(mv, vel[i])); vel[i + 1] = Math.max(-mv, Math.min(mv, vel[i + 1]))
+        cur[i] += vel[i]; cur[i + 1] += vel[i + 1]
+        const dxx = cur[i] - tgx, dyy = cur[i + 1] - tgy, lim = 90 * S * Math.max(swing, .12)
+        if (Math.abs(dxx) > lim) cur[i] = tgx + Math.sign(dxx) * lim
+        if (Math.abs(dyy) > lim) cur[i + 1] = tgy + Math.sign(dyy) * lim
       }
     }
     if (yawAmt > 0 && this.yawPhi !== 0) {

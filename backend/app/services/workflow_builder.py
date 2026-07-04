@@ -115,6 +115,55 @@ def build_sdxl_txt2img(
 
 # ── Text-to-Image: Krea 2 (12B DiT, Qwen3-VL TE, Qwen Image VAE) ─────────────
 
+def build_sdxl_inpaint(
+    model_filename: str,
+    image_name: str,           # ComfyUI /upload/image 済み
+    mask_name: str,            # 同上(白=描き直す領域)
+    prompt: str,
+    negative_prompt: str = "",
+    seed: int = -1,
+    steps: int = 28,
+    cfg: float = 6.0,
+    denoise: float = 0.92,
+    grow_mask: int = 12,
+) -> dict:
+    """
+    SDXL inpaint(InpaintModelConditioning使用 — 通常checkpointでOK)。
+    コンパニオンの口形素/閉眼など「差分スプライト」生成に使う。
+    """
+    s = _seed(seed)
+    wf = {
+        "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": model_filename}},
+        "2": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["1", 1]}},
+        "3": {"class_type": "CLIPTextEncode",
+              "inputs": {"text": negative_prompt or "low quality, blurry, deformed, extra teeth",
+                         "clip": ["1", 1]}},
+        "img": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+        "mimg": {"class_type": "LoadImage", "inputs": {"image": mask_name}},
+        "mask": {"class_type": "ImageToMask", "inputs": {"image": ["mimg", 0], "channel": "red"}},
+        "grow": {"class_type": "GrowMask",
+                 "inputs": {"mask": ["mask", 0], "expand": grow_mask, "tapered_corners": True}},
+        "cond": {"class_type": "InpaintModelConditioning", "inputs": {
+            "positive": ["2", 0], "negative": ["3", 0], "vae": ["1", 2],
+            "pixels": ["img", 0], "mask": ["grow", 0], "noise_mask": True}},
+        "5": {"class_type": "KSampler", "inputs": {
+            "seed": s, "steps": steps, "cfg": cfg,
+            "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": denoise,
+            "model": ["1", 0], "positive": ["cond", 0], "negative": ["cond", 1],
+            "latent_image": ["cond", 2]}},
+        "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
+        "7": {"class_type": "SaveImage",
+              "inputs": {"filename_prefix": "kychapogas_inpaint_", "images": ["6", 0]}},
+    }
+    # vPredモデル対応(既存txt2imgと同じ流儀)
+    if "vpred" in model_filename.lower():
+        wf["vpred"] = {"class_type": "ModelSamplingDiscrete",
+                       "inputs": {"model": ["1", 0], "sampling": "v_prediction", "zsnr": True}}
+        wf["rescale"] = {"class_type": "RescaleCFG", "inputs": {"model": ["vpred", 0], "multiplier": 0.7}}
+        wf["5"]["inputs"]["model"] = ["rescale", 0]
+    return wf
+
+
 def build_krea2_txt2img(
     unet_filename: str,          # krea2_turbo_fp8_scaled / krea2_raw_fp8_scaled
     te_filename: str,            # qwen3vl_4b_fp8_scaled.safetensors

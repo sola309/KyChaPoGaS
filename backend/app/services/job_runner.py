@@ -191,6 +191,8 @@ async def _dispatch(job: Job) -> None:
             await _vlm_review(job, params)
         case "mad_shot_takes":
             await _mad_shot_takes(job, params)
+        case "puppet_clip":
+            await _puppet_clip(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -1100,6 +1102,43 @@ async def _create_proxy(job: Job, params: dict) -> None:
 
 
 # ── Asset registration ────────────────────────────────────────────────────────
+
+async def _puppet_clip(job: Job, params: dict) -> None:
+    """コンパニオンを透過webm素材化(MAD/動画用)。idle/talk/nodのループ系モーション。"""
+    import tempfile
+    from app.services.ffmpeg_render import FFMPEG
+
+    pid = params["puppet_id"]
+    motion = params.get("motion", "idle")
+    dur = float(params.get("duration", 4))
+    fps = int(params.get("fps", 30))
+    project_id = params["project_id"]
+
+    with tempfile.TemporaryDirectory(prefix="puppet_clip_") as td:
+        proc = await asyncio.create_subprocess_exec(
+            "node", str(REPO_ROOT / "scripts" / "puppet_clip.mjs"),
+            pid, motion, str(dur), str(fps), td,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            cwd=str(REPO_ROOT / "frontend"))
+        out, _ = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"puppet_clip.mjs failed:\n{out.decode(errors='replace')[-800:]}")
+        _update_progress(job.id, 0.8)
+        dest_dir = GENERATED_DIR / str(project_id)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        outp = dest_dir / f"puppet_{pid}_{motion}_{job.id}.webm"
+        proc2 = await asyncio.create_subprocess_exec(
+            str(FFMPEG), "-y", "-framerate", str(fps), "-i", f"{td}/f%05d.png",
+            "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "24",
+            "-auto-alt-ref", "0", str(outp),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        o2, _ = await proc2.communicate()
+        if proc2.returncode != 0 or not outp.exists():
+            raise RuntimeError(f"webm encode failed:\n{o2.decode(errors='replace')[-500:]}")
+    asset_id = _register_asset(project_id, outp, "puppet_clip",
+                               {"puppet_id": pid, "motion": motion, "duration": dur, "fps": fps})
+    _update_result_assets(job.id, [asset_id])
+
 
 async def _vlm_review(job: Job, params: dict) -> None:
     """レンダー動画をローカルVLMで意味QA→コメントキューに自動起票(lightレーン)。"""

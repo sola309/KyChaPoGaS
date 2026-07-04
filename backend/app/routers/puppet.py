@@ -100,12 +100,33 @@ async def tts_speak(req: SpeakRequest):
     return Response(content=audio, media_type="audio/wav")
 
 
-@router.get("/{pid}/layer/{filename}")
+@router.get("/{pid}/layer/{filename:path}")
 def get_layer(pid: str, filename: str):
-    # prevent path traversal
-    if "/" in filename or ".." in filename:
+    # prevent path traversal ("variants/xxx.png" の1段サブディレクトリのみ許可)
+    if ".." in filename or filename.count("/") > 1:
         raise HTTPException(status_code=400, detail="bad filename")
-    p = PUPPETS_DIR / pid / filename
+    p = (PUPPETS_DIR / pid / filename).resolve()
+    if not str(p).startswith(str((PUPPETS_DIR / pid).resolve())):
+        raise HTTPException(status_code=400, detail="bad filename")
     if not p.exists() or p.suffix.lower() != ".png":
         raise HTTPException(status_code=404, detail="layer not found")
     return FileResponse(p, media_type="image/png")
+
+
+class ClipRequest(BaseModel):
+    project_id: int
+    motion: str = "idle"       # idle | talk | nod
+    duration: float = 4.0
+    fps: int = 30
+
+
+@router.post("/{pid}/clip", status_code=201)
+def make_clip(pid: str, req: ClipRequest, session: Session = Depends(get_session)):
+    """コンパニオンを透過webm素材として書き出す(MADの前景レイヤ等に)。"""
+    from app.routers.generation import _create_job
+    if not (PUPPETS_DIR / pid / "manifest.json").exists():
+        raise HTTPException(status_code=404, detail="puppet not found")
+    return _create_job(session, req.project_id, "puppet_clip", {
+        "project_id": req.project_id, "puppet_id": pid,
+        "motion": req.motion, "duration": req.duration, "fps": req.fps,
+    })
