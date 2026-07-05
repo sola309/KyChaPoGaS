@@ -79,9 +79,12 @@ def check(lyrics: str) -> dict:
         line = raw.strip()
         if not line or line.startswith("#") or re.match(r"^[^\[]{0,6}[:：]", line):
             continue
-        m = re.match(r"\[(\w[\w-]*)\]", line)
+        if cur is None and ("。" in line or "/" in line):
+            continue   # 冒頭の説明文(セクション開始前)は歌詞でない
+        # ACE-Step公式の拡張タグ([Chorus - anthemic]等)も行全体タグならセクション扱い
+        m = re.match(r"^\[([A-Za-z][^\]]*)\]\s*$", line) or re.match(r"\[(\w[\w-]*)\]", line)
         if m:
-            cur = {"tag": m.group(1).lower(), "lines": []}
+            cur = {"tag": re.split(r"[\s\-]", m.group(1).lower())[0], "lines": []}
             sections.append(cur)
             rest = line[m.end():].strip()
             if rest:
@@ -100,7 +103,9 @@ def check(lyrics: str) -> dict:
         tag, lines = sec["tag"], sec["lines"]
         if not lines:
             continue
-        counts = [l["mora"] for l in lines]
+        # 英語シャウト行(全大文字ラテン)は掛け声=対判定から除外
+        pair_lines = [l for l in lines if not re.match(r"^[A-Z0-9 !?',.]+$", l["text"])]
+        counts = [l["mora"] for l in pair_lines]
         # 平行性: 対の行(1&2, 3&4…)のモーラ数を比較 — メロディ反復の要
         for a in range(0, len(counts) - 1, 2):
             if abs(counts[a] - counts[a + 1]) > 2:

@@ -126,9 +126,11 @@ class AceStepConnector:
             "lyrics": lyrics,
             "audio_config": audio_config,
             "guidance_scale": guidance_scale,
-            # We supply caption + lyrics directly; skip LLM rewriting for speed/determinism.
-            "use_cot_caption": False,
-            "use_cot_language": False,
+            # ACE-Step 1.5の作曲家ブレイン(5Hz LM)を有効化する。
+            # 旧実装はthinking未指定(既定False)+cot無効で「LMなしの生DiT」に
+            # なっており品質を大きく損ねていた(docs/acestep-craft.md 誤用監査#1,#2)。
+            "thinking": True,
+            "shift": 3.0,
             "sample_mode": False,
             "stream": False,
         }
