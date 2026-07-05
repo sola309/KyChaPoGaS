@@ -71,16 +71,19 @@ def nearest_template(mora: int) -> str:
     return f"{best}(±{bd})" if bd <= 2 else "—"
 
 
-def check(lyrics: str) -> dict:
-    """歌詞全体を検査してレポートを返す。"""
+PARTICLES = set("をがにへとはでも")
+
+
+def check(lyrics: str, bpm: int | None = None) -> dict:
+    """歌詞全体を検査してレポートを返す。bpm指定でテンポ密度も検査。"""
     sections: list[dict] = []
     cur: dict | None = None
     for raw in lyrics.splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or re.match(r"^[^\[]{0,6}[:：]", line):
             continue
-        if cur is None and ("。" in line or "/" in line):
-            continue   # 冒頭の説明文(セクション開始前)は歌詞でない
+        if cur is None and "[" in lyrics:
+            continue   # タグ形式の歌詞では最初のタグ以前=前書きとして無視
         # ACE-Step公式の拡張タグ([Chorus - anthemic]等)も行全体タグならセクション扱い
         m = re.match(r"^\[([A-Za-z][^\]]*)\]\s*$", line) or re.match(r"\[(\w[\w-]*)\]", line)
         if m:
@@ -122,6 +125,14 @@ def check(lyrics: str) -> dict:
             for pm in l["phrases"]:
                 if pm > 12:
                     warnings.append(f"[{tag}#{si}] {pm}モーラのフレーズ({l['text'][:10]}…) — スペースで分割推奨")
+            # 行末助詞: ロングトーンが乗ると「を〜〜」と不自然に伸びる
+            _noun_ends = ("こと", "ひと", "おと", "まち", "みち", "うた")
+            if (l["text"] and l["text"][-1] in PARTICLES and l["mora"] >= 6
+                    and not any(to_hira(l["text"][-2:]) == ne for ne in _noun_ends)):
+                warnings.append(f"[{tag}#{si}] 行末が助詞『{l['text'][-1]}』({l['text'][:10]}…) — 内容語で終える")
+            # テンポ密度: 速い曲で疎な行は音節が引き伸ばされる
+            if bpm and bpm >= 150 and "chorus" in tag and l["mora"] < 10 and not re.match(r"^[A-Z0-9 !?',.]+$", l["text"]):
+                warnings.append(f"[{tag}#{si}] BPM{bpm}で{l['mora']}モーラは疎({l['text'][:8]}…) — 12-15モーラに増やすか意図的な伸ばしに")
         sec["template"] = nearest_template(sum(counts) / max(1, len(counts)) * 0 + counts[0]) if counts else "—"
 
     n_all = [l["mora"] for s in sections for l in s["lines"]]
