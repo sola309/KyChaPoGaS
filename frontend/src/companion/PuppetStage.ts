@@ -14,7 +14,7 @@ import { Application, Container, Sprite, Graphics, MeshPlane, Assets, Matrix, Te
  * be stepped deterministically for headless capture (window.__puppetSeek).
  */
 
-export interface SwayInfo { type: 'hair' | 'cloth' | 'neck'; pin: 'head' | 'body' | ''; amp: number }
+export interface SwayInfo { type: 'hair' | 'cloth' | 'neck'; pin: 'head' | 'body' | ''; amp: number; pinY?: number }
 export interface PuppetLayer { name: string; file: string; group: string; z: number; bbox: number[]; depth?: number; sway?: SwayInfo }
 type Pt = [number, number]
 export interface RigMeta {
@@ -23,6 +23,9 @@ export interface RigMeta {
   eye: { region: number[] | null; left: Pt | null; right: Pt | null; sclera: string | null; pupil: string | null }
   mouth: { region: number[]; center: Pt; left: Pt; right: Pt } | null
   brow: { left: Pt; right: Pt } | null
+  // スタジオ調整: 口/目の差分スプライトの位置・スケール補正(手動チューニング)
+  adjust?: { mouth?: { dx?: number; dy?: number; scale?: number }
+             eyes?: { dx?: number; dy?: number; scale?: number } }
   cheek: { left: Pt; right: Pt } | null
   meshGroups: string[]
   // v3: face_variants.py が生成する描き差分(口形素/まぶた) — Live2D流ブレンドシェイプ
@@ -252,6 +255,9 @@ export class PuppetStage {
 
     // ── v3: 描き差分(口形素/まぶた)を前髪の直下へ ────────────────────────────
     // フルキャンバスのパッチ画像。head変換+ヨーワープに追従させるためメッシュ化。
+    const a = manifest.rig?.adjust
+    this.adj = { mouth: { dx: a?.mouth?.dx ?? 0, dy: a?.mouth?.dy ?? 0, scale: a?.mouth?.scale ?? 1 },
+                 eyes: { dx: a?.eyes?.dx ?? 0, dy: a?.eyes?.dy ?? 0, scale: a?.eyes?.scale ?? 1 } }
     const variants = manifest.rig?.variants
     if (variants) {
       let fhIdx = this.root.children.length
@@ -653,11 +659,13 @@ export class PuppetStage {
           // front hair rides on the face → full yaw; back hair sits behind → partial.
           this.verletHair(mesh, pinM, t, S, wind, sway.amp, undefined,
             group === 'backhair' ? 0.55 : 1,
-            group === 'fronthair' ? this.faceDepth : entry.depth)
+            group === 'fronthair' ? this.faceDepth : entry.depth,
+            sway.pinY ?? 0.28)
           sprite.setFromMatrix(IDENTITY); continue
         }
         if (sway.type === 'cloth') {                      // hem-sway (bbox-weighted)
-          this.verletHair(mesh, pinM, t, S, wind, sway.amp, entry.bbox)
+          this.verletHair(mesh, pinM, t, S, wind, sway.amp, entry.bbox, 0, 0.5,
+            sway.pinY ?? 0.28)
           sprite.setFromMatrix(IDENTITY); continue
         }
       }
@@ -719,7 +727,8 @@ export class PuppetStage {
       // 前の口が下に居る間は即不透明(共存ゴーストなし)。閉→開のときだけ極短フェード
       spr.alpha = this.mouthPrev ? 1 : Math.min(1, u * 3)
       const sy = 0.72 + 0.28 * eIn        // "開いていく"モーフはそのまま
-      const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
+      const aM = this.adj.mouth
+      const mm = mHead.clone().append(rig(mx, my, 0, aM.scale, sy * aM.scale, aM.dx, aM.dy))
       this.warpFace(this.mouthShown.mesh, mm)
     }
     // 出ていく口: 入る口の下で閉じつつ、後半で消える(唇線は常に1系統)
@@ -727,12 +736,20 @@ export class PuppetStage {
       const spr = this.mouthPrev.sprite as Sprite
       spr.alpha = u < 0.55 ? 1 : 1 - (u - 0.55) / 0.45
       const sy = 1 - 0.3 * eIn
-      const mm = mHead.clone().append(rig(mx, my, 0, 1, sy, 0, 0))
+      const aM2 = this.adj.mouth
+      const mm = mHead.clone().append(rig(mx, my, 0, aM2.scale, sy * aM2.scale, aM2.dx, aM2.dy))
       this.warpFace(this.mouthPrev.mesh, mm)
     } else if (u >= 1) this.mouthPrev = null
     for (const [k, v] of this.varEyes) {
       (v.sprite as Sprite).alpha = this.blinkBank.length ? 0 : (this.vEyesA[k] ?? 0)
-      if ((v.sprite as Sprite).alpha > 0.01) this.warpFace(v.mesh, mHead)
+      if ((v.sprite as Sprite).alpha > 0.01) {
+        const aE = this.adj.eyes
+        const [ecx, ecy] = this.pivots.eyes ?? [this.cw / 2, this.ch * 0.18]
+        const me = (aE.dx || aE.dy || aE.scale !== 1)
+          ? mHead.clone().append(rig(ecx, ecy, 0, aE.scale, aE.scale, aE.dx, aE.dy))
+          : mHead
+        this.warpFace(v.mesh, me)
+      }
     }
     for (let i = 0; i < this.blinkBank.length; i++) {
       const b = this.blinkBank[i]
@@ -853,7 +870,12 @@ export class PuppetStage {
    * its drawn position on the head plus a wind-bend, a slow flutter and a per-strand
    * travelling-wave ripple — all growing toward the tips. Smooth (no jelly) but the
    * long length and tips genuinely flow. Top ~10% stays rigid on the head. */
-  private verletHair(mesh: MeshData, headM: Matrix, t: number, S: number, wind: number, amp = 1, bbox?: number[], yawAmt = 0, depth = 0.5) {
+  // スタジオ調整(manifest rig.adjust) — update()毎フレーム参照
+  adj: { mouth: { dx: number; dy: number; scale: number }
+         eyes: { dx: number; dy: number; scale: number } } =
+    { mouth: { dx: 0, dy: 0, scale: 1 }, eyes: { dx: 0, dy: 0, scale: 1 } }
+
+  private verletHair(mesh: MeshData, headM: Matrix, t: number, S: number, wind: number, amp = 1, bbox?: number[], yawAmt = 0, depth = 0.5, pinY = 0.28) {
     const { base, vx, vy, geom } = mesh
     const pos = geom.positions
     const a = headM.a, b = headM.b, c = headM.c, d = headM.d, e = headM.tx, f = headM.ty
@@ -889,7 +911,7 @@ export class PuppetStage {
       const inertia = swing * 0.55                    // 毛先ほど頭の動きに遅れる
       // ★根本ハードピン: 上部は頭皮に完全固定(pin=1)、毛先に向かって物理へランプ。
       // 全行をバネ追従にすると根本まで頭に遅れて「髪と顔がズレる」— それの根治。
-      const pinT = Math.min(1, Math.max(0, (tip - 0.28) / 0.30))     // 0=固定 .. 1=物理
+      const pinT = Math.min(1, Math.max(0, (tip - pinY) / 0.30))     // 0=固定 .. 1=物理 (manifest sway.pinY で調整可)
       const pin = pinT * pinT * (3 - 2 * pinT)
       for (let col = 0; col < vx; col++) {
         const i = (row * vx + col) * 2

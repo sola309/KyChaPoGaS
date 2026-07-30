@@ -55,6 +55,7 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
   const modeLabel =
     keyframes.length === 0 ? '— (Ref不足)' :
     keyframes.length === 1 ? '最初フレームのみ' :
+    model === 'wan2.2-vace' ? `${keyframes.length}キーフレームを1パス固定（Ref位置反映）` :
     isWan && keyframes.length > 2 ? `最初→中間${keyframes.length - 2}→最終（${keyframes.length - 1}区間）` :
     isWan                  ? '最初→最後フレーム' :
     keyframes.length === 2 ? 'Start–End I2V' :
@@ -124,6 +125,7 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
           className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700"
         >
           <option value="wan2.2-flf2v">Wan2.2 FLF2V（最初/最後フレーム・推奨）</option>
+          <option value="wan2.2-vace">Wan2.2 VACE（任意位置キーフレーム・1パス）</option>
           <option value="wan2.2-fun-inp">Wan2.2 Fun-InP（最初/最後フレーム）</option>
           <option value="svd-xt">Stable Video Diffusion XT</option>
         </select>

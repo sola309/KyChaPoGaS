@@ -103,6 +103,7 @@ def extract_frame(
     asset_id: int,
     background_tasks: BackgroundTasks,
     time_sec: float = 0.0,
+    long_edge: int | None = None,   # 出力の長辺px(lanczos)。None=元解像度
     session: Session = Depends(get_session),
 ):
     """
@@ -129,8 +130,13 @@ def extract_frame(
         counter += 1
 
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    # long_edge指定時は長辺をそのpxへlanczosリスケール(高解像度素材の縮小/低解像度素材の拡大の両対応)
+    vf = []
+    if long_edge and long_edge > 0:
+        vf = ["-vf",
+              f"scale='if(gte(iw,ih),{long_edge},-2)':'if(gte(iw,ih),-2,{long_edge})':flags=lanczos"]
     proc = subprocess.run(
-        [ffmpeg, "-y", "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1", str(dest)],
+        [ffmpeg, "-y", "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1", *vf, str(dest)],
         capture_output=True,
     )
     if proc.returncode != 0 or not dest.exists():
@@ -154,6 +160,82 @@ def extract_frame(
     return asset
 
 
+@router.post("/{asset_id}/extract-audio", response_model=AssetRead, status_code=201)
+def extract_audio(asset_id: int, session: Session = Depends(get_session)):
+    """
+    動画アセットから音声トラックをwavで抽出し、音声アセットとして登録する。
+    → 既存のBPM解析・ビートグリッド・音ハメスコアがそのまま使えるようになる。
+    """
+    import subprocess
+    import imageio_ffmpeg
+    from app.services.media_info import probe
+
+    src_asset = session.get(Asset, asset_id)
+    if not src_asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    src = Path(src_asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+
+    dest_dir = _asset_dir(src_asset.project_id)
+    dest = dest_dir / f"{src.stem}_audio.wav"
+    counter = 1
+    while dest.exists():
+        dest = dest_dir / f"{src.stem}_audio_{counter}.wav"
+        counter += 1
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    proc = subprocess.run(
+        [ffmpeg, "-y", "-i", str(src), "-vn", "-acodec", "pcm_s16le", "-ar", "44100", str(dest)],
+        capture_output=True,
+    )
+    if proc.returncode != 0 or not dest.exists() or dest.stat().st_size < 1024:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="音声がない素材か、抽出に失敗しました")
+
+    info = probe(dest)
+    asset = Asset(
+        project_id=src_asset.project_id, name=dest.name, asset_type="audio",
+        file_path=str(dest), duration_sec=info.duration_sec,
+        width=None, height=None, file_size_bytes=info.file_size_bytes,
+    )
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return asset
+
+
+@router.get("/{asset_id}/frame-preview")
+def frame_preview(asset_id: int, time_sec: float = 0.0, height: int = 360,
+                  session: Session = Depends(get_session)):
+    """
+    スクラブ用の軽量フレームプレビュー(JPEG、アセット登録なし)。
+    フレームピッカーのスライダー操作で叩かれる想定なので小さめ+高速シークで返す。
+    """
+    import subprocess
+    import imageio_ffmpeg
+    from fastapi.responses import Response
+
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    src = Path(asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Source file not found")
+    t = max(0.0, time_sec)
+    h = max(64, min(720, height))
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    proc = subprocess.run(
+        [ffmpeg, "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1",
+         "-vf", f"scale=-2:{h}", "-f", "image2", "-c:v", "mjpeg", "-q:v", "4", "pipe:1"],
+        capture_output=True,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        raise HTTPException(status_code=400, detail="preview failed")
+    return Response(content=proc.stdout, media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=3600"})
+
+
 FILMSTRIP_DIR = Path(__file__).parent.parent.parent / "data" / "proxies"
 
 
@@ -175,13 +257,13 @@ def get_filmstrip(asset_id: int, count: int = 10, session: Session = Depends(get
     n = max(2, min(40, count))
     dest_dir = FILMSTRIP_DIR / str(asset.project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{asset_id}_strip{n}.jpg"
+    dest = dest_dir / f"{asset_id}_strip96_{n}.jpg"
     if not dest.exists():
         fps = n / max(0.1, asset.duration_sec)
         ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         proc = subprocess.run(
             [ffmpeg, "-y", "-i", str(src),
-             "-vf", f"fps={fps:.4f},scale=64:36:force_original_aspect_ratio=increase,crop=64:36,tile={n}x1",
+             "-vf", f"fps={fps:.4f},scale=96:54:force_original_aspect_ratio=increase,crop=96:54,tile={n}x1",
              "-frames:v", "1", str(dest)],
             capture_output=True,
         )
@@ -374,3 +456,50 @@ def library_search(q: str = "", kind: str = "", limit: int = 60,
         if len(out) >= limit:
             break
     return {"items": out}
+
+
+@router.get("/{asset_id}/motion-series")
+def get_motion_series(asset_id: int, session: Session = Depends(get_session)):
+    """フレーム間差分(輝度)の時系列 — カット/画面全体の動き量の数値化。
+    tblend=difference + signalstats.YAVG を160px縮小で計測(1本1〜2秒, キャッシュ)。
+    差分再生モードのグラフ・音ハメ加速の指標検証用。"""
+    import re
+    import subprocess
+    import imageio_ffmpeg
+
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    if asset.asset_type not in ("video", "generated"):
+        raise HTTPException(status_code=400, detail="video assets only")
+    src = Path(asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    dest_dir = FILMSTRIP_DIR / str(asset.project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    cache = dest_dir / f"{asset_id}_motion.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    proc = subprocess.run(
+        [ffmpeg, "-i", str(src),
+         "-vf", "scale=160:-2,tblend=all_mode=difference,signalstats,"
+                "metadata=print:key=lavfi.signalstats.YAVG:file=-",
+         "-f", "null", "-"],
+        capture_output=True, text=True, timeout=300)
+    vals = [round(float(m), 4) for m in
+            re.findall(r"YAVG=([\d.]+)", proc.stdout or "")]
+    if not vals:
+        raise HTTPException(status_code=400, detail="motion extraction failed")
+    # フレームレート実測(値数/長さ)
+    fps = round(len(vals) / max(0.1, asset.duration_sec or 1), 3)
+    # カット検出: 中央値の6倍超のスパイク
+    import statistics
+    med = statistics.median(vals) or 0.01
+    cuts = [round(i / fps, 3) for i, v in enumerate(vals) if v > med * 6 and v > 2.0]
+    data = {"fps": fps, "values": vals, "median": round(med, 4), "cuts": cuts,
+            "duration_sec": asset.duration_sec}
+    cache.write_text(json.dumps(data))
+    return data

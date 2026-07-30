@@ -179,6 +179,9 @@ _VRAM_ESTIMATES: dict[str, int] = {
     "analyze_video":      512,
     "render_motion_graphics": 512,   # headless Chromium + FFmpeg (CPU)
     "decompose_character":   16384,  # See-Through (LayerDiff3D SDXL + Marigold)
+    "generate_3d":           10240,  # Hunyuan3D-2 DiT fp16 / MoGe-2 vitl
+    "generate_video_3dcam":  24576,  # Wan2.2 Fun Control 14B fp8 ×2
+    "render_orbit3d":          512,  # headless Chromium (swiftshader, CPU)
 }
 
 _MODEL_VRAM_HINTS: list[tuple[str, int]] = [

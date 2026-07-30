@@ -220,7 +220,8 @@ def configure_encoder(mode: str = "auto") -> str:
 async def _extract_segment(src: str, out: Path, in_sec: float,
                            dur_sec: float, w: int, h: int, fps: float,
                            speed: float = 1.0, ease: str = "linear",
-                           keep_alpha: bool = False, fit: str = "contain") -> None:
+                           keep_alpha: bool = False, fit: str = "contain",
+                           hold_fps: float = 0) -> None:
     """
     Extract a clip segment to uniform resolution/fps, applying a speed remap.
 
@@ -232,11 +233,63 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
     speed = max(0.05, float(speed))
     source_span = dur_sec * speed
     vf = _scale_pad_fps(w, h, fps, alpha=keep_alpha, fit=fit)
+    # コマ打ち: 速度リマップ後(出力タイムベース)でフレームを間引き、後段のfps正規化で
+    # 複製される→「2コマ/3コマ打ち」のホールド感になる。
+    hold = f"fps={float(hold_fps):g}," if hold_fps and float(hold_fps) > 0.5 and float(hold_fps) < fps else ""
 
     # Constant speed (linear) — single pass with setpts.
     # Clips shorter than ~0.5s also render linear: piecewise easing would
     # produce sub-frame parts (0-stream files), and a ramp that brief is
     # imperceptible anyway. Alpha output is linear-only.
+    # 速度エンベロープ("curve:r1,..,rN" — 出力位置ごとの相対速度、平均1想定)。
+    # 実速度 = speed * r_k。尺・速度はフロントで平均から計算済みなので、ここでは
+    # 区分ごとにソース消費を r_k に比例配分するだけでよい。
+    if ease and ease.startswith("curve:") and not keep_alpha and dur_sec * fps >= 16:
+        try:
+            rel = [max(0.05, float(x)) for x in ease[6:].split(";")[0].split(",") if x.strip()]
+        except ValueError:
+            rel = []
+        if len(rel) >= 2:
+            K = len(rel)
+            m = sum(rel) / K
+            rel = [r / m for r in rel]          # 正規化(消費合計=source_span厳守)
+            parts: list[Path] = []
+            src_cursor = in_sec
+            for k in range(K):
+                seg_out = dur_sec / K
+                seg_src_dur = max(1e-3, seg_out * speed * rel[k])
+                seg_speed = max(0.05, seg_src_dur / seg_out)
+                part = out.parent / f"{out.stem}_v{k:02d}.mp4"
+                cmd = [
+                    FFMPEG, "-y",
+                    "-ss", f"{src_cursor:.6f}", "-t", f"{seg_src_dur:.6f}", "-i", src,
+                    "-vf", (f"setpts=PTS/{seg_speed:.6f},{hold}{vf},"
+                            f"tpad=stop_mode=clone:stop_duration={seg_out:.6f}"),
+                    "-t", f"{seg_out:.6f}",
+                    *_VENC,
+                    "-an",
+                    str(part),
+                ]
+                await _run(cmd)
+                parts.append(part)
+                src_cursor += seg_src_dur
+            joined = out.parent / f"{out.stem}_joined.mp4"
+            await _concat(parts, joined)
+            cmd = [
+                FFMPEG, "-y",
+                "-i", str(joined),
+                "-vf", f"tpad=stop_mode=clone:stop_duration={dur_sec:.6f}",
+                "-t", f"{dur_sec:.6f}",
+                *_VENC,
+                "-an",
+                str(out),
+            ]
+            await _run(cmd)
+            joined.unlink(missing_ok=True)
+            for pt in parts:
+                pt.unlink(missing_ok=True)
+            return
+
     pts = _ease_points(ease)
     if dur_sec * fps < 16 or keep_alpha:
         pts = None
@@ -244,7 +297,7 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
         cmd = [
             FFMPEG, "-y",
             "-ss", f"{in_sec:.6f}", "-t", f"{source_span:.6f}", "-i", src,
-            "-vf", f"setpts=PTS/{speed:.6f},{vf}",
+            "-vf", f"setpts=PTS/{speed:.6f},{hold}{vf}",
             *(_QTRLE if keep_alpha else _X264),
             "-an",
             str(out),
@@ -273,7 +326,7 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
         cmd = [
             FFMPEG, "-y",
             "-ss", f"{seg_src_in:.6f}", "-t", f"{seg_src_dur:.6f}", "-i", src,
-            "-vf", (f"setpts=PTS/{seg_speed:.6f},{vf},"
+            "-vf", (f"setpts=PTS/{seg_speed:.6f},{hold}{vf},"
                     f"tpad=stop_mode=clone:stop_duration={seg_out:.6f}"),
             "-t", f"{seg_out:.6f}",
             *_VENC,
@@ -921,9 +974,13 @@ async def render_timeline(
         # ── Identify tracks ───────────────────────────────────────────────────
         # First video track (by order) is the BASE; further video tracks are
         # OVERLAYS composited on top (alpha/blend), in track order.
-        video_tracks = sorted([t for t in tracks if t.track_type == "video"],
-                              key=lambda t: t.order)
-        audio_tracks = [t for t in tracks if t.track_type == "audio"]
+        # UI上で上にあるトラック(order小)ほど最前面。ベースは最下段(order最大)、
+        # オーバーレイは下から上へ順に重ねる(最後に適用=最前面)。
+        video_tracks = sorted([t for t in tracks
+                               if t.track_type == "video" and not getattr(t, "hidden", False)],
+                              key=lambda t: -t.order)
+        audio_tracks = [t for t in tracks
+                        if t.track_type == "audio" and not getattr(t, "hidden", False)]
 
         v_track = video_tracks[0] if video_tracks else None
         a_track = audio_tracks[0] if audio_tracks else None
@@ -999,6 +1056,7 @@ async def render_timeline(
                         speed=getattr(clip, "speed", 1.0) or 1.0,
                         ease=getattr(clip, "speed_ease", "linear") or "linear",
                         fit="cover",
+                        hold_fps=getattr(clip, "posterize_fps", 0) or 0,
                     )
                 # Animated zoom/pan/shake (transform keyframes)
                 tr = parse_transform(getattr(clip, "transform_json", "") or "")
@@ -1082,6 +1140,7 @@ async def render_timeline(
                     width, height, fps,
                     speed=getattr(oc, "speed", 1.0) or 1.0,
                     ease=getattr(oc, "speed_ease", "linear") or "linear",
+                    hold_fps=getattr(oc, "posterize_fps", 0) or 0,
                     keep_alpha=True, fit=ofit,
                 )
             if o_tr:

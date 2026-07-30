@@ -35,6 +35,11 @@ interface TimelineState {
   loadTimeline: (projectId: number, fps: number) => Promise<void>
   syncFromServer: (projectId: number) => Promise<void>
   addTrack: (projectId: number, type: 'video' | 'audio' | 'reference', name: string) => Promise<void>
+  refSel: number[]                                  // 選択中のRefクリップ(選択順)
+  toggleRefSel: (clipId: number) => void
+  clearRefSel: () => void
+  setTrackHidden: (trackId: number, hidden: boolean) => Promise<void>
+  reorderTrack: (dragId: number, targetId: number) => Promise<void>
   deleteTrack: (trackId: number) => Promise<void>
   addClip: (trackId: number, assetId: number | null, startFrame: number, durationFrames: number) => Promise<Clip>
   placeClip: (projectId: number, trackType: 'video' | 'audio' | 'reference', assetId: number, durationFrames: number, atFrame?: number) => Promise<Clip>
@@ -48,6 +53,8 @@ interface TimelineState {
   // the server PATCH is coalesced to the last value after ~200ms idle.
   liveUpdateClip: (clipId: number, data: ClipUpdate) => void
   setClipSpeed: (clipId: number, speed: number, ease?: SpeedEase) => Promise<void>
+  /** 速度エンベロープ適用: ease文字列(curve:サンプル;k=キーポイント)+平均speedで尺を再計算 */
+  applySpeedEnvelope: (clipId: number, easeStr: SpeedEase, mean: number, flat: boolean, sourceFrames?: number) => Promise<void>
   undo: () => Promise<void>
   redo: () => Promise<void>
   setCurrentFrame: (frame: number) => void
@@ -115,6 +122,38 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
         clipsApi.list(projectId),
       ])
       set({ tracks, clips })
+    },
+
+    refSel: [],
+    toggleRefSel: (clipId) => set(s => ({
+      refSel: s.refSel.includes(clipId)
+        ? s.refSel.filter(id => id !== clipId)
+        : [...s.refSel, clipId],
+    })),
+    clearRefSel: () => set({ refSel: [] }),
+
+    setTrackHidden: async (trackId, hidden) => {
+      await tracksApi.update(trackId, { hidden })
+      set(s => ({ tracks: s.tracks.map(t => t.id === trackId ? { ...t, hidden } : t) }))
+      notifyEdit()
+    },
+
+    // dragIdのトラックをtargetIdの位置へ差し込み、全トラックのorderを振り直す
+    reorderTrack: async (dragId, targetId) => {
+      if (dragId === targetId) return
+      const sorted = [...get().tracks].sort((a, b) => a.order - b.order)
+      const from = sorted.findIndex(t => t.id === dragId)
+      const to   = sorted.findIndex(t => t.id === targetId)
+      if (from < 0 || to < 0) return
+      const [moved] = sorted.splice(from, 1)
+      sorted.splice(to, 0, moved)
+      const prevOrder = new Map(get().tracks.map(t => [t.id, t.order]))
+      const renum = sorted.map((t, i) => ({ ...t, order: i }))
+      set({ tracks: renum })
+      await Promise.all(renum
+        .filter(t => prevOrder.get(t.id) !== t.order)
+        .map(t => tracksApi.update(t.id, { order: t.order })))
+      notifyEdit()
     },
 
     addTrack: async (projectId, type, name) => {
@@ -350,6 +389,22 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
 
     // Change playback speed; the source span stays fixed so the timeline
     // duration auto-adjusts (faster → shorter clip).
+    applySpeedEnvelope: async (clipId, easeStr, mean, flat, sourceFrames) => {
+      const clip = get().clips.find(c => c.id === clipId)
+      if (!clip) return
+      const sourceConsumed = sourceFrames ?? clip.duration_frames * (clip.speed || 1)
+      const sp = Math.max(0.1, Math.min(8, mean))
+      const newDuration = Math.max(1, Math.round(sourceConsumed / sp))
+      const data: ClipUpdate = {
+        speed: sp,
+        duration_frames: newDuration,
+        speed_ease: flat ? 'linear' : easeStr,
+      }
+      const updated = await clipsApi.update(clipId, data)
+      set(s2 => ({ clips: s2.clips.map(c => c.id === clipId ? updated : c) }))
+      notifyEdit()
+    },
+
     setClipSpeed: async (clipId, speed, ease) => {
       const clip = get().clips.find(c => c.id === clipId)
       if (!clip) return

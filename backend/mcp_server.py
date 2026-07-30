@@ -323,9 +323,18 @@ MCP_TOOLS = [
 ] if _MCP_AVAILABLE else []
 
 
+def _extend_tools():
+    """agent_tools の追加ツールを MCP 形式に変換して合流。"""
+    from app.services.agent_tools import AGENT_TOOLS
+    for t in AGENT_TOOLS:
+        MCP_TOOLS.append(mcp_types.Tool(
+            name=t["name"], description=t["description"], inputSchema=t["input_schema"]))
+
+
 def _dispatch(name: str, inp: dict, project_id: int) -> dict:
     """Execute a command and return a plain dict result."""
     from app.services import command_api
+    from app.services.agent_tools import dispatch_extra
     session = _get_session_and_init()
     try:
         match name:
@@ -396,6 +405,9 @@ def _dispatch(name: str, inp: dict, project_id: int) -> dict:
                     project_id, inp["asset_id"], inp["analysis_type"], session
                 )
             case _:
+                extra = dispatch_extra(name, inp, project_id, session)
+                if extra is not None:
+                    return extra
                 return {"error": f"Unknown tool: {name}"}
     finally:
         session.close()
@@ -425,6 +437,7 @@ async def run_mcp_server(project_id: int) -> None:
             text=json.dumps(result, ensure_ascii=False, indent=2),
         )]
 
+    _extend_tools()
     log.info(f"KyChaPoGaS MCP server starting — project_id={project_id}")
     async with stdio_server() as (read_stream, write_stream):
         await server.run(

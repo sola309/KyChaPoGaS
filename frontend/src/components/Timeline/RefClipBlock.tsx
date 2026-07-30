@@ -19,7 +19,8 @@ interface Props {
 }
 
 export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selected, onSelect }: Props) {
-  const { moveClip, deleteClip } = useTimelineStore()
+  const { moveClip, deleteClip, toggleRefSel } = useTimelineStore()
+  const selIdx = useTimelineStore(s => s.refSel.indexOf(clip.id))
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
 
   const left = clip.start_frame * pixelsPerFrame
@@ -45,6 +46,9 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
       const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
       if (newFrame !== dragRef.current.origFrame) {
         moveClip(clip.id, dragRef.current.origFrame, newFrame)
+      } else {
+        // 動かさずに離した=クリック/タップ → i2vキーフレーム選択をトグル
+        toggleRefSel(clip.id)
       }
       dragRef.current = null
       window.removeEventListener('pointermove', onMove)
@@ -55,31 +59,40 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
     window.addEventListener('pointerup', onUp)
   }
 
-  const isImage = asset?.asset_type === 'image' || asset?.asset_type === 'generated'
 
   return (
     <div
-      className={`absolute top-0.5 rounded border cursor-grab select-none overflow-hidden
-        bg-amber-900/80 border-amber-500
+      className={`absolute top-0.5 rounded border cursor-grab select-none
+        bg-amber-900/80 ${selIdx >= 0 ? 'border-purple-400' : 'border-amber-500'}
         ${selected ? 'ring-2 ring-purple-300' : ''}`}
       style={{ left, width: PIN_WIDTH, height: trackHeight - 4, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
       onDoubleClick={() => deleteClip(clip.id)}
       title={`${asset?.name ?? 'ref'} @ ${(clip.start_frame / 30).toFixed(2)}s — ダブルクリックで削除`}
     >
-      {isImage && asset ? (
+      {clip.asset_id != null ? (
+        /* アセット一覧が未リフレッシュでもID直指定でサムネを出す(挿入直後の「?」対策) */
         <img
-          src={assetsApi.thumbnailUrl(asset.id)}
+          src={assetsApi.thumbnailUrl(clip.asset_id)}
           alt=""
-          className="w-full h-full object-cover opacity-90"
+          className="w-full h-full object-cover opacity-90 rounded"
           draggable={false}
+          onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-amber-300 text-[10px]">
-          {asset?.name?.slice(0, 3) ?? '?'}
+          {asset?.name?.slice(0, 3) ?? 'ref'}
         </div>
       )}
 
+      {/* キーフレーム打点=左端の◆(生成はこの位置基準。胴体はサムネ表示のみ) */}
+      <div className="absolute -left-[5px] -top-[3px] text-[9px] text-amber-400 leading-none pointer-events-none">◆</div>
+      {selIdx >= 0 && (
+        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-600 text-white
+                        text-[9px] flex items-center justify-center font-bold pointer-events-none">
+          {selIdx + 1}
+        </div>
+      )}
       {/* Time label at bottom */}
       <div className="absolute bottom-0 left-0 right-0 text-center text-[8px] text-amber-200/80 bg-black/50 leading-tight">
         {(clip.start_frame / 30).toFixed(1)}s

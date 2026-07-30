@@ -6,6 +6,8 @@ from sqlmodel import SQLModel, Field
 class ProjectBase(SQLModel):
     name: str
     description: Optional[str] = None
+    # UI上のグループ名。同じfolderのプロジェクトはサイドバーで折りたたみ表示される。
+    folder: Optional[str] = None
     fps: float = 30.0
     # Default canvas: 1920x1080 — full HD 16:9 so exports are sharp on modern
     # displays (720p looked soft). Generation still uses each model's nearest 16:9

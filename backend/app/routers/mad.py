@@ -316,3 +316,19 @@ def shot_takes(pid: int, shot_id: str, vary: str = "camera",
                session: Session = Depends(get_session)):
     """テイク比較: このショットをバリエーション4種で連続プロキシ生成(camera/enter/fx)。"""
     return _create_job(session, pid, "mad_shot_takes", {"shot_id": shot_id, "vary": vary})
+
+
+@router.get("/reference/vocab")
+def get_vocab():
+    """映像用語カタログ(テンプレ/FX/モーションの正式名称) — UIの📖とAIの共通語彙。"""
+    f = KIT_DIR / "vocab.json"
+    if not f.exists():
+        raise HTTPException(404, "vocab.json not found")
+    return json.loads(f.read_text())
+
+
+@router.get("/reference/features")
+def get_features():
+    """実装機能一覧(docs/features.md)。"""
+    f = KIT_DIR.parent.parent / "docs" / "features.md"
+    return {"markdown": f.read_text() if f.exists() else "(未作成)"}

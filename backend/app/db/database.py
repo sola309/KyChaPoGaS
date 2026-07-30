@@ -35,6 +35,9 @@ def _migrate(conn) -> None:
         if "result_json" not in job_cols:
             conn.execute(text("ALTER TABLE job ADD COLUMN result_json VARCHAR DEFAULT ''"))
             log.info("Migration: added job.result_json")
+        if "phase" not in job_cols:
+            conn.execute(text("ALTER TABLE job ADD COLUMN phase VARCHAR DEFAULT ''"))
+            log.info("Migration: added job.phase")
 
     # ── Phase D: clip speed / time-remap columns ──────────────────────────
     if "clip" in tables:
@@ -45,6 +48,16 @@ def _migrate(conn) -> None:
         if "speed_ease" not in clip_cols:
             conn.execute(text("ALTER TABLE clip ADD COLUMN speed_ease VARCHAR DEFAULT 'linear'"))
             log.info("Migration: added clip.speed_ease")
+
+    # ── Track hidden (表示/非表示) ─────────────────────────────────────────
+    if "track" in tables and "hidden" not in columns("track"):
+        conn.execute(text("ALTER TABLE track ADD COLUMN hidden BOOLEAN DEFAULT 0"))
+        log.info("Migration: added track.hidden")
+
+    # ── Project folder (UIグループ折りたたみ) ─────────────────────────────
+    if "project" in tables and "folder" not in columns("project"):
+        conn.execute(text("ALTER TABLE project ADD COLUMN folder VARCHAR"))
+        log.info("Migration: added project.folder")
 
     # ── Phase E: asset proxy path ─────────────────────────────────────────
     if "asset" in tables and "proxy_path" not in columns("asset"):
@@ -67,6 +80,7 @@ def _migrate(conn) -> None:
             ("transform_json",    "ALTER TABLE clip ADD COLUMN transform_json VARCHAR DEFAULT ''"),
             ("kind",              "ALTER TABLE clip ADD COLUMN kind VARCHAR DEFAULT 'media'"),
             ("attrs_json",        "ALTER TABLE clip ADD COLUMN attrs_json VARCHAR DEFAULT ''"),
+            ("posterize_fps",     "ALTER TABLE clip ADD COLUMN posterize_fps INTEGER DEFAULT 0"),
         ]:
             if col not in clip_cols:
                 conn.execute(text(ddl))

@@ -36,15 +36,33 @@ PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
 # レーン並列: 重いGPUジョブ(動画/音楽/最終レンダー/分解)と軽いジョブ(画像/解析/プロキシ)を
 # 1本ずつ同時に走らせる。128GBユニファイドメモリの余力を活かしつつ、VRAMゲートで安全側に倒す。
 LANE_HEAVY = {"generate_video_i2v", "generate_video_s2v", "generate_audio",
-              "render_final", "precompose", "decompose_character", "mad_shot_takes"}
+              "render_final", "precompose", "decompose_character", "mad_shot_takes",
+              "generate_3d", "generate_video_3dcam"}
 
 
 def _lane_of(job_type: str) -> str:
     return "heavy" if job_type in LANE_HEAVY else "light"
 
 
+def _recover_orphans() -> None:
+    """再起動時: 前プロセスの'running'ジョブは戻ってこないので failed に倒す。
+    (これをしないとUI上で永遠に実行中に見えるゾンビになる)"""
+    with Session(engine) as session:
+        orphans = session.exec(select(Job).where(Job.status == "running")).all()
+        for j in orphans:
+            j.status = "failed"
+            j.error_msg = "バックエンド再起動により中断されました(再投入してください)"
+            j.completed_at = datetime.utcnow()
+            session.add(j)
+        if orphans:
+            session.commit()
+            log.warning(f"Recovered {len(orphans)} orphaned running job(s) → failed: "
+                        f"{[j.id for j in orphans]}")
+
+
 async def run_forever() -> None:
     log.info("Job runner started (lanes: heavy / light)")
+    _recover_orphans()
     running: dict[str, asyncio.Task] = {}
     while True:
         try:
@@ -145,6 +163,16 @@ def _update_progress(job_id: int, pct: float) -> None:
             session.commit()
 
 
+def _update_phase(job_id: int, phase: str) -> None:
+    """実行フェーズ表示(「モデル読み込み中…」等)。頻度が高いので同値スキップ。"""
+    with Session(engine) as session:
+        j = session.get(Job, job_id)
+        if j and j.status == "running" and getattr(j, "phase", "") != phase:
+            j.phase = phase
+            session.add(j)
+            session.commit()
+
+
 def _update_result_assets(job_id: int, asset_ids: list[int]) -> None:
     with Session(engine) as session:
         j = session.get(Job, job_id)
@@ -193,6 +221,12 @@ async def _dispatch(job: Job) -> None:
             await _mad_shot_takes(job, params)
         case "puppet_clip":
             await _puppet_clip(job, params)
+        case "generate_3d":
+            await _generate_3d(job, params)
+        case "render_orbit3d":
+            await _render_orbit3d(job, params)
+        case "generate_video_3dcam":
+            await _generate_video_3dcam(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -364,10 +398,43 @@ async def _precompose(job: Job, params: dict) -> None:
 
 # ── generate_image ────────────────────────────────────────────────────────────
 
+def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> None:
+    """
+    params["place"] = {track_id, start_frame, duration_frames?} が指定されていれば
+    完成アセットをそのタイムライン位置へクリップ配置する(タイムライン第一原則)。
+    """
+    place = params.get("place")
+    if not place:
+        return
+    with Session(engine) as session:
+        # replace_clip_id: 既存クリップのアセットを差し替える(再生成ワークフロー)。
+        # 位置・尺・トランスフォームはそのまま残る。
+        if place.get("replace_clip_id"):
+            clip = session.get(Clip, int(place["replace_clip_id"]))
+            if clip:
+                clip.asset_id = asset_id
+                session.add(clip)
+                session.commit()
+                log.info(f"replaced clip {clip.id} asset → {asset_id}")
+                return
+        if not place.get("track_id"):
+            return
+        clip = Clip(
+            track_id=int(place["track_id"]),
+            asset_id=asset_id,
+            start_frame=int(place.get("start_frame", 0)),
+            duration_frames=int(place.get("duration_frames", fallback_duration)),
+        )
+        session.add(clip)
+        session.commit()
+    log.info(f"placed asset {asset_id} on track {place['track_id']} @ {place.get('start_frame', 0)}")
+
+
 async def _generate_image(job: Job, params: dict) -> None:
     from app.services.comfyui import comfyui
     from app.services.workflow_builder import (
-        build_sdxl_txt2img, build_flux_txt2img, build_krea2_txt2img, detect_model_type
+        build_sdxl_txt2img, build_sdxl_img2img, build_flux_txt2img,
+        build_krea2_txt2img, detect_model_type
     )
 
     if not await comfyui.is_available():
@@ -382,6 +449,61 @@ async def _generate_image(job: Job, params: dict) -> None:
     width      = int(params.get("width",  1024))
     height     = int(params.get("height", 1024))
     seed       = int(params.get("seed", -1))
+
+    # ✏️ AI編集モデル(Qwen-2511 / HiDream-O1 / FLUX.2 klein KV)
+    from app.services.workflow_builder import IMAGE_EDIT_MODELS
+    if model_id in IMAGE_EDIT_MODELS:
+        from app.services.workflow_builder import (
+            build_qwen_image_edit, build_hidream_o1_edit, build_flux2_klein_edit
+        )
+        ref_ids = [int(a) for a in (params.get("ref_asset_ids") or [])]
+        if not ref_ids:
+            raise ValueError("AI編集には参照画像(ref_asset_ids)が最低1枚必要です")
+        names: list[str] = []
+        first_dims = (width, height)
+        with Session(engine) as session:
+            for i, aid in enumerate(ref_ids):
+                a = session.get(Asset, aid)
+                if not a or not Path(a.file_path).exists():
+                    raise ValueError(f"参照アセット {aid} が見つかりません")
+                if i == 0 and a.width and a.height:
+                    first_dims = (a.width, a.height)
+                names.append((await comfyui.upload_image(Path(a.file_path))).get("name", Path(a.file_path).name))
+        if model_id in ("qwen-edit-2511", "qwen-edit-2511-fp8"):
+            workflow = build_qwen_image_edit(
+                names, prompt, seed=seed,
+                use_lightning=bool(params.get("use_lightning", True)),
+                fused_fp8=(model_id == "qwen-edit-2511-fp8"))
+        elif model_id == "hidream-o1-dev":
+            workflow = build_hidream_o1_edit(names, prompt, first_dims[0], first_dims[1], seed=seed)
+        else:  # flux2-klein-kv
+            # 1MP相当に正規化(klein推奨レンジ)
+            import math
+            scale = math.sqrt(1024 * 1024 / (first_dims[0] * first_dims[1]))
+            workflow = build_flux2_klein_edit(
+                names, prompt, width=int(first_dims[0] * scale), height=int(first_dims[1] * scale), seed=seed)
+
+        _update_progress(job.id, 0.05)
+        _update_phase(job.id, "モデル読み込み中…")
+        prompt_id = await comfyui.submit(workflow)
+        outputs = await comfyui.wait_for_outputs(
+            prompt_id,
+            progress_cb=lambda p: _update_progress(job.id, p),
+            phase_cb=lambda ph: _update_phase(job.id, ph),
+            workflow=workflow)
+        dest_dir = GENERATED_DIR / str(project_id)
+        asset_ids = []
+        for out in outputs:
+            fn = out.get("filename", "")
+            if not fn:
+                continue
+            path = await comfyui.download_output(fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+            asset_ids.append(_register_asset(project_id, path, "generated", params))
+        _update_result_assets(job.id, asset_ids)
+        if asset_ids:
+            _place_result(params, asset_ids[0])
+        log.info(f"AI edit done ({model_id}): {len(asset_ids)} asset(s)")
+        return
 
     model_type = detect_model_type(model_id)
 
@@ -422,8 +544,24 @@ async def _generate_image(job: Job, params: dict) -> None:
         checkpoints = await comfyui.list_checkpoints()
         ckpt = next((c for c in checkpoints if model_id.lower() in c.lower()), checkpoints[0] if checkpoints else model_id)
         loras = [(l[0], float(l[1])) for l in (params.get("loras") or [])]
-        workflow = build_sdxl_txt2img(ckpt, prompt, neg_prompt, width, height, seed,
-                                      loras=loras or None)
+        init_aid = params.get("init_asset_id")
+        if init_aid:
+            # i2i: 初期画像アセットをComfyUIへアップロードして潜在源にする
+            with Session(engine) as session:
+                init_asset = session.get(Asset, int(init_aid))
+                if not init_asset:
+                    raise ValueError(f"i2i初期画像アセット {init_aid} が見つかりません")
+                init_path = Path(init_asset.file_path)
+            if not init_path.exists():
+                raise ValueError(f"i2i初期画像ファイルがありません: {init_path}")
+            init_name = (await comfyui.upload_image(init_path)).get("name", init_path.name)
+            workflow = build_sdxl_img2img(ckpt, init_name, prompt, neg_prompt,
+                                          width, height, seed,
+                                          denoise=float(params.get("denoise", 0.6)),
+                                          loras=loras or None)
+        else:
+            workflow = build_sdxl_txt2img(ckpt, prompt, neg_prompt, width, height, seed,
+                                          loras=loras or None)
 
     _update_progress(job.id, 0.05)
 
@@ -432,7 +570,9 @@ async def _generate_image(job: Job, params: dict) -> None:
 
     def progress_cb(p): _update_progress(job.id, 0.05 + p * 0.90)
 
-    outputs = await comfyui.wait_for_outputs(prompt_id, progress_cb)
+    outputs = await comfyui.wait_for_outputs(
+        prompt_id, progress_cb,
+        phase_cb=lambda ph: _update_phase(job.id, ph), workflow=workflow)
 
     # Download outputs and register as Assets
     dest_dir = GENERATED_DIR / str(project_id)
@@ -448,6 +588,8 @@ async def _generate_image(job: Job, params: dict) -> None:
         asset_ids.append(asset_id)
 
     _update_result_assets(job.id, asset_ids)
+    if asset_ids:
+        _place_result(params, asset_ids[0])
     log.info(f"Image generation done: {len(asset_ids)} asset(s) registered")
 
 
@@ -684,6 +826,52 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
         frames.sort()
         return frames
 
+    # VACE: 任意フレーム位置に1パスで釘打ち(区間連結なし=つなぎ目の断絶なし)
+    if mode == "wan2.2-vace":
+        from app.services.workflow_builder import build_wan22_vace_video
+        length = max(5, int(round((total_len - 1) / 4)) * 4 + 1)   # Wan: 4n+1
+        t0 = min(float(kf.get("time_sec", 0.0)) for kf in keyframes)
+        t1 = max(float(kf.get("time_sec", 0.0)) for kf in keyframes)
+        span = max(t1 - t0, 1e-6)
+        kf_pos: list[tuple[str, int]] = []
+        for name, kf in zip(names, keyframes):
+            # time_sec があればタイムライン相対位置を尊重、無ければ等間隔
+            if len(keyframes) > 1 and t1 > t0:
+                frac = (float(kf.get("time_sec", 0.0)) - t0) / span
+            else:
+                frac = 0.0 if len(kf_pos) == 0 else len(kf_pos) / max(1, len(keyframes) - 1)
+            # 4の倍数へスナップ: Wan VAEの時間4x圧縮でlatentフレーム境界に整列させる
+            # (非整列だとキーフレームが数フレームに滲む)。0とlength-1(=4n)は常に整列。
+            kf_pos.append((name, int(round(frac * (length - 1) / 4)) * 4))
+        wf = build_wan22_vace_video(
+            keyframes=kf_pos, prompt=prompt, negative_prompt=neg_prompt,
+            width=width, height=height, length=length, seed=seed,
+            use_lightning=use_light,
+        )
+        prompt_id = await comfyui.submit(wf)
+        outputs = await comfyui.wait_for_outputs(
+            prompt_id, lambda p: _update_progress(job.id, 0.10 + p * 0.80))
+        all_frames = []
+        for i, out in enumerate(outputs):
+            fn = out.get("filename", "")
+            if not fn:
+                continue
+            p = await comfyui.download_output(fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+            newp = dest_dir / f"wanseg_{job.id}_00_{i:04d}{p.suffix}"
+            p.replace(newp)
+            all_frames.append(newp)
+        all_frames.sort()
+        if not all_frames:
+            raise RuntimeError("Wan2.2 VACE がフレームを出力しませんでした")
+        video_path = await _frames_to_video(all_frames, dest_dir, WAN22_FPS, job.id)
+        asset_id = _register_asset(project_id, video_path, "generated", params)
+        _update_result_assets(job.id, [asset_id])
+        _place_result(params, asset_id)
+        for fp in all_frames:
+            fp.unlink(missing_ok=True)
+        log.info(f"Wan2.2 VACE done: {len(all_frames)} frames, {len(kf_pos)} keyframes → {video_path.name}")
+        return
+
     _update_progress(job.id, 0.10)
     all_frames: list[Path] = []
     if len(names) == 1:
@@ -701,6 +889,7 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
     video_path = await _frames_to_video(all_frames, dest_dir, WAN22_FPS, job.id)
     asset_id = _register_asset(project_id, video_path, "generated", params)
     _update_result_assets(job.id, [asset_id])
+    _place_result(params, asset_id)
     for fp in all_frames:
         fp.unlink(missing_ok=True)
     log.info(f"Wan2.2 video done: {len(all_frames)} frames ({n_seg} seg) → {video_path.name}")
@@ -757,7 +946,17 @@ async def _generate_audio(job: Job, params: dict) -> None:
     seed       = int(params.get("seed", -1))
 
     _update_progress(job.id, 0.1)
-    if params.get("repaint_src_asset"):
+    if params.get("cover_src_asset"):
+        # Cover: 原盤の旋律を保って歌詞差し替え(当て書きワークフロー)
+        with Session(engine) as session:
+            src = session.get(Asset, int(params["cover_src_asset"]))
+            if not src:
+                raise ValueError("cover元アセットが見つかりません")
+            src_bytes = Path(src.file_path).read_bytes()
+        audio_bytes = await acestep.cover(
+            src_bytes, lyrics=lyrics, caption=caption,
+            vocal_language=vocal_lang, seed=seed)
+    elif params.get("repaint_src_asset"):
         # Repaint: 既存曲の区間だけを文脈保持で描き直す(一体感を保った過激化)
         with Session(engine) as session:
             src = session.get(Asset, int(params["repaint_src_asset"]))
@@ -1054,12 +1253,23 @@ async def _decompose_character(job: Job, params: dict) -> None:
                str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
     _update_progress(job.id, 0.9)
 
-    # 4) 描き差分(口形素あいうえお+閉眼/半眼)を自動生成 — 新規作成をワンパスで完結。
+    # 3.5) fast_rig(実験的) — face_mode="fast" 明示時のみ。検証の結果、
+    # テンプレ口差分は品質不足(口パッチが襟に浸食・判押し感)のため既定はsdxl。
+    face_mode = params.get("face_mode", "sdxl")
+    backend_py = REPO_ROOT / "backend" / ".venv" / "bin" / "python"
+    if face_mode == "fast":
+        try:
+            await run([backend_py, str(REPO_ROOT / "scripts" / "fast_rig.py"),
+                       str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
+        except Exception as e:
+            log.warning(f"fast_rig failed (rig自体は有効): {e}")
+    _update_progress(job.id, 0.93)
+
+    # 4) 描き差分(口形素あいうえお+閉眼/半眼)をSDXL inpaintで生成(face_mode=sdxl時)。
     # ComfyUIが落ちている場合はスキップ(後から face_variants.py で追加可能)。
     from app.services.comfyui import comfyui as _comfy
-    if await _comfy.is_available():
+    if face_mode == "sdxl" and await _comfy.is_available():
         log.info("decompose_character: generating face variants (visemes/eyelids)")
-        backend_py = REPO_ROOT / "backend" / ".venv" / "bin" / "python"
         base_tags = params.get("base_tags",
                                "1girl, anime, masterpiece, best quality, flat color")
         try:
@@ -1068,7 +1278,7 @@ async def _decompose_character(job: Job, params: dict) -> None:
                        "--base-tags", base_tags], cwd=REPO_ROOT)
         except Exception as e:
             log.warning(f"face variants failed (rig自体は完成、後から追加可): {e}")
-    else:
+    elif face_mode == "sdxl":
         log.warning("ComfyUI停止中のためface variantsをスキップ(後から追加可)")
     _update_progress(job.id, 0.97)
 
@@ -1144,9 +1354,16 @@ async def _puppet_clip(job: Job, params: dict) -> None:
     project_id = params["project_id"]
 
     with tempfile.TemporaryDirectory(prefix="puppet_clip_") as td:
+        # keyframes: スタジオのモーションエディタのトラックJSONを渡す
+        extra: list[str] = []
+        if motion == "keyframes":
+            mj = Path(td) / "motion.json"
+            mj.write_text(json.dumps({"tracks": params.get("keyframes") or {}},
+                                     ensure_ascii=False))
+            extra = [str(mj)]
         proc = await asyncio.create_subprocess_exec(
             "node", str(REPO_ROOT / "frontend" / "puppet_clip.mjs"),
-            pid, motion, str(dur), str(fps), td,
+            pid, motion, str(dur), str(fps), td, *extra,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
             cwd=str(REPO_ROOT / "frontend"))
         out, _ = await proc.communicate()
@@ -1274,7 +1491,7 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
     from app.services.thumbnail import generate_video_thumbnail, generate_image_thumbnail
 
     info = probe(file_path)
-    slim = {k: v for k, v in (gen_params or {}).items() if k != "keyframes"}
+    slim = dict(gen_params or {})   # keyframes含む全パラメータ(再生成に使う)
     asset = Asset(
         project_id=project_id,
         name=file_path.name,
@@ -1303,3 +1520,288 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
         log.warning(f"Thumbnail generation failed for asset {asset_id}: {e}")
 
     return asset_id
+
+
+# ── generate_3d: 画像→3Dモデル(GLB) ──────────────────────────────────────────
+
+def _register_model3d(project_id: int, file_path: Path, gen_params: dict) -> int:
+    """GLBをmodel3dアセットとして登録(probeは3Dを解釈できないため専用処理)。"""
+    slim = {k: v for k, v in (gen_params or {}).items() if k != "keyframes"}
+    asset = Asset(
+        project_id=project_id,
+        name=file_path.name,
+        asset_type="model3d",
+        file_path=str(file_path),
+        file_size_bytes=file_path.stat().st_size,
+        gen_params_json=json.dumps(slim, ensure_ascii=False),
+    )
+    with Session(engine) as session:
+        session.add(asset)
+        session.commit()
+        session.refresh(asset)
+        return asset.id
+
+
+async def _generate_3d(job: Job, params: dict) -> None:
+    """
+    3Dモデル生成。mode:
+      object    — 単一画像 → Hunyuan3D-2 メッシュ(事前に cutout で背景透過推奨)
+      object_mv — 正面/左/背面/右 マルチビュー → Hunyuan3D-2mv メッシュ
+      relief    — 一枚絵 → MoGe-2 テクスチャ付きレリーフメッシュ(3Dフォト演出用)
+    orbit パラメータ付きなら GLB 生成後にカメラワーク付き透過webmも作る。
+    """
+    from app.services.comfyui import comfyui
+    from app.services.workflow_builder import (
+        build_hunyuan3d_i23d, build_hunyuan3d_mv, build_moge_relief
+    )
+
+    if not await comfyui.is_available():
+        raise RuntimeError("ComfyUI が起動していません。scripts/start.sh で起動してください。")
+
+    project_id = params["project_id"]
+    mode = params.get("mode", "object")
+
+    def _asset_path(aid: int) -> Path:
+        with Session(engine) as session:
+            a = session.get(Asset, aid)
+            if not a:
+                raise ValueError(f"Asset {aid} not found")
+            return Path(a.file_path)
+
+    if mode == "object_mv":
+        views = {}
+        for v in ("front", "left", "back", "right"):
+            aid = (params.get("views") or {}).get(v)
+            if aid:
+                p = _asset_path(int(aid))
+                views[v] = (await comfyui.upload_image(p)).get("name", p.name)
+        if "front" not in views:
+            raise ValueError("object_mv には最低 front 画像が必要です")
+        workflow = build_hunyuan3d_mv(
+            views, seed=int(params.get("seed", -1)),
+            steps=int(params.get("steps", 30)),
+            octree_resolution=int(params.get("octree_resolution", 256)))
+    else:
+        p = _asset_path(int(params["image_asset_id"]))
+        name = (await comfyui.upload_image(p)).get("name", p.name)
+        if mode == "relief":
+            workflow = build_moge_relief(
+                name,
+                resolution_level=int(params.get("resolution_level", 9)),
+                decimation=int(params.get("decimation", 2)),
+                discontinuity_threshold=float(params.get("discontinuity_threshold", 0.03)),
+                fov_x_degrees=float(params.get("fov_x_degrees", 60.0)))
+        else:
+            workflow = build_hunyuan3d_i23d(
+                name, seed=int(params.get("seed", -1)),
+                steps=int(params.get("steps", 30)),
+                octree_resolution=int(params.get("octree_resolution", 256)))
+
+    _update_progress(job.id, 0.05)
+    prompt_id = await comfyui.submit(workflow)
+    log.info(f"ComfyUI 3D job submitted: mode={mode} prompt_id={prompt_id}")
+
+    def progress_cb(p): _update_progress(job.id, 0.05 + p * 0.75)
+    outputs = await comfyui.wait_for_outputs(prompt_id, progress_cb)
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    asset_ids = []
+    glb_path: Path | None = None
+    for out_info in outputs:
+        filename = out_info.get("filename", "")
+        if not filename:
+            continue
+        path = await comfyui.download_output(
+            filename, out_info.get("subfolder", ""), out_info.get("type", "output"), dest_dir)
+        if path.suffix.lower() in (".glb", ".gltf"):
+            asset_ids.append(_register_model3d(project_id, path, params))
+            glb_path = path
+        else:
+            asset_ids.append(_register_asset(project_id, path, "generated", params))
+
+    # オプション: そのままカメラワーク付き透過webmへ
+    orbit = params.get("orbit")
+    if orbit and glb_path:
+        _update_progress(job.id, 0.85)
+        webm = await _orbit_render(glb_path, dest_dir, orbit)
+        if webm:
+            asset_ids.append(_register_asset(project_id, webm, "generated",
+                                             {**params, "orbit_of": str(glb_path.name)}))
+
+    _update_result_assets(job.id, asset_ids)
+    log.info(f"3D generation done: {len(asset_ids)} asset(s)")
+
+
+async def _orbit_render(glb_path: Path, dest_dir: Path, orbit: dict) -> Path | None:
+    """tools/3d-kit/render_orbit.mjs で GLB→透過webm(vp9+alpha)を焼く。"""
+    kit = REPO_ROOT / "tools" / "3d-kit"
+    out = dest_dir / f"{glb_path.stem}_{orbit.get('preset', 'orbit')}.webm"
+    cmd = ["node", str(kit / "render_orbit.mjs"),
+           "--glb", str(glb_path), "--out", str(out),
+           "--preset", str(orbit.get("preset", "orbit")),
+           "--seconds", str(orbit.get("seconds", 4)),
+           "--fps", str(orbit.get("fps", 30)),
+           "--width", str(orbit.get("width", 1280)),
+           "--height", str(orbit.get("height", 720)),
+           "--style", str(orbit.get("style", "standard"))]
+    if orbit.get("turns") is not None:
+        cmd += ["--turns", str(orbit["turns"])]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, cwd=str(kit),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
+    if proc.returncode != 0:
+        log.warning(f"orbit render failed: {stdout.decode()[-800:]}")
+        return None
+    return out if out.exists() else None
+
+
+async def _render_orbit3d(job: Job, params: dict) -> None:
+    """既存の model3d アセットからカメラワーク付き透過webmを生成する独立ジョブ。"""
+    project_id = params["project_id"]
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        glb_path = Path(asset.file_path)
+    _update_progress(job.id, 0.1)
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    webm = await _orbit_render(glb_path, dest_dir, params.get("orbit") or params)
+    if not webm:
+        raise RuntimeError("orbit render failed (render_orbit.mjs ログ参照)")
+    asset_ids = [_register_asset(project_id, webm, "generated", params)]
+    _update_result_assets(job.id, asset_ids)
+
+
+# ── generate_video_3dcam: 3Dカメラワーク×Wan2.2 Fun Control ─────────────────
+
+async def _generate_video_3dcam(job: Job, params: dict) -> None:
+    """
+    GLB(model3d) + カメラ指定 → 深度レンダ(render_orbit.mjs --style depth)
+    → Wan2.2 Fun Control で ref_image の画風どおりの動画を生成する。
+    「カメラワークは3Dで決め、絵はAIが描く」の本命ワークフロー。
+    """
+    from app.services.comfyui import comfyui
+    from app.services.workflow_builder import build_wan22_fun_control
+
+    if not await comfyui.is_available():
+        raise RuntimeError("ComfyUI が起動していません。scripts/start.sh で起動してください。")
+
+    project_id = params["project_id"]
+    fps = 16
+    length = int(params.get("length", 81))          # 4n+1
+    length = max(5, (length - 1) // 4 * 4 + 1)
+    width = int(params.get("width", 832))
+    height = int(params.get("height", 480))
+
+    def _asset_path(aid: int) -> Path:
+        with Session(engine) as session:
+            a = session.get(Asset, aid)
+            if not a:
+                raise ValueError(f"Asset {aid} not found")
+            return Path(a.file_path)
+
+    ref_path = _asset_path(int(params["ref_image_asset_id"]))
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1) 深度コントロール動画をレンダ
+    #    単体GLB(model_asset_id) or 複数配置シーン(scene.objects[{model_asset_id,pos,rot,scale}])
+    _update_progress(job.id, 0.03)
+    kit = REPO_ROOT / "tools" / "3d-kit"
+    depth_mp4 = dest_dir / f"depthctl_{job.id}.mp4"
+    cmd = ["node", str(kit / "render_orbit.mjs"),
+           "--out", str(depth_mp4),
+           "--frames", str(length), "--fps", str(fps),
+           "--width", str(width), "--height", str(height), "--style", "depth"]
+    scene = params.get("scene")
+    scene_file = None
+    camera = params.get("camera") or {}
+    if scene and scene.get("objects"):
+        sc = {"objects": [], "camera": scene.get("camera") or
+              (camera if isinstance(camera, list) else None)}
+        for o in scene["objects"]:
+            sc["objects"].append({
+                "glb": str(_asset_path(int(o["model_asset_id"]))),
+                "pos": o.get("pos"), "rot": o.get("rot"), "scale": o.get("scale")})
+        scene_file = dest_dir / f"scene_{job.id}.json"
+        scene_file.write_text(json.dumps(sc, ensure_ascii=False))
+        cmd += ["--scene-json", f"@{scene_file}"]
+        if not sc["camera"]:
+            cmd += ["--preset", str(camera.get("preset", "arc_r")) if isinstance(camera, dict) else "arc_r"]
+    else:
+        cmd += ["--glb", str(_asset_path(int(params["model_asset_id"])))]
+        if isinstance(camera, list):
+            cmd += ["--camera-json", json.dumps(camera)]
+        else:
+            cmd += ["--preset", str(camera.get("preset", params.get("preset", "arc_r")))]
+            if camera.get("turns") is not None:
+                cmd += ["--turns", str(camera["turns"])]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, cwd=str(kit),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
+    if proc.returncode != 0 or not depth_mp4.exists():
+        raise RuntimeError(f"深度レンダ失敗: {stdout.decode()[-800:]}")
+    if scene_file:
+        scene_file.unlink(missing_ok=True)
+
+    # control_style=edge: 深度→エッジ抽出(白線/黒地)。線画寄りの構図制御が効く
+    if params.get("control_style") == "edge":
+        edge_mp4 = dest_dir / f"edgectl_{job.id}.mp4"
+        eproc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-v", "error", "-i", str(depth_mp4),
+            "-vf", "edgedetect=low=0.06:high=0.15",
+            "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(edge_mp4),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        eout, _ = await eproc.communicate()
+        if eproc.returncode != 0 or not edge_mp4.exists():
+            raise RuntimeError(f"エッジ抽出失敗: {eout.decode()[-400:]}")
+        depth_mp4.unlink(missing_ok=True)
+        depth_mp4 = edge_mp4
+
+    # 2) アップロード → Fun Control 生成
+    _update_progress(job.id, 0.15)
+    up_ref = (await comfyui.upload_image(ref_path)).get("name", ref_path.name)
+    up_ctl = (await comfyui.upload_image(depth_mp4)).get("name", depth_mp4.name)
+
+    wf = build_wan22_fun_control(
+        ref_image_name=up_ref, control_video_name=up_ctl,
+        prompt=params.get("prompt", ""),
+        negative_prompt=params.get("negative_prompt", ""),
+        width=width, height=height, length=length,
+        seed=int(params.get("seed", -1)),
+        use_lightning=bool(params.get("use_lightning", True)),
+        total_steps=int(params.get("steps", 4)))
+    prompt_id = await comfyui.submit(wf)
+    log.info(f"Fun Control 3dcam submitted: prompt_id={prompt_id}")
+
+    def cb(p): _update_progress(job.id, 0.15 + p * 0.75)
+    outputs = await comfyui.wait_for_outputs(prompt_id, cb)
+
+    frames: list[Path] = []
+    for i, out in enumerate(outputs):
+        fn = out.get("filename", "")
+        if not fn:
+            continue
+        p = await comfyui.download_output(fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+        newp = dest_dir / f"cam3d_{job.id}_{i:04d}{p.suffix}"
+        p.replace(newp)
+        frames.append(newp)
+    if not frames:
+        raise RuntimeError("Fun Control がフレームを出力しませんでした")
+
+    video_path = await _frames_to_video(sorted(frames), dest_dir, fps, job.id)
+    final = dest_dir / f"cam3d_{job.id}.mp4"
+    video_path.replace(final)
+    asset_ids = [_register_asset(project_id, final, "generated", params)]
+    if params.get("keep_control_video"):
+        asset_ids.append(_register_asset(project_id, depth_mp4, "generated",
+                                         {**params, "control_of": final.name}))
+    else:
+        depth_mp4.unlink(missing_ok=True)
+    for fp in frames:
+        fp.unlink(missing_ok=True)
+    _update_result_assets(job.id, asset_ids)
+    log.info(f"3dcam video done: {final.name} ({len(frames)} frames)")

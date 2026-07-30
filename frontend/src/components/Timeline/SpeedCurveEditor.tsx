@@ -1,133 +1,330 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { SpeedEase } from '../../api/client'
 
 /**
- * SpeedCurveEditor — AE風グラフエディタ（クリップ速度の加減速ベジェ）.
- *
- * x = クリップの出力時間(0→1), y = ソースの進行度(0→1).
- * P0=(0,0), P3=(1,1) 固定で、P1/P2 のハンドルをドラッグして任意カーブを作る。
- * 値は 'cubic:x1,y1,x2,y2' としてクリップの speed_ease に保存され、
- * 書き出し時に区分一定近似でレンダリングされる。
+ * ∿ 速度エンベロープエディタ v3(スピードランプ / ベジェ)
+ *  横軸 = クリップ内の位置 / 縦軸 = その時点の再生速度(対数・レンジ自動拡張=上限なし)
+ *  ・両端固定キーポイント+曲線タップで点追加、ドラッグ移動、選択→✕削除
+ *  ・補間は自動接線スプライン。点を選択すると**ベジェ接線ハンドル**が出て個別調整可
+ *  ・点をダブルクリック/ダブルタップ → その点を1.0xへリセット
+ *  ・ドラッグ中はタイムラインへリアルタイム反映(onLive)、離した時に確定(onApply)
+ *  保存: speed_ease='curve:<相対16>;k=<u:v[:mi:mo],...>'(mi/mo=log速度の接線, 省略=自動)
  */
 
-const PRESETS: { id: SpeedEase; label: string; pts: [number, number, number, number] }[] = [
-  { id: 'linear', label: '一定',  pts: [0.333, 0.333, 0.667, 0.667] },
-  { id: 'in',     label: '加速',  pts: [0.42, 0.0, 1.0, 1.0] },
-  { id: 'out',    label: '減速',  pts: [0.0, 0.0, 0.58, 1.0] },
-  { id: 'inout',  label: '緩急',  pts: [0.42, 0.0, 0.58, 1.0] },
+export interface SpeedPoint { u: number; v: number; mi?: number; mo?: number }
+
+const N_SAMPLES = 16
+const W = 320, H = 210, PAD = 26
+const HANDLE_DU = 0.09
+
+const PRESETS: { label: string; pts: SpeedPoint[] }[] = [
+  { label: '等速',     pts: [{ u: 0, v: 1 }, { u: 1, v: 1 }] },
+  { label: '加速',     pts: [{ u: 0, v: 0.5 }, { u: 1, v: 2.4 }] },
+  { label: '減速',     pts: [{ u: 0, v: 2.4 }, { u: 1, v: 0.5 }] },
+  { label: '緩→急→緩', pts: [{ u: 0, v: 1.8 }, { u: 0.5, v: 0.6 }, { u: 1, v: 1.8 }] },
+  { label: '急→緩→急', pts: [{ u: 0, v: 0.6 }, { u: 0.5, v: 2.0 }, { u: 1, v: 0.6 }] },
 ]
 
-function parseEase(ease: SpeedEase): [number, number, number, number] {
-  if (ease.startsWith('cubic:')) {
-    const v = ease.slice(6).split(',').map(Number)
-    if (v.length === 4 && v.every(n => Number.isFinite(n))) {
-      return [v[0], v[1], v[2], v[3]].map(n => Math.min(1, Math.max(0, n))) as [number, number, number, number]
-    }
-  }
-  return (PRESETS.find(p => p.id === ease) ?? PRESETS[0]).pts
+const VFLOOR = 0.02   // 数値安定用の下限のみ(上限なし)
+
+/** 表示レンジ: 点群にフィット(最低0.25..4を含む、余白1.6倍) */
+function rangeOf(pts: SpeedPoint[]): [number, number] {
+  let lo = 0.25, hi = 4
+  for (const p of pts) { lo = Math.min(lo, p.v / 1.6); hi = Math.max(hi, p.v * 1.6) }
+  return [Math.max(VFLOOR, lo), hi]
 }
 
-const W = 180, H = 140, PAD = 12
-const sx = (x: number) => PAD + x * (W - 2 * PAD)
-const sy = (y: number) => H - PAD - y * (H - 2 * PAD)
+/** 対数空間エルミート評価(mi/mo指定があれば接線上書き) */
+export function evalSpline(pts: SpeedPoint[], u: number): number {
+  const p = pts
+  if (u <= p[0].u) return p[0].v
+  if (u >= p[p.length - 1].u) return p[p.length - 1].v
+  let i = 0
+  while (i < p.length - 2 && u > p[i + 1].u) i++
+  const p0 = p[i], p1 = p[i + 1]
+  const du = Math.max(1e-6, p1.u - p0.u)
+  const L = (v: number) => Math.log(Math.max(VFLOOR, v))
+  const autoM = (idx: number): number => {
+    const a = p[Math.max(0, idx - 1)], b = p[Math.min(p.length - 1, idx + 1)]
+    return (L(b.v) - L(a.v)) / Math.max(1e-6, b.u - a.u)
+  }
+  const m0 = p0.mo ?? autoM(i)
+  const m1 = p1.mi ?? autoM(i + 1)
+  const t = (u - p0.u) / du
+  const h00 = 2 * t ** 3 - 3 * t ** 2 + 1, h10 = t ** 3 - 2 * t ** 2 + t
+  const h01 = -2 * t ** 3 + 3 * t ** 2, h11 = t ** 3 - t ** 2
+  const ln = h00 * L(p0.v) + h10 * du * m0 + h01 * L(p1.v) + h11 * du * m1
+  return Math.max(VFLOOR, Math.exp(ln))
+}
+
+export function samplesFromPoints(pts: SpeedPoint[]): { rel: number[]; mean: number } {
+  const abs: number[] = []
+  for (let i = 0; i < N_SAMPLES; i++) abs.push(evalSpline(pts, (i + 0.5) / N_SAMPLES))
+  const mean = abs.reduce((a, b) => a + b, 0) / abs.length
+  return { rel: abs.map(v => v / mean), mean }
+}
+
+export function easeStringFromPoints(pts: SpeedPoint[]): SpeedEase {
+  const { rel } = samplesFromPoints(pts)
+  const k = pts.map(pt => {
+    let s = `${pt.u.toFixed(3)}:${pt.v.toFixed(3)}`
+    if (pt.mi != null || pt.mo != null) s += `:${pt.mi?.toFixed(3) ?? ''}:${pt.mo?.toFixed(3) ?? ''}`
+    return s
+  }).join(',')
+  return `curve:${rel.map(r => r.toFixed(3)).join(',')};k=${k}` as SpeedEase
+}
+
+export function pointsFromEase(ease: SpeedEase, speed: number): SpeedPoint[] {
+  if (typeof ease === 'string' && ease.startsWith('curve:')) {
+    const kPart = ease.split(';k=')[1]
+    if (kPart) {
+      const pts = kPart.split(',').map(s => {
+        const seg = s.split(':')
+        const pt: SpeedPoint = { u: Number(seg[0]), v: Math.max(VFLOOR, Number(seg[1])) }
+        if (seg.length >= 4) {
+          if (seg[2] !== '') pt.mi = Number(seg[2])
+          if (seg[3] !== '' && seg[3] != null) pt.mo = Number(seg[3])
+        }
+        return pt
+      }).filter(pt => isFinite(pt.u) && isFinite(pt.v))
+      if (pts.length >= 2) return pts
+    }
+    const rel = ease.slice(6).split(';')[0].split(',').map(Number).filter(v => v > 0)
+    if (rel.length >= 2) {
+      return [0, 0.25, 0.5, 0.75, 1].map(u => {
+        const idx = Math.min(rel.length - 1, Math.round(u * (rel.length - 1)))
+        return { u, v: Math.max(VFLOOR, rel[idx] * speed) }
+      })
+    }
+  }
+  return [{ u: 0, v: Math.max(VFLOOR, speed || 1) }, { u: 1, v: Math.max(VFLOOR, speed || 1) }]
+}
 
 interface Props {
-  ease: SpeedEase
-  onChange: (ease: SpeedEase) => void   // fires on drag end / preset click
-  onClose: () => void
+  initial: SpeedPoint[]
+  sourceFrames: number
+  fps: number
+  onApply: (pts: SpeedPoint[]) => void          // 確定(ドラッグ終了/追加/削除/プリセット)
+  onLive?: (pts: SpeedPoint[]) => void          // ドラッグ中のリアルタイム反映
 }
 
-export function SpeedCurveEditor({ ease, onChange, onClose }: Props) {
-  const [pts, setPts] = useState<[number, number, number, number]>(() => parseEase(ease))
+type DragTarget = { kind: 'point'; i: number } | { kind: 'hin' | 'hout'; i: number }
+
+export function SpeedCurveEditor({ initial, sourceFrames, fps, onApply, onLive }: Props) {
+  const [pts, setPts] = useState<SpeedPoint[]>(initial)
+  const [selIdx, setSelIdx] = useState<number | null>(null)
+  const drag = useRef<DragTarget | null>(null)
+  const moved = useRef(false)
+  const lastTap = useRef<{ i: number; t: number }>({ i: -1, t: 0 })
   const svgRef = useRef<SVGSVGElement>(null)
-  const [x1, y1, x2, y2] = pts
 
-  const commit = (p: [number, number, number, number]) =>
-    onChange(`cubic:${p.map(v => Number(v.toFixed(3))).join(',')}` as SpeedEase)
+  const [vLo, vHi] = useMemo(() => rangeOf(pts), [pts])
+  const L = (v: number) => Math.log(Math.max(VFLOOR, v))
+  const vToY = (v: number) => H - PAD - ((L(v) - L(vLo)) / (L(vHi) - L(vLo))) * (H - 2 * PAD)
+  const yToV = (y: number) => Math.max(VFLOOR, Math.exp(L(vLo) + ((H - PAD - y) / (H - 2 * PAD)) * (L(vHi) - L(vLo))))
+  const uToX = (u: number) => PAD + u * (W - 2 * PAD)
+  const xToU = (x: number) => Math.max(0, Math.min(1, (x - PAD) / (W - 2 * PAD)))
 
-  const startDrag = (which: 1 | 2) => (e: React.PointerEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const svg = svgRef.current
-    if (!svg) return
-    const rect = svg.getBoundingClientRect()
-    const toLocal = (ev: PointerEvent): [number, number] => {
-      const x = Math.min(1, Math.max(0, (ev.clientX - rect.left - PAD) / (W - 2 * PAD)))
-      const y = Math.min(1, Math.max(0, (H - PAD - (ev.clientY - rect.top)) / (H - 2 * PAD)))
-      return [x, y]
+  const { mean } = useMemo(() => samplesFromPoints(pts), [pts])
+  const outFrames = Math.max(1, Math.round(sourceFrames / mean))
+
+  const gridVals = useMemo(() => {
+    const vals: number[] = []
+    for (let e = -6; e <= 8; e++) {
+      const v = 2 ** e
+      if (v >= vLo * 0.99 && v <= vHi * 1.01) vals.push(v)
     }
-    let cur: [number, number, number, number] = [...pts] as typeof pts
-    const onMove = (ev: PointerEvent) => {
-      const [x, y] = toLocal(ev)
-      cur = which === 1 ? [x, y, cur[2], cur[3]] : [cur[0], cur[1], x, y]
-      setPts(cur)
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      commit(cur)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    return vals
+  }, [vLo, vHi])
+
+  const toLocal = (e: React.PointerEvent) => {
+    const r = svgRef.current!.getBoundingClientRect()
+    return { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H }
   }
 
-  const isPreset = (p: typeof PRESETS[number]) =>
-    Math.abs(p.pts[0] - x1) < 0.01 && Math.abs(p.pts[1] - y1) < 0.01
-    && Math.abs(p.pts[2] - x2) < 0.01 && Math.abs(p.pts[3] - y2) < 0.01
+  const commit = (next: SpeedPoint[]) => { setPts(next); onApply(next) }
+
+  const handleMove = (e: React.PointerEvent) => {
+    const d = drag.current
+    if (!d) return
+    moved.current = true
+    const { x, y } = toLocal(e)
+    setPts(prev => {
+      const next = [...prev]
+      if (d.kind === 'point') {
+        const i = d.i
+        const isEnd = i === 0 || i === prev.length - 1
+        const u = isEnd ? prev[i].u
+          : Math.max(prev[i - 1].u + 0.02, Math.min(prev[i + 1].u - 0.02, xToU(x)))
+        next[i] = { ...prev[i], u, v: yToV(y) }
+      } else {
+        // 接線ハンドル: log速度の傾き = Δln(v)/Δu
+        const i = d.i
+        const pt = prev[i]
+        const hu = d.kind === 'hin' ? Math.max(0.015, pt.u - xToU(x)) : Math.max(0.015, xToU(x) - pt.u)
+        const slope = (L(yToV(y)) - L(pt.v)) / hu * (d.kind === 'hin' ? -1 : 1)
+        next[i] = { ...pt, [d.kind === 'hin' ? 'mi' : 'mo']: slope }
+      }
+      onLive?.(next)
+      return next
+    })
+  }
+
+  const handleUp = (e: React.PointerEvent) => {
+    if (!drag.current) return
+    const d = drag.current
+    drag.current = null
+    ;(e.target as Element).releasePointerCapture?.(e.pointerId)
+    if (d.kind === 'point') setSelIdx(d.i)
+    if (moved.current) onApply(ptsRef.current)
+  }
+  // onApplyでstale stateを避けるための参照
+  const ptsRef = useRef(pts); ptsRef.current = pts
+
+  const handleCanvasDown = (e: React.PointerEvent) => {
+    if (drag.current) return
+    const { x, y } = toLocal(e)
+    const u = xToU(x)
+    if (pts.some(pt => Math.hypot(uToX(pt.u) - x, vToY(pt.v) - y) < 14)) return
+    if (u < 0.03 || u > 0.97) { setSelIdx(null); return }
+    const next = [...pts, { u, v: yToV(y) }].sort((a, b) => a.u - b.u)
+    setPts(next)
+    setSelIdx(next.findIndex(pt => pt.u === u))
+    onApply(next)
+  }
+
+  const pointDown = (i: number) => (e: React.PointerEvent) => {
+    e.stopPropagation()
+    // ダブルタップ検出(300ms以内) → 1.0xへリセット
+    const now = Date.now()
+    if (lastTap.current.i === i && now - lastTap.current.t < 300) {
+      lastTap.current = { i: -1, t: 0 }
+      const next = pts.map((pt, j) => j === i ? { ...pt, v: 1 } : pt)
+      commit(next)
+      onLive?.(next)
+      return
+    }
+    lastTap.current = { i, t: now }
+    drag.current = { kind: 'point', i }
+    moved.current = false
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+  }
+
+  const handleDown = (i: number, kind: 'hin' | 'hout') => (e: React.PointerEvent) => {
+    e.stopPropagation()
+    drag.current = { kind, i }
+    moved.current = false
+    ;(e.target as Element).setPointerCapture(e.pointerId)
+  }
+
+  const removeSelected = () => {
+    if (selIdx == null || selIdx === 0 || selIdx === pts.length - 1) return
+    commit(pts.filter((_, i) => i !== selIdx)); setSelIdx(null)
+  }
+  const resetTangents = () => {
+    if (selIdx == null) return
+    commit(pts.map((pt, i) => i === selIdx ? { u: pt.u, v: pt.v } : pt))
+  }
+
+  const path = useMemo(() => {
+    const seg: string[] = []
+    for (let i = 0; i <= 80; i++) {
+      const u = i / 80
+      seg.push(`${i === 0 ? 'M' : 'L'} ${uToX(u).toFixed(1)} ${vToY(evalSpline(pts, u)).toFixed(1)}`)
+    }
+    return seg.join(' ')
+  }, [pts, vLo, vHi])
+
+  // 選択点の接線ハンドル座標
+  const handles = useMemo(() => {
+    if (selIdx == null) return null
+    const pt = pts[selIdx]
+    const autoM = (idx: number): number => {
+      const a = pts[Math.max(0, idx - 1)], b = pts[Math.min(pts.length - 1, idx + 1)]
+      return (L(b.v) - L(a.v)) / Math.max(1e-6, b.u - a.u)
+    }
+    const mi = pt.mi ?? autoM(selIdx), mo = pt.mo ?? autoM(selIdx)
+    const mk = (m: number, dir: -1 | 1) => ({
+      x: uToX(pt.u + dir * HANDLE_DU),
+      y: vToY(Math.exp(L(pt.v) + dir * m * HANDLE_DU)),
+    })
+    return {
+      in: selIdx > 0 ? mk(mi, -1) : null,
+      out: selIdx < pts.length - 1 ? mk(mo, 1) : null,
+      cx: uToX(pt.u), cy: vToY(pt.v),
+    }
+  }, [selIdx, pts, vLo, vHi])
 
   return (
-    <div
-      className="absolute z-50 top-full left-0 mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl p-2"
-      onPointerDown={e => e.stopPropagation()}
-    >
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] text-zinc-400">速度カーブ（横=時間 / 縦=ソース進行）</span>
-        <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 text-xs px-1">✕</button>
+    <div className="flex flex-col gap-2">
+      <div className="flex gap-1 flex-wrap items-center">
+        {PRESETS.map(pr => (
+          <button key={pr.label}
+                  onClick={() => { commit(pr.pts); setSelIdx(null) }}
+                  className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700">
+            {pr.label}
+          </button>
+        ))}
+        <button onClick={resetTangents}
+                disabled={selIdx == null || (pts[selIdx]?.mi == null && pts[selIdx]?.mo == null)}
+                className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 disabled:opacity-30">
+          接線を自動へ
+        </button>
+        <button onClick={removeSelected}
+                disabled={selIdx == null || selIdx === 0 || selIdx === pts.length - 1}
+                className="text-[10px] px-2 py-1 rounded bg-red-950/60 text-red-300 disabled:opacity-30 ml-auto">
+          ✕ 点を削除
+        </button>
       </div>
-
-      <svg ref={svgRef} width={W} height={H} className="touch-none select-none">
-        {/* grid */}
-        <rect x={PAD} y={PAD} width={W - 2 * PAD} height={H - 2 * PAD}
-              fill="none" stroke="#3b3034" strokeWidth={1} />
-        {[0.25, 0.5, 0.75].map(g => (
-          <g key={g} stroke="#2a2225" strokeWidth={1}>
-            <line x1={sx(g)} y1={PAD} x2={sx(g)} y2={H - PAD} />
-            <line x1={PAD} y1={sy(g)} x2={W - PAD} y2={sy(g)} />
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`}
+           className="w-full touch-none select-none rounded bg-zinc-950 border border-zinc-800"
+           onPointerDown={handleCanvasDown}
+           onPointerMove={handleMove}
+           onPointerUp={handleUp}>
+        {gridVals.map(v => (
+          <g key={v}>
+            <line x1={PAD} x2={W - PAD} y1={vToY(v)} y2={vToY(v)}
+                  stroke={v === 1 ? '#52525b' : '#27272a'} strokeDasharray={v === 1 ? '' : '3 3'} />
+            <text x={3} y={vToY(v) + 3} fontSize={8.5} fill="#71717a">{v < 1 ? v : `${v}x`}</text>
           </g>
         ))}
-        {/* linear reference */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(1)} y2={sy(1)} stroke="#524448" strokeDasharray="3 3" />
-        {/* handle arms */}
-        <line x1={sx(0)} y1={sy(0)} x2={sx(x1)} y2={sy(y1)} stroke="#9c878c" strokeWidth={1} />
-        <line x1={sx(1)} y1={sy(1)} x2={sx(x2)} y2={sy(y2)} stroke="#9c878c" strokeWidth={1} />
-        {/* bezier curve */}
-        <path
-          d={`M ${sx(0)} ${sy(0)} C ${sx(x1)} ${sy(y1)}, ${sx(x2)} ${sy(y2)}, ${sx(1)} ${sy(1)}`}
-          fill="none" stroke="#d6405d" strokeWidth={2}
-        />
-        {/* anchors */}
-        <circle cx={sx(0)} cy={sy(0)} r={3} fill="#6f5d61" />
-        <circle cx={sx(1)} cy={sy(1)} r={3} fill="#6f5d61" />
-        {/* draggable handles (large touch targets) */}
-        <circle cx={sx(x1)} cy={sy(y1)} r={10} fill="transparent" className="cursor-grab"
-                onPointerDown={startDrag(1)} />
-        <circle cx={sx(x1)} cy={sy(y1)} r={5} fill="#ee98a8" pointerEvents="none" />
-        <circle cx={sx(x2)} cy={sy(y2)} r={10} fill="transparent" className="cursor-grab"
-                onPointerDown={startDrag(2)} />
-        <circle cx={sx(x2)} cy={sy(y2)} r={5} fill="#ee98a8" pointerEvents="none" />
+        <text x={PAD} y={H - 6} fontSize={9} fill="#71717a">0</text>
+        <text x={W - PAD} y={H - 6} fontSize={9} fill="#71717a" textAnchor="end">{outFrames}f</text>
+        <path d={path} stroke="#a78bfa" strokeWidth={2} fill="none" />
+        {/* 接線ハンドル(選択点のみ) */}
+        {handles && (
+          <g>
+            {handles.in && (
+              <g>
+                <line x1={handles.cx} y1={handles.cy} x2={handles.in.x} y2={handles.in.y} stroke="#f0abfc" strokeWidth={1} />
+                <circle cx={handles.in.x} cy={handles.in.y} r={7} fill="#f0abfc" stroke="#581c87" strokeWidth={1}
+                        className="cursor-move" onPointerDown={handleDown(selIdx!, 'hin')} />
+              </g>
+            )}
+            {handles.out && (
+              <g>
+                <line x1={handles.cx} y1={handles.cy} x2={handles.out.x} y2={handles.out.y} stroke="#f0abfc" strokeWidth={1} />
+                <circle cx={handles.out.x} cy={handles.out.y} r={7} fill="#f0abfc" stroke="#581c87" strokeWidth={1}
+                        className="cursor-move" onPointerDown={handleDown(selIdx!, 'hout')} />
+              </g>
+            )}
+          </g>
+        )}
+        {pts.map((pt, i) => {
+          const isEnd = i === 0 || i === pts.length - 1
+          return (
+            <circle key={i} cx={uToX(pt.u)} cy={vToY(pt.v)} r={isEnd ? 8 : 9}
+                    fill={selIdx === i ? '#a855f7' : isEnd ? '#52525b' : '#7c3aed'}
+                    stroke="#ddd6fe" strokeWidth={1.5}
+                    className={isEnd ? 'cursor-ns-resize' : 'cursor-move'}
+                    onPointerDown={pointDown(i)} />
+          )
+        })}
       </svg>
-
-      {/* presets */}
-      <div className="flex gap-1 mt-1">
-        {PRESETS.map(p => (
-          <button
-            key={p.id}
-            onClick={() => { setPts(p.pts); onChange(p.id) }}
-            className={`text-[10px] px-1.5 py-0.5 rounded ${
-              isPreset(p) ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-            }`}
-          >{p.label}</button>
-        ))}
+      <div className="text-[11px] text-zinc-400">
+        平均 {mean.toFixed(2)}x → 出力 <span className="text-amber-300 font-medium">{outFrames}コマ</span>
+        ({(outFrames / fps).toFixed(2)}秒)
+        <span className="text-zinc-600 ml-1">/ 素材{sourceFrames}コマ分</span>
       </div>
     </div>
   )

@@ -107,7 +107,9 @@ if $START_MUSIC; then
       info "音楽生成 (ACE-Step OpenAI互換API) を起動しています (port 7867)..."
       cd "$ACESTEP_DIR"
       # OpenAI Chat-Completions 互換アダプタ。既定ポート 8002 は backend と衝突するため 7867 に。
-      OPENROUTER_PORT=7867 uv run acestep-openrouter --host 0.0.0.0 --port 7867 &
+      # XL(4B)を主モデル、旧turboを副モデルとして両ロード(リクエストのmodel idで切替可)
+      OPENROUTER_PORT=7867 ACESTEP_CONFIG_PATH=acestep-v15-xl-turbo ACESTEP_CONFIG_PATH2=acestep-v15-turbo \
+        uv run acestep-openrouter --host 0.0.0.0 --port 7867 &
       MUSIC_PID=$!
       cd "$ROOT_DIR"
       success "ACE-Step PID=$MUSIC_PID"

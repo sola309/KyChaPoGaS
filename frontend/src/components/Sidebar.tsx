@@ -18,6 +18,7 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
   const [newName,    setNewName]    = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
+  const [openFolders, setOpenFolders] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchProjects()
@@ -115,7 +116,8 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
           </div>
         )}
 
-        {projects.map(p => (
+        {/* フォルダなし → そのまま、フォルダあり → 折りたたみグループ */}
+        {projects.filter(p => !p.folder).map(p => (
           <button
             key={p.id}
             onClick={() => { setActiveProject(p); closeDrawers() }}
@@ -127,6 +129,31 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
           >
             {p.name}
           </button>
+        ))}
+        {[...new Set(projects.filter(p => p.folder).map(p => p.folder as string))].map(folder => (
+          <div key={folder}>
+            <button
+              onClick={() => setOpenFolders(s => { const n = new Set(s); n.has(folder) ? n.delete(folder) : n.add(folder); return n })}
+              className="w-full text-left px-3 py-1.5 rounded text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300 flex items-center gap-1.5"
+            >
+              <span className="text-[9px]">{openFolders.has(folder) ? '▼' : '▶'}</span>
+              <span className="truncate">📁 {folder}</span>
+              <span className="ml-auto text-[9px] text-zinc-600">{projects.filter(p => p.folder === folder).length}</span>
+            </button>
+            {openFolders.has(folder) && projects.filter(p => p.folder === folder).map(p => (
+              <button
+                key={p.id}
+                onClick={() => { setActiveProject(p); closeDrawers() }}
+                className={`w-full text-left pl-7 pr-3 py-1.5 rounded text-xs truncate transition-colors ${
+                  activeProject?.id === p.id
+                    ? 'bg-purple-900/50 text-purple-200'
+                    : 'text-zinc-400 hover:bg-zinc-800'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
         ))}
       </div>
 

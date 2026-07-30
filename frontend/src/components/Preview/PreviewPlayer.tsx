@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useProjectStore } from '../../store/projectStore'
 import type { Asset } from '../../api/client'
@@ -14,29 +14,49 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const { tracks, clips, currentFrame, projectFps, setCurrentFrame, placeClip, previewHidden } = useTimelineStore()
   const { activeProject } = useProjectStore()
   const videoRef  = useRef<HTMLVideoElement>(null)
-  const audioRef  = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying] = useState(false)
   const [loadedAssetId, setLoadedAssetId] = useState<number | null>(null)
-  const [loadedAudioId, setLoadedAudioId] = useState<number | null>(null)
   const [capturing, setCapturing] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const compRef = useRef<HTMLCanvasElement>(null)        // WYSIWYG compositor
   const imgMap = useRef<Map<number, HTMLImageElement>>(new Map())
+  const refSel = useTimelineStore(s => s.refSel)         // 選択中のImage(Ref)ピン
   const [redraw, setRedraw] = useState(0)                // bumped when an image loads
+  // 直前に確定した動画フレームのキャッシュ。シーク中(readyState低下)に黒フレームを
+  // 出さず、前のフレームを描き続けるために使う(シーク完了ごとに更新)。
+  const videoCacheRef = useRef<{ canvas: HTMLCanvasElement | null; assetId: number | null }>({ canvas: null, assetId: null })
+  // コマ打ちプレビュー: スロット(=ホールド区間)が変わった時だけビデオフレームを取り込む
+  const holdCacheRef = useRef<{ clipId: number | null; slot: number; canvas: HTMLCanvasElement | null }>({ clipId: null, slot: -1, canvas: null })
   const [box, setBox] = useState({ w: 0, h: 0 })   // fitted project-frame box (px)
   const [guideMode, setGuideMode] = useState<'off' | 'thirds' | 'safe'>('off')
   const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
+  // 差分再生モード: |今フレーム−前フレーム| を表示し、画面全体の動き量を数値化。
+  // カット=鋭いスパイク / カメラ・モーション=持続的な山。音ハメ加速の指標検証用。
+  const [diffMode, setDiffMode] = useState(false)
+  const prevFrameRef = useRef<HTMLCanvasElement | null>(null)
+  const diffTmpRef = useRef<HTMLCanvasElement | null>(null)
+  const measRef = useRef<HTMLCanvasElement | null>(null)
+  const motionHistRef = useRef<number[]>([])
+  const motionTextRef = useRef<HTMLSpanElement | null>(null)
+  const sparkRef = useRef<HTMLCanvasElement | null>(null)
 
   const projW = activeProject?.width  ?? 1280
   const projH = activeProject?.height ?? 720
 
-  // Find the clip at the current frame on the topmost video track (first in list)
-  const videoTrack = tracks.find(t => t.track_type === 'video')
-  const activeClip = videoTrack
-    ? clips
-        .filter(c => c.track_id === videoTrack.id)
+  // ベースレイヤー選択: 「再生ヘッドにクリップがある」最上位のVideoトラックを使う。
+  // 最上段が空白の区間は透明扱いで下のトラックへフォールスルーする(黒塗りにしない)。
+  const activeClip = (() => {
+    const vTracks = [...tracks]
+      .sort((a, b) => a.order - b.order)
+      .filter(t => t.track_type === 'video' && !t.hidden)
+    for (const t of vTracks) {
+      const hit = clips
+        .filter(c => c.track_id === t.id)
         .find(c => c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
-    : null
+      if (hit) return hit
+    }
+    return null
+  })()
   const activeAsset = activeClip?.asset_id != null
     ? assets.find(a => a.id === activeClip.asset_id)
     : null
@@ -45,12 +65,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const isVideoAsset = activeAsset?.asset_type === 'video'
     || (activeAsset?.asset_type === 'generated' && activeAsset?.duration_sec != null)
 
-  // First audio-track clip overlapping the playhead (the BGM to play)
-  const activeAudioClip = clips.find(c => {
+  // 再生ヘッドに重なる全Audioクリップ(全トラック分をミックス再生する)
+  const activeAudioClips = clips.filter(c => {
     const t = tracks.find(tk => tk.id === c.track_id)
-    return t?.track_type === 'audio' && c.asset_id != null
+    return t?.track_type === 'audio' && !t?.hidden && c.asset_id != null
       && c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame
-  }) ?? null
+  })
 
   // Load video when the asset changes — prefer the low-res proxy for light preview
   useEffect(() => {
@@ -68,6 +88,37 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setLoadedAssetId(activeClip.asset_id)
     }
   }, [activeClip?.asset_id, activeAsset?.proxy_path])
+
+  // シーク完了・デコード完了のたびに合成を再描画する(スクラブ時に古いフレームが
+  // 残らないように)。video.currentTime代入は非同期なので、seekedを待たないと
+  // canvasには前のフレームが描かれたままになる。
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    const bump = () => {
+      // 確定フレームをキャッシュしてから再描画(スクラブ中の黒フレーム対策)
+      if (video.readyState >= 2 && video.videoWidth) {
+        const c = videoCacheRef.current
+        if (!c.canvas) c.canvas = document.createElement('canvas')
+        if (c.canvas.width !== video.videoWidth || c.canvas.height !== video.videoHeight) {
+          c.canvas.width = video.videoWidth; c.canvas.height = video.videoHeight
+        }
+        c.canvas.getContext('2d')?.drawImage(video, 0, 0)
+        const src = video.getAttribute('src') ?? ''
+        const m = src.match(/\/assets\/(\d+)\//)
+        c.assetId = m ? Number(m[1]) : c.assetId
+      }
+      setRedraw(n => n + 1)
+    }
+    video.addEventListener('seeked', bump)
+    video.addEventListener('loadeddata', bump)
+    video.addEventListener('canplay', bump)
+    return () => {
+      video.removeEventListener('seeked', bump)
+      video.removeEventListener('loadeddata', bump)
+      video.removeEventListener('canplay', bump)
+    }
+  }, [])
 
   // Apply per-clip playback speed to the video element
   useEffect(() => {
@@ -100,35 +151,68 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     }
   }, [currentFrame, playing, activeClip, projectFps, loadedAssetId, isVideoAsset])
 
-  // Load audio (BGM) when the active audio clip changes
+  // 音声は単一プレイヤー方式(モバイル互換性を最優先)。
+  // 対象は「最上段のAudioトラックで再生ヘッドに重なるクリップ」= Audioトラック最優先。
+  const audioElRef = useRef<HTMLAudioElement | null>(null)
+  const audioUnlockedRef = useRef(false)
+  if (!audioElRef.current && typeof window !== 'undefined') {
+    const el = new Audio()
+    el.preload = 'auto'
+    audioElRef.current = el
+  }
+  const unlockAudioPool = () => {
+    if (audioUnlockedRef.current || !audioElRef.current) return
+    audioUnlockedRef.current = true
+    const el = audioElRef.current
+    el.muted = true
+    el.play().then(() => { el.pause(); el.muted = false }).catch(() => { el.muted = false })
+  }
+  const activeAudioClip = useMemo(() => {
+    const cands = [...activeAudioClips].sort((a, b) => {
+      const oa = tracks.find(t => t.id === a.track_id)?.order ?? 0
+      const ob = tracks.find(t => t.id === b.track_id)?.order ?? 0
+      return oa !== ob ? oa - ob : b.start_frame - a.start_frame
+    })
+    return cands[0] ?? null
+  }, [activeAudioClips, tracks])
+
   useEffect(() => {
-    const a = audioRef.current
-    if (!a) return
+    const el = audioElRef.current
+    if (!el) return
     if (!activeAudioClip || activeAudioClip.asset_id == null) {
-      a.src = ''
-      setLoadedAudioId(null)
+      if (!el.paused) el.pause()
       return
     }
-    if (activeAudioClip.asset_id !== loadedAudioId) {
-      a.src = assetsApi.fileUrl(activeAudioClip.asset_id)
-      a.load()
-      setLoadedAudioId(activeAudioClip.asset_id)
-    }
-  }, [activeAudioClip?.asset_id])
-
-  // Keep the audio element playing / seeked in sync with the playhead
-  useEffect(() => {
-    const a = audioRef.current
-    if (!a || !activeAudioClip) return
+    const url = assetsApi.fileUrl(activeAudioClip.asset_id)
+    if (!el.src.endsWith(url)) { el.src = url; el.load() }
     const t = (currentFrame - activeAudioClip.start_frame + activeAudioClip.asset_in_frame) / projectFps
+    const rel = currentFrame - activeAudioClip.start_frame
+    let vol = 1
+    if (activeAudioClip.fade_in_frames > 0 && rel < activeAudioClip.fade_in_frames)
+      vol = rel / activeAudioClip.fade_in_frames
+    const tail = activeAudioClip.duration_frames - rel
+    if (activeAudioClip.fade_out_frames > 0 && tail < activeAudioClip.fade_out_frames)
+      vol = Math.min(vol, tail / activeAudioClip.fade_out_frames)
+    el.volume = Math.max(0, Math.min(1, vol))
     if (playing) {
-      if (Math.abs(a.currentTime - t) > 0.25) a.currentTime = Math.max(0, t)  // correct drift only
-      if (a.paused) a.play().catch(() => {})
+      if (Math.abs(el.currentTime - t) > 0.25) el.currentTime = Math.max(0, t)
+      if (el.paused) el.play().catch(() => {})
     } else {
-      if (!a.paused) a.pause()
-      if (Math.abs(a.currentTime - t) > 0.04) a.currentTime = Math.max(0, t)
+      if (!el.paused) el.pause()
+      if (Math.abs(el.currentTime - t) > 0.04) el.currentTime = Math.max(0, t)
     }
   }, [playing, currentFrame, activeAudioClip, projectFps])
+
+  // Audioトラックが鳴っている間はVideoの内蔵音声をミュート(二重再生防止)
+  useEffect(() => {
+    const v = videoRef.current
+    if (v) v.muted = !!activeAudioClip
+  }, [activeAudioClip])
+
+  useEffect(() => () => {
+    const el = audioElRef.current
+    if (el) { el.pause(); el.src = '' }
+  }, [])
 
   // ── WYSIWYG compositor ────────────────────────────────────────────────────
   // Preload image assets so the canvas can composite them (file = full quality).
@@ -191,7 +275,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     ctx.setTransform(s, 0, 0, s, 0, 0)                 // draw in projW×projH space
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
-    const vts = tracks.filter(t => t.track_type === 'video').sort((a, b) => a.order - b.order)
+    // UI上で上にあるトラック(order小)ほど最前面 → 下から順に描き、最後に上を重ねる
+    const vts = tracks.filter(t => t.track_type === 'video' && !t.hidden).sort((a, b) => b.order - a.order)
     for (const tr of vts) {
       if (previewHidden.includes(tr.id)) continue   // hidden in preview (not render)
       const clip = clips.filter(c => c.track_id === tr.id)
@@ -214,15 +299,109 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           if (im && im.complete && im.naturalWidth) drawLayer(ctx, im, im.naturalWidth, im.naturalHeight, xf)
         } else {
           const v = videoRef.current
-          if (v && loadedAssetId === clip.asset_id && v.readyState >= 2)
-            drawLayer(ctx, v, v.videoWidth, v.videoHeight, xf)
+          const cache = videoCacheRef.current
+          const holdFps = clip.posterize_fps ?? 0
+          if (v && loadedAssetId === clip.asset_id && v.readyState >= 2 && !v.seeking) {
+            if (holdFps > 0.5) {
+              // 🎞 コマ打ち: 出力時間をホールド間隔で量子化し、区間が変わった時だけ取り込む
+              const outSec = (currentFrame - clip.start_frame) / projectFps
+              const slot = Math.floor(outSec * holdFps)
+              const hc = holdCacheRef.current
+              if (hc.clipId !== clip.id || hc.slot !== slot || !hc.canvas) {
+                if (!hc.canvas) hc.canvas = document.createElement('canvas')
+                hc.canvas.width = v.videoWidth; hc.canvas.height = v.videoHeight
+                hc.canvas.getContext('2d')?.drawImage(v, 0, 0)
+                hc.clipId = clip.id; hc.slot = slot
+              }
+              drawLayer(ctx, hc.canvas, hc.canvas.width, hc.canvas.height, xf)
+            } else {
+              drawLayer(ctx, v, v.videoWidth, v.videoHeight, xf)
+            }
+          } else if (cache.canvas && cache.assetId === clip.asset_id && cache.canvas.width) {
+            // シーク中・ロード中は直前の確定フレームで埋める(黒点滅防止)
+            drawLayer(ctx, cache.canvas, cache.canvas.width, cache.canvas.height, xf)
+          }
         }
       }
       ctx.restore()
     }
+
+    // Image(Ref)ピン選択中はその画像をcontainでフル表示(小サムネ確認の代替)。
+    // 最後に選択したピンを優先。選択解除で通常の合成表示に戻る。
+    if (refSel.length > 0) {
+      const selClip = [...refSel].reverse()
+        .map(id => clips.find(c => c.id === id))
+        .find(c => c && c.asset_id != null)
+      const im = selClip?.asset_id != null ? imgMap.current.get(selClip.asset_id) : undefined
+      if (im && im.complete && im.naturalWidth) {
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
+        const cs = Math.min(projW / im.naturalWidth, projH / im.naturalHeight)
+        const dw = im.naturalWidth * cs, dh = im.naturalHeight * cs
+        ctx.drawImage(im, (projW - dw) / 2, (projH - dh) / 2, dw, dh)
+      }
+    }
+
+    if (diffMode) applyDiffView(cv, ctx)
   }
 
-  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview])
+  // 差分ビュー: comp を |cur - prev| に置換し、動き量(平均輝度差)を計測する
+  const applyDiffView = (cv: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
+    const w = cv.width, h = cv.height
+    const ensure = (ref: React.MutableRefObject<HTMLCanvasElement | null>, ww: number, hh: number) => {
+      if (!ref.current) ref.current = document.createElement('canvas')
+      if (ref.current.width !== ww || ref.current.height !== hh) { ref.current.width = ww; ref.current.height = hh }
+      return ref.current
+    }
+    const tmp = ensure(diffTmpRef, w, h)
+    const prev = ensure(prevFrameRef, w, h)
+    // tmp ← 今フレーム(合成結果)
+    const tctx = tmp.getContext('2d')!
+    tctx.setTransform(1, 0, 0, 1, 0, 0)
+    tctx.globalCompositeOperation = 'source-over'
+    tctx.drawImage(cv, 0, 0)
+    // comp ← |今 − 前| を増幅表示
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.globalCompositeOperation = 'difference'
+    ctx.drawImage(prev, 0, 0, w, h)
+    ctx.globalCompositeOperation = 'source-over'
+    ctx.save()
+    ctx.filter = 'brightness(3.2) grayscale(0.2)'
+    ctx.drawImage(cv, 0, 0)
+    ctx.restore()
+    // 動き量: 64x36に縮小した差分の平均輝度(0-100スケール)
+    const m = ensure(measRef, 64, 36)
+    const mctx = m.getContext('2d', { willReadFrequently: true })!
+    mctx.filter = 'none'
+    mctx.drawImage(cv, 0, 0, 64, 36)
+    const d = mctx.getImageData(0, 0, 64, 36).data
+    let sum = 0
+    for (let i = 0; i < d.length; i += 4) sum += d[i] + d[i + 1] + d[i + 2]
+    const val = sum / (d.length / 4) / 3 / 255 * 100 / 3.2   // 増幅ぶんを戻す
+    const hist = motionHistRef.current
+    hist.push(val); if (hist.length > 240) hist.shift()
+    if (motionTextRef.current) motionTextRef.current.textContent = val.toFixed(1)
+    // スパークライン(直近240フレーム)
+    const sp = sparkRef.current
+    if (sp) {
+      const sctx = sp.getContext('2d')!
+      sctx.clearRect(0, 0, sp.width, sp.height)
+      const vmax = Math.max(8, ...hist)
+      sctx.strokeStyle = '#f0a8bc'; sctx.lineWidth = 1; sctx.beginPath()
+      hist.forEach((v2, i) => {
+        const x = (i / 239) * sp.width, y = sp.height - (v2 / vmax) * (sp.height - 2)
+        i === 0 ? sctx.moveTo(x, y) : sctx.lineTo(x, y)
+      })
+      sctx.stroke()
+    }
+    // prev ← 今フレーム
+    const pctx = prev.getContext('2d')!
+    pctx.setTransform(1, 0, 0, 1, 0, 0)
+    pctx.globalCompositeOperation = 'source-over'
+    pctx.drawImage(tmp, 0, 0)
+  }
+
+  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview, diffMode, refSel])
 
   // Measure the fitted project-frame box (object-contain) for the frame guides
   useEffect(() => {
@@ -285,13 +464,14 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       e.preventDefault()
+      unlockAudioPool()
       setPlaying(p => !p)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const togglePlay = () => setPlaying(p => !p)
+  const togglePlay = () => { unlockAudioPool(); setPlaying(p => !p) }
 
   const goToStart = () => {
     setPlaying(false)
@@ -324,8 +504,6 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             (transforms / opacity / blend / text) so the timeline is what-you-see. */}
         <canvas ref={compRef} className="max-w-full max-h-full object-contain" />
 
-        {/* Hidden audio element for BGM playback */}
-        <audio ref={audioRef} preload="auto" className="hidden" />
 
         {/* Project frame boundary + design guides (overlaid on the fitted frame) */}
         {box.w > 1 && (
@@ -367,7 +545,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-zinc-800 flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-zinc-800 flex-shrink-0 max-sm:overflow-x-auto max-sm:px-2 max-sm:[&>button]:flex-shrink-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 max-sm:[&>span]:flex-shrink-0">
         <button
           onClick={goToStart}
           className="text-zinc-400 hover:text-white text-sm w-6 text-center"
@@ -397,6 +575,18 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         )}
 
         <button
+          onClick={() => { setDiffMode(v => !v); motionHistRef.current = [] }}
+          className={`text-[10px] px-2 py-0.5 rounded ${diffMode ? 'bg-rose-900 text-rose-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          title="差分再生: フレーム間差分を表示し画面全体の動き量を数値化（カット=スパイク/カメラ=持続山）"
+        >🔍 差分</button>
+        {diffMode && (
+          <span className="flex items-center gap-1 text-[10px] text-rose-200 bg-zinc-900 rounded px-1.5 py-0.5">
+            動き <span ref={motionTextRef} className="font-mono w-9 text-right">0.0</span>
+            <canvas ref={sparkRef} width={120} height={18} className="rounded bg-zinc-950" />
+          </span>
+        )}
+
+        <button
           onClick={() => setLightPreview(v => !v)}
           className={`ml-auto text-[10px] px-2 py-0.5 rounded ${lightPreview ? 'bg-emerald-800 text-emerald-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           title="軽量プレビュー: 描画解像度を下げて動作を軽く（書き出し画質は不変）"
@@ -408,7 +598,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           title="フレーム枠ガイド: なし → 三分割 → セーフエリア"
         >⊞ {guideMode === 'off' ? 'ガイド' : guideMode === 'thirds' ? '三分割' : 'セーフ'}</button>
 
-        <span className="text-[10px] text-zinc-600">
+        <span className="text-[10px] text-zinc-600 max-sm:hidden">
           {projW}×{projH}
         </span>
       </div>

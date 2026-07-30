@@ -35,7 +35,7 @@ def envelopes(wavs: dict[str, np.ndarray], sr: int) -> dict[str, list[float]]:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("song")
-    ap.add_argument("--beatgrid", required=True)
+    ap.add_argument("--beatgrid", default=None)
     ap.add_argument("--stems-out", default=None)
     ap.add_argument("--model", default="htdemucs")
     a = ap.parse_args()
@@ -54,7 +54,9 @@ def main():
     ref = wav.mean(0)
     wav_n = (wav - ref.mean()) / ref.std()
     with torch.no_grad():
-        sources = apply_model(model, wav_n[None], device=dev, progress=True)[0]
+        # split=True: 長尺をセグメント処理(一括だと3分級でCUDA OOMする)
+        sources = apply_model(model, wav_n[None], device=dev, progress=True,
+                              split=True, overlap=0.25)[0]
     sources = sources * ref.std() + ref.mean()
 
     stems = {name: src.cpu().numpy() for name, src in zip(model.sources, sources)}
@@ -67,13 +69,14 @@ def main():
             sf.write(od / f"{name}.wav", w.T, model.samplerate)
         print("wavs →", od)
 
-    envs = envelopes(stems, model.samplerate)
-    bg_path = Path(a.beatgrid)
-    bg = json.loads(bg_path.read_text())
-    bg["stems"] = envs
-    bg["stemsHz"] = ENV_HZ
-    bg_path.write_text(json.dumps(bg, ensure_ascii=False))
-    print(f"beatgrid updated: {bg_path} (stems {ENV_HZ}Hz, {len(envs['drums'])} samples)")
+    if a.beatgrid:
+        envs = envelopes(stems, model.samplerate)
+        bg_path = Path(a.beatgrid)
+        bg = json.loads(bg_path.read_text())
+        bg["stems"] = envs
+        bg["stemsHz"] = ENV_HZ
+        bg_path.write_text(json.dumps(bg, ensure_ascii=False))
+        print(f"beatgrid updated: {bg_path} (stems {ENV_HZ}Hz, {len(envs['drums'])} samples)")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,9 @@ class ClipBase(SQLModel):
     # LLM tools can round-trip the clip to its shotlist entry).
     kind: str = "media"
     attrs_json: str = ""
+    # コマ打ち(アニメ風フレームホールド): 0=off, 12=2コマ打ち相当, 8=3コマ打ち相当。
+    # 速度リマップ後の出力タイムベースに適用される。
+    posterize_fps: float = 0
 
 
 class Clip(ClipBase, table=True):
@@ -60,6 +63,7 @@ class ClipUpdate(SQLModel):
     transform_json: Optional[str] = None
     kind: Optional[str] = None
     attrs_json: Optional[str] = None
+    posterize_fps: Optional[float] = None
 
 
 class ClipRead(ClipBase):

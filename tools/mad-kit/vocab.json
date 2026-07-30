@@ -1,0 +1,619 @@
+{
+  "version": "2026-07-07",
+  "note": "映像用語カタログ — AIとの対話で使う正式名称。ここに載っている語を使えば齟齬が起きない。",
+  "categories": [
+    {
+      "id": "templates",
+      "name": "シーンテンプレート",
+      "hint": "shotlistのtemplateに指定",
+      "items": [
+        {
+          "key": "mg_intro",
+          "name": "MGイントロ",
+          "desc": "タイトル+サブの導入。文字が拍で入る"
+        },
+        {
+          "key": "title_card",
+          "name": "タイトルカード",
+          "desc": "大題字1枚"
+        },
+        {
+          "key": "showcase_pattern",
+          "name": "ショーケース(柄背景)",
+          "desc": "パターン背景+主役+飾り。汎用の主力"
+        },
+        {
+          "key": "showcase_card",
+          "name": "ショーケース(カード)",
+          "desc": "カード枠に画像"
+        },
+        {
+          "key": "showcase_fullbleed",
+          "name": "全面ショーケース",
+          "desc": "画像を全面に+テキスト"
+        },
+        {
+          "key": "panels_strip",
+          "name": "パネル帯",
+          "desc": "複数画像の帯分割"
+        },
+        {
+          "key": "bands_repeat",
+          "name": "帯リピート",
+          "desc": "1枚の画像を4色調の帯に分けて時差スライドイン(params.asset必須)"
+        },
+        {
+          "key": "cv_card",
+          "name": "CVカード",
+          "desc": "キャラ+名前プレート"
+        },
+        {
+          "key": "rapid_cuts",
+          "name": "ラピッドカット",
+          "desc": "拍ごとに画像切替+ラベル"
+        },
+        {
+          "key": "riser",
+          "name": "ライザー",
+          "desc": "ズームイン+リング拡散でビルドアップ→白落ち"
+        },
+        {
+          "key": "mg_peak",
+          "name": "MGピーク",
+          "desc": "サビ頭の大文字ドン(fx併用可)"
+        },
+        {
+          "key": "profile_card",
+          "name": "プロフィールカード",
+          "desc": "人物紹介レイアウト"
+        },
+        {
+          "key": "breakdown_pan",
+          "name": "ブレイクダウンパン",
+          "desc": "静かな横パン(息抜き区間)"
+        },
+        {
+          "key": "finale_cuts",
+          "name": "フィナーレカット",
+          "desc": "小節頭で画像切替+パーティ層"
+        },
+        {
+          "key": "lineup",
+          "name": "ラインナップ",
+          "desc": "複数キャラ整列+ホップ"
+        },
+        {
+          "key": "outro_credits",
+          "name": "アウトロクレジット",
+          "desc": "白プレート+クレジット"
+        },
+        {
+          "key": "parallax_scene",
+          "name": "パララックスシーン",
+          "desc": "多層カメラ視差(bg/layers/subjects/fg)"
+        },
+        {
+          "key": "scene3d",
+          "name": "3Dシーン",
+          "desc": "GLBを実3Dカメラで撮る(objects+cameraキーフレーム)"
+        },
+        {
+          "key": "shader_scene",
+          "name": "シェーダシーン",
+          "desc": "GLSLシェーダ背景(aurora/plasma/rays/warp/grid)+主役+文字。onでステム反応"
+        }
+      ]
+    },
+    {
+      "id": "fx",
+      "name": "FX(画面効果)",
+      "hint": "shotのparams.fx: [{kind, on}]",
+      "items": [
+        {
+          "key": "glitch",
+          "name": "グリッチ",
+          "desc": "歪みノイズ+色反転コマ。on:drums推奨"
+        },
+        {
+          "key": "rgb_shift",
+          "name": "RGBずれ",
+          "desc": "色収差。拍で赤青が割れる"
+        },
+        {
+          "key": "speedlines",
+          "name": "集中線",
+          "desc": "マンガ的スピード線"
+        },
+        {
+          "key": "manga_flash",
+          "name": "マンガフラッシュ",
+          "desc": "ベタフラッシュ(放射)"
+        },
+        {
+          "key": "shake",
+          "name": "シェイク",
+          "desc": "画面揺れ。使いすぎ注意(チープ化)"
+        },
+        {
+          "key": "shockwave",
+          "name": "衝撃波",
+          "desc": "リング状の歪み拡散"
+        },
+        {
+          "key": "grain",
+          "name": "グレイン",
+          "desc": "フィルム粒子"
+        },
+        {
+          "key": "vignette_pulse",
+          "name": "ビネットパルス",
+          "desc": "周辺減光が拍で脈動"
+        }
+      ]
+    },
+    {
+      "id": "on",
+      "name": "FX/モーションのトリガー",
+      "hint": "fxやempのon:に指定",
+      "items": [
+        {
+          "key": "db",
+          "name": "ダウンビート",
+          "desc": "小節頭で発火(既定)"
+        },
+        {
+          "key": "beat",
+          "name": "ビート",
+          "desc": "全拍で発火"
+        },
+        {
+          "key": "drums",
+          "name": "ドラム音量",
+          "desc": "ドラムステムの実音量に追従"
+        },
+        {
+          "key": "bass",
+          "name": "ベース音量",
+          "desc": "ベースステム追従"
+        },
+        {
+          "key": "vocal",
+          "name": "ボーカル音量",
+          "desc": "ボーカルステム追従"
+        },
+        {
+          "key": "other",
+          "name": "その他音量",
+          "desc": "上物ステム追従"
+        }
+      ]
+    },
+    {
+      "id": "enter",
+      "name": "登場アニメ(enter)",
+      "hint": "params.subjects[].enter等",
+      "items": [
+        {
+          "key": "rise_pop",
+          "name": "せり上がりポップ",
+          "desc": "下から+バウンド"
+        },
+        {
+          "key": "pop",
+          "name": "ポップ",
+          "desc": "スケールで弾む"
+        },
+        {
+          "key": "slide_l",
+          "name": "左スライド",
+          "desc": "左から"
+        },
+        {
+          "key": "slide_r",
+          "name": "右スライド",
+          "desc": "右から"
+        },
+        {
+          "key": "slide_u",
+          "name": "上スライド",
+          "desc": "上から"
+        },
+        {
+          "key": "slide_d",
+          "name": "下スライド",
+          "desc": "下から"
+        },
+        {
+          "key": "drop_bounce",
+          "name": "落下バウンド",
+          "desc": "落ちて跳ねる"
+        },
+        {
+          "key": "spin_in",
+          "name": "スピンイン",
+          "desc": "回転しながら"
+        },
+        {
+          "key": "fade_zoom",
+          "name": "フェードズーム",
+          "desc": "拡大しつつ出現"
+        },
+        {
+          "key": "tilt_in",
+          "name": "チルトイン",
+          "desc": "傾きから起きる"
+        },
+        {
+          "key": "flip_in",
+          "name": "フリップイン",
+          "desc": "裏返りから"
+        }
+      ]
+    },
+    {
+      "id": "idle",
+      "name": "アイドルモーション(常時)",
+      "hint": "params.*.idles: [{kind, amp, rate}]",
+      "items": [
+        {
+          "key": "breath",
+          "name": "呼吸",
+          "desc": "縦の微伸縮"
+        },
+        {
+          "key": "bob",
+          "name": "ボブ",
+          "desc": "上下ゆれ"
+        },
+        {
+          "key": "sway",
+          "name": "スウェイ",
+          "desc": "左右傾きゆれ"
+        },
+        {
+          "key": "float",
+          "name": "浮遊",
+          "desc": "ゆっくり上下"
+        },
+        {
+          "key": "hop_beat",
+          "name": "拍ホップ",
+          "desc": "拍で跳ねる"
+        },
+        {
+          "key": "pulse_beat",
+          "name": "拍パルス",
+          "desc": "拍で膨らむ"
+        },
+        {
+          "key": "wiggle_beat",
+          "name": "拍ウィグル",
+          "desc": "拍で小刻み"
+        },
+        {
+          "key": "spin",
+          "name": "回転",
+          "desc": "ゆっくり回る"
+        },
+        {
+          "key": "sway3d",
+          "name": "3Dスウェイ",
+          "desc": "奥行きを感じる揺れ"
+        },
+        {
+          "key": "stem_pump",
+          "name": "ステムポンプ",
+          "desc": "指定ステム音量で伸縮"
+        },
+        {
+          "key": "stem_bob",
+          "name": "ステムボブ",
+          "desc": "ステム音量で上下"
+        }
+      ]
+    },
+    {
+      "id": "emph",
+      "name": "強調(emph)",
+      "hint": "拍・音量での瞬間強調",
+      "items": [
+        {
+          "key": "punch_db",
+          "name": "小節パンチ",
+          "desc": "小節頭でスケールパンチ"
+        },
+        {
+          "key": "punch_beat",
+          "name": "拍パンチ",
+          "desc": "全拍でパンチ"
+        }
+      ]
+    },
+    {
+      "id": "ambient",
+      "name": "アンビエント(粒子層)",
+      "hint": "params.ambient: {kind, n}",
+      "items": [
+        {
+          "key": "petals",
+          "name": "花びら",
+          "desc": "舞い散る花弁"
+        },
+        {
+          "key": "sparkles",
+          "name": "きらめき",
+          "desc": "小さな光"
+        },
+        {
+          "key": "confetti",
+          "name": "紙吹雪",
+          "desc": "祝祭感"
+        },
+        {
+          "key": "floaters",
+          "name": "浮遊粒",
+          "desc": "ふわふわした丸"
+        },
+        {
+          "key": "snow",
+          "name": "雪",
+          "desc": "降雪"
+        }
+      ]
+    },
+    {
+      "id": "pattern",
+      "name": "背景パターン",
+      "hint": "params.bg: {pattern}",
+      "items": [
+        {
+          "key": "soft",
+          "name": "ソフト",
+          "desc": "淡いグラデ(既定)"
+        },
+        {
+          "key": "night",
+          "name": "夜空",
+          "desc": "星+深紺(叛逆/クライマックス向き)"
+        },
+        {
+          "key": "argyle",
+          "name": "アーガイル",
+          "desc": "ひし形柄"
+        },
+        {
+          "key": "stripes",
+          "name": "ストライプ",
+          "desc": "斜め縞"
+        },
+        {
+          "key": "dots",
+          "name": "ドット",
+          "desc": "水玉"
+        },
+        {
+          "key": "checks",
+          "name": "チェック",
+          "desc": "市松"
+        }
+      ]
+    },
+    {
+      "id": "shader",
+      "name": "シェーダ背景",
+      "hint": "shader_sceneのshaderに指定",
+      "items": [
+        {
+          "key": "aurora",
+          "name": "オーロラ",
+          "desc": "波打つ光のカーテン(静〜中エネルギー)"
+        },
+        {
+          "key": "plasma",
+          "name": "プラズマ",
+          "desc": "サイケなうねり(高エネルギー)"
+        },
+        {
+          "key": "rays",
+          "name": "放射光",
+          "desc": "神々しい光条(円環・荘厳シーン向き)"
+        },
+        {
+          "key": "warp",
+          "name": "スターワープ",
+          "desc": "星が流れる(周回・加速シーン向き)"
+        },
+        {
+          "key": "grid",
+          "name": "ネオングリッド",
+          "desc": "シンセウェイヴ床+太陽"
+        }
+      ]
+    },
+    {
+      "id": "camera3d",
+      "name": "3Dカメラ",
+      "hint": "scene3d/3dcamのcamera",
+      "items": [
+        {
+          "key": "orbit",
+          "name": "ターンテーブル",
+          "desc": "周回。turnsで周数"
+        },
+        {
+          "key": "dolly_in",
+          "name": "ドリーイン",
+          "desc": "寄る"
+        },
+        {
+          "key": "dolly_out",
+          "name": "ドリーアウト",
+          "desc": "引く"
+        },
+        {
+          "key": "sway",
+          "name": "カメラスウェイ",
+          "desc": "左右に振る"
+        },
+        {
+          "key": "arc_l",
+          "name": "アーク左",
+          "desc": "左へ回り込み"
+        },
+        {
+          "key": "arc_r",
+          "name": "アーク右",
+          "desc": "右へ回り込み"
+        },
+        {
+          "key": "parallax",
+          "name": "パララックス",
+          "desc": "relief用の平行移動+微ドリー(3Dフォト)"
+        },
+        {
+          "key": "keyframes",
+          "name": "キーフレーム",
+          "desc": "[{at,az,el,dist,fov,roll,target,ease}]で完全指定。ease: linear|inOut|outCubic|inCubic"
+        },
+        {
+          "key": "beat_camera",
+          "name": "ビートカメラ",
+          "desc": "ビート同期キー自動生成: punch_in|orbit_beat|sway_beat|riser"
+        }
+      ]
+    },
+    {
+      "id": "style3d",
+      "name": "3D描画スタイル",
+      "hint": "orbit/scene3dのstyle",
+      "items": [
+        {
+          "key": "toon",
+          "name": "トゥーン",
+          "desc": "3段陰影+輪郭線(白彫像風)"
+        },
+        {
+          "key": "standard",
+          "name": "スタンダード",
+          "desc": "通常ライティング"
+        },
+        {
+          "key": "wire",
+          "name": "ワイヤーフレーム",
+          "desc": "線構造"
+        },
+        {
+          "key": "depth",
+          "name": "深度",
+          "desc": "白黒深度(Fun Controlのコントロール用)"
+        }
+      ]
+    },
+    {
+      "id": "grade",
+      "name": "グレード(色調)",
+      "hint": "meta.grade: [{from,to,filter}] CSSフィルタ",
+      "items": [
+        {
+          "key": "grayscale",
+          "name": "モノクロ",
+          "desc": "grayscale(0.9〜1)"
+        },
+        {
+          "key": "cool",
+          "name": "冷色",
+          "desc": "saturate(0.8) hue-rotate(-10deg)"
+        },
+        {
+          "key": "golden",
+          "name": "金白",
+          "desc": "sepia(0.2) brightness(1.08)"
+        },
+        {
+          "key": "dark_purple",
+          "name": "紫黒",
+          "desc": "hue-rotate(30deg) saturate(0.85) brightness(0.9)"
+        },
+        {
+          "key": "vivid",
+          "name": "ビビッド",
+          "desc": "saturate(1.15) contrast(1.08)"
+        },
+        {
+          "key": "dawn",
+          "name": "朝焼け",
+          "desc": "sepia(0.3) hue-rotate(-16deg) brightness(1.02)"
+        }
+      ]
+    },
+    {
+      "id": "transition",
+      "name": "トランジション/リビール",
+      "hint": "ショット切替・見せ方",
+      "items": [
+        {
+          "key": "iris",
+          "name": "アイリス",
+          "desc": "円形に開く/閉じる"
+        },
+        {
+          "key": "wipe",
+          "name": "ワイプ",
+          "desc": "面で拭う"
+        },
+        {
+          "key": "bandwipe",
+          "name": "帯ワイプ",
+          "desc": "複数帯で切替"
+        },
+        {
+          "key": "flash",
+          "name": "フラッシュ",
+          "desc": "白閃光"
+        },
+        {
+          "key": "letterbox",
+          "name": "レターボックス",
+          "desc": "上下黒帯(シネマ)"
+        }
+      ]
+    },
+    {
+      "id": "music",
+      "name": "音楽まわり",
+      "hint": "生成/評価の用語",
+      "items": [
+        {
+          "key": "caption",
+          "name": "キャプション",
+          "desc": "曲スタイル英語記述。BPM/キー語は入れない"
+        },
+        {
+          "key": "stems",
+          "name": "ステム",
+          "desc": "drums/bass/vocal/other の分離音量(モーション駆動源)"
+        },
+        {
+          "key": "punch",
+          "name": "パンチ",
+          "desc": "音圧・アタック感スコア"
+        },
+        {
+          "key": "adherence",
+          "name": "歌詞一致",
+          "desc": "書いた歌詞がどれだけ歌われたか(一致/反復/脱落)"
+        },
+        {
+          "key": "repaint",
+          "name": "リペイント",
+          "desc": "曲の区間だけ描き直す外科手術"
+        },
+        {
+          "key": "downbeat",
+          "name": "ダウンビート",
+          "desc": "小節頭。カットの基準点"
+        }
+      ]
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { Asset } from '../../api/client'
 import { AssetPanel } from '../AssetPanel'
 import { GenerationPanel } from './GenerationPanel/GenerationPanel'
+import { ReferencePanel } from './ReferencePanel'
 import { JobQueuePanel } from './JobQueuePanel'
 import { LayerPanel } from './LayerPanel'
 import { StoragePanel } from './StoragePanel'
@@ -9,7 +10,7 @@ import { MusicPanel } from './MusicPanel'
 import { useJobStore } from '../../store/jobStore'
 import { useUIStore } from '../../store/uiStore'
 
-type PanelTab = 'assets' | 'layers' | 'generate' | 'music' | 'jobs' | 'storage'
+type PanelTab = 'assets' | 'layers' | 'generate' | 'music' | 'jobs' | 'storage' | 'reference'
 
 interface Props {
   projectId: number
@@ -24,6 +25,7 @@ const TABS: { id: PanelTab; label: string; title: string }[] = [
   { id: 'music',    label: '🎵', title: '音楽スタジオ' },
   { id: 'storage',  label: '💾', title: '容量' },
   { id: 'jobs',     label: '⚙',  title: 'ジョブキュー' },
+  { id: 'reference', label: '📖', title: 'リファレンス（用語・機能一覧）' },
 ]
 
 export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
@@ -103,6 +105,9 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
         </div>
         <div className={`absolute inset-0 ${tab === 'jobs'     ? '' : 'hidden'}`}>
           <JobQueuePanel />
+        </div>
+        <div className={`absolute inset-0 ${tab === 'reference' ? '' : 'hidden'}`}>
+          <ReferencePanel />
         </div>
       </div>
     </div>

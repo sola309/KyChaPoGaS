@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Asset } from '../api/client'
-import { assetsApi } from '../api/client'
+import { assetsApi, assetKind } from '../api/client'
 import { useAnalysisStore } from '../store/analysisStore'
 import { useJobStore } from '../store/jobStore'
 
@@ -29,11 +30,44 @@ interface Props {
   onAssetsChange?: (assets: Asset[]) => void
 }
 
+type KindFilter = 'all' | 'video' | 'image' | 'audio'
+type SortMode = 'new' | 'old' | 'name'
+
 export function AssetPanel({ projectId, onAssetsChange }: Props) {
   const [assets, setAssets] = useState<Asset[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
+  const [genFilter, setGenFilter] = useState<'all' | 'gen' | 'upload'>('all')
+  const [query, setQuery] = useState('')
+  const [sortMode, setSortMode] = useState<SortMode>('new')
+
+  const counts = useMemo(() => {
+    const c = { all: assets.length, video: 0, image: 0, audio: 0 }
+    for (const a of assets) {
+      const k = assetKind(a)
+      if (k === 'video') c.video++
+      else if (k === 'image') c.image++
+      else if (k === 'audio') c.audio++
+    }
+    return c
+  }, [assets])
+
+  const visible = useMemo(() => {
+    let list = assets
+    if (kindFilter !== 'all') list = list.filter(a => assetKind(a) === kindFilter)
+    if (genFilter === 'gen') list = list.filter(a => a.asset_type === 'generated')
+    if (genFilter === 'upload') list = list.filter(a => a.asset_type !== 'generated')
+    if (query.trim()) {
+      const q = query.trim().toLowerCase()
+      list = list.filter(a => a.name.toLowerCase().includes(q) || String(a.id).includes(q))
+    }
+    return [...list].sort((a, b) =>
+      sortMode === 'new' ? b.id - a.id :
+      sortMode === 'old' ? a.id - b.id :
+      a.name.localeCompare(b.name))
+  }, [assets, kindFilter, genFilter, query, sortMode])
 
   const load = async () => {
     const list = await assetsApi.list(projectId)
@@ -42,6 +76,13 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
   }
 
   useEffect(() => { load() }, [projectId])
+
+  // extract-frame等、ジョブを介さないアセット追加からの更新通知
+  useEffect(() => {
+    const onChanged = () => load()
+    window.addEventListener('kychapogas:assets-changed', onChanged)
+    return () => window.removeEventListener('kychapogas:assets-changed', onChanged)
+  }, [projectId])
 
   // Refresh the asset list when jobs complete (new precompose/proxy/generated assets)
   const completedCount = useJobStore(s => s.jobs.filter(j => j.status === 'completed').length)
@@ -109,12 +150,43 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
         />
       </div>
 
+      {/* Filter / search / sort */}
+      <div className="px-3 pb-2 flex flex-col gap-1.5">
+        <div className="flex gap-1">
+          {([['all', `すべて ${counts.all}`], ['video', `🎬 ${counts.video}`],
+             ['image', `🖼 ${counts.image}`], ['audio', `🎵 ${counts.audio}`]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setKindFilter(k as KindFilter)}
+                    className={`text-[10px] px-2 py-1 rounded flex-1 ${
+                      kindFilter === k ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                    }`}>{label}</button>
+          ))}
+        </div>
+        <div className="flex gap-1.5 items-center">
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="🔍 名前 / #ID"
+                 className="flex-1 bg-zinc-800 text-[11px] text-zinc-100 rounded px-2 py-1 outline-none border border-zinc-700 focus:border-purple-500" />
+          <select value={genFilter} onChange={e => setGenFilter(e.target.value as typeof genFilter)}
+                  className="bg-zinc-800 text-[10px] text-zinc-300 rounded px-1 py-1 outline-none border border-zinc-700">
+            <option value="all">出所</option>
+            <option value="gen">✨生成</option>
+            <option value="upload">📁取込</option>
+          </select>
+          <select value={sortMode} onChange={e => setSortMode(e.target.value as SortMode)}
+                  className="bg-zinc-800 text-[10px] text-zinc-300 rounded px-1 py-1 outline-none border border-zinc-700">
+            <option value="new">新しい順</option>
+            <option value="old">古い順</option>
+            <option value="name">名前順</option>
+          </select>
+        </div>
+      </div>
+
       {/* Asset list */}
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
-        {assets.length === 0 && (
-          <p className="text-center text-zinc-600 text-xs mt-6">アセットなし</p>
+        {visible.length === 0 && (
+          <p className="text-center text-zinc-600 text-xs mt-6">
+            {assets.length === 0 ? 'アセットなし' : '条件に合うアセットなし'}
+          </p>
         )}
-        {assets.map(asset => (
+        {visible.map(asset => (
           <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} />
         ))}
       </div>
@@ -126,6 +198,17 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
   const [thumbError, setThumbError] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [proxying, setProxying] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const handleExtractAudio = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExtracting(true)
+    try {
+      await assetsApi.extractAudio(asset.id)
+      window.dispatchEvent(new Event('kychapogas:assets-changed'))
+    } catch { /* 無音素材など */ } finally { setExtracting(false) }
+  }
   const { beats, scenes, loadAnalysis, triggerAudio, triggerVideo } = useAnalysisStore()
 
   const canAnalyze = asset.asset_type === 'audio' || asset.asset_type === 'video'
@@ -171,7 +254,7 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
     >
       {/* Thumbnail */}
       <div className="w-14 h-9 rounded overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center">
-        {(asset.asset_type === 'video' || asset.asset_type === 'image') && !thumbError ? (
+        {assetKind(asset) !== 'audio' && !thumbError ? (
           <img
             src={assetsApi.thumbnailUrl(asset.id)}
             alt=""
@@ -189,8 +272,9 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
       <div className="flex-1 min-w-0">
         <p className="text-xs text-zinc-200 truncate">{asset.name}</p>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span className={`text-[10px] px-1 rounded ${TYPE_BADGE[asset.asset_type] ?? TYPE_BADGE.generated}`}>
-            {asset.asset_type}
+          <span className={`text-[10px] px-1 rounded ${TYPE_BADGE[assetKind(asset)] ?? TYPE_BADGE.generated}`}>
+            {assetKind(asset) === 'video' ? '🎬' : assetKind(asset) === 'image' ? '🖼' : assetKind(asset) === 'audio' ? '🎵' : '🧊'}
+            {asset.asset_type === 'generated' ? '✨' : ''}
           </span>
           {asset.duration_sec && (
             <span className="text-[10px] text-zinc-500">{formatDuration(asset.duration_sec)}</span>
@@ -217,36 +301,64 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
         </div>
       </div>
 
-      {/* Proxy button (video, no proxy yet) */}
-      {isVideo && !hasProxy && (
-        <button
-          onClick={handleProxy}
-          disabled={proxying}
-          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-zinc-200 text-[10px] px-1 transition-opacity disabled:opacity-30"
-          title="軽量プレビュー用プロキシを生成"
-        >
-          {proxying ? '…' : '📦'}
-        </button>
-      )}
 
-      {/* Analyze button */}
-      {canAnalyze && (
-        <button
-          onClick={handleAnalyze}
-          disabled={analyzing}
-          className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-emerald-400 text-[10px] px-1 transition-opacity disabled:opacity-30"
-          title={asset.asset_type === 'audio' ? 'BPM解析' : 'シーン解析'}
-        >
-          {analyzing ? '…' : '解析'}
-        </button>
-      )}
-
-      {/* Delete */}
+      {/* アクションメニュー(スマホでも押せる常時表示ボタン) */}
       <button
-        onClick={() => onDelete(asset.id)}
-        className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 text-xs px-1 transition-opacity"
-        title="削除"
-      >✕</button>
+        onClick={e => { e.stopPropagation(); setMenuOpen(true) }}
+        className="text-zinc-400 hover:text-zinc-100 text-base px-1.5 py-1"
+        title="操作メニュー"
+      >⋯</button>
+
+      {menuOpen && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+             onClick={() => setMenuOpen(false)}>
+          <div onClick={e => e.stopPropagation()}
+               className="w-[min(420px,94vw)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl p-4 flex flex-col gap-1">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-16 h-10 rounded overflow-hidden bg-zinc-800 flex-shrink-0">
+                {assetKind(asset) !== 'audio' && (
+                  <img src={assetsApi.thumbnailUrl(asset.id)} alt="" className="w-full h-full object-cover"
+                       onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-zinc-200 truncate">#{asset.id} {asset.name}</p>
+                <p className="text-[10px] text-zinc-500">{assetKind(asset)}{asset.width ? ` ${asset.width}×${asset.height}` : ''}{asset.duration_sec ? ` ${formatDuration(asset.duration_sec)}` : ''}</p>
+              </div>
+              <button onClick={() => setMenuOpen(false)}
+                      className="ml-auto text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2">✕</button>
+            </div>
+
+            {assetKind(asset) === 'video' && (
+              <button onClick={async e => { await handleExtractAudio(e); setMenuOpen(false) }}
+                      disabled={extracting}
+                      className="text-left text-sm px-3 py-2.5 rounded hover:bg-zinc-800 text-zinc-200 disabled:opacity-40">
+                🎵 音声を抽出 <span className="text-[10px] text-zinc-500">→ 音声アセット化(BPM解析・音ハメ用)</span>
+              </button>
+            )}
+            {canAnalyze && (
+              <button onClick={async e => { await handleAnalyze(e); setMenuOpen(false) }}
+                      disabled={analyzing}
+                      className="text-left text-sm px-3 py-2.5 rounded hover:bg-zinc-800 text-zinc-200 disabled:opacity-40">
+                📊 {asset.asset_type === 'audio' ? 'BPM解析' : 'シーン解析'}
+                {(hasBeat || hasScene) && <span className="text-[10px] text-emerald-400 ml-1">解析済み・再実行</span>}
+              </button>
+            )}
+            {isVideo && !hasProxy && (
+              <button onClick={async e => { await handleProxy(e); setMenuOpen(false) }}
+                      disabled={proxying}
+                      className="text-left text-sm px-3 py-2.5 rounded hover:bg-zinc-800 text-zinc-200 disabled:opacity-40">
+                📦 軽量プロキシを生成 <span className="text-[10px] text-zinc-500">プレビュー/スクラブが軽くなる</span>
+              </button>
+            )}
+            <button onClick={() => { setMenuOpen(false); onDelete(asset.id) }}
+                    className="text-left text-sm px-3 py-2.5 rounded hover:bg-red-950/50 text-red-400">
+              🗑 削除
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

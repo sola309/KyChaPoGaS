@@ -68,7 +68,8 @@ def health():
 
 
 @app.post("/transcribe")
-async def transcribe(file: UploadFile = File(...), language: str = Form("ja")):
+async def transcribe(file: UploadFile = File(...), language: str = Form("ja"),
+                     timestamps: str = Form("0")):
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="empty audio")
@@ -77,14 +78,28 @@ async def transcribe(file: UploadFile = File(...), language: str = Form("ja")):
     except subprocess.CalledProcessError as e:
         raise HTTPException(status_code=400, detail=f"音声デコード失敗: {e.stderr.decode()[:200]}")
     if audio.size < 1600:   # < 0.1s → nothing to transcribe
-        return {"text": ""}
+        return {"text": "", "segments": []}
     _load()
     feats = _state["processor"](audio, sampling_rate=16000, return_tensors="pt").input_features
     feats = feats.to(_state["device"], _state["dtype"])
+    want_ts = timestamps in ("1", "true", "True")
     with torch.no_grad():
-        ids = _state["model"].generate(feats, language=language, task="transcribe")
+        ids = _state["model"].generate(feats, language=language, task="transcribe",
+                                       return_timestamps=want_ts)
     text = _state["processor"].batch_decode(ids, skip_special_tokens=True)[0].strip()
-    return {"text": text}
+    segments = []
+    if want_ts:
+        # <|x.xx|> トークン付きデコードからセグメント境界を復元
+        offsets = _state["processor"].batch_decode(
+            ids, skip_special_tokens=True, output_offsets=True)[0].get("offsets", [])
+        for o in offsets:
+            t0, t1 = o.get("timestamp", (None, None))
+            if t0 is None:
+                continue
+            segments.append({"t0": round(float(t0), 2),
+                             "t1": round(float(t1), 2) if t1 is not None else None,
+                             "text": o.get("text", "").strip()})
+    return {"text": text, "segments": segments}
 
 
 if __name__ == "__main__":

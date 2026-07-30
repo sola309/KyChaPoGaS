@@ -301,7 +301,11 @@ TOOLS: list[dict] = [
             "properties": {
                 "job_type": {
                     "type": "string",
-                    "enum": ["generate_image", "generate_audio", "generate_video_i2v", "render_motion_graphics"],
+                    "description": "get_job_catalog で全型のスキーマを確認できる",
+                    "enum": ["generate_image", "generate_audio", "generate_video_i2v",
+                             "render_motion_graphics", "cutout", "generate_3d",
+                             "render_orbit3d", "generate_video_3dcam", "generate_video_s2v",
+                             "analyze_audio", "analyze_video", "interpolate", "vlm_review"],
                 },
                 "params": {
                     "type": "object",
@@ -370,6 +374,10 @@ class ChatResponse(BaseModel):
 
 
 # ── Tool executor ─────────────────────────────────────────────────────────────
+
+from app.services.agent_tools import AGENT_TOOLS as _AGENT_TOOLS, dispatch_extra as _dispatch_extra
+TOOLS.extend(_AGENT_TOOLS)
+
 
 def _exec_tool(
     name: str,
@@ -445,22 +453,72 @@ def _exec_tool(
                 project_id, inp["asset_id"], inp["analysis_type"], session
             )
         case _:
+            extra = _dispatch_extra(name, inp, project_id, session)
+            if extra is not None:
+                return extra
             return {"error": f"Unknown tool: {name}"}
 
 
 # ── Main endpoint ─────────────────────────────────────────────────────────────
 
+def _chat_local(req: "ChatRequest", project, session: Session) -> "ChatResponse":
+    """ローカルLLM(Ollama)でのツール付きチャット。
+    AnthropicキーがないときのフォールバックとしてAIモードUIを成立させる。
+    ollama /api/chat の tools(function calling) を使い、対応モデル
+    (nemotron等)はツールを実行、非対応モデルは通常チャットに落ちる。"""
+    import httpx
+    from app import config as _config
+    from app.services.llm_provider import _strip_think
+    from app.services import settings_store as _S
+
+    base = getattr(_config, "OLLAMA_URL", "http://localhost:11434")
+    model = _S.get("OLLAMA_MODEL", getattr(_config, "OLLAMA_MODEL", "nemotron-nano:latest"))
+    tools = [{"type": "function",
+              "function": {"name": t["name"], "description": t["description"],
+                           "parameters": t["input_schema"]}} for t in TOOLS]
+    msgs: list[dict] = [{"role": "system", "content":
+        SYSTEM_PROMPT + f"\n\n## 現在のプロジェクト\n名前: {project.name}\nFPS: {project.fps}\n"
+        "\n重要: ツールは必要なときだけ呼ぶ。回答は簡潔な日本語で。"}]
+    msgs += [{"role": m.role, "content": m.content} for m in req.history]
+    msgs.append({"role": "user", "content": req.message})
+
+    actions: list[ActionLog] = []
+    reply = ""
+    with httpx.Client(timeout=180.0) as c:
+        for _ in range(8):
+            r = c.post(f"{base}/api/chat", json={
+                "model": model, "messages": msgs, "tools": tools,
+                "stream": False, "think": False,
+                "options": {"num_ctx": 16384}})
+            r.raise_for_status()
+            m = r.json().get("message", {})
+            calls = m.get("tool_calls") or []
+            if not calls:
+                reply = _strip_think(m.get("content", "") or "")
+                break
+            msgs.append(m)
+            for tc in calls:
+                fn = tc.get("function", {})
+                name, args = fn.get("name", ""), fn.get("arguments") or {}
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args)
+                    except Exception:
+                        args = {}
+                result = _exec_tool(name, args, req.project_id, session)
+                actions.append(ActionLog(tool=name, input=args, result=result))
+                msgs.append({"role": "tool", "content": json.dumps(result, ensure_ascii=False)})
+    return ChatResponse(reply=reply or "(応答なし)", actions=actions)
+
+
 @router.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, session: Session = Depends(get_session)):
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="ANTHROPIC_API_KEY not configured. Add it to backend/.env",
-        )
-
     project = session.get(Project, req.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    if not ANTHROPIC_API_KEY:
+        return _chat_local(req, project, session)
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -492,13 +550,17 @@ def chat(req: ChatRequest, session: Session = Depends(get_session)):
 
     # Agentic loop
     for _ in range(10):   # max 10 tool-call rounds
-        response = client.messages.create(
-            model=LLM_MODEL,
-            max_tokens=4096,
-            system=system,
-            tools=TOOLS,
-            messages=messages,
-        )
+        try:
+            response = client.messages.create(
+                model=LLM_MODEL,
+                max_tokens=4096,
+                system=system,
+                tools=TOOLS,
+                messages=messages,
+            )
+        except anthropic.AuthenticationError:
+            # キーが無効ならローカルLLMで続行(AIモードを止めない)
+            return _chat_local(req, project, session)
 
         messages.append({"role": "assistant", "content": response.content})
 

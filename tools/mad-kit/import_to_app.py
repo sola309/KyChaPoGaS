@@ -75,6 +75,10 @@ def main():
 
     proxies = project_dir / "shot_proxies"
     spans, shotlist, grid = asyncio.run(render_shot_proxies(project_dir, shotlist_path, proxies))
+    # snap first clip to t=0 (db:0 が 0.0x秒でも開幕を黒にしない)
+    if spans and spans[0][1] > 0:
+        _sid, _t0, _t1, _path = spans[0]
+        spans[0] = (_sid, 0.0, _t1, _path)
 
     # ---- register in the app DB ----
     from sqlmodel import Session, select
@@ -106,7 +110,7 @@ def main():
         music_dst = asset_dir / music_src.name
         shutil.copy2(music_src, music_dst)
         end_sec = float(shotlist["meta"].get("end_sec") or grid["duration"])
-        m_asset = Asset(project_id=proj.id, name="theme song", asset_type="audio",
+        m_asset = Asset(project_id=proj.id, name=shotlist.get("meta", {}).get("title", "music"), asset_type="audio",
                         file_path=str(music_dst), duration_sec=grid["duration"])
         s.add(m_asset); s.commit(); s.refresh(m_asset)
         s.add(Clip(track_id=atrack.id, asset_id=m_asset.id, start_frame=0,

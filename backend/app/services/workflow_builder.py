@@ -113,6 +113,35 @@ def build_sdxl_txt2img(
 
 
 
+def build_sdxl_img2img(
+    model_filename: str,
+    init_image_name: str,      # ComfyUI /upload/image 済み
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 1024,
+    height: int = 1024,
+    seed: int = -1,
+    steps: int = 25,
+    cfg: float = 7.0,
+    denoise: float = 0.6,      # 0=元画像そのまま … 1=ほぼt2i
+    loras: list | None = None,
+) -> dict:
+    """
+    SDXL image-to-image。t2iワークフローの潜在源をVAEEncode(初期画像)に差し替える。
+    vpred/LoRAチェーンはbuild_sdxl_txt2imgの処理をそのまま継承する。
+    """
+    wf = build_sdxl_txt2img(model_filename, prompt, negative_prompt,
+                            width, height, seed, steps, cfg, loras)
+    wf["img_init"] = {"class_type": "LoadImage", "inputs": {"image": init_image_name}}
+    wf["img_fit"] = {"class_type": "ImageScale", "inputs": {
+        "image": ["img_init", 0], "upscale_method": "lanczos",
+        "width": width, "height": height, "crop": "center"}}
+    wf["4"] = {"class_type": "VAEEncode",
+               "inputs": {"pixels": ["img_fit", 0], "vae": ["1", 2]}}
+    wf["5"]["inputs"]["denoise"] = max(0.05, min(1.0, float(denoise)))
+    return wf
+
+
 # ── Text-to-Image: Krea 2 (12B DiT, Qwen3-VL TE, Qwen Image VAE) ─────────────
 
 def build_sdxl_inpaint(
@@ -342,10 +371,24 @@ def build_svd_i2v(
 #     LOW-noise UNET finishes — two chained KSamplerAdvanced passes.
 #   - Lightning 4-step distillation LoRA (high/low) → 4 total steps, cfg=1.0.
 
+# Wan公式リポジトリ/LightX2V配布スクリプト同梱の推奨ネガティブプロンプト
+WAN22_DEFAULT_NEGATIVE = (
+    "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，"
+    "低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，"
+    "毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
+)
+
 WAN22_VAE            = "wan_2.1_vae.safetensors"
 WAN22_TEXT_ENCODER   = "umt5_xxl_fp8_e4m3fn_scaled.safetensors"
+# Seko-V1 (2025-08) — fun_control で実績のある旧世代。I2V/VACE は 1022 を使う。
 WAN22_LIGHTNING_HIGH = "Wan2.2-Lightning/high_noise_model.safetensors"
 WAN22_LIGHTNING_LOW  = "Wan2.2-Lightning/low_noise_model.safetensors"
+# lightx2v 1022 蒸留LoRA (2025-10) — I2V-A14B 用の現行推奨。shift=5/cfg=1/euler+simple。
+WAN22_LIGHTNING_1022_HIGH = "wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors"
+WAN22_LIGHTNING_1022_LOW  = "wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors"
+# Lightning蒸留はshift=5.0のシグマで学習されている(非蒸留は従来どおり8.0)
+WAN22_SHIFT_LIGHTNING = 5.0
+WAN22_SHIFT_FULL      = 8.0
 
 # mode → (high_noise_unet, low_noise_unet, conditioning_node_class)
 WAN22_VIDEO_MODELS: dict[str, tuple[str, str, str]] = {
@@ -378,7 +421,7 @@ def build_wan22_video(
     seed: int = -1,
     use_lightning: bool = True,
     total_steps: int = 4,
-    shift: float = 8.0,
+    shift: float | None = None,
 ) -> dict:
     """
     Wan2.2 14B image-to-video with first (and optional last) frame control.
@@ -395,6 +438,8 @@ def build_wan22_video(
     width  = _round_to(width, 16)
     height = _round_to(height, 16)
     length = _round_to(length - 1, 4) + 1          # Wan length must be 4n+1
+    if shift is None:
+        shift = WAN22_SHIFT_LIGHTNING if use_lightning else WAN22_SHIFT_FULL
     if use_lightning:
         steps, cfg = max(2, total_steps), 1.0
     else:
@@ -412,7 +457,7 @@ def build_wan22_video(
         "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": WAN22_VAE}},
         "pos":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
         "neg":  {"class_type": "CLIPTextEncode",
-                 "inputs": {"text": negative_prompt or "low quality, static, blurry, deformed",
+                 "inputs": {"text": negative_prompt or WAN22_DEFAULT_NEGATIVE,
                             "clip": ["clip", 0]}},
         "img_start": {"class_type": "LoadImage", "inputs": {"image": start_image_name}},
 
@@ -430,13 +475,14 @@ def build_wan22_video(
         cond_inputs["end_image"] = ["img_end", 0]
 
     # Lightning LoRA on each expert (skip for full-quality mode)
+    # 1022 蒸留LoRA (lightx2v/Wan2.2-Distill-Loras) — I2V-A14B 現行推奨
     if use_lightning:
         wf["lora_high"] = {"class_type": "LoraLoaderModelOnly",
                            "inputs": {"model": ["unet_high", 0],
-                                      "lora_name": WAN22_LIGHTNING_HIGH, "strength_model": 1.0}}
+                                      "lora_name": WAN22_LIGHTNING_1022_HIGH, "strength_model": 1.0}}
         wf["lora_low"]  = {"class_type": "LoraLoaderModelOnly",
                            "inputs": {"model": ["unet_low", 0],
-                                      "lora_name": WAN22_LIGHTNING_LOW, "strength_model": 1.0}}
+                                      "lora_name": WAN22_LIGHTNING_1022_LOW, "strength_model": 1.0}}
         high_src, low_src = ["lora_high", 0], ["lora_low", 0]
     else:
         high_src, low_src = ["unet_high", 0], ["unet_low", 0]
@@ -460,6 +506,159 @@ def build_wan22_video(
     wf["decode"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ksampler_low", 0], "vae": ["vae", 0]}}
     wf["save"]   = {"class_type": "SaveImage",
                     "inputs": {"filename_prefix": "kychapogas_wan22", "images": ["decode", 0]}}
+    return wf
+
+
+# ── Wan2.2 VACE: 任意フレーム位置のキーフレーム条件付け ──────────────────────
+#
+# WanVaceToVideo は「control_video(グレー=自由/画像=固定) + control_masks
+# (1=生成/0=固定)」で任意のフレーム位置に画像を釘打ちできる。FLF2Vの区間連結と
+# 違い1パス生成なので、つなぎ目のモーション断絶が起きない。
+# コントロール列は ComfyUI ノードだけで組み立てる(EmptyImage+ImageBatch連鎖)。
+
+WAN22_VACE_HIGH = "wan2.2_fun_vace_high_noise_14B_fp8_scaled.safetensors"
+WAN22_VACE_LOW  = "wan2.2_fun_vace_low_noise_14B_fp8_scaled.safetensors"
+
+_GRAY  = 0x7F7F7F   # EmptyImage color: 自由領域(VACEの「未指定」はグレー)
+_WHITE = 0xFFFFFF   # マスク1 = ここを生成する
+_BLACK = 0x000000   # マスク0 = キーフレームで固定
+
+
+def build_wan22_vace_video(
+    keyframes: list[tuple[str, int]],   # (uploaded_image_name, frame_index) 昇順
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 640,
+    height: int = 640,
+    length: int = 81,
+    seed: int = -1,
+    use_lightning: bool = True,
+    total_steps: int = 4,
+    shift: float | None = None,
+    vace_strength: float = 1.0,
+) -> dict:
+    """
+    Wan2.2 VACE Fun: 最初/最後に限らず任意のフレーム位置へキーフレームを固定した
+    1パス生成。keyframes は (アップロード済み画像名, フレーム番号) のリスト。
+    出力はフレーム列(SaveImage) — 下流で FFmpeg 結合。
+    """
+    s = _seed(seed)
+    width  = _round_to(width, 16)
+    height = _round_to(height, 16)
+    length = _round_to(length - 1, 4) + 1
+    if shift is None:
+        shift = WAN22_SHIFT_LIGHTNING if use_lightning else WAN22_SHIFT_FULL
+    if use_lightning:
+        steps, cfg = max(2, total_steps), 1.0
+    else:
+        steps, cfg = max(10, total_steps), 3.5
+    boundary = max(1, steps // 2)
+
+    # フレーム番号を正規化(重複除去・範囲内・昇順)
+    kfs: list[tuple[str, int]] = []
+    seen: set[int] = set()
+    for name, idx in sorted(keyframes, key=lambda kf: kf[1]):
+        idx = max(0, min(length - 1, int(idx)))
+        if idx in seen:
+            continue
+        seen.add(idx)
+        kfs.append((name, idx))
+    if not kfs:
+        raise ValueError("VACE には最低1つのキーフレームが必要です")
+
+    wf: dict[str, dict] = {
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": WAN22_TEXT_ENCODER, "type": "wan"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": WAN22_VAE}},
+        "pos":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
+        "neg":  {"class_type": "CLIPTextEncode",
+                 "inputs": {"text": negative_prompt or WAN22_DEFAULT_NEGATIVE,
+                            "clip": ["clip", 0]}},
+        "unet_high": {"class_type": "UNETLoader",
+                      "inputs": {"unet_name": WAN22_VACE_HIGH, "weight_dtype": "default"}},
+        "unet_low":  {"class_type": "UNETLoader",
+                      "inputs": {"unet_name": WAN22_VACE_LOW, "weight_dtype": "default"}},
+    }
+
+    # ── control_video / control_masks をノードで組み立てる ──
+    # 各キーフレーム位置に画像1枚、それ以外はグレー。マスクは固定=黒(0)/生成=白(1)。
+    def _gray(node_id: str, n: int, color: int) -> None:
+        wf[node_id] = {"class_type": "EmptyImage", "inputs": {
+            "width": width, "height": height, "batch_size": n, "color": color}}
+
+    ctl_chain: list[list] = []   # 連結順の [node_id, out] 参照
+    msk_chain: list[list] = []
+    cursor = 0
+    for i, (name, idx) in enumerate(kfs):
+        if idx > cursor:                        # キーフレーム前の自由区間
+            _gray(f"ctl_gap{i}", idx - cursor, _GRAY)
+            _gray(f"msk_gap{i}", idx - cursor, _WHITE)
+            ctl_chain.append([f"ctl_gap{i}", 0])
+            msk_chain.append([f"msk_gap{i}", 0])
+        wf[f"kf{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        wf[f"kf{i}_fit"] = {"class_type": "ImageScale", "inputs": {
+            "image": [f"kf{i}", 0], "upscale_method": "lanczos",
+            "width": width, "height": height, "crop": "center"}}
+        _gray(f"msk_kf{i}", 1, _BLACK)
+        ctl_chain.append([f"kf{i}_fit", 0])
+        msk_chain.append([f"msk_kf{i}", 0])
+        cursor = idx + 1
+    if cursor < length:                          # 末尾の自由区間
+        _gray("ctl_tail", length - cursor, _GRAY)
+        _gray("msk_tail", length - cursor, _WHITE)
+        ctl_chain.append(["ctl_tail", 0])
+        msk_chain.append(["msk_tail", 0])
+
+    def _concat(prefix: str, chain: list[list]) -> list:
+        ref = chain[0]
+        for j, nxt in enumerate(chain[1:]):
+            nid = f"{prefix}_cat{j}"
+            wf[nid] = {"class_type": "ImageBatch",
+                       "inputs": {"image1": ref, "image2": nxt}}
+            ref = [nid, 0]
+        return ref
+
+    ctl_ref = _concat("ctl", ctl_chain)
+    msk_img = _concat("msk", msk_chain)
+    wf["msk_mask"] = {"class_type": "ImageToMask",
+                      "inputs": {"image": msk_img, "channel": "red"}}
+
+    if use_lightning:
+        # I2V蒸留LoRAをVACE Funに転用(A14B同系)。モーション崩れ時はhigh側を0.6-0.8へ。
+        wf["lora_high"] = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"model": ["unet_high", 0],
+                                      "lora_name": WAN22_LIGHTNING_1022_HIGH, "strength_model": 1.0}}
+        wf["lora_low"]  = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"model": ["unet_low", 0],
+                                      "lora_name": WAN22_LIGHTNING_1022_LOW, "strength_model": 1.0}}
+        high_src, low_src = ["lora_high", 0], ["lora_low", 0]
+    else:
+        high_src, low_src = ["unet_high", 0], ["unet_low", 0]
+
+    wf["model_high"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": high_src, "shift": shift}}
+    wf["model_low"]  = {"class_type": "ModelSamplingSD3", "inputs": {"model": low_src,  "shift": shift}}
+
+    wf["cond"] = {"class_type": "WanVaceToVideo", "inputs": {
+        "positive": ["pos", 0], "negative": ["neg", 0], "vae": ["vae", 0],
+        "width": width, "height": height, "length": length, "batch_size": 1,
+        "strength": vace_strength,
+        "control_video": ctl_ref, "control_masks": ["msk_mask", 0]}}
+
+    wf["ksampler_high"] = {"class_type": "KSamplerAdvanced", "inputs": {
+        "model": ["model_high", 0], "add_noise": "enable", "noise_seed": s,
+        "steps": steps, "cfg": cfg, "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["cond", 2],
+        "start_at_step": 0, "end_at_step": boundary, "return_with_leftover_noise": "enable"}}
+    wf["ksampler_low"] = {"class_type": "KSamplerAdvanced", "inputs": {
+        "model": ["model_low", 0], "add_noise": "disable", "noise_seed": s,
+        "steps": steps, "cfg": cfg, "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["ksampler_high", 0],
+        "start_at_step": boundary, "end_at_step": 10000, "return_with_leftover_noise": "disable"}}
+    wf["trim"]   = {"class_type": "TrimVideoLatent",
+                    "inputs": {"samples": ["ksampler_low", 0], "trim_amount": ["cond", 3]}}
+    wf["decode"] = {"class_type": "VAEDecode", "inputs": {"samples": ["trim", 0], "vae": ["vae", 0]}}
+    wf["save"]   = {"class_type": "SaveImage",
+                    "inputs": {"filename_prefix": "kychapogas_vace", "images": ["decode", 0]}}
     return wf
 
 
@@ -495,7 +694,7 @@ def build_wan22_s2v(
         "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": WAN22_VAE}},
         "pos":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
         "neg":  {"class_type": "CLIPTextEncode",
-                 "inputs": {"text": negative_prompt or "low quality, static, blurry, deformed",
+                 "inputs": {"text": negative_prompt or WAN22_DEFAULT_NEGATIVE,
                             "clip": ["clip", 0]}},
         "img":  {"class_type": "LoadImage", "inputs": {"image": ref_image_name}},
         "aud":  {"class_type": "LoadAudio", "inputs": {"audio": audio_name}},
@@ -537,3 +736,372 @@ def detect_model_type(model_id: str) -> str:
     if any(k in m for k in ("xl", "sdxl")):
         return "sdxl"
     return "sd15"   # default to SD 1.5 compatible
+
+
+# ── 3D生成: Hunyuan3D-2 (画像→GLBメッシュ) ───────────────────────────────────
+
+HY3D_CKPT = "hunyuan3d-dit-v2_fp16.safetensors"
+HY3D_MV_CKPT = "hunyuan3d-dit-v2-mv_fp16.safetensors"
+
+
+def build_hunyuan3d_i23d(
+    image_name: str,
+    seed: int = -1,
+    steps: int = 30,
+    cfg: float = 5.0,
+    resolution: int = 3072,
+    octree_resolution: int = 256,
+    algorithm: str = "surface net",   # VoxelToMesh: "surface net" | "basic"
+) -> dict:
+    """単一画像→3Dメッシュ(GLB)。入力は背景透過画像が最良(cutout-kit前処理推奨)。"""
+    s = _seed(seed)
+    return {
+        "ckpt": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": HY3D_CKPT}},
+        "img": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+        "cv": {"class_type": "CLIPVisionEncode",
+               "inputs": {"clip_vision": ["ckpt", 1], "image": ["img", 0], "crop": "center"}},
+        "cond": {"class_type": "Hunyuan3Dv2Conditioning", "inputs": {"clip_vision_output": ["cv", 0]}},
+        "latent": {"class_type": "EmptyLatentHunyuan3Dv2",
+                   "inputs": {"resolution": resolution, "batch_size": 1}},
+        "sampler": {"class_type": "KSampler", "inputs": {
+            "model": ["ckpt", 0], "seed": s, "steps": steps, "cfg": cfg,
+            "sampler_name": "euler", "scheduler": "sgm_uniform", "denoise": 1.0,
+            "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["latent", 0]}},
+        "voxel": {"class_type": "VAEDecodeHunyuan3D", "inputs": {
+            "samples": ["sampler", 0], "vae": ["ckpt", 2],
+            "num_chunks": 8000, "octree_resolution": octree_resolution}},
+        "mesh": {"class_type": "VoxelToMesh", "inputs": {"voxel": ["voxel", 0],
+                 "algorithm": algorithm, "threshold": 0.6}},
+        "save": {"class_type": "SaveGLB", "inputs": {"mesh": ["mesh", 0],
+                 "filename_prefix": "3d/kychapogas_hy3d"}},
+    }
+
+
+def build_hunyuan3d_mv(
+    views: dict,                  # {"front": name, "left": name, "back": name, "right": name} 一部省略可
+    seed: int = -1,
+    steps: int = 30,
+    cfg: float = 5.0,
+    resolution: int = 3072,
+    octree_resolution: int = 256,
+) -> dict:
+    """マルチビュー(正面/左/背面/右)→3Dメッシュ。コンパニオン素材シートの流用に最適。"""
+    s = _seed(seed)
+    wf = {
+        "ckpt": {"class_type": "ImageOnlyCheckpointLoader", "inputs": {"ckpt_name": HY3D_MV_CKPT}},
+        "latent": {"class_type": "EmptyLatentHunyuan3Dv2",
+                   "inputs": {"resolution": resolution, "batch_size": 1}},
+    }
+    cond_inputs = {}
+    for view, name in views.items():
+        if not name:
+            continue
+        wf[f"img_{view}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        wf[f"cv_{view}"] = {"class_type": "CLIPVisionEncode",
+                            "inputs": {"clip_vision": ["ckpt", 1], "image": [f"img_{view}", 0], "crop": "center"}}
+        cond_inputs[view] = [f"cv_{view}", 0]
+    wf["cond"] = {"class_type": "Hunyuan3Dv2ConditioningMultiView", "inputs": cond_inputs}
+    wf["sampler"] = {"class_type": "KSampler", "inputs": {
+        "model": ["ckpt", 0], "seed": s, "steps": steps, "cfg": cfg,
+        "sampler_name": "euler", "scheduler": "sgm_uniform", "denoise": 1.0,
+        "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["latent", 0]}}
+    wf["voxel"] = {"class_type": "VAEDecodeHunyuan3D", "inputs": {
+        "samples": ["sampler", 0], "vae": ["ckpt", 2],
+        "num_chunks": 8000, "octree_resolution": octree_resolution}}
+    wf["mesh"] = {"class_type": "VoxelToMesh", "inputs": {"voxel": ["voxel", 0],
+                  "algorithm": "surface net", "threshold": 0.6}}
+    wf["save"] = {"class_type": "SaveGLB", "inputs": {"mesh": ["mesh", 0],
+                  "filename_prefix": "3d/kychapogas_hy3dmv"}}
+    return wf
+
+
+# ── 3D生成: MoGe-2 レリーフメッシュ(一枚絵→テクスチャ付き深度メッシュ) ──────
+
+MOGE_MODEL = "moge_2_vitl_normal_fp16.safetensors"
+
+
+def build_moge_relief(
+    image_name: str,
+    resolution_level: int = 9,
+    decimation: int = 2,      # 頂点ストライド1-8(1=フル解像度)
+    discontinuity_threshold: float = 0.03,
+    fov_x_degrees: float = 60.0,
+) -> dict:
+    """一枚絵→元絵テクスチャ付きレリーフメッシュ(GLB)。イラスト内をカメラが飛ぶ3Dフォト演出用。"""
+    return {
+        "model": {"class_type": "LoadMoGeModel", "inputs": {"model_name": MOGE_MODEL}},
+        "img": {"class_type": "LoadImage", "inputs": {"image": image_name}},
+        "geo": {"class_type": "MoGeInference", "inputs": {
+            "moge_model": ["model", 0], "image": ["img", 0],
+            "resolution_level": resolution_level, "fov_x_degrees": fov_x_degrees,
+            "batch_size": 1, "force_projection": True, "apply_mask": True}},
+        "mesh": {"class_type": "MoGePointMapToMesh", "inputs": {
+            "moge_geometry": ["geo", 0], "batch_index": 0,
+            "decimation": decimation,
+            "discontinuity_threshold": discontinuity_threshold, "texture": True}},
+        "save": {"class_type": "SaveGLB", "inputs": {"mesh": ["mesh", 0],
+                 "filename_prefix": "3d/kychapogas_relief"}},
+    }
+
+
+# ── Wan2.2 Fun Control: 3Dカメラワーク×AIレンダ ──────────────────────────────
+
+WAN22_FUNCTRL_HIGH = "wan2.2_fun_control_high_noise_14B_fp8_scaled.safetensors"
+WAN22_FUNCTRL_LOW  = "wan2.2_fun_control_low_noise_14B_fp8_scaled.safetensors"
+
+
+def build_wan22_fun_control(
+    ref_image_name: str,          # /upload/image 済みの参照画像(キャラ原画=画風・キャラ維持)
+    control_video_name: str,      # /upload/image 済みのコントロール動画(深度/線画列, 16fps)
+    prompt: str,
+    negative_prompt: str = "",
+    width: int = 832,
+    height: int = 480,
+    length: int = 81,
+    seed: int = -1,
+    use_lightning: bool = True,
+    total_steps: int = 4,
+    shift: float = 8.0,
+) -> dict:
+    """
+    Wan2.2 Fun Control: 3Dシーンの深度レンダ(render_orbit.mjs --style depth)を
+    control_video に流し、そのカメラワークどおりの動画を ref_image の画風で生成する。
+    出力はフレーム列(SaveImage) — 下流で FFmpeg 結合。
+    """
+    s = _seed(seed)
+    width  = _round_to(width, 16)
+    height = _round_to(height, 16)
+    length = _round_to(length - 1, 4) + 1
+    if use_lightning:
+        steps, cfg = max(2, total_steps), 1.0
+    else:
+        steps, cfg = max(10, total_steps), 3.5
+    boundary = max(1, steps // 2)
+
+    wf: dict[str, dict] = {
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": WAN22_TEXT_ENCODER, "type": "wan"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": WAN22_VAE}},
+        "pos":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
+        "neg":  {"class_type": "CLIPTextEncode",
+                 "inputs": {"text": negative_prompt or WAN22_DEFAULT_NEGATIVE,
+                            "clip": ["clip", 0]}},
+        "img_ref": {"class_type": "LoadImage", "inputs": {"image": ref_image_name}},
+        "ctl_vid": {"class_type": "LoadVideo", "inputs": {"file": control_video_name}},
+        "ctl_img": {"class_type": "GetVideoComponents", "inputs": {"video": ["ctl_vid", 0]}},
+        "unet_high": {"class_type": "UNETLoader",
+                      "inputs": {"unet_name": WAN22_FUNCTRL_HIGH, "weight_dtype": "default"}},
+        "unet_low":  {"class_type": "UNETLoader",
+                      "inputs": {"unet_name": WAN22_FUNCTRL_LOW, "weight_dtype": "default"}},
+    }
+
+    if use_lightning:
+        wf["lora_high"] = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"model": ["unet_high", 0],
+                                      "lora_name": WAN22_LIGHTNING_HIGH, "strength_model": 1.0}}
+        wf["lora_low"]  = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"model": ["unet_low", 0],
+                                      "lora_name": WAN22_LIGHTNING_LOW, "strength_model": 1.0}}
+        high_src, low_src = ["lora_high", 0], ["lora_low", 0]
+    else:
+        high_src, low_src = ["unet_high", 0], ["unet_low", 0]
+
+    wf["model_high"] = {"class_type": "ModelSamplingSD3", "inputs": {"model": high_src, "shift": shift}}
+    wf["model_low"]  = {"class_type": "ModelSamplingSD3", "inputs": {"model": low_src,  "shift": shift}}
+
+    wf["cond"] = {"class_type": "Wan22FunControlToVideo", "inputs": {
+        "positive": ["pos", 0], "negative": ["neg", 0], "vae": ["vae", 0],
+        "width": width, "height": height, "length": length, "batch_size": 1,
+        "ref_image": ["img_ref", 0], "control_video": ["ctl_img", 0]}}
+
+    wf["ksampler_high"] = {"class_type": "KSamplerAdvanced", "inputs": {
+        "model": ["model_high", 0], "add_noise": "enable", "noise_seed": s,
+        "steps": steps, "cfg": cfg, "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["cond", 2],
+        "start_at_step": 0, "end_at_step": boundary, "return_with_leftover_noise": "enable"}}
+    wf["ksampler_low"] = {"class_type": "KSamplerAdvanced", "inputs": {
+        "model": ["model_low", 0], "add_noise": "disable", "noise_seed": s,
+        "steps": steps, "cfg": cfg, "sampler_name": "euler", "scheduler": "simple",
+        "positive": ["cond", 0], "negative": ["cond", 1], "latent_image": ["ksampler_high", 0],
+        "start_at_step": boundary, "end_at_step": 10000, "return_with_leftover_noise": "disable"}}
+    wf["decode"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ksampler_low", 0], "vae": ["vae", 0]}}
+    wf["save"]   = {"class_type": "SaveImage",
+                    "inputs": {"filename_prefix": "kychapogas_3dcam", "images": ["decode", 0]}}
+    return wf
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ✏️ AI画像編集(instruction edit) — Qwen-2511 / HiDream-O1 / FLUX.2 klein KV
+# 公式テンプレート(comfyui_workflow_templates 0.11.15)のグラフ構造を移植。
+# ══════════════════════════════════════════════════════════════════════════════
+
+QWEN_EDIT_BF16      = "qwen_image_edit_2511_bf16.safetensors"
+QWEN_EDIT_FP8_LIGHT = "qwen_image_edit_2511_fp8_lightning_4steps.safetensors"  # Lightning融合済み
+QWEN_EDIT_LORA_4S   = "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+QWEN_EDIT_TE        = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+QWEN_EDIT_VAE       = "qwen_image_vae.safetensors"
+
+HIDREAM_O1_DEV_CKPT = "hidream_o1_image_dev_fp8_scaled.safetensors"
+
+FLUX2_KLEIN_KV_UNET = "flux-2-klein-9b-kv-fp8.safetensors"
+FLUX2_KLEIN_TE      = "qwen_3_8b_fp8mixed.safetensors"
+FLUX2_VAE           = "flux2-vae.safetensors"
+
+# UI/API向けの編集モデルID
+IMAGE_EDIT_MODELS = {"qwen-edit-2511", "qwen-edit-2511-fp8", "hidream-o1-dev", "flux2-klein-kv"}
+
+
+def build_qwen_image_edit(
+    ref_image_names: list[str],     # /upload/image 済み(1〜3枚)。image1が編集対象
+    prompt: str,
+    seed: int = -1,
+    use_lightning: bool = True,
+    fused_fp8: bool = False,        # True=Lightning融合fp8単体(LoRA不要)
+) -> dict:
+    """Qwen-Image-Edit-2511: 指示文編集+マルチ参照(最大3枚)。出力サイズはimage1に追従。"""
+    if not ref_image_names:
+        raise ValueError("編集には参照画像が最低1枚必要です")
+    s = _seed(seed)
+    steps, cfg = (4, 1.0) if use_lightning else (40, 3.0)
+    unet = QWEN_EDIT_FP8_LIGHT if fused_fp8 else QWEN_EDIT_BF16
+
+    wf: dict[str, dict] = {
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": unet, "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": QWEN_EDIT_TE, "type": "qwen_image", "device": "default"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": QWEN_EDIT_VAE}},
+        "ms":   {"class_type": "ModelSamplingAuraFlow", "inputs": {"model": ["unet", 0], "shift": 3.1}},
+        "norm": {"class_type": "CFGNorm", "inputs": {"model": ["ms", 0], "strength": 1.0}},
+    }
+    model_src = ["norm", 0]
+    if use_lightning and not fused_fp8:
+        wf["lora"] = {"class_type": "LoraLoaderModelOnly",
+                      "inputs": {"model": model_src, "lora_name": QWEN_EDIT_LORA_4S,
+                                 "strength_model": 1.0}}
+        model_src = ["lora", 0]
+
+    enc_inputs: dict[str, object] = {"clip": ["clip", 0], "vae": ["vae", 0]}
+    for i, name in enumerate(ref_image_names[:3]):
+        wf[f"img{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        if i == 0:
+            # image1のみKontextスケール(出力解像度の基準になる)
+            wf["scale0"] = {"class_type": "FluxKontextImageScale", "inputs": {"image": ["img0", 0]}}
+            enc_inputs["image1"] = ["scale0", 0]
+        else:
+            enc_inputs[f"image{i+1}"] = [f"img{i}", 0]
+
+    wf["pos"] = {"class_type": "TextEncodeQwenImageEditPlus",
+                 "inputs": {**enc_inputs, "prompt": prompt}}
+    wf["neg"] = {"class_type": "TextEncodeQwenImageEditPlus",
+                 "inputs": {**enc_inputs, "prompt": ""}}
+    wf["pos_m"] = {"class_type": "FluxKontextMultiReferenceLatentMethod",
+                   "inputs": {"conditioning": ["pos", 0], "reference_latents_method": "index_timestep_zero"}}
+    wf["neg_m"] = {"class_type": "FluxKontextMultiReferenceLatentMethod",
+                   "inputs": {"conditioning": ["neg", 0], "reference_latents_method": "index_timestep_zero"}}
+    wf["lat"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["scale0", 0], "vae": ["vae", 0]}}
+    wf["ks"] = {"class_type": "KSampler", "inputs": {
+        "seed": s, "steps": steps, "cfg": cfg,
+        "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0,
+        "model": model_src, "positive": ["pos_m", 0], "negative": ["neg_m", 0],
+        "latent_image": ["lat", 0]}}
+    wf["dec"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["vae", 0]}}
+    wf["save"] = {"class_type": "SaveImage",
+                  "inputs": {"filename_prefix": "kychapogas_edit_qwen", "images": ["dec", 0]}}
+    return wf
+
+
+def build_hidream_o1_edit(
+    ref_image_names: list[str],     # 1枚=指示編集 / 2〜10枚=マルチ参照
+    prompt: str,
+    width: int,
+    height: int,
+    seed: int = -1,
+    steps: int = 28,
+) -> dict:
+    """HiDream-O1 Dev: ピクセル空間の指示編集。width/heightは32の倍数に丸める。"""
+    if not ref_image_names:
+        raise ValueError("編集には参照画像が最低1枚必要です")
+    s = _seed(seed)
+    width, height = max(32, (width // 32) * 32), max(32, (height // 32) * 32)
+
+    wf: dict[str, dict] = {
+        "ckpt": {"class_type": "CheckpointLoaderSimple",
+                 "inputs": {"ckpt_name": HIDREAM_O1_DEV_CKPT}},
+        "noise": {"class_type": "ModelNoiseScale",
+                  "inputs": {"model": ["ckpt", 0], "noise_scale": 7.6}},
+        "pos": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["ckpt", 1]}},
+        "neg": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["ckpt", 1]}},
+        "sched": {"class_type": "BasicScheduler",
+                  "inputs": {"model": ["noise", 0], "scheduler": "normal",
+                             "steps": steps, "denoise": 1.0}},
+        "smp": {"class_type": "SamplerLCM",
+                "inputs": {"s_noise": 1.0, "s_noise_end": 1.0, "noise_clip_std": 2.5}},
+        "lat": {"class_type": "EmptyHiDreamO1LatentImage",
+                "inputs": {"width": width, "height": height, "batch_size": 1}},
+    }
+    ref_inputs: dict[str, object] = {"positive": ["pos", 0], "negative": ["neg", 0]}
+    for i, name in enumerate(ref_image_names[:10]):
+        wf[f"img{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        ref_inputs[f"images.image_{i+1}"] = [f"img{i}", 0]
+    wf["refs"] = {"class_type": "HiDreamO1ReferenceImages", "inputs": ref_inputs}
+    wf["ks"] = {"class_type": "SamplerCustom", "inputs": {
+        "model": ["noise", 0], "add_noise": True, "noise_seed": s, "cfg": 1.0,
+        "positive": ["refs", 0], "negative": ["refs", 1],
+        "sampler": ["smp", 0], "sigmas": ["sched", 0], "latent_image": ["lat", 0]}}
+    wf["dec"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["ckpt", 2]}}
+    wf["save"] = {"class_type": "SaveImage",
+                  "inputs": {"filename_prefix": "kychapogas_edit_hidream", "images": ["dec", 0]}}
+    return wf
+
+
+def build_flux2_klein_edit(
+    ref_image_names: list[str],     # 参照1〜4枚
+    prompt: str,
+    width: int = 1024,
+    height: int = 1024,
+    seed: int = -1,
+    steps: int = 4,                 # klein 9B は4step蒸留
+) -> dict:
+    """FLUX.2 klein 9B KV: 参照KVキャッシュ付き編集。同一参照の反復編集が高速。"""
+    if not ref_image_names:
+        raise ValueError("編集には参照画像が最低1枚必要です")
+    s = _seed(seed)
+    width, height = _round_to(width, 16), _round_to(height, 16)
+
+    wf: dict[str, dict] = {
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": FLUX2_KLEIN_KV_UNET, "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": FLUX2_KLEIN_TE, "type": "flux2", "device": "default"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": FLUX2_VAE}},
+        "txt":  {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["clip", 0]}},
+        "zero": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["txt", 0]}},
+    }
+    cond = ["txt", 0]
+    for i, name in enumerate(ref_image_names[:4]):
+        wf[f"img{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        wf[f"fit{i}"] = {"class_type": "ImageScaleToTotalPixels",
+                         "inputs": {"image": [f"img{i}", 0], "upscale_method": "lanczos",
+                                    "megapixels": 1.0, "resolution_steps": 1}}
+        wf[f"enc{i}"] = {"class_type": "VAEEncode",
+                         "inputs": {"pixels": [f"fit{i}", 0], "vae": ["vae", 0]}}
+        wf[f"ref{i}"] = {"class_type": "ReferenceLatent",
+                         "inputs": {"conditioning": cond, "latent": [f"enc{i}", 0]}}
+        cond = [f"ref{i}", 0]
+    wf["kv"] = {"class_type": "FluxKVCache", "inputs": {"model": ["unet", 0]}}
+    wf["guider"] = {"class_type": "CFGGuider", "inputs": {
+        "model": ["kv", 0], "positive": cond, "negative": ["zero", 0], "cfg": 1.0}}
+    wf["noise"] = {"class_type": "RandomNoise", "inputs": {"noise_seed": s}}
+    wf["ksel"] = {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}}
+    wf["sched"] = {"class_type": "Flux2Scheduler",
+                   "inputs": {"steps": steps, "width": width, "height": height}}
+    wf["lat"] = {"class_type": "EmptyFlux2LatentImage",
+                 "inputs": {"width": width, "height": height, "batch_size": 1}}
+    wf["ks"] = {"class_type": "SamplerCustomAdvanced", "inputs": {
+        "noise": ["noise", 0], "guider": ["guider", 0], "sampler": ["ksel", 0],
+        "sigmas": ["sched", 0], "latent_image": ["lat", 0]}}
+    wf["dec"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["vae", 0]}}
+    wf["save"] = {"class_type": "SaveImage",
+                  "inputs": {"filename_prefix": "kychapogas_edit_klein", "images": ["dec", 0]}}
+    return wf

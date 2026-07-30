@@ -28,7 +28,7 @@ export function CollabBar() {
         onClick={editName}
         className="text-[11px] px-2 py-0.5 rounded bg-purple-800 hover:bg-purple-700 text-purple-100"
         title="共同編集に表示する名前を設定"
-      >👤 名前を設定して参加</button>
+      >👤 <span className="max-sm:hidden">名前を設定して</span>参加</button>
     )
   }
 

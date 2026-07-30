@@ -4,11 +4,11 @@ import { assetsApi } from '../../api/client'
 // Module-level cache: assetId → Float32Array of peaks (one per pixel at zoom=1)
 const peakCache = new Map<number, Float32Array>()
 
-async function getPeaks(assetId: number, numBuckets: number): Promise<Float32Array> {
+async function getPeaks(assetId: number, numBuckets: number, useProxy = false): Promise<Float32Array> {
   // Fetch raw decoded audio, then decimate to numBuckets peaks
   let allPeaks = peakCache.get(assetId)
   if (!allPeaks) {
-    const res  = await fetch(assetsApi.fileUrl(assetId))
+    const res  = await fetch(assetsApi.fileUrl(assetId, useProxy))
     const buf  = await res.arrayBuffer()
     const ctx  = new AudioContext()
     const decoded = await ctx.decodeAudioData(buf)
@@ -59,9 +59,10 @@ interface Props {
   width: number
   height: number
   color?: string
+  useProxy?: boolean
 }
 
-export function WaveformCanvas({ assetId, width, height, color = '#4ade80' }: Props) {
+export function WaveformCanvas({ assetId, width, height, color = '#4ade80', useProxy = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export function WaveformCanvas({ assetId, width, height, color = '#4ade80' }: Pr
     canvas.width  = numBuckets
     canvas.height = height
 
-    getPeaks(assetId, numBuckets).then(peaks => {
+    getPeaks(assetId, numBuckets, useProxy).then(peaks => {
       if (cancelled) return
       ctx.clearRect(0, 0, numBuckets, height)
       ctx.fillStyle = color
@@ -90,7 +91,7 @@ export function WaveformCanvas({ assetId, width, height, color = '#4ade80' }: Pr
     })
 
     return () => { cancelled = true }
-  }, [assetId, width, height, color])
+  }, [assetId, width, height, color, useProxy])
 
   return (
     <canvas

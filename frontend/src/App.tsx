@@ -1,3 +1,4 @@
+import { JobProgressPill } from './components/JobProgressPill'
 import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './pages/ProjectView'
@@ -11,6 +12,8 @@ import { SettingsModal } from './components/SettingsModal'
 import { InspectOverlay } from './components/InspectOverlay'
 import { MusicStudio } from './components/Music/MusicStudio'
 import { CompositionStudio } from './components/Composition/CompositionStudio'
+import { AiModeView } from './components/AiMode/AiModeView'
+import { PuppetStudioView } from './components/PuppetStudio/PuppetStudioView'
 import { LoraLab } from './components/Lora/LoraLab'
 import { useUIStore } from './store/uiStore'
 
@@ -97,34 +100,46 @@ function App() {
   const closeDrawers = useUIStore(s => s.closeDrawers)
 
   // Platform: one app active at a time (video editor / AI companion …)
-  const [activeApp, setActiveApp] = useState<'editor' | 'companion' | 'music' | 'compose' | 'lora'>('editor')
+  const [activeApp, setActiveApp] = useState<'editor' | 'companion' | 'music' | 'compose' | 'lora' | 'ai' | 'studio'>('editor')
   const [showSettings, setShowSettings] = useState(false)
   const inspectMode = useUIStore(s => s.inspectMode)
   const setInspectMode = useUIStore(s => s.setInspectMode)
   const APPS = [
     { id: 'editor' as const, label: '🎬 編集' },
+    { id: 'ai' as const, label: '🤖 AI' },
     { id: 'compose' as const, label: '📝 構成' },
     { id: 'music' as const, label: '🎵 音楽' },
     { id: 'lora' as const, label: '🧪 LoRA' },
     { id: 'companion' as const, label: '🎭 コンパニオン' },
+    { id: 'studio' as const, label: '🎎 スタジオ' },
   ]
 
   return (
     <div className="app-root flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      {/* GPU / VRAM status bar */}
-      <GpuStatusBar />
+      {/* GPU / VRAM status bar(モバイルでは非表示にして縦を節約) */}
+      <div className="max-sm:hidden"><GpuStatusBar /></div>
 
-      {/* App launcher — one app active at a time */}
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
-        {APPS.map(a => (
-          <button
-            key={a.id}
-            onClick={() => setActiveApp(a.id)}
-            className={`text-[11px] px-2.5 py-1 rounded transition-colors ${
-              activeApp === a.id ? 'bg-purple-800 text-purple-100' : 'text-zinc-400 hover:bg-zinc-800'
-            }`}
-          >{a.label}</button>
-        ))}
+      {/* App launcher — one app active at a time.
+          スマホ幅では絵文字のみ(アクティブタブだけラベル表示)+横スクロールで視認性を確保 */}
+      <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800 bg-zinc-950 flex-shrink-0 overflow-x-auto">
+        {APPS.map(a => {
+          const [emoji, ...rest] = a.label.split(' ')
+          const text = rest.join(' ')
+          const active = activeApp === a.id
+          return (
+            <button
+              key={a.id}
+              onClick={() => setActiveApp(a.id)}
+              className={`flex-shrink-0 text-[11px] px-2 sm:px-2.5 py-1.5 sm:py-1 rounded transition-colors ${
+                active ? 'bg-purple-800 text-purple-100' : 'text-zinc-400 hover:bg-zinc-800'
+              }`}
+              title={text}
+            >
+              <span className="text-[13px] sm:text-[11px]">{emoji}</span>
+              <span className={active ? 'inline ml-1' : 'hidden sm:inline sm:ml-1'}>{text}</span>
+            </button>
+          )
+        })}
         <span className="ml-auto flex items-center gap-2">
           <BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" />
           <button
@@ -178,6 +193,10 @@ function App() {
         <CompositionStudio />
       ) : activeApp === 'lora' ? (
         <LoraLab />
+      ) : activeApp === 'ai' ? (
+        <AiModeView />
+      ) : activeApp === 'studio' ? (
+        <PuppetStudioView />
       ) : (
         <div className="flex flex-1 min-h-0 relative">
           {/* Backdrop behind the mobile drawers */}
@@ -236,6 +255,7 @@ function App() {
           </div>
         </>
       )}
+      <JobProgressPill />
     </div>
   )
 }

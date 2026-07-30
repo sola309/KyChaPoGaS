@@ -116,3 +116,31 @@ depth>0=奥 / 0=主役面 / depth<0=カメラ手前。静止時の見た目はde
 
 実装メモ: perspective(cameraRig)はrig内コンテナに隔離してあるので、FXオーバーレイの
 z-indexは通常の2Dスタッキングで機能する(rootにperspectiveを付けると壊れる)。
+
+## scene3d — 生成3Dモデルのリアル3Dカメラワーク (2026-07 追加)
+
+Hunyuan3D-2 / MoGe-2 で生成した GLB (assets/*.glb) を three.js で直接動かす。
+回り込み(orbit)・ドリー・アーク・3Dフォト(parallax)が本物の3Dで撮れる。
+
+```json
+{ "template": "scene3d", "params": {
+    "model": "kyoko3d",            // assets/kyoko3d.glb
+    "camera": "orbit",             // orbit|dolly_in|dolly_out|sway|arc_l|arc_r|parallax
+                                   // or [{at,az,el,dist,fov}] キーフレーム
+    "turns": 0.5, "style": "toon", // standard|toon|wire
+    "bg": {"pattern": "soft"}, "ornaments": [] } }
+```
+
+詳細は tools/3d-kit/README.md。
+
+## shader_scene — GLSLシェーダ背景 (2026-07-07 追加)
+
+Web系シェーダアートをMG背景に。依存ゼロ(素のWebGL)・決定論(u_time=シーク時刻)。
+
+```json
+{ "template": "shader_scene", "params": {
+    "shader": "rays",     // aurora|plasma|rays|warp|grid
+    "on": "vocal",        // 省略可: ステム音量がシェーダに乗る(u_level)
+    "speed": 1.0,
+    "title": "円環の理", "subjects": [], "ornaments": [] } }
+```

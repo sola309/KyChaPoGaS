@@ -56,24 +56,60 @@ def build_html(project: Path, shotlist_path: Path, offset: float = 0.0,
 
     assets = {}
     video_assets = []
+    has_glb = False
     for f in sorted((project / "assets").iterdir()):
-        if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".mp4", ".webm"):
-            mime = {"png": "image/png", "mp4": "video/mp4", "webm": "video/webm"}.get(f.suffix[1:].lower(), "image/jpeg")
+        if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".mp4", ".webm", ".glb"):
+            mime = {"png": "image/png", "mp4": "video/mp4", "webm": "video/webm",
+                    "glb": "model/gltf-binary"}.get(f.suffix[1:].lower(), "image/jpeg")
             assets[f.stem] = (f"{asset_url_prefix}asset/{f.name}" if asset_url_prefix
                               else b64(f, mime))
             if f.suffix.lower() in (".mp4", ".webm"):
                 video_assets.append(f.stem)
+            if f.suffix.lower() == ".glb":
+                has_glb = True
 
     kycha = {"bpm": grid["bpm"], "duration": grid["duration"], "beats": grid["beats"],
              "downbeats": grid["downbeats"], "stems": grid.get("stems"),
              "stemsHz": grid.get("stemsHz", 30), "assets": assets, "shotlist": shotlist,
              "offset": offset, "live": live, "videoAssets": video_assets}
     live_js = (KIT_DIR / "mad-kit-live.js").read_text() if live else ""
+    # scene3d 使用時のみ three.js(ESM)をデータURLモジュールとして同梱する。
+    # importmap は data: URL を解決できるので完全自己完結の一枚HTMLのまま。
+    uses_3d = has_glb or '"scene3d"' in json.dumps(shotlist)
+    three_block = _three_bundle() if uses_3d else ""
     html = (tpl.replace("/*FONTS*/", fonts_css)
                .replace("/*KYCHA*/", "window.kycha = " + json.dumps(kycha) + ";")
+               .replace("/*THREE*/", three_block)
                .replace("/*KIT*/", (KIT_DIR / "mad-kit.js").read_text())
                .replace("/*SCENES*/", (KIT_DIR / "mad-kit-scenes.js").read_text() + "\n" + live_js))
     return html, shotlist, grid
+
+
+def _three_bundle() -> str:
+    """three.js + GLTFLoader を importmap(dataURL) 経由で読み込み window.THREE に載せる。"""
+    import base64 as _b64
+    libs = KIT_DIR.parent / "mg-libs"
+
+    def durl(text: str) -> str:
+        return "data:text/javascript;base64," + _b64.b64encode(text.encode()).decode()
+
+    core = (libs / "three.core.min.js").read_text()
+    three = (libs / "three.module.min.js").read_text().replace(
+        './three.core.min.js', 'three-core')
+    bgu = (libs / "BufferGeometryUtils.js").read_text()
+    gltf = (libs / "GLTFLoader.js").read_text().replace(
+        './BufferGeometryUtils.js', 'bgutils')
+    imap = json.dumps({"imports": {
+        "three-core": durl(core), "three": durl(three),
+        "bgutils": durl(bgu), "gltfloader": durl(gltf)}})
+    return (f'<script type="importmap">{imap}</script>\n'
+            '<script type="module">\n'
+            'import * as THREE from "three";\n'
+            'import { GLTFLoader } from "gltfloader";\n'
+            'window.THREE = THREE; window.GLTFLoader3D = GLTFLoader;\n'
+            'if (window.__threeResolve) window.__threeResolve();\n'
+            'window.__threeReady = Promise.resolve();\n'
+            '</script>')
 
 
 def check(shotlist: dict) -> list[str]:
@@ -82,7 +118,7 @@ def check(shotlist: dict) -> list[str]:
     known = ["mg_intro", "title_card", "showcase_pattern", "showcase_card", "showcase_fullbleed",
              "panels_strip", "bands_repeat", "cv_card", "rapid_cuts", "riser", "mg_peak",
              "profile_card", "breakdown_pan", "finale_cuts", "lineup", "outro_credits",
-             "parallax_scene"]
+             "parallax_scene", "scene3d", "shader_scene"]
     for i, s in enumerate(shotlist.get("shots", [])):
         where = f"shots[{i}] (id={s.get('id', '?')})"
         if s.get("template") not in known:

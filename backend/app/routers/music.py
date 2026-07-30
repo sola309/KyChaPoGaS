@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -22,6 +23,8 @@ from app.db.database import get_session, engine
 from app.models import Project, Asset
 from app.models.job import JobRead
 from app.routers.generation import _create_job
+
+log = logging.getLogger("music")
 
 router = APIRouter(prefix="/music", tags=["music"])
 
@@ -178,6 +181,8 @@ class MusicChatRequest(BaseModel):
 
 
 MUSIC_DIRECTOR = """
+【絵コンテ】各sectionは cuts: [{who,action,emotion,framing,status}] を持てる。映像の議論では「章の意味→キャラの瞬間(cuts)」の順で具体化し、framingはアップ/バストアップ/全身/引き/後ろ姿/手元から選ぶ。
+
 【作詞規範(必須)】歌詞はメロディの設計図。以下を守る:
 - フレーズは半角スペースで区切り、Aメロ5-7/プレ7-5/サビ8-8を基本形に
 - 対になる行はモーラ数を±1で揃える(1番2番も同じ)
@@ -386,6 +391,33 @@ class RepaintRequest(BaseModel):
     variants: int = 1
 
 
+class CoverRequest(BaseModel):
+    lyrics: str
+    caption: str = ""
+    vocal_language: str = "ja"
+    seed: int = -1
+    variants: int = 1
+
+
+@router.post("/songs/{aid}/cover", response_model=list[JobRead], status_code=201)
+def cover(aid: int, req: CoverRequest, session: Session = Depends(get_session)):
+    """Cover: 原盤の旋律・アレンジを保ったまま歌詞を差し替えて歌い直す。
+    「先に旋律を確定→歌詞を当て書き」ワークフローの実行部。"""
+    pid = studio_id(session)
+    jobs = []
+    base_seed = req.seed if req.seed >= 0 else 50021
+    for i in range(max(1, min(req.variants, 4))):
+        jobs.append(_create_job(session, pid, "generate_audio", {
+            "project_id": pid,
+            "cover_src_asset": aid,
+            "lyrics": req.lyrics,
+            "prompt": req.caption,
+            "vocal_language": req.vocal_language,
+            "seed": base_seed + i * 111,
+        }))
+    return jobs
+
+
 @router.post("/songs/{aid}/repaint", response_model=list[JobRead], status_code=201)
 def repaint(aid: int, req: RepaintRequest, session: Session = Depends(get_session)):
     """区間Repaint: 声・音色の文脈を保ったまま[start,end]だけ描き直す(ACE-Step 1.5)。
@@ -411,3 +443,163 @@ def lyrics_check(req: LyricsCheckRequest):
     """作詞リンター: モーラ設計(譜割り)の検査。メロディに乗らない歌詞を事前に潰す。"""
     from app.services.lyric_craft import check as _check
     return _check(req.lyrics)
+
+
+@router.post("/songs/{aid}/adherence")
+async def adherence(aid: int, session: Session = Depends(get_session)):
+    """歌唱一致チェック: Whisperで書き起こし→歌詞と照合。
+    勝手な反復・行の脱落(ACE-Stepの癖)を機械検出する。"""
+    import httpx
+    import re as _re
+    from app import config
+    asset = session.get(Asset, aid)
+    if not asset:
+        raise HTTPException(status_code=404, detail="song not found")
+    lyrics = ""
+    try:
+        lyrics = json.loads(asset.gen_params_json or "{}").get("lyrics") or ""
+    except Exception:
+        pass
+    if not lyrics:
+        raise HTTPException(status_code=400, detail="この曲には歌詞がありません")
+
+    # 1) ボーカルステム分離(伴奏を除去 — 轟音区間でもASRが読める)
+    import subprocess, tempfile
+    from app.services.ffmpeg_render import FFMPEG
+    import shutil as _sh
+    stem_py = Path(__file__).resolve().parents[3] / "tools" / "stem-kit" / ".venv" / "bin" / "python"
+    vocal_path = asset.file_path
+    tmpdir = tempfile.mkdtemp(prefix="adh_")
+    try:
+        if stem_py.exists():
+            # 注意: `python -m demucs` はtorchaudio保存がtorchcodec必須で死ぬ。
+            # soundfileで保存する separate.py 経由でボーカルステムを得る。
+            sep = stem_py.parent.parent.parent / "separate.py"
+            r0 = subprocess.run([str(stem_py), str(sep), asset.file_path,
+                                 "--stems-out", tmpdir],
+                                capture_output=True, text=True, timeout=900)
+            cand = Path(tmpdir) / "vocals.wav"
+            if cand.exists():
+                vocal_path = str(cand)
+            else:
+                log.warning(f"vocal stem separation failed: {r0.stdout[-300:]} {r0.stderr[-300:]}")
+    except Exception as e:
+        log.warning(f"vocal stem separation error: {e}")
+    # 2) whisperは~30秒窓しか見ないため、25秒チャンクで全曲を書き起こす
+    dur = float(asset.duration_sec or 180)
+    parts = []
+    async with httpx.AsyncClient(timeout=600) as c:
+        t0 = 0.0
+        while t0 < dur:
+            with tempfile.NamedTemporaryFile(suffix=".wav") as tf:
+                subprocess.run([str(FFMPEG), "-y", "-ss", str(t0), "-t", "25",
+                                "-i", vocal_path, "-ar", "16000", "-ac", "1", tf.name],
+                               capture_output=True)
+                chunk = Path(tf.name).read_bytes()
+            if len(chunk) > 8000:
+                r = await c.post(f"{config.ASR_API_URL}/transcribe",
+                                 files={"file": ("c.wav", chunk, "audio/wav")},
+                                 data={"language": "ja"})
+                if r.status_code == 200:
+                    parts.append(r.json().get("text", ""))
+            t0 += 23.0
+    transcript = " ".join(parts)
+    _sh.rmtree(tmpdir, ignore_errors=True)
+
+    def norm(t: str) -> str:
+        t = _re.sub(r"\[[^\]]*\]|\([^)]*\)", "", t)      # タグ/括弧BGV除去
+        return _re.sub(r"[^ぁ-ゖァ-ヺー一-鿿a-zA-Z0-9]", "", t)
+
+    from difflib import SequenceMatcher
+    tr_n = norm(transcript)
+    lines = [l.strip() for l in lyrics.splitlines()
+             if l.strip() and not l.strip().startswith("[")]
+    # 歌詞に同じ行が複数回書かれている場合(意図した反復)は期待回数と比較する
+    from collections import Counter
+    expected = Counter(norm(l) for l in lines if len(norm(l)) >= 4)
+    report = []
+    seen: set = set()
+    for line in lines:
+        ln = norm(line)
+        if len(ln) < 4 or ln in seen:
+            continue
+        seen.add(ln)
+        w = len(ln)
+        hits = 0
+        i = 0
+        while i <= max(0, len(tr_n) - w // 2):
+            seg = tr_n[i:i + w + 2]
+            if SequenceMatcher(None, ln, seg).ratio() >= 0.62:
+                hits += 1
+                i += w
+            else:
+                i += max(2, w // 4)
+        exp = expected[ln]
+        if hits == 0:
+            status = "missing"
+        elif hits <= exp:
+            status = "ok" if hits == exp else f"ok({hits}/{exp})"
+        else:
+            status = f"repeated x{hits}(期待{exp})"
+        report.append({"line": line, "status": status, "expected": exp, "hits": hits})
+    n_ok = sum(1 for r0 in report if r0["status"].startswith("ok"))
+    n_rep = sum(1 for r0 in report if r0["status"].startswith("repeated"))
+    n_miss = sum(1 for r0 in report if r0["status"] == "missing")
+    score = int(100 * n_ok / max(1, len(report))) - n_rep * 5
+    return {"score": max(0, score), "ok": n_ok, "repeated": n_rep, "missing": n_miss,
+            "lines": report, "transcript": transcript}
+
+
+def _mora_count(text: str) -> int:
+    from app.services.lyric_craft import mora_split, to_hira
+    try:
+        return len(mora_split(to_hira(text)))
+    except Exception:
+        return len([c for c in text if c.strip()])
+
+
+@router.post("/songs/{aid}/phrase-map")
+def phrase_map(aid: int, session: Session = Depends(get_session)):
+    """譜割り抽出: ボーカルステム→ASR(タイムスタンプ付き)でフレーズ境界と
+    実際に歌われた音数(モーラ)を取得する。当て書きワークフローの計測部。
+    出力: [{t0, t1, dur, text, mora}] — 歌詞の各行をmoraに合わせて調整→cover。"""
+    import subprocess
+    import tempfile
+    import httpx as _hx
+
+    asset = session.get(Asset, aid)
+    if not asset:
+        raise HTTPException(404, "asset not found")
+    stem_py = Path(__file__).resolve().parents[3] / "tools" / "stem-kit" / ".venv" / "bin" / "python"
+    sep = stem_py.parent.parent.parent / "separate.py"
+    phrases = []
+    with tempfile.TemporaryDirectory(prefix="phrasemap_") as td:
+        r = subprocess.run([str(stem_py), str(sep), asset.file_path, "--stems-out", td],
+                           capture_output=True, text=True, timeout=900)
+        vocal = Path(td) / "vocals.wav"
+        if not vocal.exists():
+            raise HTTPException(500, f"vocal separation failed: {r.stderr[-200:]}")
+        # 25秒チャンクでASR(whisperの窓制限) — セグメントにチャンクオフセットを加算
+        dur = float(asset.duration_sec or 180)
+        import math
+        n_chunks = math.ceil(dur / 25)
+        for ci in range(n_chunks):
+            t_off = ci * 25
+            chunk = Path(td) / f"chunk{ci}.wav"
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", str(t_off), "-t", "25",
+                            "-i", str(vocal), str(chunk)], check=True, timeout=60)
+            with open(chunk, "rb") as f:
+                resp = _hx.post("http://localhost:8089/transcribe",
+                                files={"file": ("c.wav", f, "audio/wav")},
+                                data={"language": "ja", "timestamps": "1"},
+                                timeout=300)
+            for seg in resp.json().get("segments", []):
+                if not seg.get("text"):
+                    continue
+                t0 = seg["t0"] + t_off
+                t1 = (seg["t1"] if seg["t1"] is not None else seg["t0"] + 2) + t_off
+                phrases.append({"t0": round(t0, 2), "t1": round(t1, 2),
+                                "dur": round(t1 - t0, 2), "text": seg["text"],
+                                "mora": _mora_count(seg["text"])})
+    return {"phrases": phrases, "count": len(phrases),
+            "hint": "歌詞の各行を対応フレーズのmoraに合わせて調整→ POST /songs/{aid}/cover"}

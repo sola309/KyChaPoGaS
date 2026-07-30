@@ -26,6 +26,7 @@ def create_track(data: TrackCreate, session: Session = Depends(get_session)):
 
 @router.patch("/{track_id}", response_model=TrackRead)
 def update_track(track_id: int, name: str | None = None, order: int | None = None,
+                 hidden: bool | None = None,
                  session: Session = Depends(get_session)):
     track = session.get(Track, track_id)
     if not track:
@@ -34,6 +35,8 @@ def update_track(track_id: int, name: str | None = None, order: int | None = Non
         track.name = name
     if order is not None:
         track.order = order
+    if hidden is not None:
+        track.hidden = hidden
     session.add(track)
     session.commit()
     session.refresh(track)

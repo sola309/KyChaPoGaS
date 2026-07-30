@@ -1,10 +1,12 @@
 // puppet_clip — コンパニオンを透過webm素材として書き出す(MAD/動画用)。
-// usage: node puppet_clip.mjs <puppetId> <motion:idle|talk|nod> <durationSec> <fps> <outDir>
+// usage: node puppet_clip.mjs <puppetId> <motion:idle|talk|nod|keyframes> <durationSec> <fps> <outDir> [motionJsonPath]
+//   keyframes: motionJsonPath の {tracks:{turn:[{at,v,ease?}],nod:[],talk:[],level:[],wide:[],expr:[{at,v}]}}
+//   at は 0..1(尺内正規化)。ease: linear|inOut|outCubic|inCubic
 // 透過PNG連番を吐く(webm化は呼び出し側のffmpegで)。
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 
-const [pid = 'recipe_kyoko', motion = 'idle', durS = '4', fpsS = '30', OUT = '/tmp/puppet_clip'] = process.argv.slice(2)
+const [pid = 'recipe_kyoko', motion = 'idle', durS = '4', fpsS = '30', OUT = '/tmp/puppet_clip', motionJson = ''] = process.argv.slice(2)
 const dur = parseFloat(durS), fps = parseInt(fpsS)
 const EXEC = '/home/kigarashi309/.cache/ms-playwright/chromium-1223/chrome-linux/chrome'
 const URL = (process.env.QA_URL || 'http://localhost:8002') + `/?puppet=${pid}`
@@ -33,7 +35,39 @@ const MOTIONS = {
                   wide: 0.5 + 0.45 * Math.sin(t * 2.1) }),
   nod: (t) => ({ talk: 0, turn: 0, nod: Math.sin(t * 2.2) * 0.7, expr: 'smile', level: 0 }),
 }
-const fn = (MOTIONS[motion] || MOTIONS.idle).toString()
+// keyframes: スタジオのモーションエディタが吐くトラックを補間する純関数を合成
+let fn
+if (motion === 'keyframes' && motionJson) {
+  const { readFileSync } = await import('node:fs')
+  const kf = JSON.parse(readFileSync(motionJson, 'utf8'))
+  fn = `(t) => {
+    const DUR = ${dur}
+    const EASES = { linear: u => u, inOut: u => .5 - .5 * Math.cos(Math.PI * u),
+      outCubic: u => 1 - Math.pow(1 - u, 3), inCubic: u => u * u * u }
+    const tracks = ${JSON.stringify(kf.tracks || {})}
+    const num = (key, dflt) => {
+      const ks = tracks[key]; if (!ks || !ks.length) return dflt
+      const u0 = Math.min(1, Math.max(0, t / DUR))
+      let a = ks[0], b = ks[ks.length - 1]
+      for (let i = 0; i < ks.length - 1; i++)
+        if (u0 >= ks[i].at && u0 <= ks[i + 1].at) { a = ks[i]; b = ks[i + 1]; break }
+      const su = b.at === a.at ? 0 : (u0 - a.at) / (b.at - a.at)
+      const e = (EASES[b.ease] || EASES.linear)(Math.min(1, Math.max(0, su)))
+      return a.v + (b.v - a.v) * e
+    }
+    const step = (key, dflt) => {
+      const ks = tracks[key]; if (!ks || !ks.length) return dflt
+      const u0 = t / DUR
+      let v = ks[0].v
+      for (const k of ks) if (k.at <= u0) v = k.v
+      return v
+    }
+    return { turn: num('turn', 0), nod: num('nod', 0), talk: num('talk', 0),
+             level: num('level', 0), wide: num('wide', 0.5), expr: step('expr', 'neutral') }
+  }`
+} else {
+  fn = (MOTIONS[motion] || MOTIONS.idle).toString()
+}
 
 const n = Math.round(dur * fps)
 // 内部平滑状態を落ち着かせるプリロール

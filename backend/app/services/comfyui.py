@@ -10,6 +10,7 @@ Uses ComfyUI's REST API (HTTP polling) — no WebSocket required.
 """
 
 import asyncio
+import json
 import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -98,10 +99,56 @@ class ComfyUIConnector:
 
     # ── Polling ───────────────────────────────────────────────────────────────
 
+    # ロード系ノード → フェーズ表示「モデル読み込み中」の判定に使う
+    _LOADER_CLASSES = {
+        "UNETLoader", "CheckpointLoaderSimple", "CLIPLoader", "VAELoader",
+        "DualCLIPLoader", "LoraLoader", "LoraLoaderModelOnly", "AudioEncoderLoader",
+    }
+
+    async def _phase_watcher(self, prompt_id: str, workflow: dict | None,
+                             phase_cb: Callable[[str], None],
+                             progress_cb: Optional[Callable[[float], None]] = None) -> None:
+        """
+        ComfyUI の WebSocket からノード実行イベントを拾ってフェーズ文字列を流す。
+        - executing ノードがローダー系 → 「モデル読み込み中…」
+        - progress イベント → 「生成中 k/n」(+実測進捗をprogress_cbへ)
+        失敗しても無害(ポーリング進捗にフォールバック)。
+        """
+        try:
+            import websockets
+            ws_url = self.base_url.replace("http", "ws", 1) + "/ws?clientId=kychapogas_phase"
+            async with websockets.connect(ws_url, open_timeout=5) as ws:
+                while True:
+                    raw = await ws.recv()
+                    if not isinstance(raw, str):
+                        continue
+                    msg = json.loads(raw)
+                    mtype, data = msg.get("type"), msg.get("data", {})
+                    if data.get("prompt_id") not in (None, prompt_id):
+                        continue
+                    if mtype == "executing":
+                        node = data.get("node")
+                        if node is None:
+                            return  # 実行完了
+                        cls = (workflow or {}).get(str(node), {}).get("class_type", "")
+                        if cls in self._LOADER_CLASSES:
+                            phase_cb("モデル読み込み中…")
+                        elif cls:
+                            phase_cb(f"実行中: {cls}")
+                    elif mtype == "progress":
+                        v, m = data.get("value", 0), data.get("max", 1)
+                        phase_cb(f"生成中 {v}/{m}")
+                        if progress_cb and m:
+                            progress_cb(0.05 + 0.88 * (v / m))
+        except Exception:
+            pass  # WS不可でもポーリングで続行
+
     async def wait_for_outputs(
         self,
         prompt_id: str,
         progress_cb: Optional[Callable[[float], None]] = None,
+        phase_cb: Optional[Callable[[str], None]] = None,
+        workflow: dict | None = None,
     ) -> list[dict]:
         """
         Poll /history until the prompt completes.
@@ -109,6 +156,10 @@ class ComfyUIConnector:
           [{"filename": "...", "subfolder": "...", "type": "output"}, ...]
         """
         elapsed = 0.0
+        watcher = None
+        if phase_cb:
+            watcher = asyncio.create_task(
+                self._phase_watcher(prompt_id, workflow, phase_cb, progress_cb))
 
         while elapsed < COMFY_TIMEOUT_S:
             async with httpx.AsyncClient(timeout=10.0) as c:
@@ -134,6 +185,8 @@ class ComfyUIConnector:
                         msgs = status.get("messages", [])
                         for mtype, mdata in msgs:
                             if mtype == "execution_error":
+                                if watcher:
+                                    watcher.cancel()
                                 raise RuntimeError(
                                     mdata.get("exception_message", "ComfyUI execution error")
                                 )
@@ -141,21 +194,28 @@ class ComfyUIConnector:
                         # Collect all image / video outputs
                         outputs: list[dict] = []
                         for _node_id, node_out in entry.get("outputs", {}).items():
-                            for key in ("images", "gifs", "video"):
+                            for key in ("images", "gifs", "video", "3d"):
                                 if key in node_out:
                                     outputs.extend(node_out[key])
                         if outputs:
                             if progress_cb:
                                 progress_cb(0.95)
+                            if watcher:
+                                watcher.cancel()
+                            if phase_cb:
+                                phase_cb("")
                             return outputs
 
             await asyncio.sleep(POLL_INTERVAL_S)
             elapsed += POLL_INTERVAL_S
 
             # Rough progress estimate (assumes ~2 min for a typical generation)
-            if progress_cb:
+            # WSフェーズ監視が生きている場合は実測進捗が来るのでこちらは出さない
+            if progress_cb and not (watcher and not watcher.done()):
                 progress_cb(min(0.9, 0.05 + elapsed / 120.0))
 
+        if watcher:
+            watcher.cancel()
         raise TimeoutError(f"ComfyUI job timed out after {COMFY_TIMEOUT_S}s")
 
     # ── Download ──────────────────────────────────────────────────────────────

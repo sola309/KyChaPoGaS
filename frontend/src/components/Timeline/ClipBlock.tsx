@@ -229,13 +229,21 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
           style={{ background: remoteLock.color }}
         >🔒 {remoteLock.name}</span>
       )}
-      {/* Filmstrip background (video clips) */}
-      {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (
-        <div
-          className="absolute inset-0 opacity-45 pointer-events-none bg-no-repeat"
-          style={{ backgroundImage: `url(${assetsApi.filmstripUrl(asset.id)})`, backgroundSize: '100% 100%' }}
-        />
-      )}
+      {/* Filmstrip background (video clips) — タイルが常に16:9で表示されるよう
+          クリップ表示幅からコマ数を逆算(段階量子化でキャッシュ効率を保つ) */}
+      {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (() => {
+        const tileW = trackHeight * 16 / 9
+        const STEPS = [2, 3, 4, 6, 8, 12, 16, 24, 32, 40]
+        const want = width / Math.max(24, tileW)
+        const n = STEPS.find(v => v >= want) ?? 40
+        return (
+          <div
+            className="absolute inset-0 opacity-45 pointer-events-none bg-no-repeat"
+            style={{ backgroundImage: `url(${assetsApi.filmstripUrl(asset.id, n)})`,
+                     backgroundSize: '100% 100%' }}
+          />
+        )
+      })()}
 
       {/* Motion waveform (フレーム差分量 — 音声波形の動画版) */}
       {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (

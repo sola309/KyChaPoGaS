@@ -8,9 +8,14 @@ import { useUIStore } from '../../store/uiStore'
  * 共通の設計図になる。将来はブログ等の文章にも拡張予定。
  */
 
+interface Cut {
+  who: string; action: string; emotion: string; framing: string
+  status: 'idea' | 'generated' | 'placed'
+}
 interface Section {
   tag: string; name: string; bars: number; energy: number
   mood: string; visual: string; lyrics: string
+  cuts?: Cut[]
 }
 interface Sheet {
   format_version: number; title: string; concept: string
@@ -67,6 +72,11 @@ export function CompositionStudio() {
   function patch(p: Partial<Sheet>) { setSheet(s => ({ ...s, ...p })); setDirty(true) }
   function patchSec(i: number, p: Partial<Section>) {
     setSheet(s => ({ ...s, sections: s.sections.map((x, k) => k === i ? { ...x, ...p } : x) })); setDirty(true)
+  }
+  const patchCut = (i: number, ci: number, p: Partial<Cut>) => {
+    setSheet(s => ({ ...s, sections: s.sections.map((x, k) => k === i
+      ? { ...x, cuts: (x.cuts ?? []).map((c, m) => m === ci ? { ...c, ...p } : c) } : x) }))
+    setDirty(true)
   }
 
   async function send() {
@@ -199,6 +209,40 @@ export function CompositionStudio() {
                 <textarea value={s.lyrics} onChange={e => patchSec(i, { lyrics: e.target.value })}
                   placeholder="歌詞(未定なら空)" rows={2}
                   className="w-full bg-zinc-900 border border-zinc-700 rounded p-2 text-xs font-mono" />
+                {/* 🎬 絵コンテ: この章で見せる「キャラの瞬間」 */}
+                <div className="pt-1 border-t border-zinc-800/60 space-y-1">
+                  <p className="text-[10px] text-amber-300/90">🎬 絵コンテ — キャラの瞬間({(s.cuts ?? []).length})</p>
+                  {(s.cuts ?? []).map((c, ci) => (
+                    <div key={ci} className="flex flex-wrap gap-1 items-center bg-zinc-950/60 rounded px-1.5 py-1">
+                      <input value={c.who} placeholder="誰が"
+                        onChange={e => patchCut(i, ci, { who: e.target.value })}
+                        className="w-24 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[11px]" />
+                      <input value={c.action} placeholder="何をしている"
+                        onChange={e => patchCut(i, ci, { action: e.target.value })}
+                        className="flex-1 min-w-32 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[11px]" />
+                      <input value={c.emotion} placeholder="感情"
+                        onChange={e => patchCut(i, ci, { emotion: e.target.value })}
+                        className="w-20 bg-zinc-900 border border-zinc-800 rounded px-1.5 py-0.5 text-[11px]" />
+                      <select value={c.framing} onChange={e => patchCut(i, ci, { framing: e.target.value })}
+                        className="bg-zinc-900 border border-zinc-800 rounded px-1 py-0.5 text-[11px]">
+                        {['アップ', 'バストアップ', '全身', '引き', '後ろ姿', '手元'].map(f => <option key={f}>{f}</option>)}
+                      </select>
+                      <select value={c.status} onChange={e => patchCut(i, ci, { status: e.target.value as Cut['status'] })}
+                        className={`rounded px-1 py-0.5 text-[11px] border ${
+                          c.status === 'placed' ? 'bg-emerald-950 border-emerald-800 text-emerald-300'
+                          : c.status === 'generated' ? 'bg-sky-950 border-sky-800 text-sky-300'
+                          : 'bg-zinc-900 border-zinc-800 text-zinc-400'}`}>
+                        <option value="idea">案</option>
+                        <option value="generated">生成済</option>
+                        <option value="placed">配置済</option>
+                      </select>
+                      <button onClick={() => { patchSec(i, { cuts: (s.cuts ?? []).filter((_, k) => k !== ci) }) }}
+                        className="text-zinc-700 hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  ))}
+                  <button onClick={() => patchSec(i, { cuts: [...(s.cuts ?? []), { who: '', action: '', emotion: '', framing: 'バストアップ', status: 'idea' }] })}
+                    className="w-full py-0.5 rounded border border-dashed border-zinc-800 text-zinc-600 hover:text-amber-300 text-[10px]">＋ 瞬間を追加</button>
+                </div>
               </div>
             ))}
             <button onClick={() => { setSheet(sh => ({ ...sh, sections: [...sh.sections, { tag: '[verse]', name: '新セクション', bars: 8, energy: 0.5, mood: '', visual: '', lyrics: '' }] })); setDirty(true) }}

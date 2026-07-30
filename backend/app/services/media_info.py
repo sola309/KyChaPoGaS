@@ -33,6 +33,9 @@ def probe(file_path: Path) -> MediaInfo:
         return _probe_av(file_path, size, expect_video=False)
     if ext in _VIDEO_EXTS:
         return _probe_av(file_path, size, expect_video=True)
+    if ext in (".glb", ".gltf"):
+        return MediaInfo(asset_type="model3d", duration_sec=None, width=None, height=None,
+                         file_size_bytes=size)
 
     return _probe_av(file_path, size, expect_video=False)
 

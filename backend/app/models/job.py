@@ -12,6 +12,7 @@ class JobBase(SQLModel):
     result_asset_ids: str = "[]"  # JSON array
     result_json: str = ""     # ジョブ固有の構造化結果(takes/vlm_review等)
     progress: float = 0.0
+    phase: str = ""        # 実行フェーズ表示("モデル読み込み中"等)
     error_msg: Optional[str] = None
     vram_estimated_mb: Optional[int] = None   # pre-run VRAM estimate
     vram_peak_mb: Optional[int] = None        # actual peak VRAM observed during run
@@ -39,6 +40,7 @@ class JobRead(SQLModel):
     result_asset_ids: list[int]
     result_json: str = ""
     progress: float
+    phase: str = ""
     error_msg: Optional[str]
     vram_estimated_mb: Optional[int]
     vram_peak_mb: Optional[int]
@@ -57,6 +59,7 @@ class JobRead(SQLModel):
             result_asset_ids=json.loads(job.result_asset_ids),
             result_json=job.result_json or "",
             progress=job.progress,
+            phase=getattr(job, "phase", "") or "",
             error_msg=job.error_msg,
             vram_estimated_mb=job.vram_estimated_mb,
             vram_peak_mb=job.vram_peak_mb,

@@ -103,6 +103,8 @@ const HEART = (c, s = 1) => `<path transform="scale(${s})" d="M150 250 C 40 170 
 const PAL = { wine: '#a5405c', wine2: '#8c3450', pink: '#f7dede', pink2: '#fbecec',
   deep: '#e0355f', mag: '#e8446e', cream: '#fff6f2', blue: '#3fa0d0', mint: '#dff0e4' };
 const PATTERNS = {
+  // 夜空: 叛逆/クライマックス章・scene3dの背景用(星の点描+深い紺のグラデ)
+  night: c => ({ background: `radial-gradient(1.6px 1.6px at 12% 24%, rgba(255,255,255,.7) 50%, transparent 51%),radial-gradient(1.2px 1.2px at 68% 12%, rgba(255,255,255,.55) 50%, transparent 51%),radial-gradient(1.8px 1.8px at 42% 58%, rgba(255,255,255,.5) 50%, transparent 51%),radial-gradient(1.2px 1.2px at 86% 44%, rgba(255,255,255,.6) 50%, transparent 51%),radial-gradient(1.4px 1.4px at 24% 80%, rgba(255,255,255,.45) 50%, transparent 51%),radial-gradient(ellipse at 50% 120%, #2a2244 0%, ${c || '#141126'} 62%, #0a0916 100%)` }),
   argyle: c => ({ background: `repeating-linear-gradient(45deg, rgba(165,64,92,.16) 0 2px, transparent 2px 84px),repeating-linear-gradient(-45deg, rgba(165,64,92,.16) 0 2px, transparent 2px 84px),repeating-linear-gradient(45deg, rgba(233,155,177,.5) 0 42px, rgba(247,222,222,.9) 42px 84px),repeating-linear-gradient(-45deg, rgba(233,155,177,.35) 0 42px, transparent 42px 84px) ${c || '#f7dede'}` }),
   stripes: c => ({ background: `repeating-linear-gradient(-55deg, ${c || '#fbecec'} 0 46px, #f5cfd6 46px 92px)` }),
   dots: c => ({ backgroundImage: 'radial-gradient(circle, rgba(165,64,92,.28) 9px, transparent 10px)', backgroundSize: '72px 72px', backgroundColor: c || '#e9f3ec' }),
@@ -116,6 +118,83 @@ const PATTERNS = {
 function patternBG(root, kind, color) {
   const wrap = el(root, { inset: '-140px', ...(PATTERNS[kind] || PATTERNS.solid)(color) });
   return t => { wrap.style.backgroundPosition = `${(t * 26) % 168}px ${(t * 14) % 168}px`; };
+}
+
+
+/* ---- shaderBG: GLSLフラグメントシェーダ背景(依存ゼロ・決定論) ----
+   Web系のシェーダアート表現をMG背景として使う。u_time=シーク時刻なので
+   ヘッドレスレンダでも完全決定論。u_level に任意ステム音量を渡せる。 */
+const SHADERS = {
+  // オーロラ: 波打つ光のカーテン
+  aurora: `float n(vec2 p){return sin(p.x*3.1+u_time*.7)*sin(p.y*2.3-u_time*.5);}
+    void main(){vec2 uv=gl_FragCoord.xy/u_res; vec3 col=vec3(0.02,0.02,0.06);
+    for(float i=1.;i<4.;i++){float y=uv.y-.5-.18*sin(uv.x*4.+u_time*.6*i+i*2.)-i*.05;
+    float g=exp(-abs(y)*(9.-i*2.))*(.5+.5*n(uv*i));
+    col+=g*mix(vec3(.1,.9,.6),vec3(.5,.3,.9),uv.x+.2*sin(u_time*.3+i))*(.5+u_level);}
+    gl_FragColor=vec4(col,1.);}`,
+  // プラズマ: 古典プラズマ
+  plasma: `void main(){vec2 uv=gl_FragCoord.xy/u_res*6.;
+    float v=sin(uv.x+u_time)+sin(uv.y+u_time*.7)+sin((uv.x+uv.y)*.7+u_time*1.3)
+      +sin(length(uv-3.)*1.4-u_time);
+    vec3 col=.5+.5*cos(v+vec3(0.,2.1,4.2)+u_time*.2);
+    gl_FragColor=vec4(col*(.55+.45*u_level),1.);}`,
+  // 神々しい放射光
+  rays: `void main(){vec2 uv=gl_FragCoord.xy/u_res-.5; uv.x*=u_res.x/u_res.y;
+    float a=atan(uv.y,uv.x); float r=length(uv);
+    float g=pow(max(0.,sin(a*9.+u_time*.8)),3.)*exp(-r*2.2);
+    float core=exp(-r*7.)*1.4;
+    vec3 col=(g*(.6+u_level)+core)*vec3(1.,.92,.75);
+    gl_FragColor=vec4(col,1.);}`,
+  // スターワープ(周回モンタージュ向き)
+  warp: `float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+    void main(){vec2 uv=gl_FragCoord.xy/u_res-.5; uv.x*=u_res.x/u_res.y;
+    float a=atan(uv.y,uv.x); float r=length(uv)+.02;
+    vec3 col=vec3(0.);
+    for(float i=0.;i<40.;i++){float sa=h(vec2(i,1.))*6.283;
+    float sp=.15+h(vec2(i,2.))*.5; float d=abs(sin((a-sa)*30.));
+    float tr=fract(h(vec2(i,3.))+u_time*sp*(.7+u_level));
+    col+=exp(-d*40.)*exp(-abs(r-tr)*18.)*vec3(.7,.8,1.);}
+    gl_FragColor=vec4(col,1.);}`,
+  // シンセウェイヴ床グリッド
+  grid: `void main(){vec2 uv=gl_FragCoord.xy/u_res-.5; uv.x*=u_res.x/u_res.y;
+    vec3 col=mix(vec3(.06,.01,.12),vec3(.25,.02,.2),-uv.y+.5);
+    if(uv.y<0.){float z=.12/-uv.y; vec2 g=vec2(uv.x*z*3.,z+u_time*(1.2+u_level));
+    float l=max(exp(-abs(fract(g.x)-.5)*24.),exp(-abs(fract(g.y)-.5)*24.));
+    col+=l*vec3(1.,.2,.8)*exp(-z*.18);}
+    float sun=exp(-length(uv-vec2(0.,.18))*5.);
+    col+=sun*vec3(1.,.4,.6);
+    gl_FragColor=vec4(col,1.);}`,
+};
+function shaderBG(root, kind, opts = {}) {
+  const cv = document.createElement('canvas');
+  cv.width = 960; cv.height = 540;   // 背景は1/2解像度で十分(拡大表示)
+  Object.assign(cv.style, { position: 'absolute', inset: 0, width: '100%', height: '100%' });
+  root.appendChild(cv);
+  const gl = cv.getContext('webgl', { preserveDrawingBuffer: true });
+  if (!gl) return () => {};
+  const vs = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+  const fs = 'precision mediump float;uniform vec2 u_res;uniform float u_time;uniform float u_level;'
+    + (SHADERS[kind] || SHADERS.plasma);
+  const mk = (ty, src) => { const sh = gl.createShader(ty); gl.shaderSource(sh, src); gl.compileShader(sh); return sh; };
+  const pr = gl.createProgram();
+  gl.attachShader(pr, mk(gl.VERTEX_SHADER, vs));
+  gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(pr); gl.useProgram(pr);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(pr, 'p');
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const uRes = gl.getUniformLocation(pr, 'u_res');
+  const uTime = gl.getUniformLocation(pr, 'u_time');
+  const uLevel = gl.getUniformLocation(pr, 'u_level');
+  gl.uniform2f(uRes, cv.width, cv.height);
+  const speed = opts.speed ?? 1;
+  return t => {
+    gl.uniform1f(uTime, t * speed);
+    gl.uniform1f(uLevel, opts.on ? stemLevel(opts.on, t) : 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  };
 }
 
 /* ============ D. particles / ambient layers ============ */
@@ -606,6 +685,232 @@ TEMPLATES.parallax_scene = (root, p, ctx) => {
     vids.forEach(sk => sk(tt));
     ups.forEach(u => u(t));
   };
+};
+
+/* ---- scene3d: 生成3Dモデル(GLB)のリアル3Dカメラワーク ----
+   Hunyuan3D-2のオブジェクトGLB / MoGe-2のレリーフGLBを three.js で直接動かす。
+   切り貼りでは不可能な回り込み・ドリー・3Dフォト演出の主戦力。
+   例: { "template": "scene3d", "params": {
+     "model": "kyoko_hy3d",             // assets/ の .glb (拡張子なし)
+     "camera": "orbit",                 // orbit|dolly_in|dolly_out|sway|arc_l|arc_r|parallax
+                                        // または [{at,az,el,dist,fov}] キーフレーム
+     "style": "toon",                   // standard|toon|wire
+     "turns": 0.5, "bg": {"pattern": "soft"},
+     "ornaments": [...] } }             // parallax_scene と同じ飾りが載る */
+TEMPLATES.scene3d = (root, p, ctx) => {
+  if (!window.__threeUse) window.__threeUse = window.__threeReady ||
+    new Promise(r => { window.__threeResolve = r; });
+
+  // 背景(2D)は3Dキャンバスの下に敷く
+  const ups = [];
+  if (p.bg) ups.push(patternBG(el(root, { inset: 0 }), p.bg.pattern || 'soft', p.bg.color));
+
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  Object.assign(cv.style, { position: 'absolute', inset: 0, zIndex: 3 });
+  root.appendChild(cv);
+
+  let R = null;   // { renderer, scene, camera, center, radius, sizeY }
+  const ready = window.__threeUse.then(async () => {
+    const T = window.THREE;
+    const renderer = new T.WebGLRenderer({ canvas: cv, alpha: true, antialias: true,
+      preserveDrawingBuffer: true });
+    renderer.setSize(W, H, false); renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = T.SRGBColorSpace;
+    const scene = new T.Scene();
+    const camera = new T.PerspectiveCamera(p.fov ?? 40, W / H, 0.01, 1000);
+    scene.add(new T.HemisphereLight(0xffffff, 0x8899aa, 2.0));
+    const key = new T.DirectionalLight(0xffffff, 2.2); key.position.set(2, 3, 4); scene.add(key);
+    const rim = new T.DirectionalLight(0xaaccff, 1.1); rim.position.set(-3, 1, -4); scene.add(rim);
+
+    const specs = p.objects || [{ model: p.model, style: p.style }];
+    const meshes = [];
+    for (const spec of specs) {
+      const url = K.assets[spec.model];
+      const buf = await (await fetch(url)).arrayBuffer();
+      const gltf = await new window.GLTFLoader3D().parseAsync(buf, '');
+      const node = gltf.scene;
+      node.traverse(o => { if (o.isMesh) { o.userData.mkStyle = spec.style || p.style; meshes.push(o); } });
+      // 高さ1に正規化し足元を原点へ → pos/rot/scale はシーン単位で直感的に
+      const bb = new T.Box3().setFromObject(node);
+      const sz = bb.getSize(new T.Vector3()), ct = bb.getCenter(new T.Vector3());
+      const nrm = 1 / Math.max(1e-6, sz.y);
+      const wrap = new T.Group();
+      node.position.sub(ct); node.position.y += sz.y / 2;
+      node.scale.setScalar(nrm); node.position.multiplyScalar(nrm);
+      wrap.add(node);
+      if (spec.pos) wrap.position.set(spec.pos[0] ?? 0, spec.pos[1] ?? 0, spec.pos[2] ?? 0);
+      if (spec.rot) wrap.rotation.set((spec.rot[0] ?? 0) * Math.PI / 180,
+        (spec.rot[1] ?? 0) * Math.PI / 180, (spec.rot[2] ?? 0) * Math.PI / 180);
+      if (spec.scale) wrap.scale.setScalar(spec.scale);
+      scene.add(wrap);
+    }
+    const model = scene;
+    for (const o of meshes) {
+      if (o.material && o.material.map) continue;
+      const g = o.geometry, pos = g.attributes.position, idx = g.index;
+      if (!pos) continue;
+      const c = new T.Vector3();
+      const stp = Math.max(1, Math.floor(pos.count / 500));
+      let cn = 0;
+      for (let i = 0; i < pos.count; i += stp) { c.add(new T.Vector3().fromBufferAttribute(pos, i)); cn++; }
+      c.multiplyScalar(1 / cn);
+      const a = new T.Vector3(), b = new T.Vector3(), d = new T.Vector3(),
+            ab = new T.Vector3(), ad = new T.Vector3(), fc = new T.Vector3();
+      const nTri = idx ? idx.count / 3 : pos.count / 3;
+      const fstep = Math.max(1, Math.floor(nTri / 2000));
+      let out = 0, inn = 0;
+      for (let f = 0; f < nTri; f += fstep) {
+        const i0 = idx ? idx.getX(f * 3) : f * 3, i1 = idx ? idx.getX(f * 3 + 1) : f * 3 + 1,
+              i2 = idx ? idx.getX(f * 3 + 2) : f * 3 + 2;
+        a.fromBufferAttribute(pos, i0); b.fromBufferAttribute(pos, i1); d.fromBufferAttribute(pos, i2);
+        ab.subVectors(b, a); ad.subVectors(d, a);
+        fc.addVectors(a, b).add(d).multiplyScalar(1 / 3).sub(c);
+        if (ab.cross(ad).dot(fc) > 0) out++; else inn++;
+      }
+      if (inn > out && idx) {
+        for (let f = 0; f < idx.count; f += 3) {
+          const tmp = idx.getX(f + 1); idx.setX(f + 1, idx.getX(f + 2)); idx.setX(f + 2, tmp);
+        }
+        idx.needsUpdate = true; g.computeVertexNormals();
+      } else if (!g.attributes.normal) g.computeVertexNormals();
+      if (o.material && o.material.color && !o.material.map && !o.material.vertexColors &&
+          o.material.color.getHex() === 0xffffff) o.material.color.setHex(0xd8d0c8);
+    }
+
+    const toonMeshes = meshes.filter(m => (m.userData.mkStyle || 'standard') === 'toon');
+    const wireMeshes = meshes.filter(m => m.userData.mkStyle === 'wire');
+    if (toonMeshes.length) {
+      const gc = document.createElement('canvas'); gc.width = 3; gc.height = 1;
+      const gx = gc.getContext('2d');
+      ['#666677', '#aaaabb', '#ffffff'].forEach((col, i) => { gx.fillStyle = col; gx.fillRect(i, 0, 1, 1); });
+      const grad = new T.CanvasTexture(gc); grad.minFilter = grad.magFilter = T.NearestFilter;
+      for (const o of toonMeshes) {
+        const old = o.material;
+        o.material = new T.MeshToonMaterial({ color: old.color || new T.Color(0xdddddd),
+          map: old.map || null, gradientMap: grad, vertexColors: !!old.vertexColors });
+        const hull = new T.Mesh(o.geometry, new T.MeshBasicMaterial({ color: 0x1a1a2a, side: T.BackSide }));
+        hull.scale.setScalar(1.02); o.add(hull);
+      }
+    }
+    if (wireMeshes.length) {
+      for (const o of wireMeshes) {
+        o.add(new T.LineSegments(new T.WireframeGeometry(o.geometry),
+          new T.LineBasicMaterial({ color: 0x99eeff, transparent: true, opacity: .5 })));
+        o.material = new T.MeshStandardMaterial({ color: 0x223344, roughness: .9,
+          vertexColors: !!o.material.vertexColors });
+      }
+    }
+    const box = new T.Box3();
+    meshes.forEach(m => box.expandByObject(m));
+    const size = box.getSize(new T.Vector3()), center = box.getCenter(new T.Vector3());
+    R = { renderer, scene, camera, center,
+          radius: Math.max(size.x, size.y, size.z), sizeY: size.y };
+  });
+  // ヘッドレスレンダは __madAssetsReady を待ってからフレームを刻む
+  window.__madAssetsReady = Promise.all([window.__madAssetsReady || 0, ready]);
+
+  // 飾り(2Dオーバーレイ、depth概念なし)
+  (p.ornaments || []).forEach((o, i) => {
+    let e;
+    if (o.kind === 'nameplate') e = nameplate(root, o.text, { left: o.x + 'px', top: o.y + 'px', zIndex: 10, ...(o.css || {}) });
+    else if (o.kind === 'pill') e = pill(root, o.text, { left: o.x + 'px', top: o.y + 'px', zIndex: 10 });
+    else e = txt(root, o.text || '★', { left: o.x + 'px', top: o.y + 'px', zIndex: 10,
+      fontFamily: 'Mochiy', fontSize: (o.size ?? 46) + 'px', color: o.color || PAL.wine });
+    tag(e, ctx, `ornaments[${i}]`, o.text || o.kind);
+    ups.push(motorize(e, { enter: { kind: o.enter || 'pop', at: .3 + i * .186, dur: .34 },
+      idles: [{ kind: 'bob', amp: 7, rate: 1.6, ph: i * 1.7 }] }, ctx.t0));
+  });
+
+  const easeIO = u => .5 - .5 * Math.cos(Math.PI * clamp(u));
+  return t => {
+    ups.forEach(u => u(t));
+    if (!R) return;
+    const u = map(t, ctx.t0, ctx.t1);
+    const { camera, center, radius, sizeY } = R;
+    const d0 = radius * 2.1;
+    let az = 0, elv = .25, dist = d0;
+    const cam = p.camera || 'orbit';
+    if (Array.isArray(cam)) {
+      // キーフレーム [{at,az,el,dist,fov,roll,target,ease}] (azはラジアン, rollは度)
+      let k0 = cam[0], k1 = cam[cam.length - 1];
+      for (let i = 0; i < cam.length - 1; i++)
+        if (u >= cam[i].at && u <= cam[i + 1].at) { k0 = cam[i]; k1 = cam[i + 1]; break; }
+      let su = map(u, k0.at, k1.at);
+      su = (EASE[k1.ease] || EASE.linear)(su);
+      az = lerp(k0.az ?? 0, k1.az ?? 0, su);
+      elv = lerp(k0.el ?? .25, k1.el ?? .25, su);
+      dist = lerp(k0.dist ?? 2.1, k1.dist ?? 2.1, su) * radius;
+      camera.fov = lerp(k0.fov ?? 40, k1.fov ?? 40, su); camera.updateProjectionMatrix();
+      const tg0 = k0.target || [center.x, center.y, center.z];
+      const tg1 = k1.target || [center.x, center.y, center.z];
+      const tgt = new window.THREE.Vector3(
+        lerp(tg0[0], tg1[0], su), lerp(tg0[1], tg1[1], su), lerp(tg0[2], tg1[2], su));
+      camera.position.set(
+        tgt.x + dist * Math.sin(az) * Math.cos(elv),
+        tgt.y + dist * Math.sin(elv),
+        tgt.z + dist * Math.cos(az) * Math.cos(elv));
+      camera.up.set(0, 1, 0); camera.lookAt(tgt);
+      const roll = lerp(k0.roll ?? 0, k1.roll ?? 0, su) * Math.PI / 180;
+      if (roll) camera.rotateZ(roll);
+      R.renderer.render(R.scene, camera);
+      return;
+    } else if (cam === 'orbit') az = u * Math.PI * 2 * (p.turns ?? 1);
+    else if (cam === 'dolly_in') dist = d0 * (1.35 - .65 * easeIO(u));
+    else if (cam === 'dolly_out') dist = d0 * (.70 + .65 * easeIO(u));
+    else if (cam === 'sway') az = Math.sin(u * Math.PI * 2) * .26;
+    else if (cam === 'arc_l') { az = -.7 + 1.4 * easeIO(1 - u); elv = .18 + .10 * u; }
+    else if (cam === 'arc_r') { az = -.7 + 1.4 * easeIO(u); elv = .18 + .10 * u; }
+    else if (cam === 'parallax') {
+      const fit = (sizeY / 2) / Math.tan((camera.fov * Math.PI / 180) / 2) * 1.02;
+      camera.position.set(
+        center.x + Math.sin(u * Math.PI * 2) * radius * .05,
+        center.y + Math.cos(u * Math.PI * 2) * radius * .025,
+        center.z + fit * (1.06 - .14 * easeIO(u)));
+      camera.lookAt(center);
+      R.renderer.render(R.scene, camera);
+      return;
+    }
+    camera.position.set(
+      center.x + dist * Math.sin(az) * Math.cos(elv),
+      center.y + dist * Math.sin(elv),
+      center.z + dist * Math.cos(az) * Math.cos(elv));
+    camera.lookAt(center);
+    R.renderer.render(R.scene, camera);
+  };
+};
+
+
+/* ---- shader_scene: GLSLシェーダ背景のシーン ----
+   例: {"template":"shader_scene","params":{"shader":"aurora","on":"vocal",
+        "title":"…","subjects":[…],"ornaments":[…]}} */
+TEMPLATES.shader_scene = (root, p, ctx) => {
+  const ups = [shaderBG(root, p.shader || 'plasma', { speed: p.speed, on: p.on })];
+  const amb = p.ambient === 'none' ? null : ambientOf(root, p.ambient || { kind: 'sparkles', n: 12 }, ctx.idx * 31 + 3);
+  (p.subjects || []).forEach((sp, i) => {
+    const m = img(root, sp.asset, { height: (sp.h ?? 860) + 'px', left: (sp.x ?? 640) + 'px', top: (sp.y ?? 220) + 'px', zIndex: 8 });
+    tag(m, ctx, `subjects[${i}]`, sp.asset);
+    integrate(m, { rim: sp.rim });
+    ups.push(motorize(m, { origin: '50% 100%',
+      enter: { kind: sp.enter || autoEnter(ctx.idx + i), at: .05 + i * .19, dur: .55 },
+      idles: sp.idles || [{ kind: 'breath' }, { kind: 'sway', amp: 1.2, rate: .9, ph: i }],
+      emph: { kind: 'punch_db', amp: .03 } }, ctx.t0));
+  });
+  if (p.title) {
+    const ttl = tag(txt(root, p.title, { left: 0, right: 0, top: p.titleY ?? '120px', textAlign: 'center',
+      fontFamily: 'Mochiy', fontSize: (p.titleSize ?? 84) + 'px', color: '#fff', zIndex: 10,
+      textShadow: '0 6px 30px rgba(0,0,0,.55)' }), ctx, 'title', p.title);
+    ups.push(motorize(ttl, { enter: { kind: 'fade_zoom', at: .1, dur: .5 },
+      idles: [{ kind: 'bob', amp: 5, rate: 1.2 }] }, ctx.t0));
+  }
+  (p.ornaments || []).forEach((o, i) => {
+    const e = o.kind === 'nameplate' ? nameplate(root, o.text, { left: o.x + 'px', top: o.y + 'px', zIndex: 10 })
+      : txt(root, o.text || '★', { left: o.x + 'px', top: o.y + 'px', zIndex: 9,
+          fontFamily: 'Mochiy', fontSize: (o.size ?? 46) + 'px', color: o.color || '#fff' });
+    tag(e, ctx, `ornaments[${i}]`, o.text || o.kind);
+    ups.push(motorize(e, { enter: { kind: o.enter || 'pop', at: .3 + i * .186, dur: .34 } }, ctx.t0));
+  });
+  return t => { ups.forEach(u => u(t)); if (amb) amb(t, 1); };
 };
 
 /* ---- lineup ---- */

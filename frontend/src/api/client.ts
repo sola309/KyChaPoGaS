@@ -31,6 +31,7 @@ export interface Project {
   id: number
   name: string
   description: string | null
+  folder?: string | null
   fps: number
   width: number
   height: number
@@ -50,13 +51,14 @@ export interface Asset {
   id: number
   project_id: number
   name: string
-  asset_type: 'video' | 'audio' | 'image' | 'generated'
+  asset_type: 'video' | 'audio' | 'image' | 'generated' | 'model3d'
   file_path: string
   duration_sec: number | null
   width: number | null
   height: number | null
   file_size_bytes: number | null
   proxy_path: string | null
+  gen_params_json?: string
   created_at: string
 }
 
@@ -73,6 +75,7 @@ export interface Track {
   name: string
   track_type: 'video' | 'audio' | 'reference'
   order: number
+  hidden?: boolean
 }
 
 export type TransitionType = '' | 'cross' | 'white' | 'black'
@@ -103,6 +106,8 @@ export interface Clip {
   kind: string
   /** JSON side-data for special kinds (mg_shot: {"shot_id": ...}) */
   attrs_json: string
+  /** コマ打ち(アニメ風ホールド): 0=off, 12=2コマ, 8=3コマ */
+  posterize_fps: number
 }
 
 export interface ClipUpdate {
@@ -119,19 +124,22 @@ export interface ClipUpdate {
   opacity?: number
   blend?: Clip['blend']
   transform_json?: string
+  posterize_fps?: number
 }
 
 // extras are optional on create (backend defaults)
 export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
   | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'
-  | 'kind' | 'attrs_json'>
+  | 'kind' | 'attrs_json' | 'posterize_fps'>
   & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
-  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json' | 'kind' | 'attrs_json'>>
+  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json' | 'kind' | 'attrs_json' | 'posterize_fps'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
     api.get<Track[]>('/tracks/', { params: { project_id: projectId } }).then(r => r.data),
   create: (data: Omit<Track, 'id'>) => api.post<Track>('/tracks/', data).then(r => r.data),
+  update: (id: number, data: { name?: string; order?: number; hidden?: boolean }) =>
+    api.patch<Track>(`/tracks/${id}`, null, { params: data }).then(r => r.data),
   delete: (id: number) => api.delete(`/tracks/${id}`),
 }
 
@@ -148,6 +156,14 @@ export const clipsApi = {
       '/clips/scatter-beat-effects', null, { params: { project_id: projectId, effect, every } }).then(r => r.data),
 }
 
+/** 実態ベースの種別: generatedも動画/画像に振り分ける(UI表示・フィルタ用) */
+export const assetKind = (a: Asset): 'video' | 'image' | 'audio' | 'model3d' => {
+  if (a.asset_type === 'audio') return 'audio'
+  if (a.asset_type === 'model3d' || /\.(glb|gltf)$/i.test(a.name)) return 'model3d'
+  if ((a.duration_sec ?? 0) > 0 || /\.(mp4|webm|mov)$/i.test(a.name)) return 'video'
+  return 'image'
+}
+
 export const assetsApi = {
   list:         (projectId?: number) =>
     api.get<Asset[]>('/assets/', { params: projectId ? { project_id: projectId } : {} }).then(r => r.data),
@@ -162,11 +178,15 @@ export const assetsApi = {
     }).then(r => r.data)
   },
   thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
-  filmstripUrl: (assetId: number) => `/api/assets/${assetId}/filmstrip`,
+  filmstripUrl: (assetId: number, count?: number) => `/api/assets/${assetId}/filmstrip${count ? `?count=${count}` : ''}`,
   fileUrl:      (assetId: number, useProxy = false) =>
     `/api/assets/${assetId}/file${useProxy ? '?proxy=1' : ''}`,
-  extractFrame: (assetId: number, timeSec: number) =>
-    api.post<Asset>(`/assets/${assetId}/extract-frame`, null, { params: { time_sec: timeSec } }).then(r => r.data),
+  extractFrame: (assetId: number, timeSec: number, longEdge?: number) =>
+    api.post<Asset>(`/assets/${assetId}/extract-frame`, null, { params: { time_sec: timeSec, ...(longEdge ? { long_edge: longEdge } : {}) } }).then(r => r.data),
+  framePreviewUrl: (assetId: number, timeSec: number, height = 360) =>
+    `/api/assets/${assetId}/frame-preview?time_sec=${timeSec.toFixed(3)}&height=${height}`,
+  extractAudio: (assetId: number) =>
+    api.post<Asset>(`/assets/${assetId}/extract-audio`).then(r => r.data),
   makeProxy:    (assetId: number) =>
     api.post<{ job_id: number; status: string }>(`/assets/${assetId}/proxy`).then(r => r.data),
 }
@@ -184,6 +204,7 @@ export interface Job {
   params: Record<string, unknown>
   result_asset_ids: number[]
   progress: number
+  phase?: string
   error_msg: string | null
   created_at: string
   started_at: string | null
@@ -191,9 +212,10 @@ export interface Job {
 }
 
 export interface I2VKeyframe  { time_sec: number; asset_id: number }
-export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number }
+export interface PlaceSpec       { track_id: number; start_frame: number; duration_frames?: number; replace_clip_id?: number }
+export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number; init_asset_id?: number; denoise?: number; ref_asset_ids?: number[]; use_lightning?: boolean; loras?: [string, number][]; place?: PlaceSpec }
 export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
-export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; place?: PlaceSpec }
 
 export const jobsApi = {
   list:        (projectId: number) =>
@@ -213,6 +235,51 @@ export const generationApi = {
   image:       (p: ImageGenParams)  => api.post<Job>('/generation/image', p).then(r => r.data),
   audio:       (p: AudioGenParams)  => api.post<Job>('/generation/audio', p).then(r => r.data),
   videoI2V:    (p: VideoI2VParams)  => api.post<Job>('/generation/video/i2v', p).then(r => r.data),
+  model3d:     (p: Model3DParams)   => api.post<Job>('/generation/model3d', p).then(r => r.data),
+  model3dOrbit:(p: { project_id: number; asset_id: number; orbit: OrbitSpec }) =>
+    api.post<Job>('/generation/model3d/orbit', p).then(r => r.data),
+  video3dcam:  (p: Video3DCamParams) => api.post<Job>('/generation/video/3dcam', p).then(r => r.data),
+  beatCamera:  (p: { project_id: number; audio_asset_id: number; start_sec: number;
+                     end_sec: number; style?: string; intensity?: number }) =>
+    api.post<{ camera: Array<Record<string, number | string>> }>('/generation/camera/beat', p).then(r => r.data),
+}
+
+export interface Video3DCamParams {
+  project_id: number
+  model_asset_id: number
+  ref_image_asset_id: number
+  prompt?: string
+  negative_prompt?: string
+  camera?: { preset: string; turns?: number } | Array<Record<string, number>>
+  length?: number
+  width?: number
+  height?: number
+  seed?: number
+  use_lightning?: boolean
+  steps?: number
+}
+
+export interface OrbitSpec {
+  preset: string       // orbit | dolly_in | dolly_out | sway | arc_l | arc_r | parallax
+  seconds: number
+  fps: number
+  width: number
+  height: number
+  style: string        // standard | toon | wire
+  turns?: number
+}
+
+export interface Model3DParams {
+  project_id: number
+  mode: 'object' | 'object_mv' | 'relief'
+  image_asset_id?: number
+  views?: Record<string, number>
+  seed?: number
+  steps?: number
+  octree_resolution?: number
+  resolution_level?: number
+  decimation?: number
+  orbit?: OrbitSpec
 }
 
 // ── Analysis ──────────────────────────────────────────────────────────────────

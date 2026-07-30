@@ -15,6 +15,7 @@ audio_config.instrumental = false. The `messages` text is then the style caption
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -29,6 +30,43 @@ class AceStepConnector:
     def __init__(self, base_url: str = ACESTEP_API_URL):
         self.base_url = base_url.rstrip("/")
 
+
+    async def cover(
+        self,
+        src_audio: bytes,
+        lyrics: str,
+        caption: str = "",
+        vocal_language: str = "ja",
+        seed: int = -1,
+        guidance_scale: float = 7.0,
+    ) -> bytes:
+        """Cover: 原盤の旋律・アレンジを保ったまま歌詞を差し替えて歌い直す。
+        「先に旋律、歌詞を当て書き」ワークフローの実行部(task_type=cover はLM作曲なし)。"""
+        import base64
+        b64 = base64.b64encode(src_audio).decode()
+        payload: dict = {
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": caption or "cover with new lyrics"},
+                {"type": "input_audio", "input_audio": {"data": b64, "format": "wav"}},
+            ]}],
+            "lyrics": lyrics,
+            "audio_config": {"vocal_language": vocal_language, "format": "wav"},
+            "task_type": "cover",
+            "guidance_scale": guidance_scale,
+            "use_cot_caption": False, "use_cot_language": False,
+            "sample_mode": False, "stream": False,
+        }
+        if seed is not None and seed >= 0:
+            payload["seed"] = seed
+        async with httpx.AsyncClient(timeout=ACESTEP_TIMEOUT_S) as c:
+            r = await c.post(f"{self.base_url}/v1/chat/completions", json=payload)
+            r.raise_for_status()
+            data = r.json()
+            audio = data["choices"][0]["message"]["audio"][0]["audio_url"]["url"]
+            if "," in audio:
+                audio = audio.split(",", 1)[1]
+            import base64 as _b64
+            return _b64.b64decode(audio)
 
     async def repaint(
         self,
@@ -136,6 +174,9 @@ class AceStepConnector:
         }
         if seed is not None and seed >= 0:
             payload["seed"] = seed
+        _m = os.getenv("ACESTEP_MODEL", "")
+        if _m:
+            payload["model"] = _m
 
         async with httpx.AsyncClient(timeout=ACESTEP_TIMEOUT_S) as c:
             r = await c.post(f"{self.base_url}/v1/chat/completions", json=payload)

@@ -1,5 +1,9 @@
-import type { Track, Clip, Asset } from '../../api/client'
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { assetsApi, type Track, type Clip, type Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useProjectStore } from '../../store/projectStore'
+import { VideoFramePicker } from './VideoFramePicker'
 import { useCollabStore } from '../../store/collabStore'
 import { ClipBlock } from './ClipBlock'
 import { RefClipBlock } from './RefClipBlock'
@@ -24,8 +28,23 @@ export function TrackLane({
   track, clips, assets, pixelsPerFrame, totalWidth,
   selectedClipId, onSelectClip, onDropAsset, snapFrame,
 }: Props) {
-  const { deleteTrack, setCurrentFrame } = useTimelineStore()
+  const { deleteTrack, setCurrentFrame, setTrackHidden, reorderTrack, addClip, currentFrame } = useTimelineStore()
   const others = useCollabStore(s => s.others)
+  const { activeProject } = useProjectStore()
+  const fps = activeProject?.fps ?? 30
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerBusy, setPickerBusy] = useState(false)
+
+  // ＋画像: 動画アセット→フレーム指定→再生ヘッド位置に画像として挿入
+  const handleVFrameInsert = async (videoAssetId: number, timeSec: number, longEdge?: number) => {
+    setPickerBusy(true)
+    try {
+      const frameAsset = await assetsApi.extractFrame(videoAssetId, timeSec, longEdge)
+      await addClip(track.id, frameAsset.id, currentFrame, Math.round(fps))
+      window.dispatchEvent(new Event('kychapogas:assets-changed'))
+      setPickerOpen(false)
+    } finally { setPickerBusy(false) }
+  }
 
   // Remote collaborators' selection / active-edit per clip id
   const remoteFor = (clipId: number) => {
@@ -57,19 +76,62 @@ export function TrackLane({
   }
 
   return (
-    <div className="flex flex-shrink-0" style={{ height }}>
-      {/* Label */}
+    <div className={`flex flex-shrink-0 ${track.hidden ? 'opacity-40' : ''}`} style={{ height }}>
+      {/* Label — ドラッグでトラック順を入れ替え */}
       <div
-        className={`w-28 flex-shrink-0 flex items-center justify-between px-2
+        draggable
+        onDragStart={e => {
+          e.dataTransfer.setData('trackReorderId', String(track.id))
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragOver={e => {
+          if (e.dataTransfer.types.includes('trackreorderid')) e.preventDefault()
+        }}
+        onDrop={e => {
+          const dragId = Number(e.dataTransfer.getData('trackReorderId'))
+          if (dragId) { e.preventDefault(); reorderTrack(dragId, track.id) }
+        }}
+        className={`w-28 flex-shrink-0 flex items-center gap-1 px-2 cursor-grab active:cursor-grabbing sticky left-0 z-30
           bg-zinc-900 border-r border-zinc-700 group
           ${isRef ? 'bg-amber-950/30' : ''}`}
+        title="ドラッグで順序変更"
       >
-        <span className={`text-[11px] truncate ${typeColor}`}>{track.name}</span>
+        <span className="text-zinc-700 text-[9px] leading-none select-none">⠿</span>
+        <span className={`text-[11px] truncate flex-1 ${typeColor}`}>{track.name}</span>
+        <button
+          onClick={() => setTrackHidden(track.id, !track.hidden)}
+          className={`text-xs leading-none ${track.hidden ? 'text-zinc-600' : 'text-zinc-400 hover:text-zinc-200'}`}
+          title={track.hidden ? '表示する(現在プレビュー/書き出しから除外中)' : '非表示にする'}
+        >{track.hidden ? '🚫' : '👁'}</button>
+        {isRef && (
+          <button
+            onClick={e => { e.stopPropagation(); setPickerOpen(v => !v) }}
+            className={`text-sm leading-none ${pickerOpen ? 'text-purple-300' : 'text-zinc-400 hover:text-purple-300'}`}
+            title="＋画像: 動画素材からフレームを指定して再生ヘッド位置に挿入"
+          >＋</button>
+        )}
         <button
           onClick={() => deleteTrack(track.id)}
           className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 text-xs"
           title="トラック削除"
         >✕</button>
+        {pickerOpen && createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-2 sm:p-6"
+               onClick={() => setPickerOpen(false)}>
+            <div className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-[min(760px,96vw)] max-h-[94vh] overflow-y-auto p-4 cursor-default"
+                 draggable={false}
+                 onClick={e => e.stopPropagation()}
+                 onDragStart={e => { e.preventDefault(); e.stopPropagation() }}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-zinc-200">🎥 動画からフレーム挿入 → <span className="text-amber-400">frame {currentFrame}</span>({track.name})</span>
+                <button onClick={() => setPickerOpen(false)}
+                        className="text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2 py-1">✕</button>
+              </div>
+              <VideoFramePicker assets={assets} fps={fps} busy={pickerBusy} onInsert={handleVFrameInsert} large />
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
 
       {/* Clip area */}
@@ -130,6 +192,27 @@ export function TrackLane({
                     width={Math.max(clipWidth - 12, 2)}
                     height={clipInner}
                     color="#4ade80"
+                  />
+                </div>
+              )}
+
+              {/* Videoクリップの音声波形(下段・音がある素材のみ描画される) */}
+              {!isAudio && clip.asset_id != null && (asset?.duration_sec ?? 0) > 0 && (
+                <div
+                  className="absolute pointer-events-none z-10 opacity-70"
+                  style={{
+                    left:   clip.start_frame * pixelsPerFrame + 6,
+                    width:  Math.max(clipWidth - 12, 2),
+                    top:    4 + clipInner * 0.62,
+                    height: clipInner * 0.38,
+                  }}
+                >
+                  <WaveformCanvas
+                    assetId={clip.asset_id}
+                    width={Math.max(clipWidth - 12, 2)}
+                    height={clipInner * 0.38}
+                    color="#7dd3fc"
+                    useProxy={!!asset?.proxy_path}
                   />
                 </div>
               )}

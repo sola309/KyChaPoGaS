@@ -3,18 +3,22 @@ import type { Asset } from '../../../api/client'
 import { ImageGenPanel } from './ImageGenPanel'
 import { VideoGenPanel } from './VideoGenPanel'
 import { MotionGfxPanel } from './MotionGfxPanel'
+import { Model3DGenPanel } from './Model3DGenPanel'
+import { ShotPanel } from './ShotPanel'
 
 // Music moved to its own top-level 🎵 tab (MusicPanel) for lyric/melody crafting.
-type GenTab = 'image' | 'video' | 'mg'
+type GenTab = 'shot' | 'image' | 'video' | 'mg' | 'model3d'
 
 const TABS: { id: GenTab; label: string }[] = [
+  { id: 'shot',  label: '🎞 ショット' },
   { id: 'image', label: '🖼 画像' },
   { id: 'video', label: '🎬 動画' },
   { id: 'mg',    label: '⚡ MG' },
+  { id: 'model3d', label: '🧊 3D' },
 ]
 
 export function GenerationPanel({ assets }: { assets: Asset[] }) {
-  const [tab, setTab] = useState<GenTab>('image')
+  const [tab, setTab] = useState<GenTab>('shot')
 
   return (
     <div className="flex flex-col h-full">
@@ -37,9 +41,11 @@ export function GenerationPanel({ assets }: { assets: Asset[] }) {
 
       {/* Panel content */}
       <div className="flex-1 overflow-y-auto">
+        {tab === 'shot'  && <ShotPanel assets={assets} />}
         {tab === 'image' && <ImageGenPanel />}
         {tab === 'video' && <VideoGenPanel assets={assets} />}
         {tab === 'mg'    && <MotionGfxPanel />}
+        {tab === 'model3d' && <Model3DGenPanel assets={assets} />}
       </div>
     </div>
   )

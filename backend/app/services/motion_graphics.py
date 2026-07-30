@@ -87,7 +87,10 @@ async def render_html_to_video(
     # split the range across N headless pages (each its own renderer process) → uses
     # all cores. Frames are written as PNG files (frame_%06d.png) then encoded once.
     # (The old single-page → stdin pipe was strictly serial and the render bottleneck.)
-    workers = max(1, min(8, (os.cpu_count() or 4) - 1))
+    # MG_RENDER_WORKERS: 重いページ(scene3dのGLB同梱等)でワーカーブラウザが
+    # メモリ落ちする場合に絞る
+    workers = max(1, min(int(os.getenv("MG_RENDER_WORKERS", "8")),
+                         (os.cpu_count() or 4) - 1))
     if n_frames < 2 * workers:
         workers = 1
     frame_dir = Path(tempfile.mkdtemp(prefix="mg_frames_"))
@@ -113,6 +116,8 @@ async def render_html_to_video(
             await page.evaluate(
                 "Promise.all([...document.images].map(im => im.complete ? 0 : "
                 "new Promise(r => { im.onload = im.onerror = r; })))")
+            # scene3d(three.js)などの非同期アセット(GLBパース等)の完了待ち
+            await page.evaluate("window.__madAssetsReady || 0")
             import base64 as _b64
             for i in idxs:
                 await page.evaluate(_SEEK_JS, (i / fps) * 1000.0)

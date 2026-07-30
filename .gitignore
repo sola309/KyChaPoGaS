@@ -72,3 +72,13 @@ training-data/*
 !training-data/README.md
 tools/musubi-tuner/
 tools/lora-trainer/
+
+# ── 外部クローン/重量物(2026-07-30追加) ──────────────────────────────
+# SageAttention/SpargeAttn/cutlass: sm_121向けソースビルド用の外部リポジトリ
+tools/SageAttention/
+tools/SpargeAttn/
+tools/cutlass/
+# LightX2V: 外部推論フレームワーク(モデル・venv込みで重い)
+tools/lightx2v/
+# svc-kit: 歌声変換素材(音声データ大容量・権利配慮につき非公開)
+tools/svc-kit/

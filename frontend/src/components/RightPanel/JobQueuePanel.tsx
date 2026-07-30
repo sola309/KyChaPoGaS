@@ -40,12 +40,19 @@ function JobCard({ job }: { job: Job }) {
 
       {/* Progress bar (running only) */}
       {job.status === 'running' && (
-        <div className="w-full bg-zinc-800 rounded h-1 mb-1 overflow-hidden">
-          <div
-            className="h-full bg-blue-500 transition-all duration-500"
-            style={{ width: `${Math.round(job.progress * 100)}%` }}
-          />
-        </div>
+        <>
+          <div className="w-full bg-zinc-800 rounded h-1 mb-1 overflow-hidden">
+            <div
+              className="h-full bg-blue-500 transition-all duration-500"
+              style={{ width: `${Math.round(job.progress * 100)}%` }}
+            />
+          </div>
+          {job.phase && (
+            <p className={`text-[9px] mb-0.5 ${
+              job.phase.includes('読み込み') ? 'text-amber-400' : 'text-zinc-500'
+            }`}>{job.phase.includes('読み込み') ? '⏳ ' : ''}{job.phase}</p>
+          )}
+        </>
       )}
 
       {/* Error message */}

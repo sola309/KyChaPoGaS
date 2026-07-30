@@ -30,6 +30,23 @@ def get_project(project_id: int, session: Session = Depends(get_session)):
     return project
 
 
+@router.patch("/{project_id}", response_model=ProjectRead)
+def update_project(project_id: int, data: dict, session: Session = Depends(get_session)):
+    """name/description/folder等の部分更新。folder=nullでフォルダから出す。"""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    allowed = {"name", "description", "folder", "fps", "width", "height"}
+    for k, v in data.items():
+        if k in allowed:
+            setattr(project, k, v)
+    project.updated_at = datetime.utcnow()
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    return project
+
+
 @router.delete("/{project_id}", status_code=204)
 def delete_project(project_id: int, session: Session = Depends(get_session)):
     project = session.get(Project, project_id)

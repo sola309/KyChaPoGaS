@@ -9,8 +9,11 @@ import { TimeRuler } from './TimeRuler'
 import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
-import { SpeedCurveEditor } from './SpeedCurveEditor'
+import { createPortal } from 'react-dom'
+import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoints } from './SpeedCurveEditor'
 import { ClipInspector } from './ClipInspector'
+import { RegenPanel } from './RegenPanel'
+import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
@@ -26,8 +29,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const {
     tracks, clips, currentFrame, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
-    loadTimeline, addTrack, addClip, splitClip,
-    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, updateClip, liveUpdateClip,
+    loadTimeline, addTrack, addClip, placeClip, splitClip,
+    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, applySpeedEnvelope, updateClip, liveUpdateClip,
     selectedClipId, setSelectedClipId, syncFromServer,
   } = useTimelineStore()
 
@@ -52,6 +55,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [beatMatch, setBeatMatch] = useState<BeatMatchResult | null>(null)
   const [scoring, setScoring] = useState(false)
   const [showCurveEditor, setShowCurveEditor] = useState(false)
+  const [curveSrcFrames, setCurveSrcFrames] = useState(0)   // ∿編集中のソース量(開いた時点で固定)
   const [showInspector, setShowInspector] = useState(false)
 
   const { beats } = useAnalysisStore()
@@ -163,24 +167,30 @@ export function Timeline({ projectId, fps, assets }: Props) {
   }, [selectedClipId, currentFrame, splitClip, deleteClip, undo, redo, setCurrentFrame])
 
   // ── Wheel zoom ────────────────────────────────────────────────────────
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
+  // Reactのwheelはパッシブ登録になりpreventDefaultが効かない(=Ctrl+ホイールで
+  // ブラウザのページ拡大が発動してしまう)ため、ネイティブの非パッシブリスナーで
+  // 捕まえる。Ctrl/⌘+ホイール=ズーム(カーソル位置固定)、通常ホイールは素のスクロール。
+  useEffect(() => {
+    const sc = scrollRef.current
+    if (!sc) return
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
       e.preventDefault()
+      const st = useTimelineStore.getState()
+      const ppf = st.pixelsPerFrame
       const delta = e.deltaY > 0 ? 0.85 : 1.18
-      const next = pixelsPerFrame * delta
-      // ズーム時はカーソル位置のフレームを画面上で固定(視点が飛ばない)
-      const sc = scrollRef.current
-      if (sc) {
-        const rect = sc.getBoundingClientRect()
-        const mouseX = e.clientX - rect.left
-        const frameAt = (sc.scrollLeft + mouseX - LABEL_WIDTH) / pixelsPerFrame
-        requestAnimationFrame(() => {
-          sc.scrollLeft = Math.max(0, frameAt * next - mouseX + LABEL_WIDTH)
-        })
-      }
-      setZoom(next)
+      const next = ppf * delta
+      const rect = sc.getBoundingClientRect()
+      const mouseX = e.clientX - rect.left
+      const frameAt = (sc.scrollLeft + mouseX - LABEL_WIDTH) / ppf
+      requestAnimationFrame(() => {
+        sc.scrollLeft = Math.max(0, frameAt * next - mouseX + LABEL_WIDTH)
+      })
+      st.setZoom(next)
     }
-  }, [pixelsPerFrame, setZoom])
+    sc.addEventListener('wheel', onWheel, { passive: false })
+    return () => sc.removeEventListener('wheel', onWheel)
+  }, [])
 
   // ── Pinch zoom (タッチ2本指) ───────────────────────────────────────────
   const pinchRef = useRef<{ d: number; ppf: number; frameAt: number } | null>(null)
@@ -281,7 +291,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
       onKeyDown={handleKeyDown}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-2 max-sm:[&>button]:flex-shrink-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 max-sm:[&>span]:flex-shrink-0 max-sm:[&>div]:flex-shrink-0">
         <button
           onClick={() => addTrack(projectId, 'video', `Video ${tracks.filter(t => t.track_type === 'video').length + 1}`)}
           className="text-[11px] px-2 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-200"
@@ -526,33 +536,111 @@ export function Timeline({ projectId, fps, assets }: Props) {
                     <option value={String(selectedClip.speed)}>{selectedClip.speed.toFixed(2)}x</option>
                   )}
                 </select>
-                <span className="relative">
+                <span>
                   <button
-                    onClick={() => setShowCurveEditor(v => !v)}
+                    onClick={() => {
+                      if (!showCurveEditor && selectedClip)
+                        setCurveSrcFrames(Math.max(1, Math.round(selectedClip.duration_frames * selectedClip.speed)))
+                      setShowCurveEditor(v => !v)
+                    }}
                     className={`text-[11px] px-2 py-0.5 rounded border ${
                       showCurveEditor || selectedClip.speed_ease !== 'linear'
                         ? 'bg-purple-900/60 text-purple-200 border-purple-700'
                         : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'
                     }`}
-                    title="加減速カーブ（ベジェ）をグラフで編集"
+                    title="速度と加減速カーブをまとめて編集"
                   >
                     ∿ {selectedClip.speed_ease === 'linear' ? '一定'
                       : selectedClip.speed_ease === 'in' ? '加速'
                       : selectedClip.speed_ease === 'out' ? '減速'
                       : selectedClip.speed_ease === 'inout' ? '緩急' : 'カスタム'}
                   </button>
-                  {showCurveEditor && (
-                    <SpeedCurveEditor
-                      ease={selectedClip.speed_ease}
-                      onChange={ease => setClipSpeed(selectedClip.id, selectedClip.speed, ease)}
-                      onClose={() => setShowCurveEditor(false)}
-                    />
+                  {showCurveEditor && createPortal(
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3"
+                         onClick={() => setShowCurveEditor(false)}>
+                      <div onClick={e => e.stopPropagation()}
+                           className="w-[min(440px,94vw)] rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-zinc-200">∿ 速度とカーブ</span>
+                          <button onClick={() => setShowCurveEditor(false)}
+                                  className="text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2">✕</button>
+                        </div>
+                        {/* 速度カーブ(スピードランプ): 横=クリップ位置 / 縦=速度。
+                            カーブの平均速度で出力コマ数が決まる */}
+                        <SpeedCurveEditor
+                          initial={pointsFromEase(selectedClip.speed_ease, selectedClip.speed)}
+                          sourceFrames={curveSrcFrames}
+                          fps={fps}
+                          onApply={pts2 => {
+                            const { rel, mean } = samplesFromPoints(pts2)
+                            const flat = rel.every(r => Math.abs(r - 1) < 0.02)
+                            applySpeedEnvelope(selectedClip.id, easeStringFromPoints(pts2), mean, flat, curveSrcFrames)
+                          }}
+                          onLive={pts2 => {
+                            // ドラッグ中: APIを叩かず純ローカルで尺を追従(確定はonApply)
+                            const { mean } = samplesFromPoints(pts2)
+                            const newDur = Math.max(1, Math.round(curveSrcFrames / mean))
+                            useTimelineStore.setState(st => ({
+                              clips: st.clips.map(c => c.id === selectedClip.id ? { ...c, duration_frames: newDur } : c),
+                            }))
+                          }}
+                        />
+                        <p className="text-[9px] text-zinc-600">
+                          点をドラッグ: 上=速く(尺が縮む)/下=遅く(尺が伸びる)。曲線上をタップで点を追加、点を選んで✕で削除。両端は固定点(縦のみ)。
+                        </p>
+                        {/* コマ打ち: 高速化のヌルヌル感をアニメ的なホールドに変換 */}
+                        <div className="flex items-center gap-1.5 flex-wrap border-t border-zinc-800 pt-2">
+                          <span className="text-[10px] text-zinc-500">🎞 コマ打ち</span>
+                          {([[0, 'なし'], [12, '2コマ'], [8, '3コマ'], [6, '4コマ']] as const).map(([v, label]) => (
+                            <button key={v}
+                                    onClick={async () => {
+                                      const updated = await clipsApi.update(selectedClip.id, { posterize_fps: v })
+                                      useTimelineStore.setState(st => ({
+                                        clips: st.clips.map(c => c.id === selectedClip.id ? updated : c),
+                                      }))
+                                    }}
+                                    className={`text-[10px] px-2 py-1 rounded ${
+                                      Math.abs((selectedClip.posterize_fps ?? 0) - v) < 0.05
+                                        ? 'bg-amber-800 text-amber-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                                    }`}>{label}</button>
+                          ))}
+                          {(selectedClip.posterize_fps ?? 0) > 0 && (
+                            <span className="text-[10px] text-amber-300 ml-auto">{(selectedClip.posterize_fps ?? 0).toFixed(1)}fps</span>
+                          )}
+                          {/* 小数指定スライダー(2〜24fps, 0.1刻み): ドラッグ中はローカル反映、離して確定 */}
+                          <input type="range" min={2} max={24} step={0.1}
+                                 value={Math.max(2, selectedClip.posterize_fps || 12)}
+                                 onChange={e => {
+                                   const v = Number(e.target.value)
+                                   useTimelineStore.setState(st => ({
+                                     clips: st.clips.map(c => c.id === selectedClip.id ? { ...c, posterize_fps: v } : c),
+                                   }))
+                                 }}
+                                 onPointerUp={async e => {
+                                   const v = Number((e.target as HTMLInputElement).value)
+                                   const updated = await clipsApi.update(selectedClip.id, { posterize_fps: v })
+                                   useTimelineStore.setState(st => ({
+                                     clips: st.clips.map(c => c.id === selectedClip.id ? updated : c),
+                                   }))
+                                 }}
+                                 className="w-full" />
+                          <span className="text-[9px] text-zinc-600 w-full">プレビュー再生にも反映されます。速度カーブと併用可(出力タイムベースでホールド)</span>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
                   )}
                 </span>
               </>
             )}
           </>
         )}
+
+        {selectedClip && selAsset && selAsset.gen_params_json && (
+          <RegenPanel clip={selectedClip} asset={selAsset} projectId={projectId} fps={fps} />
+        )}
+
+        <I2VSelPopover projectId={projectId} fps={fps} assets={assets} />
 
         <div className="ml-auto flex items-center gap-2">
           {/* Zoom (touch-friendly — no Ctrl+wheel needed) */}
@@ -594,14 +682,14 @@ export function Timeline({ projectId, fps, assets }: Props) {
       </div>
 
       {/* Scrollable area */}
-      <div className="flex-1 overflow-auto" ref={scrollRef} onWheel={handleWheel}
+      <div className="flex-1 overflow-auto" ref={scrollRef}
         onPointerDown={handlePinchDown} onPointerMove={handlePinchMove}
         onPointerUp={handlePinchUp} onPointerCancel={handlePinchUp}
         style={{ touchAction: 'pan-x pan-y' }}>
         <div className="flex flex-col min-h-full relative">
           {/* Ruler row */}
           <div className="flex flex-shrink-0 sticky top-0 z-10 bg-zinc-900">
-            <div className="w-28 flex-shrink-0 border-r border-b border-zinc-700 bg-zinc-900" />
+            <div className="w-28 flex-shrink-0 border-r border-b border-zinc-700 bg-zinc-900 sticky left-0 z-30" />
             <TimeRuler
               pixelsPerFrame={pixelsPerFrame}
               fps={fps}
@@ -614,7 +702,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
           {/* Beat ruler (shown only when beat analysis is available) */}
           {beatInfo && (
             <div className="flex flex-shrink-0">
-              <div className="w-28 flex-shrink-0 border-r border-b border-zinc-800 bg-zinc-950 flex items-center px-2">
+              <div className="w-28 flex-shrink-0 border-r border-b border-zinc-800 bg-zinc-950 flex items-center px-2 sticky left-0 z-30">
                 <span className="text-[9px] text-zinc-600">beat</span>
               </div>
               <BeatRuler
@@ -631,7 +719,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
           {/* Rhythm lane: 合成モーション×ビート（音ハメの見える化） */}
           {beatInfo && (
             <div className="flex flex-shrink-0 border-b border-zinc-800">
-              <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex items-center px-2">
+              <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex items-center px-2 sticky left-0 z-30">
                 <span className="text-[9px] text-zinc-600">rhythm</span>
               </div>
               <RhythmLane
@@ -649,7 +737,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
           )}
 
           {/* Track lanes */}
-          {tracks.map(track => (
+          {[...tracks].sort((a, b) => a.order - b.order).map(track => (
             <TrackLane
               key={track.id}
               track={track}
@@ -665,8 +753,22 @@ export function Timeline({ projectId, fps, assets }: Props) {
           ))}
 
           {tracks.length === 0 && (
-            <div className="flex-1 flex items-center justify-center text-zinc-700 text-sm py-8">
-              「+ Video」または「+ Audio」でトラックを追加
+            <div
+              className="flex-1 flex items-center justify-center text-zinc-700 text-sm py-8"
+              onDragOver={e => e.preventDefault()}
+              onDrop={async e => {
+                e.preventDefault()
+                const assetId = Number(e.dataTransfer.getData('assetId'))
+                if (!assetId) return
+                const asset = assets.find(a => a.id === assetId)
+                if (!asset) return
+                const durationFrames = asset.duration_sec
+                  ? Math.round(asset.duration_sec * fps) : fps * 5
+                const type = asset.asset_type === 'audio' ? 'audio' : 'video'
+                await placeClip(projectId, type, assetId, durationFrames, 0)
+              }}
+            >
+              ここにアセットをドロップ（トラック自動作成） / または「+ Video」「+ Audio」
             </div>
           )}
 

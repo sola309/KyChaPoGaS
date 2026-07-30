@@ -95,7 +95,7 @@ start() {
   if ! $CORE_ONLY; then
     if [ -d "$ROOT/tools/comfyui/.venv" ]; then
       spawn comfyui 8188 "$ROOT/tools/comfyui" \
-        "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188
+        "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention
     fi
     if [ -d "$ROOT/tools/ace-step" ] && command -v uv >/dev/null 2>&1; then
       spawn acestep 7867 "$ROOT/tools/ace-step" \
@@ -160,7 +160,7 @@ status() {
 start_one() {
   case "$1" in
     comfyui) spawn comfyui 8188 "$ROOT/tools/comfyui" \
-               "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 ;;
+               "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention ;;
     acestep) spawn acestep 7867 "$ROOT/tools/ace-step" \
                env OPENROUTER_PORT=7867 "$(command -v uv)" run acestep-openrouter --host 0.0.0.0 --port 7867 ;;
     tts)     spawn tts 8088 "$ROOT/tools/irodori-tts" \
@@ -184,9 +184,9 @@ stop_one() {
 }
 
 case "${1:-start}" in
-  start)   if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then start_one "$2"; else start; fi ;;
-  stop)    if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; else stop; fi ;;
-  restart) if [ -n "$2" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; sleep 1; start_one "$2"; else stop; sleep 1; start; fi ;;
+  start)   if [ -n "${2:-}" ] && [ "${2#--}" = "$2" ]; then start_one "$2"; else start; fi ;;
+  stop)    if [ -n "${2:-}" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; else stop; fi ;;
+  restart) if [ -n "${2:-}" ] && [ "${2#--}" = "$2" ]; then stop_one "$2"; sleep 1; start_one "$2"; else stop; sleep 1; start; fi ;;
   status)  status ;;
   logs)    tail -n 80 -f "$RUN/${2:-backend}.log" ;;
   *)       echo "usage: $0 {start|stop|restart|status|logs <name>} [engine|--core]" ;;

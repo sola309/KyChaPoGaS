@@ -90,9 +90,9 @@ export function ProjectView() {
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Project header */}
-        <div className="px-4 py-2 border-b border-zinc-800 flex items-center gap-4 flex-shrink-0 bg-zinc-900">
+        <div className="px-4 max-sm:px-2 py-2 max-sm:py-1.5 border-b border-zinc-800 flex items-center gap-4 max-sm:gap-2 flex-shrink-0 bg-zinc-900">
           <h1 className="text-sm font-bold text-white">{activeProject.name}</h1>
-          <div className="flex gap-3 text-xs text-zinc-500">
+          <div className="flex gap-3 text-xs text-zinc-500 max-sm:hidden">
             <span>{activeProject.fps} fps</span>
             <span>{activeProject.width} × {activeProject.height}</span>
           </div>
@@ -105,7 +105,7 @@ export function ProjectView() {
                 window.open(r.data.download, '_blank')
               }}
             >📦 書き出し</button>
-            <SaveIndicator />
+            <span className="max-sm:hidden"><SaveIndicator /></span>
             <CollabBar />
           </div>
         </div>

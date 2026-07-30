@@ -20,6 +20,18 @@ export function TimeRuler({ pixelsPerFrame, fps, totalWidth, currentFrame, onSee
     return Array.from({ length: count }, (_, i) => i * interval)
   }, [pixelsPerSecond, totalWidth])
 
+  // ズーム時のフレーム目盛り: 1フレーム≥6pxで全フレーム、≥2.5pxで5フレームごと
+  const frameTicks = useMemo(() => {
+    const step = pixelsPerFrame >= 6 ? 1 : pixelsPerFrame >= 2.5 ? 5 : 0
+    if (!step) return { step: 0, frames: [] as number[] }
+    const total = Math.ceil(totalWidth / pixelsPerFrame)
+    const frames: number[] = []
+    for (let f = 0; f <= total; f += step) {
+      if (f % fps !== 0) frames.push(f)   // 秒目盛りと重なる位置は除外
+    }
+    return { step, frames }
+  }, [pixelsPerFrame, totalWidth, fps])
+
   // press-and-drag scrubbing (pointer events → mouse and touch both work)
   const scrub = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -47,6 +59,22 @@ export function TimeRuler({ pixelsPerFrame, fps, totalWidth, currentFrame, onSee
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
     >
+      {/* フレーム単位の小目盛り(ズーム時のみ) */}
+      {frameTicks.frames.map(f => (
+        <div
+          key={`f${f}`}
+          className={`absolute top-0 w-px ${f % 5 === 0 ? 'h-2 bg-zinc-700' : 'h-1 bg-zinc-800'}`}
+          style={{ left: f * pixelsPerFrame }}
+        />
+      ))}
+      {/* フレーム番号(十分ズームした時のみ、5フレームごと) */}
+      {pixelsPerFrame >= 14 && frameTicks.frames.filter(f => f % 5 === 0).map(f => (
+        <span
+          key={`fl${f}`}
+          className="absolute top-2.5 text-[8px] text-zinc-600 leading-none pointer-events-none"
+          style={{ left: f * pixelsPerFrame + 1 }}
+        >{f}</span>
+      ))}
       {marks.map(sec => (
         <div
           key={sec}
