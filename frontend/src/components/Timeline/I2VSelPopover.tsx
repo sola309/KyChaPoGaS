@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../../api/client'
 import { assetsApi, assetKind } from '../../api/client'
+import { RefImagePicker } from '../RefImagePicker'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
 
@@ -40,7 +41,7 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   // Ref2V詳細オプション
   const [refAudioId, setRefAudioId] = useState<number | ''>('')     // 参照音声(歌唱リップシンク)
   const [refAudioSeg, setRefAudioSeg] = useState(true)              // 範囲セグメントを切り出して使用
-  const [extraImgId, setExtraImgId] = useState<number | ''>('')     // 追加参照画像(キャラ設定画等)
+  const [refImgIds, setRefImgIds] = useState<number[]>([])          // 参照画像(≤9, サムネ選択)
   const [refImgSize, setRefImgSize] = useState<'match' | 'max'>('match')
   const [refScheduler, setRefScheduler] = useState<'beta' | 'normal' | 'simple'>('beta')
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
@@ -86,7 +87,7 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   const model = engine === 'h3ref' ? 'minimax-h3-ref' : engine === 'h3' ? 'minimax-h3'
     : kfs.length >= 3 ? 'wan2.2-vace' : 'wan2.2-flf2v'
   const modeLabel = engine === 'h3ref'
-    ? `H3 Ref2V(範囲下のVideoを参照・KF${Math.min(9, kfs.length)}枚を参照画像に)`
+    ? `H3 Ref2V(範囲下のVideoを参照・参照画像${refImgIds.length}枚)`
     : engine === 'h3'
     ? `H3 音声付き(開始→終了${kfs.length > 2 ? `・中間${kfs.length - 2}枚は無視` : ''})`
     : kfs.length >= 3 ? `VACE(中間${kfs.length - 2}枚を位置固定)` : 'FLF2V(開始→終了)'
@@ -119,8 +120,9 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
       const sz = presets[sizeIdx] ?? presets[0]
       // タイムライン上の相対位置を保ったまま、出力長へスケール
       const scale = spanSec > 0 ? durSec / spanSec : 1
-      const useKfs = engine === 'h3ref' ? kfs.slice(0, 8)   // Ref2V: 参照画像≤9(追加画像の枠を1つ確保)
-        : engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
+      // Ref2V: ピンは範囲/参照動画の指定にのみ使い、参照画像は視覚選択したもの(≤9)を使う
+      // (ピンは参照動画由来のフレームなので<Picture>に流用しない)
+      const useKfs = engine === 'h3ref' ? [] : engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
 
       // h3ref: 範囲下のVideoを切り出して参照動画に(カット範囲=最初→最後の打点+1フレーム)
       let refVideoIds: number[] | undefined
@@ -157,7 +159,7 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
       }
 
       const kfSpecs = useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! }))
-      if (engine === 'h3ref' && extraImgId !== '') kfSpecs.push({ time_sec: 0, asset_id: extraImgId })
+      if (engine === 'h3ref') kfSpecs.push(...refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id })))
       const job = await generateVideoI2V({
         project_id: projectId,
         keyframes: kfSpecs,
@@ -232,10 +234,12 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
           {engine === 'h3ref' && (
             <>
               <p className="text-[9px] text-zinc-500">
-                範囲(最初→最後の打点)の下のVideoを&lt;Video 1&gt;、選択KF(≤8枚)+追加画像を&lt;Picture&gt;として参照します。
-                プロンプトで「Recreate the camera work of &lt;Video 1&gt;…」のように指名すると効きます。
+                範囲(最初→最後の打点)の下のVideoを&lt;Video 1&gt;、下で選んだ参照画像(≤9枚)を&lt;Picture 1..&gt;として参照します。
+                ピンは範囲指定のみに使用(参照動画由来のフレームのため)。
+                「Recreate the camera work of &lt;Video 1&gt;, the girl is &lt;Picture 1&gt;…」のように指名すると効きます。
                 {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
               </p>
+              <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds} />
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
                 <span>🎤参照音声</span>
                 <select value={refAudioId} onChange={e => setRefAudioId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -260,13 +264,6 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
                 </p>
               )}
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
-                <span>➕参照画像</span>
-                <select value={extraImgId} onChange={e => setExtraImgId(e.target.value === '' ? '' : Number(e.target.value))}
-                        className={inputCls + ' flex-1 min-w-32'}>
-                  <option value="">なし(選択KFのみ)</option>
-                  {assets.filter(a => a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null))
-                    .map(a => <option key={a.id} value={a.id}>#{a.id} {a.name}</option>)}
-                </select>
                 <select value={refImgSize} onChange={e => setRefImgSize(e.target.value as 'match' | 'max')} className={inputCls}
                         title="match=速度優先 / max=同一性優先(2048短辺)">
                   <option value="match">match</option>
@@ -302,7 +299,8 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
               {(useH3 ? H3_PRESETS : VID_PRESETS).map((s, i) => <option key={i} value={i}>{s.label}</option>)}
             </select>
             <button onClick={handleGen}
-                    disabled={engine === 'h3ref' && (!refSourceClip || !prompt.trim())}
+                    disabled={engine === 'h3ref' && (!refSourceClip || !prompt.trim() || refImgIds.length === 0)}
+                    title={engine === 'h3ref' && refImgIds.length === 0 ? '参照画像を1枚以上選択してください' : undefined}
                     className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40">▶ 生成</button>
           </div>
           <button onClick={() => { clearRefSel(); setOpen(false) }}

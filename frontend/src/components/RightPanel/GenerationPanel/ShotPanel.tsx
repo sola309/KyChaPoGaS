@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { assetsApi, assetKind, type Asset } from '../../../api/client'
 import { VideoFramePicker } from '../../Timeline/VideoFramePicker'
+import { RefImagePicker } from '../../RefImagePicker'
 import { useJobStore } from '../../../store/jobStore'
 import { useProjectStore } from '../../../store/projectStore'
 import { useTimelineStore } from '../../../store/timelineStore'
@@ -56,6 +57,7 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
   const [engine, setEngine] = useState<'wan' | 'h3' | 'h3ref'>('wan')   // 範囲i2vのエンジン
   const [h3Steps, setH3Steps] = useState(15)   // 15+EasyCacheが現行スイートスポット
   const [h3EasyCache, setH3EasyCache] = useState(true)
+  const [refImgIds, setRefImgIds] = useState<number[]>([])   // Ref2V参照画像(≤9, サムネ選択)
   const h3Snap = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362(5.2-15.1秒)   // 既定=横16:9
   const watchedJobs = useRef<Set<number>>(new Set())
 
@@ -193,8 +195,8 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
   const modeLabel =
     engine === 'h3ref' ? (
       !refSourceClip ? '— 範囲の下にVideo素材がありません' :
-      rangeKfs.length === 0 ? '— 参照画像としてImageピンが範囲内に必要' :
-      `H3 Ref2V(Videoを参考に生成・${h3DurSec.toFixed(2)}秒)`
+      refImgIds.length === 0 ? '— 参照画像を1枚以上選択してください' :
+      `H3 Ref2V(Videoを参考に生成・参照画像${refImgIds.length}枚・${h3DurSec.toFixed(2)}秒)`
     ) :
     rangeKfs.length === 0 ? '— 範囲内にImageキーフレームなし' :
     engine === 'h3' ? `H3 音声付き(最初${rangeKfs.length >= 2 ? '+最後' : ''}フレーム・${h3DurSec.toFixed(2)}秒${(outFrame - inFrame) / fps < 5 ? '・最短5.2秒に延長' : ''})` :
@@ -203,8 +205,9 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
     `VACE(${rangeKfs.length}キーフレームを位置固定)`
 
   const handleGenVideo = async () => {
-    if (!activeProject || rangeKfs.length === 0 || outFrame <= inFrame) return
-    if (engine === 'h3ref' && !refSourceClip) return
+    if (!activeProject || outFrame <= inFrame) return
+    if (engine === 'h3ref' && (!refSourceClip || refImgIds.length === 0)) return
+    if (engine !== 'h3ref' && rangeKfs.length === 0) return
     setBusy(true); setMsg('')
     try {
       const shots = await ensureTrack('Shots', 'video')
@@ -228,9 +231,13 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
       }
 
+      // Ref2V: 参照画像=視覚選択したもの(ピンは参照動画由来のため使わない)
+      const kfSpecs = engine === 'h3ref'
+        ? refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id }))
+        : kfs.map(c => ({ time_sec: (c.start_frame - inFrame) / fps, asset_id: c.asset_id! }))
       const job = await generateVideoI2V({
         project_id: activeProject.id,
-        keyframes: kfs.map(c => ({ time_sec: (c.start_frame - inFrame) / fps, asset_id: c.asset_id! })),
+        keyframes: kfSpecs,
         duration_sec: durSec,
         model: vidModel,
         prompt: vidPrompt.trim(),
@@ -378,12 +385,15 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
           <p className="text-[9px] text-amber-500">⚠ H3は最初/最後フレームのみ対応 — 中間{rangeKfs.length - 2}枚は無視されます(中間固定はWanのVACEを使用)</p>
         )}
         {engine === 'h3ref' && (
-          <p className="text-[9px] text-zinc-500">
-            範囲の下のVideo素材を切り出して<span className="text-zinc-300">&lt;Video 1&gt;</span>として参照、
-            範囲内のImageピン(最大2枚)を<span className="text-zinc-300">&lt;Picture 1,2&gt;</span>として参照します。
-            プロンプトで「&lt;Video 1&gt;と同じカメラワーク/構図で…」のように指名すると効きます。
-            {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
-          </p>
+          <>
+            <p className="text-[9px] text-zinc-500">
+              範囲の下のVideo素材を切り出して<span className="text-zinc-300">&lt;Video 1&gt;</span>として参照、
+              下で選んだ参照画像(≤9枚)を<span className="text-zinc-300">&lt;Picture 1..&gt;</span>として参照します。
+              「Recreate the camera work of &lt;Video 1&gt;, the girl is &lt;Picture 1&gt;…」のように指名すると効きます。
+              {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
+            </p>
+            <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds} />
+          </>
         )}
         <textarea value={vidPrompt} onChange={e => setVidPrompt(e.target.value)} rows={2}
                   placeholder={engine === 'h3ref'
@@ -412,8 +422,10 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
             </>
           )}
           <button onClick={handleGenVideo}
-                  disabled={busy || rangeKfs.length === 0 || outFrame <= inFrame ||
-                            (engine === 'h3ref' && (!refSourceClip || !vidPrompt.trim()))}
+                  disabled={busy || outFrame <= inFrame ||
+                            (engine === 'h3ref'
+                              ? (!refSourceClip || !vidPrompt.trim() || refImgIds.length === 0)
+                              : rangeKfs.length === 0)}
                   className={btnCls}>
             ▶ 動画生成→配置
           </button>
