@@ -37,6 +37,50 @@ def _asset_dir(project_id: int) -> Path:
     return d
 
 
+_fps_cache: dict[str, tuple[float, float] | None] = {}
+
+
+def _src_video_info(path: Path) -> tuple[float, float] | None:
+    """動画の実fps(avg_frame_rate)と長さ。抽出時刻の源フレームグリッドスナップに使う。"""
+    key = str(path)
+    if key in _fps_cache:
+        return _fps_cache[key]
+    import subprocess as sp
+    try:
+        out = sp.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=avg_frame_rate", "-show_entries", "format=duration",
+             "-of", "csv=p=0", key],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip().split("\n")
+        num, den = out[0].split("/")
+        fps = float(num) / float(den) if float(den) else 0.0
+        dur = float(out[1]) if len(out) > 1 else 0.0
+        info = (fps, dur) if fps > 0 else None
+    except Exception:
+        info = None
+    _fps_cache[key] = info
+    return info
+
+
+def _snap_seek(path: Path, time_sec: float) -> float:
+    """
+    抽出時刻を「その時刻にプレビューが表示している源フレーム」に合わせる。
+    ブラウザは floor(t*fps) のフレームを表示するが、ffmpegの-ssは「t以降の最初の
+    フレーム」(切り上げ)を選ぶため、境界に乗らない時刻では1フレームずれる。
+    → 対象フレームn=floor(t*fps)を確実に選ぶよう (n-0.5)/fps へスナップする。
+    タイムラインが源動画より長い場合は最終フレームにクランプ。
+    """
+    info = _src_video_info(path)
+    if not info:
+        return max(0.0, time_sec)
+    fps, dur = info
+    n = int(time_sec * fps + 1e-6)
+    if dur > 0:
+        n = min(n, max(0, int(dur * fps - 0.5) - 1))
+    return max(0.0, (n - 0.5) / fps)
+
+
 def _make_thumbnail(asset: Asset) -> None:
     src = Path(asset.file_path)
     if not src.exists():
@@ -124,7 +168,7 @@ def extract_frame(
         raise HTTPException(status_code=404, detail="Source file not found on disk")
 
     dest_dir = _asset_dir(src_asset.project_id)
-    t = max(0.0, time_sec)
+    t = _snap_seek(src, max(0.0, time_sec))   # プレビュー表示フレームと一致させる
     dest = dest_dir / f"frame_{asset_id}_{int(t * 1000)}ms.png"
     counter = 1
     while dest.exists():
@@ -224,7 +268,7 @@ def frame_preview(asset_id: int, time_sec: float = 0.0, height: int = 360,
     src = Path(asset.file_path)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Source file not found")
-    t = max(0.0, time_sec)
+    t = _snap_seek(src, max(0.0, time_sec))   # 挿入されるフレーム(extract-frame)と一致させる
     h = max(64, min(720, height))
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     proc = subprocess.run(
@@ -338,7 +382,8 @@ def extract_clip(
     is_audio = src_asset.asset_type == "audio" or src.suffix.lower() in audio_exts
 
     dest_dir = _asset_dir(src_asset.project_id)
-    t = max(0.0, start_sec)
+    # 動画はプレビュー表示フレームへスナップ(音声はそのまま)
+    t = max(0.0, start_sec) if is_audio else _snap_seek(src, max(0.0, start_sec))
     ext = ".wav" if is_audio else ".mp4"
     dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms{ext}"
     counter = 1
