@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../../api/client'
+import { assetsApi } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
 
@@ -33,8 +34,9 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   const [prompt, setPrompt] = useState('')
   const [sizeIdx, setSizeIdx] = useState(0)   // 既定=横1280×720
   const [frames, setFrames] = useState(81)    // Wanフレーム数(16fps, 4n+1)
-  const [engine, setEngine] = useState<'wan' | 'h3'>('wan')
+  const [engine, setEngine] = useState<'wan' | 'h3' | 'h3ref'>('wan')
   const [h3Steps, setH3Steps] = useState(15)
+  const [h3EasyCache, setH3EasyCache] = useState(true)
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
   const [msg, setMsg] = useState('')
   const snap4n1 = (n: number) => Math.max(5, Math.round((n - 1) / 4) * 4 + 1)
@@ -71,14 +73,32 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
 
   if (kfs.length < 2) return null
 
-  const genFps = engine === 'h3' ? 24 : 16
-  const snapFn = engine === 'h3' ? snapH3 : snap4n1
+  const useH3 = engine === 'h3' || engine === 'h3ref'
+  const genFps = useH3 ? 24 : 16
+  const snapFn = useH3 ? snapH3 : snap4n1
   const durSec = snapFn(frames) / genFps   // 実出力の長さ
-  const model = engine === 'h3' ? 'minimax-h3'
+  const model = engine === 'h3ref' ? 'minimax-h3-ref' : engine === 'h3' ? 'minimax-h3'
     : kfs.length >= 3 ? 'wan2.2-vace' : 'wan2.2-flf2v'
-  const modeLabel = engine === 'h3'
+  const modeLabel = engine === 'h3ref'
+    ? `H3 Ref2V(範囲下のVideoを参照・KF${Math.min(9, kfs.length)}枚を参照画像に)`
+    : engine === 'h3'
     ? `H3 音声付き(開始→終了${kfs.length > 2 ? `・中間${kfs.length - 2}枚は無視` : ''})`
     : kfs.length >= 3 ? `VACE(中間${kfs.length - 2}枚を位置固定)` : 'FLF2V(開始→終了)'
+
+  // h3ref: 選択範囲(最初→最後の打点)の下にあるVideo素材を参照動画として切り出す
+  const refSourceClip = (() => {
+    if (engine !== 'h3ref') return null
+    const st = useTimelineStore.getState()
+    const vts = st.tracks
+      .filter(t => t.track_type === 'video' && t.name !== 'Shots' && !t.hidden)
+      .sort((a, b) => a.order - b.order)
+    for (const t of vts) {
+      const c = clips.find(c => c.track_id === t.id && c.asset_id != null &&
+        c.start_frame <= first.start_frame && first.start_frame < c.start_frame + c.duration_frames)
+      if (c) return c
+    }
+    return null
+  })()
 
   const handleGen = async () => {
     setMsg('')
@@ -89,18 +109,34 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
         shots = useTimelineStore.getState().tracks.find(t => t.name === 'Shots' && t.track_type === 'video')
       }
       if (!shots) throw new Error('Shotsトラックを作成できませんでした')
-      const presets = engine === 'h3' ? H3_PRESETS : VID_PRESETS
+      const presets = useH3 ? H3_PRESETS : VID_PRESETS
       const sz = presets[sizeIdx] ?? presets[0]
       // タイムライン上の相対位置を保ったまま、出力長へスケール
       const scale = spanSec > 0 ? durSec / spanSec : 1
-      const useKfs = engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
+      const useKfs = engine === 'h3ref' ? kfs.slice(0, 9)   // Ref2V: 参照画像≤9
+        : engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
+
+      // h3ref: 範囲下のVideoを切り出して参照動画に(カット範囲=最初→最後の打点+1フレーム)
+      let refVideoIds: number[] | undefined
+      if (engine === 'h3ref' && refSourceClip) {
+        setMsg('✂️ 参照動画を切り出し中…')
+        const c = refSourceClip
+        const srcStart = (first.start_frame - c.start_frame + c.asset_in_frame) / fps
+        const srcDur = Math.min((last.start_frame - first.start_frame + 1) / fps,
+          (c.duration_frames - (first.start_frame - c.start_frame)) / fps)
+        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcDur)
+        refVideoIds = [seg.id]
+        window.dispatchEvent(new Event('kychapogas:assets-changed'))
+      }
+
       const job = await generateVideoI2V({
         project_id: projectId,
         keyframes: useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! })),
         duration_sec: durSec,
         model, prompt: prompt.trim(),
         width: sz.w, height: sz.h, seed: -1, use_lightning: true,
-        ...(engine === 'h3' ? { steps: h3Steps } : {}),
+        ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
+        ...(engine === 'h3ref' ? { ref_video_asset_ids: refVideoIds, scheduler: 'beta' } : {}),
         place: { track_id: shots.id, start_frame: first.start_frame,
                  duration_frames: Math.round(durSec * fps) },
       })
@@ -143,34 +179,52 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
                     className={`px-2 py-1 rounded ${engine === 'wan' ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>Wan2.2</button>
             <button onClick={() => { setEngine('h3'); setSizeIdx(0) }}
                     className={`px-2 py-1 rounded ${engine === 'h3' ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>H3 音声付き</button>
-            {engine === 'h3' && (
-              <label className="flex items-center gap-1 ml-auto">steps
-                <input type="number" min={8} max={40} value={h3Steps}
-                       onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
-                       className={inputCls + ' w-14'} />
-              </label>
+            <button onClick={() => { setEngine('h3ref'); setSizeIdx(0) }}
+                    className={`px-2 py-1 rounded ${engine === 'h3ref' ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>🎭Ref2V</button>
+            {useH3 && (
+              <>
+                <label className="flex items-center gap-1 ml-auto">steps
+                  <input type="number" min={8} max={40} value={h3Steps}
+                         onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
+                         className={inputCls + ' w-14'} />
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer"
+                       title="約1.5〜2倍高速化(わずかな甘さ)。最終品質重視ならOFF">
+                  <input type="checkbox" checked={h3EasyCache} onChange={e => setH3EasyCache(e.target.checked)} />⚡
+                </label>
+              </>
             )}
           </div>
+          {engine === 'h3ref' && (
+            <p className="text-[9px] text-zinc-500">
+              範囲(最初→最後の打点)の下のVideoを&lt;Video 1&gt;、選択KF(≤9枚)を&lt;Picture&gt;として参照します。
+              プロンプトで「Recreate the camera work of &lt;Video 1&gt;…」のように指名すると効きます。
+              {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
+            </p>
+          )}
           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
             <span>フレーム数</span>
-            <input type="number" step={engine === 'h3' ? 17 : 4} min={5} value={frames}
+            <input type="number" step={useH3 ? 17 : 4} min={5} value={frames}
                    onChange={e => setFrames(snapFn(Number(e.target.value)))}
                    className={inputCls + ' w-20'} />
-            {(engine === 'h3' ? [124, 226, 362] : [41, 81, 121]).map(n => (
+            {(useH3 ? [124, 226, 362] : [41, 81, 121]).map(n => (
               <button key={n} onClick={() => setFrames(n)}
                       className={`px-1.5 py-0.5 rounded ${frames === n ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>{n}</button>
             ))}
             <span className="ml-auto">= {durSec.toFixed(2)}秒({genFps}fps) → <span className="text-amber-400">{modeLabel}</span></span>
           </div>
-          <p className="text-[9px] text-zinc-600">タイムライン上のKF間隔({spanSec.toFixed(2)}秒)と違う場合、動きは出力長に合わせて伸縮します。{engine === 'h3' ? 'H3: 24fps・訓練域124〜362(5.2〜15.1秒)・音声同時生成(プロンプトに音の指示可)。推奨124。' : '推奨81(4n+1)。'}</p>
+          <p className="text-[9px] text-zinc-600">タイムライン上のKF間隔({spanSec.toFixed(2)}秒)と違う場合、動きは出力長に合わせて伸縮します。{useH3 ? 'H3: 24fps・訓練域124〜362(5.2〜15.1秒)・音声同時生成(プロンプトに音の指示可)。推奨124。' : '推奨81(4n+1)。'}</p>
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2}
-                    placeholder="モーションプロンプト" className={inputCls + ' resize-none'} />
+                    placeholder={engine === 'h3ref'
+                      ? '例: Recreate the same camera work as <Video 1>, but the singer is the girl in <Picture 1>'
+                      : 'モーションプロンプト'} className={inputCls + ' resize-none'} />
           <div className="flex gap-2">
             <select value={sizeIdx} onChange={e => setSizeIdx(Number(e.target.value))} className={inputCls + ' flex-1'}>
-              {(engine === 'h3' ? H3_PRESETS : VID_PRESETS).map((s, i) => <option key={i} value={i}>{s.label}</option>)}
+              {(useH3 ? H3_PRESETS : VID_PRESETS).map((s, i) => <option key={i} value={i}>{s.label}</option>)}
             </select>
             <button onClick={handleGen}
-                    className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white">▶ 生成</button>
+                    disabled={engine === 'h3ref' && (!refSourceClip || !prompt.trim())}
+                    className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40">▶ 生成</button>
           </div>
           <button onClick={() => { clearRefSel(); setOpen(false) }}
                   className="text-[10px] text-zinc-500 hover:text-zinc-300 self-start">選択解除</button>

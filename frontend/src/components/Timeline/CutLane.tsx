@@ -32,6 +32,7 @@ const LANE_H = 26
 
 export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Props) {
   const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
+  const refSel = useTimelineStore(s => s.refSel)
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const justDraggedRef = useRef(false)   // ドラッグ直後のclick(シーク)誤発火防止
@@ -116,6 +117,20 @@ export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Prop
     }))
   }
 
+  // カットクリック: シーク+そのカットのピンペアをKF選択にトグル。
+  // 選択後はツールバーの「🎬選択KF→i2v」からFLF2V/VACE/H3/🎭Ref2Vへ流せる。
+  const toggleCutSelect = (c: CutInfo) => {
+    const st = useTimelineStore.getState()
+    const both = st.refSel.includes(c.sId) && st.refSel.includes(c.eId)
+    if (both) {
+      st.toggleRefSel(c.sId)
+      st.toggleRefSel(c.eId)
+    } else {
+      if (!st.refSel.includes(c.sId)) st.toggleRefSel(c.sId)
+      if (!st.refSel.includes(c.eId)) st.toggleRefSel(c.eId)
+    }
+  }
+
   const startEdgeDrag = (e: React.PointerEvent, cutIdx: number, side: 'l' | 'r') => {
     e.stopPropagation()
     e.preventDefault()
@@ -168,16 +183,23 @@ export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Prop
           }
           const w = Math.max(2, (e + 1 - s) * pixelsPerFrame)
           const isDoomed = doomed.has(i)
+          const isSelected = refSel.includes(c.sId) && refSel.includes(c.eId)
           return (
             <div
               key={`${c.sId}-${i}`}
               className={`absolute top-0.5 bottom-0.5 rounded-sm border overflow-visible
                           text-[9px] text-white/90 leading-none
-                          ${isDoomed ? 'border-red-400 opacity-40' : 'border-black/30 hover:brightness-125'}`}
+                          ${isDoomed ? 'border-red-400 opacity-40'
+                            : isSelected ? 'border-purple-300 ring-1 ring-purple-300'
+                            : 'border-black/30 hover:brightness-125'}`}
               style={{ left: s * pixelsPerFrame, width: w,
                        background: isDoomed ? '#7f1d1d' : hue(i % 12) }}
-              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)— 端をドラッグで境界調整`}
-              onClick={() => { if (!justDraggedRef.current) setCurrentFrame(c.s) }}
+              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)— クリックで選択(選択KF→i2v/Ref2Vに使用)・端ドラッグで境界調整`}
+              onClick={() => {
+                if (justDraggedRef.current) return
+                setCurrentFrame(c.s)
+                toggleCutSelect(c)
+              }}
             >
               <span className="absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none flex gap-1 items-baseline overflow-hidden max-w-full">
                 {w > 34 && <span>C{i + 1}</span>}
