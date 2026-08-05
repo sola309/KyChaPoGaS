@@ -320,8 +320,8 @@ def extract_clip(
     session: Session = Depends(get_session),
 ):
     """
-    動画アセットの区間[start_sec, start_sec+dur_sec)を切り出して新しい動画アセットに登録。
-    H3 Ref2Vの参照動画(タイムラインの範囲指定→参照素材化)などに使う。
+    動画/音声アセットの区間[start_sec, start_sec+dur_sec)を切り出して新アセットに登録。
+    H3 Ref2Vの参照動画・参照音声(歌唱セグメント等)に使う。
     フレーム精度のため再エンコード(-c copyはキーフレーム境界に丸まるため不可)。
     """
     import subprocess as sp
@@ -334,19 +334,30 @@ def extract_clip(
     if not src.exists():
         raise HTTPException(status_code=404, detail="Source file not found on disk")
 
+    audio_exts = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aiff", ".aif"}
+    is_audio = src_asset.asset_type == "audio" or src.suffix.lower() in audio_exts
+
     dest_dir = _asset_dir(src_asset.project_id)
     t = max(0.0, start_sec)
-    dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms.mp4"
+    ext = ".wav" if is_audio else ".mp4"
+    dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms{ext}"
     counter = 1
     while dest.exists():
-        dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms_{counter}.mp4"
+        dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms_{counter}{ext}"
         counter += 1
 
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    if is_audio:
+        # 5msフェードで切り出し境界のクリックノイズを防ぐ(H3参照音声はセグメント端も条件になる)
+        d = max(0.1, dur_sec)
+        codec = ["-vn", "-af", f"afade=t=in:d=0.005,afade=t=out:st={d - 0.005:.3f}:d=0.005",
+                 "-acodec", "pcm_s16le", "-ar", "44100"]
+    else:
+        codec = ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                 "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
     proc = sp.run(
         [ffmpeg, "-y", "-ss", f"{t:.3f}", "-t", f"{max(0.1, dur_sec):.3f}", "-i", str(src),
-         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
-         "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dest)],
+         *codec, str(dest)],
         capture_output=True,
     )
     if proc.returncode != 0 or not dest.exists():
@@ -356,7 +367,7 @@ def extract_clip(
     asset = Asset(
         project_id=src_asset.project_id,
         name=dest.name,
-        asset_type="video",
+        asset_type="audio" if is_audio else "video",
         file_path=str(dest),
         duration_sec=info.duration_sec,
         width=info.width,
@@ -406,6 +417,22 @@ def get_peaks(asset_id: int, buckets: int = 2000, session: Session = Depends(get
     cache_dir.mkdir(exist_ok=True)
     cache.write_text(json.dumps(result))
     return JSONResponse(result, headers=cache_headers)
+
+
+@router.post("/{asset_id}/separate-vocals", status_code=202)
+def separate_vocals(asset_id: int, session: Session = Depends(get_session)):
+    """音楽アセットを歌唱/伴奏に分離(demucs)。完了で「(歌唱)」「(伴奏)」アセットが増える。"""
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    job = Job(
+        project_id=asset.project_id, job_type="separate_vocals",
+        params=json.dumps({"asset_id": asset.id, "project_id": asset.project_id}),
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+    return {"job_id": job.id, "status": "queued"}
 
 
 @router.post("/{asset_id}/proxy", status_code=202)

@@ -203,6 +203,8 @@ async def _dispatch(job: Job) -> None:
             await _analyze_video(job, params)
         case "create_proxy":
             await _create_proxy(job, params)
+        case "separate_vocals":
+            await _separate_vocals(job, params)
         case "precompose":
             await _precompose(job, params)
         case "render_motion_graphics":
@@ -1368,6 +1370,80 @@ async def _decompose_character(job: Job, params: dict) -> None:
             session.commit()
     _update_progress(job.id, 1.0)
     log.info(f"decompose_character done → puppet '{puppet_id}'")
+
+
+# ── separate_vocals: 音楽→歌唱(vocals)/伴奏(inst)の2ステム分離 ──────────────
+
+SEPARATOR_BIN = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "audio-separator"
+SEPARATOR_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer(J-POPボーカルで現行最良級)
+
+
+async def _separate_vocals(job: Job, params: dict) -> None:
+    """
+    audio-separator(BS-RoFormer)で音声アセットを歌唱/伴奏に分離し、
+    「{name}(歌唱).wav」「{name}(伴奏).wav」として登録する。
+    H3 Ref2VAのリップシンク参照音声(クリーンな歌声)用。
+    GPUがOOM(ComfyUIのモデル常駐時)ならCPUで再試行する。
+    """
+    import os
+    import tempfile
+
+    asset_id = params["asset_id"]
+    with Session(engine) as session:
+        asset = session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+        src = Path(asset.file_path)
+        project_id = asset.project_id
+        base = src.stem
+    if not src.exists():
+        raise ValueError(f"アセットファイルが見つかりません: {src}")
+    if not SEPARATOR_BIN.exists():
+        raise RuntimeError("audio-separatorが未インストールです(backend venv)")
+
+    _update_progress(job.id, 0.05)
+    with tempfile.TemporaryDirectory(prefix="sep_") as tmp:
+        async def run(env_extra: dict[str, str]) -> tuple[int, str]:
+            proc = await asyncio.create_subprocess_exec(
+                str(SEPARATOR_BIN), str(src),
+                "--model_filename", SEPARATOR_MODEL,
+                "--output_dir", tmp, "--output_format", "wav",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env={**os.environ, **env_extra},
+            )
+            _, stderr = await proc.communicate()
+            return proc.returncode, stderr.decode()
+
+        rc, err = await run({})
+        if rc != 0 and ("out of memory" in err.lower() or "cuda" in err.lower()):
+            log.warning("separate_vocals: GPU失敗→CPUで再試行")
+            _update_progress(job.id, 0.1)
+            rc, err = await run({"CUDA_VISIBLE_DEVICES": ""})
+        if rc != 0:
+            raise RuntimeError(f"分離に失敗: {err[-400:]}")
+
+        outs = list(Path(tmp).glob("*.wav"))
+        vocals = next((p for p in outs if "(Vocals)" in p.name), None)
+        inst = next((p for p in outs if "(Instrumental)" in p.name), None)
+        if not vocals or not inst:
+            raise RuntimeError(f"分離出力が見つかりません: {[p.name for p in outs]}")
+        _update_progress(job.id, 0.85)
+
+        dest_dir = Path(__file__).resolve().parents[2] / "data" / "assets" / str(project_id)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        ids = []
+        for stem_path, label in ((vocals, "歌唱"), (inst, "伴奏")):
+            dest = dest_dir / f"{base}({label}).wav"
+            counter = 1
+            while dest.exists():
+                dest = dest_dir / f"{base}({label})_{counter}.wav"
+                counter += 1
+            stem_path.replace(dest)
+            ids.append(_register_asset(project_id, dest, "separated",
+                                       {"source_asset_id": asset_id, "stem": label}))
+    _update_result_assets(job.id, ids)
+    _update_progress(job.id, 1.0)
+    log.info(f"Vocal separation done: asset {asset_id} → {ids}")
 
 
 # ── create_proxy: low-res preview proxy for a video asset ─────────────────────

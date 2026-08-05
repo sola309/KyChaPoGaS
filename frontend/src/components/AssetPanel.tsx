@@ -336,6 +336,16 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
                 🎵 音声を抽出 <span className="text-[10px] text-zinc-500">→ 音声アセット化(BPM解析・音ハメ用)</span>
               </button>
             )}
+            {assetKind(asset) === 'audio' && (
+              <button onClick={async e => {
+                        e.stopPropagation()
+                        await assetsApi.separateVocals(asset.id)
+                        setMenuOpen(false)
+                      }}
+                      className="text-left text-sm px-3 py-2.5 rounded hover:bg-zinc-800 text-zinc-200">
+                🎤 歌唱を分離 <span className="text-[10px] text-zinc-500">→「(歌唱)」「(伴奏)」アセット化(Ref2Vリップシンク用)</span>
+              </button>
+            )}
             {canAnalyze && (
               <button onClick={async e => { await handleAnalyze(e); setMenuOpen(false) }}
                       disabled={analyzing}

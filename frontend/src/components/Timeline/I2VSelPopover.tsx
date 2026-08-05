@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../../api/client'
-import { assetsApi } from '../../api/client'
+import { assetsApi, assetKind } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
 
@@ -37,6 +37,12 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   const [engine, setEngine] = useState<'wan' | 'h3' | 'h3ref'>('wan')
   const [h3Steps, setH3Steps] = useState(15)
   const [h3EasyCache, setH3EasyCache] = useState(true)
+  // Ref2V詳細オプション
+  const [refAudioId, setRefAudioId] = useState<number | ''>('')     // 参照音声(歌唱リップシンク)
+  const [refAudioSeg, setRefAudioSeg] = useState(true)              // 範囲セグメントを切り出して使用
+  const [extraImgId, setExtraImgId] = useState<number | ''>('')     // 追加参照画像(キャラ設定画等)
+  const [refImgSize, setRefImgSize] = useState<'match' | 'max'>('match')
+  const [refScheduler, setRefScheduler] = useState<'beta' | 'normal' | 'simple'>('beta')
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
   const [msg, setMsg] = useState('')
   const snap4n1 = (n: number) => Math.max(5, Math.round((n - 1) / 4) * 4 + 1)
@@ -113,11 +119,12 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
       const sz = presets[sizeIdx] ?? presets[0]
       // タイムライン上の相対位置を保ったまま、出力長へスケール
       const scale = spanSec > 0 ? durSec / spanSec : 1
-      const useKfs = engine === 'h3ref' ? kfs.slice(0, 9)   // Ref2V: 参照画像≤9
+      const useKfs = engine === 'h3ref' ? kfs.slice(0, 8)   // Ref2V: 参照画像≤9(追加画像の枠を1つ確保)
         : engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
 
       // h3ref: 範囲下のVideoを切り出して参照動画に(カット範囲=最初→最後の打点+1フレーム)
       let refVideoIds: number[] | undefined
+      let refAudioIds: number[] | undefined
       if (engine === 'h3ref' && refSourceClip) {
         setMsg('✂️ 参照動画を切り出し中…')
         const c = refSourceClip
@@ -128,15 +135,42 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
         refVideoIds = [seg.id]
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
       }
+      if (engine === 'h3ref' && refAudioId !== '') {
+        if (refAudioSeg) {
+          // 範囲に対応する音声セグメントを切り出す。参照音声アセットがタイムラインに
+          // 置かれていればその位置でマップ、無ければ「音源=タイムライン0起点」とみなす。
+          setMsg('🎤 参照音声セグメントを切り出し中…')
+          const st = useTimelineStore.getState()
+          const audClip = clips.find(c => c.asset_id === refAudioId &&
+            st.tracks.find(t => t.id === c.track_id)?.track_type === 'audio' &&
+            c.start_frame <= first.start_frame && first.start_frame < c.start_frame + c.duration_frames)
+          const aStart = audClip
+            ? (first.start_frame - audClip.start_frame + audClip.asset_in_frame) / fps
+            : first.start_frame / fps
+          // リップシンクは出力長ぶんの歌声を渡す(スナップで範囲より長くなる分も含める)
+          const aseg = await assetsApi.extractClip(refAudioId, aStart, durSec)
+          refAudioIds = [aseg.id]
+          window.dispatchEvent(new Event('kychapogas:assets-changed'))
+        } else {
+          refAudioIds = [refAudioId]
+        }
+      }
 
+      const kfSpecs = useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! }))
+      if (engine === 'h3ref' && extraImgId !== '') kfSpecs.push({ time_sec: 0, asset_id: extraImgId })
       const job = await generateVideoI2V({
         project_id: projectId,
-        keyframes: useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! })),
+        keyframes: kfSpecs,
         duration_sec: durSec,
         model, prompt: prompt.trim(),
         width: sz.w, height: sz.h, seed: -1, use_lightning: true,
         ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
-        ...(engine === 'h3ref' ? { ref_video_asset_ids: refVideoIds, scheduler: 'beta' } : {}),
+        ...(engine === 'h3ref' ? {
+          ref_video_asset_ids: refVideoIds,
+          ref_audio_asset_ids: refAudioIds,
+          scheduler: refScheduler,
+          ref_image_size: refImgSize,
+        } : {}),
         place: { track_id: shots.id, start_frame: first.start_frame,
                  duration_frames: Math.round(durSec * fps) },
       })
@@ -196,11 +230,56 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
             )}
           </div>
           {engine === 'h3ref' && (
-            <p className="text-[9px] text-zinc-500">
-              範囲(最初→最後の打点)の下のVideoを&lt;Video 1&gt;、選択KF(≤9枚)を&lt;Picture&gt;として参照します。
-              プロンプトで「Recreate the camera work of &lt;Video 1&gt;…」のように指名すると効きます。
-              {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
-            </p>
+            <>
+              <p className="text-[9px] text-zinc-500">
+                範囲(最初→最後の打点)の下のVideoを&lt;Video 1&gt;、選択KF(≤8枚)+追加画像を&lt;Picture&gt;として参照します。
+                プロンプトで「Recreate the camera work of &lt;Video 1&gt;…」のように指名すると効きます。
+                {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
+              </p>
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
+                <span>🎤参照音声</span>
+                <select value={refAudioId} onChange={e => setRefAudioId(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={inputCls + ' flex-1 min-w-32'}>
+                  <option value="">なし(音はプロンプト任せ)</option>
+                  {assets.filter(a => assetKind(a) === 'audio')
+                    .sort((a, b) => (a.name.includes('歌唱') ? -1 : 0) - (b.name.includes('歌唱') ? -1 : 0))
+                    .map(a => <option key={a.id} value={a.id}>#{a.id} {a.name}</option>)}
+                </select>
+                <label className="flex items-center gap-1 cursor-pointer"
+                       title="範囲に対応する区間だけを切り出して渡す(リップシンク用)。OFFで音源全体">
+                  <input type="checkbox" checked={refAudioSeg} onChange={e => setRefAudioSeg(e.target.checked)} />
+                  範囲切り出し
+                </label>
+              </div>
+              {refAudioId !== '' && (
+                <p className="text-[9px] text-zinc-600">
+                  💡 歌唱リップシンク: 「(歌唱)」分離アセット推奨(未分離ならアセット⋯→🎤歌唱を分離)。
+                  プロンプトは「Use &lt;Audio 1&gt; exactly as it is as the final audio track. S1 sings along to &lt;Audio 1&gt;, lips precisely synced」型が公式規範。
+                  声質だけ借りて別歌詞なら「S1 uses the voice timbre from &lt;Audio 1&gt;」+&lt;d&gt;歌詞&lt;/d&gt;。
+                  出力音声は生成し直されるので同期ガイド専用 — 最終音はタイムラインのAudio(原曲)が優先されます。
+                </p>
+              )}
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
+                <span>➕参照画像</span>
+                <select value={extraImgId} onChange={e => setExtraImgId(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={inputCls + ' flex-1 min-w-32'}>
+                  <option value="">なし(選択KFのみ)</option>
+                  {assets.filter(a => a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null))
+                    .map(a => <option key={a.id} value={a.id}>#{a.id} {a.name}</option>)}
+                </select>
+                <select value={refImgSize} onChange={e => setRefImgSize(e.target.value as 'match' | 'max')} className={inputCls}
+                        title="match=速度優先 / max=同一性優先(2048短辺)">
+                  <option value="match">match</option>
+                  <option value="max">max(同一性)</option>
+                </select>
+                <select value={refScheduler} onChange={e => setRefScheduler(e.target.value as 'beta' | 'normal' | 'simple')} className={inputCls}
+                        title="参照が多いときはbeta/normalが安定(公式Tips)">
+                  <option value="beta">beta</option>
+                  <option value="normal">normal</option>
+                  <option value="simple">simple</option>
+                </select>
+              </div>
+            </>
           )}
           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
             <span>フレーム数</span>
