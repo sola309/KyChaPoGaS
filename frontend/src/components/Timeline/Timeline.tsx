@@ -14,6 +14,7 @@ import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoin
 import { CutLane } from './CutLane'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
+import { ShotTunePopover } from './ShotTunePopover'
 import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
 
@@ -72,6 +73,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [showCurveEditor, setShowCurveEditor] = useState(false)
   const [curveSrcFrames, setCurveSrcFrames] = useState(0)   // ∿編集中のソース量(開いた時点で固定)
   const [showInspector, setShowInspector] = useState(false)
+  const [showShotTune, setShowShotTune] = useState(false)
 
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
@@ -748,6 +750,18 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
         {selectedClip && selAsset && selAsset.gen_params_json && (
           <RegenPanel clip={selectedClip} asset={selAsset} projectId={projectId} fps={fps} />
+        )}
+
+        {selectedClip && selTrack?.track_type === 'video' && selAsset?.duration_sec != null && (
+          <button onClick={() => setShowShotTune(true)}
+                  className="text-[11px] px-2 py-0.5 rounded border bg-purple-950/60 text-purple-300 border-purple-700 hover:bg-purple-900/60"
+                  title="ソース窓・速度カーブ・分割をポップアップで編集(両隣が埋まっていてもOK)">
+            🎛 調整
+          </button>
+        )}
+        {showShotTune && selectedClip && selTrack?.track_type === 'video' && (
+          <ShotTunePopover clip={selectedClip} asset={selAsset ?? undefined} fps={fps}
+                           onClose={() => setShowShotTune(false)} />
         )}
 
         <I2VSelPopover projectId={projectId} fps={fps} assets={assets} />
