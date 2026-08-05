@@ -58,6 +58,7 @@ export interface Asset {
   height: number | null
   file_size_bytes: number | null
   proxy_path: string | null
+  starred?: boolean
   gen_params_json?: string
   created_at: string
 }
@@ -198,6 +199,8 @@ export const assetsApi = {
     }).then(r => r.data),
   separateVocals: (assetId: number) =>
     api.post<{ job_id: number }>(`/assets/${assetId}/separate-vocals`).then(r => r.data),
+  toggleStar: (assetId: number) =>
+    api.post<Asset>(`/assets/${assetId}/star`).then(r => r.data),
   makeProxy:    (assetId: number) =>
     api.post<{ job_id: number; status: string }>(`/assets/${assetId}/proxy`).then(r => r.data),
 }

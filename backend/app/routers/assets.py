@@ -95,8 +95,22 @@ def _make_thumbnail(asset: Asset) -> None:
 def list_assets(project_id: int | None = None, session: Session = Depends(get_session)):
     query = select(Asset)
     if project_id is not None:
-        query = query.where(Asset.project_id == project_id)
+        # ⭐スター付きアセットはプロジェクトを跨いで共有表示される
+        query = query.where((Asset.project_id == project_id) | (Asset.starred == True))  # noqa: E712
     return session.exec(query).all()
+
+
+@router.post("/{asset_id}/star", response_model=AssetRead)
+def toggle_star(asset_id: int, session: Session = Depends(get_session)):
+    """⭐トグル: スター付きアセットは全プロジェクトのアセットパネルに現れる。"""
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    asset.starred = not asset.starred
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return asset
 
 
 @router.post("/upload", response_model=AssetRead, status_code=201)

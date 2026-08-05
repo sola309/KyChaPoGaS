@@ -63,6 +63,9 @@ def _migrate(conn) -> None:
     if "asset" in tables and "proxy_path" not in columns("asset"):
         conn.execute(text("ALTER TABLE asset ADD COLUMN proxy_path VARCHAR"))
         log.info("Migration: added asset.proxy_path")
+    if "asset" in tables and "starred" not in columns("asset"):
+        conn.execute(text("ALTER TABLE asset ADD COLUMN starred BOOLEAN DEFAULT 0"))
+        log.info("Migration: added asset.starred")
     if "asset" in tables and "gen_params_json" not in columns("asset"):
         conn.execute(text("ALTER TABLE asset ADD COLUMN gen_params_json VARCHAR DEFAULT ''"))
         log.info("Migration: added asset.gen_params_json")

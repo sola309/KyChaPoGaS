@@ -201,14 +201,20 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
           </p>
         )}
         {visible.map(asset => (
-          <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} />
+          <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} currentProjectId={projectId} />
         ))}
       </div>
     </div>
   )
 }
 
-function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) => void }) {
+function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDelete: (id: number) => void; currentProjectId?: number }) {
+  const isForeign = currentProjectId != null && asset.project_id !== currentProjectId
+  const handleStar = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await assetsApi.toggleStar(asset.id)
+    window.dispatchEvent(new Event('kychapogas:assets-changed'))
+  }
   const [thumbError, setThumbError] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [proxying, setProxying] = useState(false)
@@ -284,7 +290,18 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-zinc-200 truncate">{asset.name}</p>
+        <p className="text-xs text-zinc-200 truncate flex items-center gap-1">
+          <button onClick={handleStar}
+                  className={`flex-shrink-0 leading-none ${asset.starred ? 'text-amber-400' : 'text-zinc-600 hover:text-amber-300'}`}
+                  title={asset.starred ? '⭐解除(このプロジェクト外から見えなくなる)' : '⭐スター: 全プロジェクトで使えるようにする'}>
+            {asset.starred ? '★' : '☆'}
+          </button>
+          <span className="truncate">{asset.name}</span>
+          {isForeign && (
+            <span className="flex-shrink-0 text-[9px] px-1 rounded bg-amber-950/60 text-amber-400 border border-amber-800"
+                  title={`他プロジェクト(#${asset.project_id})のスター付き共有アセット`}>⭐PJ{asset.project_id}</span>
+          )}
+        </p>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
           <span className={`text-[10px] px-1 rounded ${TYPE_BADGE[assetKind(asset)] ?? TYPE_BADGE.generated}`}>
             {assetKind(asset) === 'video' ? '🎬' : assetKind(asset) === 'image' ? '🖼' : assetKind(asset) === 'audio' ? '🎵' : '🧊'}
@@ -375,10 +392,14 @@ function AssetCard({ asset, onDelete }: { asset: Asset; onDelete: (id: number) =
                 📦 軽量プロキシを生成 <span className="text-[10px] text-zinc-500">プレビュー/スクラブが軽くなる</span>
               </button>
             )}
-            <button onClick={() => { setMenuOpen(false); onDelete(asset.id) }}
-                    className="text-left text-sm px-3 py-2.5 rounded hover:bg-red-950/50 text-red-400">
-              🗑 削除
-            </button>
+            {isForeign ? (
+              <p className="text-[10px] text-zinc-500 px-3 py-2">他プロジェクトの共有アセットのため、削除は元のプロジェクトから行ってください</p>
+            ) : (
+              <button onClick={() => { setMenuOpen(false); onDelete(asset.id) }}
+                      className="text-left text-sm px-3 py-2.5 rounded hover:bg-red-950/50 text-red-400">
+                🗑 削除
+              </button>
+            )}
           </div>
         </div>,
         document.body

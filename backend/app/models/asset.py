@@ -17,6 +17,8 @@ class AssetBase(SQLModel):
     # 生成来歴(要件7.4): 生成ジョブのパラメータJSON(prompt/seed/model/loras等)。
     # 「同条件で再生成」「条件を変えて再生成」の根拠になる。インポート時も保持される。
     gen_params_json: str = ""
+    # ⭐スター: 全プロジェクトのアセットパネルに共有表示される(キャラ設定画などの横断素材用)
+    starred: bool = False
 
 
 class Asset(AssetBase, table=True):
