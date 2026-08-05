@@ -129,15 +129,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setLoadedAssetId(null)
       return
     }
-    // メモリ(Blob)キャッシュ済みならそれを使う=境界切替が即時になる
-    const cached = vidBlobRef.current.get(activeClip.asset_id)
-    const url = cached ? cached.url : assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path)
+    // 軽量: Blobキャッシュ(プロキシ)優先=境界切替が即時。
+    // 高画質: 原本ファイルをネイティブストリーミング(プロキシ640pでは画質が上がらないため)。
+    const cached = lightPreview ? vidBlobRef.current.get(activeClip.asset_id) : undefined
+    const url = cached ? cached.url
+      : assetsApi.fileUrl(activeClip.asset_id, lightPreview && !!activeAsset?.proxy_path)
     if (video.getAttribute('src') !== url) {
       video.src = url
       video.load()
       setLoadedAssetId(activeClip.asset_id)
     }
-  }, [activeClip?.asset_id, activeAsset?.proxy_path])
+  }, [activeClip?.asset_id, activeAsset?.proxy_path, lightPreview])
 
   // シーク完了・デコード完了のたびに合成を再描画する(スクラブ時に古いフレームが
   // 残らないように)。video.currentTime代入は非同期なので、seekedを待たないと
