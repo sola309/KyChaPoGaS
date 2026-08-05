@@ -361,6 +361,7 @@ def extract_clip(
     background_tasks: BackgroundTasks,
     start_sec: float = 0.0,
     dur_sec: float = 5.0,
+    end_sec: float | None = None,   # 指定時: 動画はこの時刻に表示中の源フレームまで「包含」で切る(フレーム厳密)
     session: Session = Depends(get_session),
 ):
     """
@@ -384,6 +385,23 @@ def extract_clip(
     dest_dir = _asset_dir(src_asset.project_id)
     # 動画はプレビュー表示フレームへスナップ(音声はそのまま)
     t = max(0.0, start_sec) if is_audio else _snap_seek(src, max(0.0, start_sec))
+    # end_sec指定時はフレーム厳密: [開始フレーム..終了フレーム]包含。
+    # -t(秒指定)はB-frame並べ替えの影響で±1フレームぶれるため、
+    # 動画は出力フレーム数を-frames:vで直接固定する。
+    frames_cap: int | None = None
+    if end_sec is not None and end_sec > start_sec:
+        if is_audio:
+            dur_sec = end_sec - start_sec
+        else:
+            info = _src_video_info(src)
+            if info:
+                fps, _ = info
+                n0 = int(round(t * fps + 0.5))          # 先頭フレーム(スナップ済みtの直後)
+                n_end = int(end_sec * fps + 1e-6)
+                frames_cap = max(1, n_end - n0 + 1)
+                dur_sec = (frames_cap + 2) / fps        # 読み込み範囲(余裕込み)。本命はframes_cap
+            else:
+                dur_sec = end_sec - start_sec
     ext = ".wav" if is_audio else ".mp4"
     dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms{ext}"
     counter = 1
@@ -400,6 +418,8 @@ def extract_clip(
     else:
         codec = ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                  "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
+        if frames_cap is not None:
+            codec = ["-frames:v", str(frames_cap), *codec]
     proc = sp.run(
         [ffmpeg, "-y", "-ss", f"{t:.3f}", "-t", f"{max(0.1, dur_sec):.3f}", "-i", str(src),
          *codec, str(dest)],

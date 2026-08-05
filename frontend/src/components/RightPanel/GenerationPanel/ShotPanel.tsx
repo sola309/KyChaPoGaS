@@ -224,9 +224,10 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
         setMsg('✂️ 参照動画を切り出し中…')
         const c = refSourceClip
         const srcStart = (inFrame - c.start_frame + c.asset_in_frame) / fps
-        const srcDur = Math.min((outFrame - inFrame) / fps,
-          (c.duration_frames - (inFrame - c.start_frame)) / fps)
-        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcDur)
+        // 終端フレーム(outFrame-1)包含で厳密に切る(隣カットの1フレーム混入防止)
+        const srcEnd = (Math.min(outFrame - 1, c.start_frame + c.duration_frames - 1)
+          - c.start_frame + c.asset_in_frame) / fps
+        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcEnd - srcStart + 1 / fps, srcEnd)
         refVideoIds = [seg.id]
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
       }

@@ -188,8 +188,10 @@ export const assetsApi = {
     `/api/assets/${assetId}/frame-preview?time_sec=${timeSec.toFixed(3)}&height=${height}`,
   extractAudio: (assetId: number) =>
     api.post<Asset>(`/assets/${assetId}/extract-audio`).then(r => r.data),
-  extractClip: (assetId: number, startSec: number, durSec: number) =>
-    api.post<Asset>(`/assets/${assetId}/extract-clip`, null, { params: { start_sec: startSec, dur_sec: durSec } }).then(r => r.data),
+  extractClip: (assetId: number, startSec: number, durSec: number, endSec?: number) =>
+    api.post<Asset>(`/assets/${assetId}/extract-clip`, null, {
+      params: { start_sec: startSec, dur_sec: durSec, ...(endSec != null ? { end_sec: endSec } : {}) },
+    }).then(r => r.data),
   separateVocals: (assetId: number) =>
     api.post<{ job_id: number }>(`/assets/${assetId}/separate-vocals`).then(r => r.data),
   makeProxy:    (assetId: number) =>
