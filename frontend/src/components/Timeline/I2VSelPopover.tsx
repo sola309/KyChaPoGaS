@@ -296,7 +296,8 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
                 「Recreate the camera work of &lt;Video 1&gt;, the girl is &lt;Picture 1&gt;…」のように指名すると効きます。
                 {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
               </p>
-              <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds} />
+              <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds}
+                              fps={fps} frameSourceAssetId={refSourceClip?.asset_id ?? undefined} />
               {selectedCuts.length >= 2 && (
                 <label className="flex items-center gap-1.5 text-[10px] text-amber-300 cursor-pointer bg-amber-950/40 border border-amber-800 rounded px-2 py-1">
                   <input type="checkbox" checked={batchPerCut} onChange={e => setBatchPerCut(e.target.checked)} />

@@ -393,7 +393,8 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
               「Recreate the camera work of &lt;Video 1&gt;, the girl is &lt;Picture 1&gt;…」のように指名すると効きます。
               {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
             </p>
-            <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds} />
+            <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds}
+                            fps={fps} frameSourceAssetId={refSourceClip?.asset_id ?? undefined} />
           </>
         )}
         <textarea value={vidPrompt} onChange={e => setVidPrompt(e.target.value)} rows={2}

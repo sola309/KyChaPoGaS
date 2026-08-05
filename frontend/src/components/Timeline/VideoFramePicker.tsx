@@ -12,10 +12,12 @@ interface Props {
   onInsert: (videoAssetId: number, timeSec: number, longEdge?: number) => void
   compact?: boolean
   large?: boolean
+  /** 初期選択する動画アセット(Ref2Vの参照動画元など) */
+  initialAssetId?: number
 }
 
-export function VideoFramePicker({ assets, fps, busy = false, onInsert, compact = false, large = false }: Props) {
-  const [vfAssetId, setVfAssetId] = useState<number | ''>('')
+export function VideoFramePicker({ assets, fps, busy = false, onInsert, compact = false, large = false, initialAssetId }: Props) {
+  const [vfAssetId, setVfAssetId] = useState<number | ''>(initialAssetId ?? '')
   const [vfTime, setVfTime] = useState(0)
   const [vfEdge, setVfEdge] = useState<number>(0)
   const videoRef = useRef<HTMLVideoElement>(null)
