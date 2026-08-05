@@ -808,8 +808,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             } else {
               drawLayer(ctx, v, v.videoWidth, v.videoHeight, xf)
             }
-          } else if (cache.canvas && cache.assetId === clip.asset_id && cache.canvas.width) {
-            // シーク中・ロード中は直前の確定フレームで埋める(黒点滅防止)
+            // 最後に描いたライブフレームを常にキャッシュ(クリップ境界の切替中も
+            // 下層素材へフォールスルーせず、直前フレームでホールドするため)
+            if (!cache.canvas) cache.canvas = document.createElement('canvas')
+            if (cache.canvas.width !== v.videoWidth || cache.canvas.height !== v.videoHeight) {
+              cache.canvas.width = v.videoWidth; cache.canvas.height = v.videoHeight
+            }
+            cache.canvas.getContext('2d')?.drawImage(v, 0, 0)
+            cache.assetId = clip.asset_id
+          } else if (cache.canvas && cache.canvas.width) {
+            // シーク中・ロード中・クリップ切替中は直前の確定フレームで埋める。
+            // アセットが変わる境界でも下層(Video/Imageトラック)を一瞬見せない。
             drawLayer(ctx, cache.canvas, cache.canvas.width, cache.canvas.height, xf)
           }
         }
