@@ -1147,6 +1147,7 @@ def _h3_apply_easycache(wf: dict) -> None:
     wf["ecache"] = {"class_type": "EasyCache", "inputs": {
         "model": ["unet", 0],
         "reuse_threshold": 0.2, "start_percent": 0.15, "end_percent": 0.95,
+        "verbose": False,
     }}
     for node in wf.values():
         ins = node.get("inputs", {})
