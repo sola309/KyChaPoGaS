@@ -60,7 +60,7 @@ export function LayerPanel({ assets }: Props) {
             {/* thumbnail */}
             <div className="w-10 h-6 rounded bg-zinc-900 overflow-hidden flex-shrink-0 flex items-center justify-center">
               {asset && (asset.asset_type === 'image' || (asset.asset_type === 'generated' && asset.duration_sec == null))
-                ? <img src={`/api/assets/${asset.id}/file`} className="w-full h-full object-cover" alt="" />
+                ? <img src={`/api/assets/${asset.id}/thumbnail`} className="w-full h-full object-cover" alt="" />
                 : <span className="text-[8px] text-zinc-600">{asset ? '動画' : '—'}</span>}
             </div>
             {/* name + meta */}

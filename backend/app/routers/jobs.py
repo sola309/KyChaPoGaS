@@ -95,6 +95,8 @@ async def stream_jobs(project_id: int, request: Request):
     Pushes the full job list for the project every 2 seconds.
     """
     async def generator():
+        last_payload = ""
+        beat = 0
         while not await request.is_disconnected():
             # New session per poll (thread-safe for SQLite)
             with Session(engine) as session:
@@ -102,12 +104,22 @@ async def stream_jobs(project_id: int, request: Request):
                     select(Job)
                     .where(Job.project_id == project_id)
                     .order_by(Job.created_at.desc())
+                    .limit(50)
                 ).all()
-                payload = json.dumps(
-                    [_to_read(j).model_dump(mode="json") for j in jobs],
-                    default=str,
-                )
-            yield f"data: {payload}\n\n"
+                rows = []
+                for j in jobs:
+                    d = _to_read(j).model_dump(mode="json")
+                    # 帯域削減: 巨大フィールドはストリームから除外
+                    # (必要になった1件だけGET /jobs/{id}で取得する)
+                    d.pop("params", None)
+                    d.pop("result_json", None)
+                    rows.append(d)
+                payload = json.dumps(rows, default=str)
+            # 変化があった時だけ送信(接続維持のため15秒ごとにハートビート)
+            beat += 1
+            if payload != last_payload or beat % 8 == 0:
+                last_payload = payload
+                yield f"data: {payload}\n\n"
             await asyncio.sleep(2)
 
     return StreamingResponse(

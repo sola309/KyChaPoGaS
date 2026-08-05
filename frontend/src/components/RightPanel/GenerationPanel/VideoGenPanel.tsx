@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { useJobStore } from '../../../store/jobStore'
 import { useProjectStore } from '../../../store/projectStore'
 import { useTimelineStore } from '../../../store/timelineStore'
-import { assetsApi, type Asset } from '../../../api/client'
+import { assetsApi, assetKind, type Asset } from '../../../api/client'
 
 function KeyframePreview({ timeSec, asset }: { timeSec: number; asset: Asset | undefined }) {
   return (
@@ -34,10 +34,16 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
   const [negPrompt, setNegPrompt] = useState('')
   const [vres, setVres] = useState('832x480')   // Wan2.2 16:9 buckets
   const [useLightning, setUseLightning] = useState(true)
+  const [refVideoId, setRefVideoId] = useState<number | ''>('')
+  const [refAudioId, setRefAudioId] = useState<number | ''>('')
+  const [h3Scheduler, setH3Scheduler] = useState('beta')
+  const [refImageSize, setRefImageSize] = useState('match')
   const [busy,     setBusy]     = useState(false)
   const [error,    setError]    = useState<string | null>(null)
 
   const isWan = model.startsWith('wan2.2')
+  const isH3Ref = model === 'minimax-h3-ref'
+  const isRich = isWan || model.startsWith('minimax-h3')   // prompt/解像度を取るモデル
 
   // Read keyframes from Reference tracks on the timeline
   const keyframes = useMemo(() => {
@@ -71,11 +77,16 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
         keyframes:  keyframes.map(kf => ({ time_sec: kf.time_sec, asset_id: kf.asset_id })),
         duration_sec: duration,
         fps, motion_strength: strength, model, seed,
-        ...(isWan ? {
+        ...(isRich ? {
           prompt, negative_prompt: negPrompt,
           width:  Number(vres.split('x')[0]),
           height: Number(vres.split('x')[1]),
           use_lightning: useLightning,
+        } : {}),
+        ...(isH3Ref ? {
+          ...(refVideoId !== '' ? { ref_video_asset_ids: [Number(refVideoId)] } : {}),
+          ...(refAudioId !== '' ? { ref_audio_asset_ids: [Number(refAudioId)] } : {}),
+          scheduler: h3Scheduler, ref_image_size: refImageSize,
         } : {}),
       })
     } catch (e: unknown) {
@@ -121,18 +132,66 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
         <span className="text-[10px] text-zinc-500">モデル</span>
         <select
           value={model}
-          onChange={e => setModel(e.target.value)}
+          onChange={e => {
+            const m = e.target.value
+            setModel(m)
+            if (m.startsWith('minimax-h3')) setVres('1344x768')
+            else if (vres.includes('1344') || vres === '960x960' || vres.includes('1152')) setVres('832x480')
+          }}
           className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700"
         >
           <option value="wan2.2-flf2v">Wan2.2 FLF2V（最初/最後フレーム・推奨）</option>
           <option value="wan2.2-vace">Wan2.2 VACE（任意位置キーフレーム・1パス）</option>
+          <option value="minimax-h3">MiniMax H3（映像+音声同時生成・高品質・遅い）</option>
+          <option value="minimax-h3-ref">MiniMax H3 Ref2VA（参照9枚でキャラ一貫・音声付き）</option>
           <option value="wan2.2-fun-inp">Wan2.2 Fun-InP（最初/最後フレーム）</option>
           <option value="svd-xt">Stable Video Diffusion XT</option>
         </select>
       </label>
 
-      {/* Wan2.2: motion prompt */}
-      {isWan && (
+      {isH3Ref && (
+        <div className="flex flex-col gap-2 border border-purple-900/50 rounded p-2">
+          <p className="text-[10px] text-purple-300">Refトラックの画像(≤9枚)がキャラ/画風の参照になります。プロンプトで &lt;Picture 1&gt; のように参照を指名できます。</p>
+          <div className="flex gap-2">
+            <label className="flex flex-col gap-1 flex-1">
+              <span className="text-[10px] text-zinc-500">参照動画(任意・2〜15秒)</span>
+              <select value={refVideoId} onChange={e => setRefVideoId(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700">
+                <option value="">なし</option>
+                {assets.filter(a => assetKind(a) === 'video' && (a.duration_sec ?? 0) <= 15).map(a => (
+                  <option key={a.id} value={a.id}>#{a.id} {a.name}</option>))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 flex-1">
+              <span className="text-[10px] text-zinc-500">参照音声(任意)</span>
+              <select value={refAudioId} onChange={e => setRefAudioId(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700">
+                <option value="">なし</option>
+                {assets.filter(a => assetKind(a) === 'audio').map(a => (
+                  <option key={a.id} value={a.id}>#{a.id} {a.name}</option>))}
+              </select>
+            </label>
+          </div>
+          <div className="flex gap-2 items-center text-[10px] text-zinc-500">
+            <span>スケジューラ</span>
+            <select value={h3Scheduler} onChange={e => setH3Scheduler(e.target.value)}
+                    className="bg-zinc-800 text-xs text-zinc-200 rounded px-1.5 py-1 border border-zinc-700">
+              <option value="beta">beta(参照多め推奨)</option>
+              <option value="normal">normal</option>
+              <option value="simple">simple</option>
+            </select>
+            <span className="ml-2">参照解像度</span>
+            <select value={refImageSize} onChange={e => setRefImageSize(e.target.value)}
+                    className="bg-zinc-800 text-xs text-zinc-200 rounded px-1.5 py-1 border border-zinc-700">
+              <option value="match">match(速度)</option>
+              <option value="max">max(同一性重視)</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Wan2.2/H3: motion prompt */}
+      {isRich && (
         <>
           <label className="flex flex-col gap-1">
             <span className="text-[10px] text-zinc-500">プロンプト（動きの指示）</span>
@@ -172,16 +231,29 @@ export function VideoGenPanel({ assets }: { assets: Asset[] }) {
         </label>
       </div>
 
-      {/* Wan2.2: resolution + Lightning */}
-      {isWan && (
+      {/* Wan2.2/H3: resolution + Lightning */}
+      {isRich && (
         <div className="flex gap-2 items-end">
           <label className="flex flex-col gap-1 flex-1">
             <span className="text-[10px] text-zinc-500">解像度</span>
             <select value={vres} onChange={e => setVres(e.target.value)}
               className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 outline-none border border-zinc-700"
             >
-              <option value="832x480">832×480（16:9・高速）</option>
-              <option value="1280x720">1280×720（16:9・高品質/低速）</option>
+              {model.startsWith('minimax-h3') ? (
+                <>
+                  <option value="1344x768">1344×768（H3ネイティブ・横）</option>
+                  <option value="768x1344">768×1344（H3ネイティブ・縦）</option>
+                  <option value="1152x640">1152×640（H3高速・横）</option>
+                  <option value="960x960">960×960（正方）</option>
+                </>
+              ) : (
+                <>
+                  <option value="832x480">832×480（16:9・高速）</option>
+                  <option value="480x832">480×832（縦・高速）</option>
+                  <option value="1280x720">1280×720（16:9・高品質/低速）</option>
+                  <option value="720x1280">720×1280（縦・高品質/低速）</option>
+                </>
+              )}
             </select>
           </label>
           <label className="flex items-center gap-1.5 pb-1.5 cursor-pointer">

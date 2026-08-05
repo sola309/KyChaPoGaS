@@ -64,6 +64,10 @@ interface TimelineState {
   // Preview-only layer visibility (declutter / lighten preview; does NOT affect render)
   previewHidden: number[]                 // track ids hidden in the compositor
   toggleTrackHidden: (trackId: number) => void
+  // クリップごとの読み込み済み範囲(クリップ長に対する割合の区間リスト)。
+  // PreviewPlayerが定期更新し、TrackLaneが配信サービス風のバッファバーとして描画する。
+  clipBuffered: Record<number, [number, number][]>
+  setClipBuffered: (m: Record<number, [number, number][]>) => void
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => {
@@ -98,6 +102,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     canUndo: false,
     canRedo: false,
     previewHidden: [],
+    clipBuffered: {},
+    setClipBuffered: (m) => set({ clipBuffered: m }),
 
     toggleTrackHidden: (trackId) => set(s => ({
       previewHidden: s.previewHidden.includes(trackId)

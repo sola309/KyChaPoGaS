@@ -63,7 +63,7 @@ export function MusicStudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [musicDraft])
   useEffect(() => {
-    const t = setInterval(() => { void load() }, 4000)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void load() }, 10000)
     return () => clearInterval(t)
   }, [load])
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])

@@ -49,6 +49,34 @@ export function ProjectView() {
   // ①③ Auto-place generated images / videos / music onto the timeline
   useAutoPlaceGenerated(activeProject?.id, activeProject?.fps ?? 30, addAsset)
 
+  // 📋 クリップボード貼り付け: 画像をアセットとして取り込む(Ctrl+V / ⌘V)
+  useEffect(() => {
+    const pid = activeProject?.id
+    if (!pid) return
+    const onPaste = async (e: ClipboardEvent) => {
+      // 入力欄への通常ペーストは邪魔しない
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault()
+          const file = item.getAsFile()
+          if (!file) continue
+          const named = new File([file], `paste_${Date.now()}.png`, { type: file.type })
+          const asset = await assetsApi.upload(pid, named)
+          addAsset(asset)
+          window.dispatchEvent(new Event('kychapogas:assets-changed'))
+          useUIStore.getState().pushToast(`📋 貼り付け画像をアセット#${asset.id}として追加しました`, 'success')
+          return
+        }
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [activeProject?.id])
+
   // Realtime collaboration presence
   useCollab(activeProject?.id)
 

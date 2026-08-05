@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { Asset, TransitionType, BeatMatchResult } from '../../api/client'
-import { clipsApi, jobsApi, analysisApi } from '../../api/client'
+import { clipsApi, jobsApi, analysisApi, assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { useCollabStore } from '../../store/collabStore'
@@ -11,6 +11,7 @@ import { TrackLane } from './TrackLane'
 import { RenderDialog } from '../RenderDialog'
 import { createPortal } from 'react-dom'
 import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoints } from './SpeedCurveEditor'
+import { CutLane } from './CutLane'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { I2VSelPopover } from './I2VSelPopover'
@@ -38,17 +39,31 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
   // 再生追従: プレイヘッドが可視範囲から出たらスクロールして追いかける
   // (停止中に手でスクロールして離れても、currentFrameが動かない限り介入しない)
+  // 再生ヘッド追従スクロール。ズーム(pixelsPerFrame変更)では発動させない —
+  // ズーム時はカーソル位置アンカーが優先で、ここが動くと表示領域が飛ぶ。
   useEffect(() => {
     const sc = scrollRef.current
     if (!sc) return
-    const x = LABEL_WIDTH + currentFrame * pixelsPerFrame
+    const ppf = useTimelineStore.getState().pixelsPerFrame
+    const x = LABEL_WIDTH + currentFrame * ppf
     const viewL = sc.scrollLeft + LABEL_WIDTH
     const viewR = sc.scrollLeft + sc.clientWidth
     if (x < viewL + 8 || x > viewR - 40) {
       sc.scrollLeft = Math.max(0, x - LABEL_WIDTH - sc.clientWidth * 0.3)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFrame, pixelsPerFrame])
+  }, [currentFrame])
+
+  // ズームのアンカー維持: 新しいppfでのレイアウト確定後にscrollLeftを適用する。
+  // (レイアウト前に代入すると古いscrollWidthでクランプされて表示領域が飛ぶ)
+  const pendingScrollRef = useRef<number | null>(null)
+  useLayoutEffect(() => {
+    const sc = scrollRef.current
+    if (sc && pendingScrollRef.current != null) {
+      sc.scrollLeft = pendingScrollRef.current
+      pendingScrollRef.current = null
+    }
+  }, [pixelsPerFrame])
   const containerRef   = useRef<HTMLDivElement>(null)
   const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -63,6 +78,99 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
   useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
 
+  // ── カット割りの空き自動補完 & ピン画像の追従 ──────────────────────────
+  // ・ピン移動/カット端スライドで隣カットとの間に空き(≥1フレーム)ができたら、
+  //   即座に新しいカット(ピンペア)を仮画像で生成し、裏でVideoの実フレームに差し替える。
+  // ・自動抽出画像(frame_*)のピンは、移動後に新しい時刻のフレームへ自動で差し替える。
+  //   手動で選んだ画像や色ピンは勝手に置き換えない。
+  const gapFillBusyRef = useRef(false)
+  useEffect(() => {
+    const videoFrameAssetAt = async (frame: number): Promise<number | null> => {
+      const st = useTimelineStore.getState()
+      const videoTracks = st.tracks
+        .filter(t => t.track_type === 'video' && t.name !== 'Shots' && !t.hidden)
+        .sort((a, b) => a.order - b.order)
+      for (const vt of videoTracks) {
+        const c = st.clips.find(c => c.track_id === vt.id && c.asset_id != null &&
+          c.start_frame <= frame && frame < c.start_frame + c.duration_frames)
+        if (c) {
+          const t = (frame - c.start_frame + c.asset_in_frame) / fps
+          const a = await assetsApi.extractFrame(c.asset_id!, Math.max(0, t), 1280)
+          return a.id
+        }
+      }
+      return null
+    }
+    // 自動抽出画像のピンだけ、現在位置のフレームに画像を差し替える(古い抽出画像は掃除)
+    const refreshPinImage = async (clipId: number) => {
+      const st = useTimelineStore.getState()
+      const clip = st.clips.find(c => c.id === clipId)
+      if (!clip || clip.asset_id == null) return
+      const asset = assets.find(a => a.id === clip.asset_id)
+      if (!asset || !/^frame_\d+_/.test(asset.name)) return   // 手動画像は保持
+      const newId = await videoFrameAssetAt(clip.start_frame)
+      if (newId == null) return
+      const oldId = clip.asset_id
+      await st.updateClip(clipId, { asset_id: newId })
+      const stillUsed = useTimelineStore.getState().clips.some(c => c.id !== clipId && c.asset_id === oldId)
+      if (!stillUsed) { try { await assetsApi.delete(oldId) } catch { /* noop */ } }
+      window.dispatchEvent(new Event('kychapogas:assets-changed'))
+    }
+    const fillGaps = async (aroundClipId: number) => {
+      const st = useTimelineStore.getState()
+      const imgTrack = st.tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
+      if (!imgTrack) return
+      const pins = st.clips
+        .filter(c => c.track_id === imgTrack.id && c.asset_id != null)
+        .sort((a, b) => a.start_frame - b.start_frame)
+      const idx = pins.findIndex(p => p.id === aroundClipId)
+      if (idx < 0) return
+      const gaps: Array<{ s: number, e: number }> = []
+      for (let i = 1; i + 1 < pins.length; i += 2) {   // 終端ピン(奇数)→次の開始ピン
+        const endPin = pins[i]
+        const nextStart = pins[i + 1]
+        const gap = nextStart.start_frame - (endPin.start_frame + 1)
+        if (gap >= 1 && (endPin.id === aroundClipId || nextStart.id === aroundClipId)) {
+          gaps.push({ s: endPin.start_frame + 1, e: nextStart.start_frame - 1 })
+        }
+      }
+      for (const g of gaps) {
+        // 即時: 隣の画像を仮置きしてピンを立て、裏で実フレームに差し替える。
+        // 1フレームカット(g.s === g.e)は開始/終了ピンが同フレームに重なる。
+        const fallback = pins[idx].asset_id!
+        const c1 = await st.addClip(imgTrack.id, fallback, g.s, 15)
+        const c2 = await st.addClip(imgTrack.id, fallback, g.e, 15)
+        void (async () => {
+          const sAsset = await videoFrameAssetAt(g.s)
+          if (sAsset != null) await useTimelineStore.getState().updateClip(c1.id, { asset_id: sAsset })
+          const eAsset = g.e === g.s ? sAsset : await videoFrameAssetAt(g.e)
+          if (eAsset != null) await useTimelineStore.getState().updateClip(c2.id, { asset_id: eAsset })
+          window.dispatchEvent(new Event('kychapogas:assets-changed'))
+        })()
+      }
+    }
+    const onPinMoved = async (ev: Event) => {
+      const movedClipId = (ev as CustomEvent).detail?.clipId as number | undefined
+      if (movedClipId == null || gapFillBusyRef.current) return
+      gapFillBusyRef.current = true
+      try {
+        await fillGaps(movedClipId)
+        void refreshPinImage(movedClipId)
+      } finally { gapFillBusyRef.current = false }
+    }
+    // カット端ロール(両カットの境界移動): 双方のピン画像を追従させるだけ(空きは生じない)
+    const onPinRoll = (ev: Event) => {
+      const ids = ((ev as CustomEvent).detail?.clipIds ?? []) as number[]
+      for (const id of ids) void refreshPinImage(id)
+    }
+    window.addEventListener('kychapogas:pin-moved', onPinMoved)
+    window.addEventListener('kychapogas:pin-roll', onPinRoll)
+    return () => {
+      window.removeEventListener('kychapogas:pin-moved', onPinMoved)
+      window.removeEventListener('kychapogas:pin-roll', onPinRoll)
+    }
+  }, [fps, assets])
+
   // クリップが参照する全アセットの解析（ビート/モーションカーブ等）をロード
   const clipAssetIds = useMemo(
     () => [...new Set(clips.map(c => c.asset_id).filter((x): x is number => x != null))],
@@ -70,9 +178,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
   )
   useEffect(() => {
     const st = useAnalysisStore.getState()
-    for (const aid of clipAssetIds) {
-      if (!st.curves[aid] && !st.beats[aid] && !st.loading[aid]) void st.loadAnalysis(aid)
-    }
+    const missing = clipAssetIds.filter(aid => !st.curves[aid] && !st.beats[aid] && !st.loading[aid])
+    if (missing.length) void st.loadAnalysisBatch(missing)
   }, [clipAssetIds])
 
   // Find the first audio clip that has beat analysis
@@ -134,6 +241,11 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // 入力欄(モーダル内含む)のタイプ中はショートカットを完全停止。
+    // portalのイベントもReactツリーを伝播してここに届くため、このガードが無いと
+    // プロンプト入力の "s" で分割・Backspaceでクリップ削除が誤発火する。
+    const t = e.target as HTMLElement | null
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
     const ctrl = e.ctrlKey || e.metaKey
 
     if (ctrl && e.key === 'z' && !e.shiftKey) {
@@ -183,9 +295,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
       const rect = sc.getBoundingClientRect()
       const mouseX = e.clientX - rect.left
       const frameAt = (sc.scrollLeft + mouseX - LABEL_WIDTH) / ppf
-      requestAnimationFrame(() => {
-        sc.scrollLeft = Math.max(0, frameAt * next - mouseX + LABEL_WIDTH)
-      })
+      pendingScrollRef.current = Math.max(0, frameAt * next - mouseX + LABEL_WIDTH)
       st.setZoom(next)
     }
     sc.addEventListener('wheel', onWheel, { passive: false })
@@ -218,7 +328,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
       const sc = scrollRef.current
       if (sc) {
         const midX = (a.x + b.x) / 2 - sc.getBoundingClientRect().left
-        requestAnimationFrame(() => { sc.scrollLeft = Math.max(0, p.frameAt * next - midX + LABEL_WIDTH) })
+        pendingScrollRef.current = Math.max(0, p.frameAt * next - midX + LABEL_WIDTH)
       }
       setZoom(next)
     }
@@ -291,7 +401,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
       onKeyDown={handleKeyDown}
     >
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap max-sm:flex-nowrap max-sm:overflow-x-auto max-sm:px-2 max-sm:[&>button]:flex-shrink-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 max-sm:[&>span]:flex-shrink-0 max-sm:[&>div]:flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0 flex-nowrap overflow-x-auto [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap [&>span]:flex-shrink-0 [&>div]:flex-shrink-0 max-sm:px-2 max-sm:[&>button]:py-1.5">
         <button
           onClick={() => addTrack(projectId, 'video', `Video ${tracks.filter(t => t.track_type === 'video').length + 1}`)}
           className="text-[11px] px-2 py-0.5 rounded bg-blue-900 hover:bg-blue-800 text-blue-200"
@@ -735,6 +845,9 @@ export function Timeline({ projectId, fps, assets }: Props) {
               />
             </div>
           )}
+
+          {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
+          <CutLane tracks={tracks} clips={clips} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 
           {/* Track lanes */}
           {[...tracks].sort((a, b) => a.order - b.order).map(track => (

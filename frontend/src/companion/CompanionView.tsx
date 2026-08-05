@@ -577,7 +577,7 @@ function GenerateCharacterPanel({ basePrompt, onCreated }:
       <div className="text-[10px] text-emerald-300/90 bg-zinc-950 rounded px-2 py-1.5 border border-zinc-800 font-mono leading-snug break-words max-h-24 overflow-y-auto">{finalPrompt}</div>
 
       {asset != null && (
-        <img src={`/api/assets/${asset}/file`} alt="candidate"
+        <img src={`/api/assets/${asset}/thumbnail`} alt="candidate"
           className="w-full max-h-64 object-contain rounded bg-zinc-900 border border-zinc-800" />
       )}
 

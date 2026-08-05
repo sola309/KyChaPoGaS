@@ -5,38 +5,43 @@ import { assetsApi } from '../../api/client'
 const peakCache = new Map<number, Float32Array>()
 
 async function getPeaks(assetId: number, numBuckets: number, useProxy = false): Promise<Float32Array> {
-  // Fetch raw decoded audio, then decimate to numBuckets peaks
+  // サーバ計算のピークJSON(約8KB)を取得。従来のファイル全体DL+ブラウザデコードは
+  // 帯域を食い尽くして音声ストリーミングを妨げていたため、フォールバックのみに残す。
   let allPeaks = peakCache.get(assetId)
   if (!allPeaks) {
-    const res  = await fetch(assetsApi.fileUrl(assetId, useProxy))
-    const buf  = await res.arrayBuffer()
-    const ctx  = new AudioContext()
-    const decoded = await ctx.decodeAudioData(buf)
-    await ctx.close()
-
-    // Mix all channels down to mono
-    const ch0  = decoded.getChannelData(0)
-    const mono = decoded.numberOfChannels > 1
-      ? (() => {
-          const ch1  = decoded.getChannelData(1)
-          const out  = new Float32Array(ch0.length)
-          for (let i = 0; i < ch0.length; i++) out[i] = (Math.abs(ch0[i]) + Math.abs(ch1[i])) / 2
-          return out
-        })()
-      : new Float32Array(ch0.map(Math.abs))
-
-    // Store at 2000-bucket resolution for re-use across zoom levels
-    const stored = new Float32Array(2000)
-    const chunk  = Math.ceil(mono.length / 2000)
-    for (let i = 0; i < 2000; i++) {
-      let max = 0
-      for (let j = i * chunk; j < Math.min((i + 1) * chunk, mono.length); j++) {
-        if (mono[j] > max) max = mono[j]
+    try {
+      const res = await fetch(assetsApi.fileUrl(assetId).replace(/\/file.*$/, '/peaks'))
+      if (!res.ok) throw new Error(`peaks ${res.status}`)
+      const data = await res.json() as { peaks: number[] }
+      allPeaks = data.peaks.length ? new Float32Array(data.peaks) : new Float32Array(2000)
+    } catch {
+      // フォールバック: 従来方式(ファイル全体をデコード)
+      const res  = await fetch(assetsApi.fileUrl(assetId, useProxy))
+      const buf  = await res.arrayBuffer()
+      const ctx  = new AudioContext()
+      const decoded = await ctx.decodeAudioData(buf)
+      await ctx.close()
+      const ch0  = decoded.getChannelData(0)
+      const mono = decoded.numberOfChannels > 1
+        ? (() => {
+            const ch1  = decoded.getChannelData(1)
+            const out  = new Float32Array(ch0.length)
+            for (let i = 0; i < ch0.length; i++) out[i] = (Math.abs(ch0[i]) + Math.abs(ch1[i])) / 2
+            return out
+          })()
+        : new Float32Array(ch0.map(Math.abs))
+      const stored = new Float32Array(2000)
+      const chunk  = Math.ceil(mono.length / 2000)
+      for (let i = 0; i < 2000; i++) {
+        let max = 0
+        for (let j = i * chunk; j < Math.min((i + 1) * chunk, mono.length); j++) {
+          if (mono[j] > max) max = mono[j]
+        }
+        stored[i] = max
       }
-      stored[i] = max
+      allPeaks = stored
     }
-    allPeaks = stored
-    peakCache.set(assetId, stored)
+    peakCache.set(assetId, allPeaks)
   }
 
   // Resample stored 2000-peak array to requested numBuckets

@@ -1019,11 +1019,15 @@ def build_hidream_o1_edit(
     seed: int = -1,
     steps: int = 28,
 ) -> dict:
-    """HiDream-O1 Dev: ピクセル空間の指示編集。width/heightは32の倍数に丸める。"""
+    """
+    HiDream-O1 Dev: ピクセル空間の指示編集。
+    公式テンプレ準拠: 参照を4MPへlanczosスケールし、出力latentは
+    その参照サイズをfloor(x/32)*32したものを使う(width/height引数は使わない —
+    ピクセル空間UiTは~2048級の解像度が前提で、小さいlatentだと質感が崩壊する)。
+    """
     if not ref_image_names:
         raise ValueError("編集には参照画像が最低1枚必要です")
     s = _seed(seed)
-    width, height = max(32, (width // 32) * 32), max(32, (height // 32) * 32)
 
     wf: dict[str, dict] = {
         "ckpt": {"class_type": "CheckpointLoaderSimple",
@@ -1037,14 +1041,23 @@ def build_hidream_o1_edit(
                              "steps": steps, "denoise": 1.0}},
         "smp": {"class_type": "SamplerLCM",
                 "inputs": {"s_noise": 1.0, "s_noise_end": 1.0, "noise_clip_std": 2.5}},
-        "lat": {"class_type": "EmptyHiDreamO1LatentImage",
-                "inputs": {"width": width, "height": height, "batch_size": 1}},
     }
     ref_inputs: dict[str, object] = {"positive": ["pos", 0], "negative": ["neg", 0]}
     for i, name in enumerate(ref_image_names[:10]):
         wf[f"img{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        ref_inputs[f"images.image_{i+1}"] = [f"img{i}", 0]
+        wf[f"fit{i}"] = {"class_type": "ImageScaleToTotalPixels",
+                         "inputs": {"image": [f"img{i}", 0], "upscale_method": "lanczos",
+                                    "megapixels": 4.0, "resolution_steps": 1}}
+        ref_inputs[f"images.image_{i+1}"] = [f"fit{i}", 0]
     wf["refs"] = {"class_type": "HiDreamO1ReferenceImages", "inputs": ref_inputs}
+    # latentサイズ = 1枚目参照(4MPスケール後)のfloor(/32)*32
+    wf["size"] = {"class_type": "GetImageSize", "inputs": {"image": ["fit0", 0]}}
+    wf["mw"] = {"class_type": "ComfyMathExpression",
+                "inputs": {"expression": "floor(a/32)*32", "values.a": ["size", 0]}}
+    wf["mh"] = {"class_type": "ComfyMathExpression",
+                "inputs": {"expression": "floor(a/32)*32", "values.a": ["size", 1]}}
+    wf["lat"] = {"class_type": "EmptyHiDreamO1LatentImage",
+                 "inputs": {"width": ["mw", 1], "height": ["mh", 1], "batch_size": 1}}
     wf["ks"] = {"class_type": "SamplerCustom", "inputs": {
         "model": ["noise", 0], "add_noise": True, "noise_seed": s, "cfg": 1.0,
         "positive": ["refs", 0], "negative": ["refs", 1],
@@ -1104,4 +1117,166 @@ def build_flux2_klein_edit(
     wf["dec"] = {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["vae", 0]}}
     wf["save"] = {"class_type": "SaveImage",
                   "inputs": {"filename_prefix": "kychapogas_edit_klein", "images": ["dec", 0]}}
+    return wf
+
+
+# ── MiniMax H3 (FL2VA): 映像+ネイティブ音声の同時生成 ────────────────────────
+#
+# 公式テンプレ(video_minimax_h3_i2v)準拠。最初/最後フレーム条件付け対応。
+# 出力はSaveVideo(音声込みmp4)。lengthは24fps・17k+5グリッドへ切り上げスナップ。
+
+H3_UNET = "minimax_h3_fl2va_pruned_int8_convrot.safetensors"
+H3_TE = "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors"
+H3_VIDEO_VAE = "minimax_h3_video_vae_fp16.safetensors"
+H3_AUDIO_VAE = "minimax_h3_audio_vae_fp32.safetensors"
+H3_FPS = 24
+
+
+def h3_snap_length(frames: int) -> int:
+    """
+    H3のフレーム数制約: 17k+5グリッドへ切り上げ+訓練域124-362へクランプ。
+    (公式tooltip: 124=約5秒、訓練レンジ~124-362、超過は未検証)
+    """
+    n = max(124, min(362, int(frames)))
+    return min(362, n + (5 - (n % 17)) % 17)
+
+
+def _h3_apply_easycache(wf: dict) -> None:
+    """EasyCache(ComfyUIネイティブ)をUNETとguider/schedulerの間に挿入。
+    ステップ間の特徴再利用で約1.5〜2倍(内容依存)。副作用はわずかな甘さ/動きの平滑化。"""
+    wf["ecache"] = {"class_type": "EasyCache", "inputs": {
+        "model": ["unet", 0],
+        "reuse_threshold": 0.2, "start_percent": 0.15, "end_percent": 0.95,
+    }}
+    for node in wf.values():
+        ins = node.get("inputs", {})
+        for k, v in ins.items():
+            if node is not wf["ecache"] and isinstance(v, list) and v and v[0] == "unet":
+                ins[k] = ["ecache", 0]
+
+
+def build_minimax_h3_video(
+    prompt: str,
+    width: int = 1280,
+    height: int = 720,
+    length: int = 124,              # 24fpsフレーム数(スナップされる)
+    first_image_name: str | None = None,
+    last_image_name: str | None = None,
+    seed: int = -1,
+    steps: int = 20,
+    easycache: bool = True,
+) -> dict:
+    s = _seed(seed)
+    width = max(32, (width // 32) * 32)
+    height = max(32, (height // 32) * 32)
+    length = h3_snap_length(length)
+
+    wf: dict[str, dict] = {
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": H3_UNET, "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": H3_TE, "type": "minimax", "device": "default"}},
+        "vvae": {"class_type": "VAELoader", "inputs": {"vae_name": H3_VIDEO_VAE}},
+        "avae": {"class_type": "VAELoader", "inputs": {"vae_name": H3_AUDIO_VAE}},
+        "cond": {"class_type": "MiniMaxH3ImageToVideo", "inputs": {
+            "clip": ["clip", 0], "vae": ["vvae", 0], "prompt": prompt,
+            "width": width, "height": height, "length": length}},
+        "guider": {"class_type": "BasicGuider",
+                   "inputs": {"model": ["unet", 0], "conditioning": ["cond", 0]}},
+        "sched": {"class_type": "BasicScheduler",
+                  "inputs": {"model": ["unet", 0], "scheduler": "simple",
+                             "steps": steps, "denoise": 1.0}},
+        "smp": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "res_multistep"}},
+        "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": s}},
+        "ks": {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": ["noise", 0], "guider": ["guider", 0], "sampler": ["smp", 0],
+            "sigmas": ["sched", 0], "latent_image": ["cond", 1]}},
+        "vdec": {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["vvae", 0]}},
+        "adec": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["ks", 0], "vae": ["avae", 0]}},
+        "vid": {"class_type": "CreateVideo",
+                "inputs": {"images": ["vdec", 0], "fps": H3_FPS, "audio": ["adec", 0]}},
+        "save": {"class_type": "SaveVideo",
+                 "inputs": {"video": ["vid", 0], "filename_prefix": "video/kychapogas_h3",
+                            "format": "auto", "codec": "auto"}},
+    }
+    if first_image_name:
+        wf["img_f"] = {"class_type": "LoadImage", "inputs": {"image": first_image_name}}
+        wf["cond"]["inputs"]["first_frame"] = ["img_f", 0]
+    if last_image_name:
+        wf["img_l"] = {"class_type": "LoadImage", "inputs": {"image": last_image_name}}
+        wf["cond"]["inputs"]["last_frame"] = ["img_l", 0]
+    if easycache:
+        _h3_apply_easycache(wf)
+    return wf
+
+
+H3_REF_UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
+
+
+def build_minimax_h3_ref_video(
+    prompt: str,
+    ref_image_names: list[str],           # ≤9(2048短辺へ自動縮小・拡大なし)
+    ref_video_names: list[str] | None = None,   # ≤3 (ComfyUI input/の動画ファイル名)
+    ref_audio_names: list[str] | None = None,   # ≤3 (同・音声)
+    width: int = 1344,
+    height: int = 768,
+    length: int = 124,
+    seed: int = -1,
+    steps: int = 20,
+    scheduler: str = "beta",              # 公式Tips: 参照過多時はbeta/normalがsimpleより安定
+    ref_image_size: str = "match",        # match=速度優先 / max=同一性優先(2048短辺)
+    easycache: bool = True,
+) -> dict:
+    """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。"""
+    if not (ref_image_names or ref_video_names or ref_audio_names):
+        raise ValueError("Ref2VAには参照が最低1つ必要です")
+    s_ = _seed(seed)
+    width = max(32, (width // 32) * 32)
+    height = max(32, (height // 32) * 32)
+    length = h3_snap_length(length)
+
+    cond_inputs: dict[str, object] = {
+        "clip": ["clip", 0], "vae": ["vvae", 0], "audio_vae": ["avae", 0],
+        "prompt": prompt, "width": width, "height": height, "length": length,
+        "ref_image_size": ref_image_size,
+    }
+    wf: dict[str, dict] = {
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": H3_REF_UNET, "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": H3_TE, "type": "minimax", "device": "default"}},
+        "vvae": {"class_type": "VAELoader", "inputs": {"vae_name": H3_VIDEO_VAE}},
+        "avae": {"class_type": "VAELoader", "inputs": {"vae_name": H3_AUDIO_VAE}},
+        "guider": {"class_type": "BasicGuider",
+                   "inputs": {"model": ["unet", 0], "conditioning": ["cond", 0]}},
+        "sched": {"class_type": "BasicScheduler",
+                  "inputs": {"model": ["unet", 0], "scheduler": scheduler,
+                             "steps": steps, "denoise": 1.0}},
+        "smp": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "res_multistep"}},
+        "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": s_}},
+        "ks": {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": ["noise", 0], "guider": ["guider", 0], "sampler": ["smp", 0],
+            "sigmas": ["sched", 0], "latent_image": ["cond", 1]}},
+        "vdec": {"class_type": "VAEDecode", "inputs": {"samples": ["ks", 0], "vae": ["vvae", 0]}},
+        "adec": {"class_type": "VAEDecodeAudio", "inputs": {"samples": ["ks", 0], "vae": ["avae", 0]}},
+        "vid": {"class_type": "CreateVideo",
+                "inputs": {"images": ["vdec", 0], "fps": H3_FPS, "audio": ["adec", 0]}},
+        "save": {"class_type": "SaveVideo",
+                 "inputs": {"video": ["vid", 0], "filename_prefix": "video/kychapogas_h3r",
+                            "format": "auto", "codec": "auto"}},
+    }
+    for i, name in enumerate((ref_image_names or [])[:9]):
+        wf[f"rimg{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        cond_inputs[f"ref_images.ref_image_{i+1}"] = [f"rimg{i}", 0]
+    for i, name in enumerate((ref_video_names or [])[:3]):
+        wf[f"rvid{i}"] = {"class_type": "LoadVideo", "inputs": {"file": name}}
+        wf[f"rvc{i}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"rvid{i}", 0]}}
+        cond_inputs[f"ref_videos.ref_video_{i+1}"] = [f"rvc{i}", 0]
+        cond_inputs[f"ref_video_audios.ref_video_audio_{i+1}"] = [f"rvc{i}", 1]
+    for i, name in enumerate((ref_audio_names or [])[:3]):
+        wf[f"raud{i}"] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
+        cond_inputs[f"ref_audios.ref_audio_{i+1}"] = [f"raud{i}", 0]
+    wf["cond"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": cond_inputs}
+    if easycache:
+        _h3_apply_easycache(wf)
     return wf

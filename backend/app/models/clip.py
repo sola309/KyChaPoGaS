@@ -48,6 +48,7 @@ class ClipCreate(ClipBase):
 
 
 class ClipUpdate(SQLModel):
+    asset_id: Optional[int] = None   # アセット差し替え(音量正規化版への置換等)
     start_frame: Optional[int] = None
     duration_frames: Optional[int] = None
     asset_in_frame: Optional[int] = None

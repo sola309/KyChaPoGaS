@@ -16,6 +16,14 @@ const SIZE_PRESETS = [
   { label: '縦 832×1216',  w: 832,  h: 1216 },
   { label: '正方 1024',    w: 1024, h: 1024 },
 ] as const
+const H3_PRESETS = [
+  { label: '横 1344×768(ネイティブ推奨)', w: 1344, h: 768 },
+  { label: '縦 768×1344(ネイティブ推奨)', w: 768, h: 1344 },
+  { label: '横 1152×640(高速)',           w: 1152, h: 640 },
+  { label: '縦 640×1152(高速)',           w: 640, h: 1152 },
+  { label: '正方 960',                    w: 960, h: 960 },
+] as const
+
 const VID_PRESETS = [
   { label: '横 832×480(16:9)', w: 832, h: 480 },
   { label: '縦 480×832',       w: 480, h: 832 },
@@ -44,7 +52,11 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
   const [inFrame, setInFrame] = useState(0)
   const [outFrame, setOutFrame] = useState(0)
   const [vidPrompt, setVidPrompt] = useState('')
-  const [vidSizeIdx, setVidSizeIdx] = useState(0)   // 既定=横16:9
+  const [vidSizeIdx, setVidSizeIdx] = useState(0)
+  const [engine, setEngine] = useState<'wan' | 'h3' | 'h3ref'>('wan')   // 範囲i2vのエンジン
+  const [h3Steps, setH3Steps] = useState(15)   // 15+EasyCacheが現行スイートスポット
+  const [h3EasyCache, setH3EasyCache] = useState(true)
+  const h3Snap = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362(5.2-15.1秒)   // 既定=横16:9
   const watchedJobs = useRef<Set<number>>(new Set())
 
   const imgAssets = useMemo(() => assets.filter(a => assetKind(a) === 'image'), [assets])
@@ -159,28 +171,74 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
   const tol = fps / 2
   const hasStart = rangeKfs.length > 0 && rangeKfs[0].start_frame - inFrame <= tol
   const hasEnd = rangeKfs.length > 1 && outFrame - rangeKfs[rangeKfs.length - 1].start_frame <= tol
-  const vidModel = rangeKfs.length >= 3 || (rangeKfs.length === 2 && (!hasStart || !hasEnd))
+  const vidModel = engine === 'h3ref' ? 'minimax-h3-ref' : engine === 'h3' ? 'minimax-h3'
+    : rangeKfs.length >= 3 || (rangeKfs.length === 2 && (!hasStart || !hasEnd))
     ? 'wan2.2-vace' : 'wan2.2-flf2v'
+  const h3DurSec = h3Snap(Math.round((outFrame - inFrame) / fps * 24)) / 24
+
+  // h3ref: 範囲の下にあるVideoトラック素材を参照動画として切り出す
+  const refSourceClip = useMemo(() => {
+    if (outFrame <= inFrame) return null
+    const vidTracks = tracks
+      .filter(t => t.track_type === 'video' && t.name !== 'Shots' && !t.hidden)
+      .sort((a, b) => a.order - b.order)
+    for (const t of vidTracks) {
+      const c = clips.find(c => c.track_id === t.id && c.asset_id != null &&
+        c.start_frame <= inFrame && inFrame < c.start_frame + c.duration_frames)
+      if (c) return c
+    }
+    return null
+  }, [tracks, clips, inFrame, outFrame])
+
   const modeLabel =
+    engine === 'h3ref' ? (
+      !refSourceClip ? '— 範囲の下にVideo素材がありません' :
+      rangeKfs.length === 0 ? '— 参照画像としてImageピンが範囲内に必要' :
+      `H3 Ref2V(Videoを参考に生成・${h3DurSec.toFixed(2)}秒)`
+    ) :
     rangeKfs.length === 0 ? '— 範囲内にImageキーフレームなし' :
+    engine === 'h3' ? `H3 音声付き(最初${rangeKfs.length >= 2 ? '+最後' : ''}フレーム・${h3DurSec.toFixed(2)}秒${(outFrame - inFrame) / fps < 5 ? '・最短5.2秒に延長' : ''})` :
     rangeKfs.length === 1 ? 'I2V(開始フレームのみ)' :
     vidModel === 'wan2.2-flf2v' ? 'FLF2V(開始+終了フレーム指定)' :
     `VACE(${rangeKfs.length}キーフレームを位置固定)`
 
   const handleGenVideo = async () => {
     if (!activeProject || rangeKfs.length === 0 || outFrame <= inFrame) return
+    if (engine === 'h3ref' && !refSourceClip) return
     setBusy(true); setMsg('')
     try {
       const shots = await ensureTrack('Shots', 'video')
-      const sz = VID_PRESETS[vidSizeIdx]
+      const useH3 = engine === 'h3' || engine === 'h3ref'
+      const sz = (useH3 ? H3_PRESETS : VID_PRESETS)[vidSizeIdx] ?? (useH3 ? H3_PRESETS : VID_PRESETS)[0]
+      const kfs = useH3 && rangeKfs.length > 2
+        ? [rangeKfs[0], rangeKfs[rangeKfs.length - 1]]      // H3は最初/最後のみ対応(refは参照画像≤2枚)
+        : rangeKfs
+      const durSec = useH3 ? h3DurSec : (outFrame - inFrame) / fps
+
+      // h3ref: 範囲下のVideoを参照動画としてアセット化してから生成
+      let refVideoIds: number[] | undefined
+      if (engine === 'h3ref' && refSourceClip) {
+        setMsg('✂️ 参照動画を切り出し中…')
+        const c = refSourceClip
+        const srcStart = (inFrame - c.start_frame + c.asset_in_frame) / fps
+        const srcDur = Math.min((outFrame - inFrame) / fps,
+          (c.duration_frames - (inFrame - c.start_frame)) / fps)
+        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcDur)
+        refVideoIds = [seg.id]
+        window.dispatchEvent(new Event('kychapogas:assets-changed'))
+      }
+
       const job = await generateVideoI2V({
         project_id: activeProject.id,
-        keyframes: rangeKfs.map(c => ({ time_sec: (c.start_frame - inFrame) / fps, asset_id: c.asset_id! })),
-        duration_sec: (outFrame - inFrame) / fps,
+        keyframes: kfs.map(c => ({ time_sec: (c.start_frame - inFrame) / fps, asset_id: c.asset_id! })),
+        duration_sec: durSec,
         model: vidModel,
         prompt: vidPrompt.trim(),
         width: sz.w, height: sz.h, seed: -1, use_lightning: true,
-        place: { track_id: shots.id, start_frame: inFrame, duration_frames: outFrame - inFrame },
+        ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
+        ...(engine === 'h3ref' ? { ref_video_asset_ids: refVideoIds, scheduler: 'beta' } : {}),
+        place: { track_id: shots.id, start_frame: inFrame,
+                 duration_frames: Math.round(durSec * fps) },
       })
       watchedJobs.current.add(job.id)
       setMsg(`⏳ ${modeLabel} 生成中(job ${job.id})— 完了するとShotsトラックに自動配置`)
@@ -235,7 +293,7 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
                   <select value={editModel} onChange={e => setEditModel(e.target.value)} className={inputCls}>
                     <option value="qwen-edit-2511">Qwen-Edit-2511(推奨・4step)</option>
                     <option value="qwen-edit-2511-fp8">Qwen-Edit-2511 fp8(軽量)</option>
-                    <option value="hidream-o1-dev">HiDream-O1 Dev(キャラ参照に強い)</option>
+                    <option value="hidream-o1-dev">HiDream-O1 Dev ⚠実験的(黒画面になる既知問題あり)</option>
                     <option value="flux2-klein-kv">FLUX.2 klein KV(エフェクト・反復編集)</option>
                   </select>
                 )}
@@ -310,16 +368,59 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
             ))}
           </div>
         )}
+        <div className="flex gap-1 items-center">
+          <span className="text-[10px] text-zinc-500">エンジン</span>
+          <button className={chipCls(engine === 'wan')} onClick={() => { setEngine('wan'); setVidSizeIdx(0) }}>Wan2.2(高速・KF自在)</button>
+          <button className={chipCls(engine === 'h3')} onClick={() => { setEngine('h3'); setVidSizeIdx(0) }}>H3(音声付き・約3分)</button>
+          <button className={chipCls(engine === 'h3ref')} onClick={() => { setEngine('h3ref'); setVidSizeIdx(0) }}>🎭H3 Ref2V(Video参考)</button>
+        </div>
+        {engine === 'h3' && rangeKfs.length > 2 && (
+          <p className="text-[9px] text-amber-500">⚠ H3は最初/最後フレームのみ対応 — 中間{rangeKfs.length - 2}枚は無視されます(中間固定はWanのVACEを使用)</p>
+        )}
+        {engine === 'h3ref' && (
+          <p className="text-[9px] text-zinc-500">
+            範囲の下のVideo素材を切り出して<span className="text-zinc-300">&lt;Video 1&gt;</span>として参照、
+            範囲内のImageピン(最大2枚)を<span className="text-zinc-300">&lt;Picture 1,2&gt;</span>として参照します。
+            プロンプトで「&lt;Video 1&gt;と同じカメラワーク/構図で…」のように指名すると効きます。
+            {refSourceClip ? '' : ' ⚠ 範囲の下にVideo素材が見つかりません。'}
+          </p>
+        )}
         <textarea value={vidPrompt} onChange={e => setVidPrompt(e.target.value)} rows={2}
-                  placeholder="モーションプロンプト(camera push-in, hair swaying, ...)" className={inputCls + ' resize-none'} />
-        <div className="flex gap-2">
+                  placeholder={engine === 'h3ref'
+                    ? '例: Recreate the same camera work and composition as <Video 1>, but the singer is the girl in <Picture 1>, anime style, singing'
+                    : engine === 'h3'
+                    ? 'プロンプト(動き+音の指示: crackling sparkler, distant crowd murmur, ...)'
+                    : 'モーションプロンプト(camera push-in, hair swaying, ...)'}
+                  className={inputCls + ' resize-none'} />
+        <div className="flex gap-2 items-center flex-wrap">
           <select value={vidSizeIdx} onChange={e => setVidSizeIdx(Number(e.target.value))} className={inputCls + ' flex-1'}>
-            {VID_PRESETS.map((s, i) => <option key={i} value={i}>{s.label}</option>)}
+            {(engine === 'h3' || engine === 'h3ref' ? H3_PRESETS : VID_PRESETS).map((s, i) => <option key={i} value={i}>{s.label}</option>)}
           </select>
-          <button onClick={handleGenVideo} disabled={busy || rangeKfs.length === 0 || outFrame <= inFrame} className={btnCls}>
+          {(engine === 'h3' || engine === 'h3ref') && (
+            <>
+              <label className="flex items-center gap-1 text-[10px] text-zinc-500">
+                steps
+                <input type="number" min={8} max={40} value={h3Steps}
+                       onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
+                       className={inputCls + ' w-16'} />
+              </label>
+              <label className="flex items-center gap-1 text-[10px] text-zinc-500 cursor-pointer"
+                     title="ステップ間の特徴再利用で約1.5〜2倍高速化。副作用はわずかな甘さ(最終品質重視ならOFF)">
+                <input type="checkbox" checked={h3EasyCache} onChange={e => setH3EasyCache(e.target.checked)} />
+                ⚡EasyCache
+              </label>
+            </>
+          )}
+          <button onClick={handleGenVideo}
+                  disabled={busy || rangeKfs.length === 0 || outFrame <= inFrame ||
+                            (engine === 'h3ref' && (!refSourceClip || !vidPrompt.trim()))}
+                  className={btnCls}>
             ▶ 動画生成→配置
           </button>
         </div>
+        {(engine === 'h3' || engine === 'h3ref') && (
+          <p className="text-[9px] text-zinc-600">24fps・長さは17k+5グリッド({h3DurSec.toFixed(2)}秒)・訓練域5.2〜15.1秒にクランプ。音声(SFX/環境音/セリフ)も同時生成されます。</p>
+        )}
       </div>
 
       {msg && <p className="text-[10px] text-zinc-400">{msg}</p>}

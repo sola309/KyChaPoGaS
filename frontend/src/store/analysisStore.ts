@@ -17,6 +17,8 @@ interface AnalysisState {
   loading: Record<number, boolean>
 
   loadAnalysis: (assetId: number) => Promise<void>
+  /** 複数アセットの解析結果を1リクエストで取得(タイムライン初期化用) */
+  loadAnalysisBatch: (assetIds: number[]) => Promise<void>
   triggerAudio: (assetId: number) => Promise<number>
   triggerVideo: (assetId: number) => Promise<number>
   clearAsset:   (assetId: number) => void
@@ -47,6 +49,30 @@ export const useAnalysisStore = create<AnalysisState>((set, get) => ({
       set({ beats, scenes, motion, curves })
     } finally {
       set(s => ({ loading: { ...s.loading, [assetId]: false } }))
+    }
+  },
+
+  loadAnalysisBatch: async (assetIds) => {
+    if (!assetIds.length) return
+    set(s => ({ loading: { ...s.loading, ...Object.fromEntries(assetIds.map(id => [id, true])) } }))
+    try {
+      const byAsset = await analysisApi.getResultsBatch(assetIds)
+      const beats  = { ...get().beats }
+      const scenes = { ...get().scenes }
+      const motion = { ...get().motion }
+      const curves = { ...get().curves }
+      for (const [idStr, results] of Object.entries(byAsset)) {
+        const id = Number(idStr)
+        for (const r of results) {
+          if (r.analysis_type === 'audio_beats')   beats[id]  = r.result as BeatAnalysis
+          if (r.analysis_type === 'scene_changes') scenes[id] = r.result as SceneAnalysis
+          if (r.analysis_type === 'motion')        motion[id] = r.result as MotionAnalysis
+          if (r.analysis_type === 'motion_curve')  curves[id] = r.result as unknown as MotionCurve
+        }
+      }
+      set({ beats, scenes, motion, curves })
+    } finally {
+      set(s => ({ loading: { ...s.loading, ...Object.fromEntries(assetIds.map(id => [id, false])) } }))
     }
   },
 

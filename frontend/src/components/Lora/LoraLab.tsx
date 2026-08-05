@@ -42,7 +42,7 @@ export function LoraLab() {
   }, [])
   useEffect(() => { void load() }, [load])
   useEffect(() => {
-    const t = setInterval(() => { void load() }, 5000)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') void load() }, 15000)
     return () => clearInterval(t)
   }, [load])
 

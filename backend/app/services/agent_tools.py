@@ -95,10 +95,11 @@ JOB_CATALOG: dict[str, dict] = {
     },
     "generate_video_i2v": {
         "description": "キーフレーム画像から動画(Wan2.2)。flf2v=最初/最後フレーム指定。"
-                       "vace=任意フレーム位置のキーフレームを1パス固定(time_secの相対位置を尊重、3枚以上推奨)。",
+                       "vace=任意フレーム位置のキーフレームを1パス固定(time_secの相対位置を尊重、3枚以上推奨)。"
+                       "minimax-h3=映像+ネイティブ音声を同時生成(24fps/最初・最後フレーム対応/高品質だが1本数分)。",
         "params": {
             "model": {"type": "string",
-                      "enum": ["wan2.2-flf2v", "wan2.2-vace", "wan2.2-fun-inp", "svd-xt"],
+                      "enum": ["wan2.2-flf2v", "wan2.2-vace", "wan2.2-fun-inp", "minimax-h3", "svd-xt"],
                       "default": "wan2.2-flf2v"},
             "keyframes": {"type": "array", "required": True,
                           "items": "{time_sec, asset_id}"},
@@ -107,6 +108,7 @@ JOB_CATALOG: dict[str, dict] = {
             "width": {"type": "integer", "default": 640},
             "height": {"type": "integer", "default": 640},
             "use_lightning": {"type": "boolean", "default": True},
+            "steps": {"type": "integer", "note": "minimax-h3用(既定20)。Wan系はuse_lightningが優先"},
         },
     },
     "generate_video_s2v": {

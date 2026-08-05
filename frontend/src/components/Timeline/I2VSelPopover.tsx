@@ -17,6 +17,15 @@ const VID_PRESETS = [
   { label: '正方 640',          w: 640, h: 640 },
 ] as const
 
+// H3ネイティブ: 短辺768・上限768×1344・32の倍数
+const H3_PRESETS = [
+  { label: '横 1344×768(ネイティブ推奨)', w: 1344, h: 768 },
+  { label: '縦 768×1344(ネイティブ推奨)', w: 768, h: 1344 },
+  { label: '横 1152×640(高速)',           w: 1152, h: 640 },
+  { label: '縦 640×1152(高速)',           w: 640, h: 1152 },
+  { label: '正方 960',                    w: 960, h: 960 },
+] as const
+
 export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; fps: number; assets: Asset[] }) {
   const { generateVideoI2V, jobs } = useJobStore()
   const { refSel, clearRefSel, clips, addTrack, loadTimeline } = useTimelineStore()
@@ -24,6 +33,9 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   const [prompt, setPrompt] = useState('')
   const [sizeIdx, setSizeIdx] = useState(0)   // 既定=横1280×720
   const [frames, setFrames] = useState(81)    // Wanフレーム数(16fps, 4n+1)
+  const [engine, setEngine] = useState<'wan' | 'h3'>('wan')
+  const [h3Steps, setH3Steps] = useState(15)
+  const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
   const [msg, setMsg] = useState('')
   const snap4n1 = (n: number) => Math.max(5, Math.round((n - 1) / 4) * 4 + 1)
   const watched = useRef<Set<number>>(new Set())
@@ -59,9 +71,14 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
 
   if (kfs.length < 2) return null
 
-  const durSec = frames / 16   // 実出力の長さ(Wanネイティブ16fps)
-  const model = kfs.length >= 3 ? 'wan2.2-vace' : 'wan2.2-flf2v'
-  const modeLabel = kfs.length >= 3 ? `VACE(中間${kfs.length - 2}枚を位置固定)` : 'FLF2V(開始→終了)'
+  const genFps = engine === 'h3' ? 24 : 16
+  const snapFn = engine === 'h3' ? snapH3 : snap4n1
+  const durSec = snapFn(frames) / genFps   // 実出力の長さ
+  const model = engine === 'h3' ? 'minimax-h3'
+    : kfs.length >= 3 ? 'wan2.2-vace' : 'wan2.2-flf2v'
+  const modeLabel = engine === 'h3'
+    ? `H3 音声付き(開始→終了${kfs.length > 2 ? `・中間${kfs.length - 2}枚は無視` : ''})`
+    : kfs.length >= 3 ? `VACE(中間${kfs.length - 2}枚を位置固定)` : 'FLF2V(開始→終了)'
 
   const handleGen = async () => {
     setMsg('')
@@ -72,15 +89,18 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
         shots = useTimelineStore.getState().tracks.find(t => t.name === 'Shots' && t.track_type === 'video')
       }
       if (!shots) throw new Error('Shotsトラックを作成できませんでした')
-      const sz = VID_PRESETS[sizeIdx]
-      // タイムライン上の相対位置を保ったまま、出力長(frames/16秒)へスケール
+      const presets = engine === 'h3' ? H3_PRESETS : VID_PRESETS
+      const sz = presets[sizeIdx] ?? presets[0]
+      // タイムライン上の相対位置を保ったまま、出力長へスケール
       const scale = spanSec > 0 ? durSec / spanSec : 1
+      const useKfs = engine === 'h3' && kfs.length > 2 ? [kfs[0], kfs[kfs.length - 1]] : kfs
       const job = await generateVideoI2V({
         project_id: projectId,
-        keyframes: kfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! })),
+        keyframes: useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! })),
         duration_sec: durSec,
         model, prompt: prompt.trim(),
         width: sz.w, height: sz.h, seed: -1, use_lightning: true,
+        ...(engine === 'h3' ? { steps: h3Steps } : {}),
         place: { track_id: shots.id, start_frame: first.start_frame,
                  duration_frames: Math.round(durSec * fps) },
       })
@@ -118,22 +138,36 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
             })}
           </div>
           <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <span>エンジン</span>
+            <button onClick={() => { setEngine('wan'); setSizeIdx(0) }}
+                    className={`px-2 py-1 rounded ${engine === 'wan' ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>Wan2.2</button>
+            <button onClick={() => { setEngine('h3'); setSizeIdx(0) }}
+                    className={`px-2 py-1 rounded ${engine === 'h3' ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>H3 音声付き</button>
+            {engine === 'h3' && (
+              <label className="flex items-center gap-1 ml-auto">steps
+                <input type="number" min={8} max={40} value={h3Steps}
+                       onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
+                       className={inputCls + ' w-14'} />
+              </label>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
             <span>フレーム数</span>
-            <input type="number" step={4} min={5} value={frames}
-                   onChange={e => setFrames(snap4n1(Number(e.target.value)))}
+            <input type="number" step={engine === 'h3' ? 17 : 4} min={5} value={frames}
+                   onChange={e => setFrames(snapFn(Number(e.target.value)))}
                    className={inputCls + ' w-20'} />
-            {[41, 81, 121].map(n => (
+            {(engine === 'h3' ? [124, 226, 362] : [41, 81, 121]).map(n => (
               <button key={n} onClick={() => setFrames(n)}
                       className={`px-1.5 py-0.5 rounded ${frames === n ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 hover:bg-zinc-700'}`}>{n}</button>
             ))}
-            <span className="ml-auto">= {durSec.toFixed(2)}秒(16fps) → <span className="text-amber-400">{modeLabel}</span></span>
+            <span className="ml-auto">= {durSec.toFixed(2)}秒({genFps}fps) → <span className="text-amber-400">{modeLabel}</span></span>
           </div>
-          <p className="text-[9px] text-zinc-600">タイムライン上のKF間隔({spanSec.toFixed(2)}秒)と違う場合、動きは出力長に合わせて伸縮します。推奨81(4n+1)。</p>
+          <p className="text-[9px] text-zinc-600">タイムライン上のKF間隔({spanSec.toFixed(2)}秒)と違う場合、動きは出力長に合わせて伸縮します。{engine === 'h3' ? 'H3: 24fps・訓練域124〜362(5.2〜15.1秒)・音声同時生成(プロンプトに音の指示可)。推奨124。' : '推奨81(4n+1)。'}</p>
           <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={2}
                     placeholder="モーションプロンプト" className={inputCls + ' resize-none'} />
           <div className="flex gap-2">
             <select value={sizeIdx} onChange={e => setSizeIdx(Number(e.target.value))} className={inputCls + ' flex-1'}>
-              {VID_PRESETS.map((s, i) => <option key={i} value={i}>{s.label}</option>)}
+              {(engine === 'h3' ? H3_PRESETS : VID_PRESETS).map((s, i) => <option key={i} value={i}>{s.label}</option>)}
             </select>
             <button onClick={handleGen}
                     className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white">▶ 生成</button>

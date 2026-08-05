@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { memo, useRef, useState } from 'react'
 import type { Clip, Asset } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
@@ -37,9 +37,17 @@ interface Props {
   remoteLock?: { name: string; color: string } | null
 }
 
-export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
+export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
   const snap = snapFrame ?? ((f: number) => f)
-  const { moveClip, trimClip, deleteClip, projectFps, setEditingClipId, updateClip, setCurrentFrame } = useTimelineStore()
+  // 個別セレクタ購読(アクション参照は安定)— 全ストア購読だと再生中30fpsの
+  // currentFrame更新で全ClipBlockが再レンダされてしまう
+  const moveClip = useTimelineStore(s => s.moveClip)
+  const trimClip = useTimelineStore(s => s.trimClip)
+  const deleteClip = useTimelineStore(s => s.deleteClip)
+  const projectFps = useTimelineStore(s => s.projectFps)
+  const setEditingClipId = useTimelineStore(s => s.setEditingClipId)
+  const updateClip = useTimelineStore(s => s.updateClip)
+  const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
   const openShotEditor = useUIStore(st => st.openShotEditor)
   // mg_shot detection is defensive: fall back to the asset naming convention so a
   // stale cached Clip object (no `kind` field) can never fall into delete-on-dblclick.
@@ -52,7 +60,8 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
     } catch { /* noop */ }
   }
   const locked = !!remoteLock
-  const { scenes, motion } = useAnalysisStore()
+  const scenes = useAnalysisStore(s => s.scenes)
+  const motion = useAnalysisStore(s => s.motion)
 
   // Video/audio clips have a finite source (duration_sec); images do not and can
   // be stretched freely (freeze-frame / placeholder). For finite sources the
@@ -341,4 +350,4 @@ export function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, 
       />
     </div>
   )
-}
+})

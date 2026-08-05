@@ -1,10 +1,11 @@
 import json
 import mimetypes
 import shutil
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlmodel import Session, select
 
 from app.db.database import get_session
@@ -91,8 +92,9 @@ async def upload_asset(
 
     background_tasks.add_task(_make_thumbnail, asset)
 
-    # Auto-generate a lightweight preview proxy for uploaded videos.
-    if info.asset_type == "video":
+    # Auto-generate a lightweight preview proxy.
+    # video → 640px mp4 / audio → AAC 96k m4a(回線越しプレビューでPCM wavは重すぎるため)
+    if info.asset_type in ("video", "audio"):
         _queue_proxy(session, asset)
 
     return asset
@@ -269,7 +271,8 @@ def get_filmstrip(asset_id: int, count: int = 10, session: Session = Depends(get
         )
         if proc.returncode != 0 or not dest.exists():
             raise HTTPException(status_code=400, detail="Filmstrip generation failed")
-    return FileResponse(dest, media_type="image/jpeg")
+    return FileResponse(dest, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/{asset_id}/thumbnail")
@@ -289,7 +292,8 @@ def get_thumbnail(asset_id: int, session: Session = Depends(get_session)):
     if not thumb.exists():
         raise HTTPException(status_code=404, detail="Thumbnail not available")
 
-    return FileResponse(thumb, media_type="image/jpeg")
+    return FileResponse(thumb, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/{asset_id}/file")
@@ -305,6 +309,103 @@ def get_asset_file(asset_id: int, proxy: bool = False, session: Session = Depend
         raise HTTPException(status_code=404, detail="File not found on disk")
     media_type, _ = mimetypes.guess_type(str(path))
     return FileResponse(path, media_type=media_type or "application/octet-stream")
+
+
+@router.post("/{asset_id}/extract-clip", response_model=AssetRead, status_code=201)
+def extract_clip(
+    asset_id: int,
+    background_tasks: BackgroundTasks,
+    start_sec: float = 0.0,
+    dur_sec: float = 5.0,
+    session: Session = Depends(get_session),
+):
+    """
+    動画アセットの区間[start_sec, start_sec+dur_sec)を切り出して新しい動画アセットに登録。
+    H3 Ref2Vの参照動画(タイムラインの範囲指定→参照素材化)などに使う。
+    フレーム精度のため再エンコード(-c copyはキーフレーム境界に丸まるため不可)。
+    """
+    import subprocess as sp
+    import imageio_ffmpeg
+
+    src_asset = session.get(Asset, asset_id)
+    if not src_asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    src = Path(src_asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="Source file not found on disk")
+
+    dest_dir = _asset_dir(src_asset.project_id)
+    t = max(0.0, start_sec)
+    dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms.mp4"
+    counter = 1
+    while dest.exists():
+        dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms_{counter}.mp4"
+        counter += 1
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    proc = sp.run(
+        [ffmpeg, "-y", "-ss", f"{t:.3f}", "-t", f"{max(0.1, dur_sec):.3f}", "-i", str(src),
+         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+         "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dest)],
+        capture_output=True,
+    )
+    if proc.returncode != 0 or not dest.exists():
+        raise HTTPException(status_code=400, detail=f"Clip extraction failed: {proc.stderr.decode()[-300:]}")
+
+    info = probe(dest)
+    asset = Asset(
+        project_id=src_asset.project_id,
+        name=dest.name,
+        asset_type="video",
+        file_path=str(dest),
+        duration_sec=info.duration_sec,
+        width=info.width,
+        height=info.height,
+        file_size_bytes=info.file_size_bytes,
+    )
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    background_tasks.add_task(_make_thumbnail, asset)
+    _queue_proxy(session, asset)
+    return asset
+
+
+@router.get("/{asset_id}/peaks")
+def get_peaks(asset_id: int, buckets: int = 2000, session: Session = Depends(get_session)):
+    """
+    波形ピーク(0..1のmax絶対値、buckets個)を返す。タイムラインの波形描画用。
+    従来はブラウザが素材ファイル全体(数十MB)をDLしてデコードしていたのを、
+    サーバ側ffmpegで計算した約8KBのJSONに置き換える。結果はディスクにキャッシュ。
+    """
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    src = Path(asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    cache_dir = src.parent / ".peaks"
+    cache = cache_dir / f"{asset_id}_{buckets}.json"
+    cache_headers = {"Cache-Control": "public, max-age=86400"}
+    if cache.exists() and cache.stat().st_mtime >= src.stat().st_mtime:
+        return JSONResponse(json.loads(cache.read_text()), headers=cache_headers)
+
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(src),
+         "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+        capture_output=True,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        return {"peaks": []}   # 音声なし素材
+    import numpy as np  # noqa: PLC0415
+    data = np.abs(np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32)) / 32768.0
+    n = max(1, len(data) // buckets)
+    trimmed = data[: n * buckets].reshape(-1, n) if len(data) >= buckets else data.reshape(1, -1)
+    peaks = trimmed.max(axis=1)
+    result = {"peaks": [round(float(p), 4) for p in peaks]}
+    cache_dir.mkdir(exist_ok=True)
+    cache.write_text(json.dumps(result))
+    return JSONResponse(result, headers=cache_headers)
 
 
 @router.post("/{asset_id}/proxy", status_code=202)

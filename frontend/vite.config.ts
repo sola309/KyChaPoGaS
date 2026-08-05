@@ -9,11 +9,15 @@ export default defineConfig({
   // filesystem so edits are never missed — native fs events can be dropped on some
   // setups, which would silently break auto-reload. Gated by env so a one-off
   // `vite build` is NOT forced into watch mode.
-  // minify:false — private LAN app; keeps React component names readable so the
-  // UI inspect mode (🎯) can report <ClipBlock> etc. to the AI agent.
-  build: process.env.KYCHAPOGAS_WATCH
-    ? { minify: false, watch: { buildDelay: 200, watcher: { usePolling: true, pollInterval: 400 } } }
-    : { minify: false },
+  // minify + keepNames — 転送量削減(2.9MB→大幅減、gzipと併用)しつつ、
+  // UI inspect mode (🎯) が使うReactコンポーネント名(関数.name)は保持する。
+  build: {
+    minify: true,
+    rollupOptions: { output: { keepNames: true } },
+    ...(process.env.KYCHAPOGAS_WATCH
+      ? { watch: { buildDelay: 200, watcher: { usePolling: true, pollInterval: 400 } } }
+      : {}),
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

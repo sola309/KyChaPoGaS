@@ -76,6 +76,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# JSON/JSバンドルの転送量を数分の1に。SSEはgzipバッファでイベントが届かなくなるため除外。
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+
+
+class SelectiveGZipMiddleware(GZipMiddleware):
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "") if scope["type"] == "http" else ""
+        if path.endswith("/stream/sse") or path.endswith("/gpu/stream"):
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
+
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
 
 app.include_router(projects.router, prefix="/api")
 app.include_router(assets.router, prefix="/api")

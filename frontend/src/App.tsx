@@ -58,7 +58,7 @@ function App() {
         }
       } catch { /* ignore */ }
     }
-    const t = setInterval(check, 4000)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') check() }, 10000)
     check()
     return () => clearInterval(t)
   }, [])

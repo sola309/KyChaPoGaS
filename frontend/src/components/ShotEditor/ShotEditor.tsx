@@ -204,7 +204,7 @@ export function ShotEditor({ projectId, shotId, onClose }: Props) {
               <iframe ref={iframe} title="shot-scene"
                 src={`/api/mad/${projectId}/scene.html`}
                 className="absolute inset-0 w-full h-full border-0" />
-              <audio ref={audio} src={`/api/mad/${projectId}/music`} preload="auto" />
+              <audio ref={audio} src={`/api/mad/${projectId}/music`} preload="none" />
             </div>
             {/* transport */}
             <div className="flex items-center gap-3 px-4 py-2 border-t border-neutral-700">

@@ -2,7 +2,7 @@
  * RefClipBlock — a "pin" on the Reference Track.
  * Displayed as a fixed-width thumbnail marker; drag to reposition.
  */
-import { useRef } from 'react'
+import { memo, useRef } from 'react'
 import type { Clip, Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { assetsApi } from '../../api/client'
@@ -18,8 +18,10 @@ interface Props {
   onSelect: (id: number) => void
 }
 
-export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selected, onSelect }: Props) {
-  const { moveClip, deleteClip, toggleRefSel } = useTimelineStore()
+export const RefClipBlock = memo(function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selected, onSelect }: Props) {
+  const moveClip = useTimelineStore(s => s.moveClip)
+  const deleteClip = useTimelineStore(s => s.deleteClip)
+  const toggleRefSel = useTimelineStore(s => s.toggleRefSel)
   const selIdx = useTimelineStore(s => s.refSel.indexOf(clip.id))
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
 
@@ -45,7 +47,12 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
       const dx = ev.clientX - dragRef.current.startX
       const newFrame = Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame))
       if (newFrame !== dragRef.current.origFrame) {
-        moveClip(clip.id, dragRef.current.origFrame, newFrame)
+        void moveClip(clip.id, dragRef.current.origFrame, newFrame).then(() => {
+          // カット割りの空き自動補完(CutGapFillerが処理)へ通知
+          window.dispatchEvent(new CustomEvent('kychapogas:pin-moved', {
+            detail: { clipId: clip.id, trackId: clip.track_id },
+          }))
+        })
       } else {
         // 動かさずに離した=クリック/タップ → i2vキーフレーム選択をトグル
         toggleRefSel(clip.id)
@@ -99,4 +106,4 @@ export function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selecte
       </div>
     </div>
   )
-}
+})

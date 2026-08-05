@@ -62,6 +62,29 @@ def trigger_video_analysis(asset_id: int, session: Session = Depends(get_session
 
 # ── Result retrieval ──────────────────────────────────────────────────────────
 
+@router.get("/batch/by-assets")
+def get_analysis_batch(asset_ids: str, session: Session = Depends(get_session)):
+    """
+    複数アセットの解析結果を一括取得(タイムライン初期化時のN連発リクエスト解消)。
+    asset_ids はカンマ区切り。返り値は {asset_id: [AnalysisResultRead...]}。
+    """
+    try:
+        ids = [int(x) for x in asset_ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="asset_ids must be comma-separated integers")
+    if not ids:
+        return {}
+    results = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.asset_id.in_(ids[:200]))
+        .order_by(AnalysisResult.created_at.desc())
+    ).all()
+    out: dict[int, list] = {}
+    for r in results:
+        out.setdefault(r.asset_id, []).append(AnalysisResultRead.from_orm(r))
+    return out
+
+
 @router.get("/{asset_id}", response_model=list[AnalysisResultRead])
 def get_analysis(asset_id: int, session: Session = Depends(get_session)):
     _get_asset_or_404(asset_id, session)

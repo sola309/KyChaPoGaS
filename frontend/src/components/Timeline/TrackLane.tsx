@@ -28,19 +28,29 @@ export function TrackLane({
   track, clips, assets, pixelsPerFrame, totalWidth,
   selectedClipId, onSelectClip, onDropAsset, snapFrame,
 }: Props) {
-  const { deleteTrack, setCurrentFrame, setTrackHidden, reorderTrack, addClip, currentFrame } = useTimelineStore()
+  // 個別セレクタ購読 — currentFrameを購読すると再生中30fpsでレーン全体が再レンダされる
+  // ため、フレーム値はハンドラ内で getState() から取る(表示はピッカー内のみ)
+  const deleteTrack = useTimelineStore(s => s.deleteTrack)
+  const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
+  const setTrackHidden = useTimelineStore(s => s.setTrackHidden)
+  const reorderTrack = useTimelineStore(s => s.reorderTrack)
+  const addClip = useTimelineStore(s => s.addClip)
+  const clipBuffered = useTimelineStore(s => s.clipBuffered)
   const others = useCollabStore(s => s.others)
   const { activeProject } = useProjectStore()
   const fps = activeProject?.fps ?? 30
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerBusy, setPickerBusy] = useState(false)
+  // ピッカー表示中のみフレーム値を購読(閉時は定数→再生中の再レンダを回避)
+  const currentFrame = useTimelineStore(s => (pickerOpen ? s.currentFrame : -1))
 
   // ＋画像: 動画アセット→フレーム指定→再生ヘッド位置に画像として挿入
   const handleVFrameInsert = async (videoAssetId: number, timeSec: number, longEdge?: number) => {
     setPickerBusy(true)
     try {
       const frameAsset = await assetsApi.extractFrame(videoAssetId, timeSec, longEdge)
-      await addClip(track.id, frameAsset.id, currentFrame, Math.round(fps))
+      const atFrame = useTimelineStore.getState().currentFrame
+      await addClip(track.id, frameAsset.id, atFrame, Math.round(fps))
       window.dispatchEvent(new Event('kychapogas:assets-changed'))
       setPickerOpen(false)
     } finally { setPickerBusy(false) }
@@ -228,6 +238,28 @@ export function TrackLane({
                 remoteSelect={remoteFor(clip.id).select}
                 remoteLock={remoteFor(clip.id).lock}
               />
+
+              {/* バッファ済みバー(配信サービス風): 読み込み済み範囲を水色で表示 */}
+              {(clipBuffered[clip.id]?.length ?? 0) > 0 && (
+                <div
+                  className="absolute pointer-events-none z-20"
+                  style={{
+                    left:   clip.start_frame * pixelsPerFrame + 6,
+                    width:  Math.max(clipWidth - 12, 2),
+                    top:    height - 7,
+                    height: 3,
+                  }}
+                >
+                  <div className="absolute inset-0 rounded-full bg-black/40" />
+                  {clipBuffered[clip.id].map(([s, e], i) => (
+                    <div
+                      key={i}
+                      className="absolute top-0 bottom-0 rounded-full bg-sky-400/80"
+                      style={{ left: `${s * 100}%`, width: `${Math.max(0.5, (e - s) * 100)}%` }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

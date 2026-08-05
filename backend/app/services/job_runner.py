@@ -605,7 +605,7 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
         )
 
     model_id = params.get("model", "wan2.2-flf2v")
-    if model_id.startswith("wan2.2"):
+    if model_id.startswith("wan2.2") or model_id.startswith("minimax-h3"):
         await _generate_video_wan22(job, params)
         return
 
@@ -825,6 +825,82 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
             frames.append(newp)
         frames.sort()
         return frames
+
+    # MiniMax H3 Ref2VA: 参照束(画像/動画/音声)+指示文→映像+音声
+    if mode == "minimax-h3-ref":
+        from app.services.workflow_builder import build_minimax_h3_ref_video, h3_snap_length, H3_FPS
+        _update_progress(job.id, 0.05)
+        # keyframes=参照画像(≤9)。動画/音声参照はasset_idリストで受ける
+        rv_names, ra_names = [], []
+        for aid in (params.get("ref_video_asset_ids") or [])[:3]:
+            pth = _asset_path(int(aid))
+            rv_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
+        for aid in (params.get("ref_audio_asset_ids") or [])[:3]:
+            pth = _asset_path(int(aid))
+            ra_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
+        length = h3_snap_length(int(round(duration * H3_FPS)))
+        wf = build_minimax_h3_ref_video(
+            prompt=prompt, ref_image_names=names[:9],
+            ref_video_names=rv_names or None, ref_audio_names=ra_names or None,
+            width=width, height=height, length=length,
+            seed=seed, steps=int(params.get("steps") or 15),
+            scheduler=str(params.get("scheduler") or "beta"),
+            ref_image_size=str(params.get("ref_image_size") or "match"),
+            easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
+        )
+        prompt_id = await comfyui.submit(wf)
+        outputs = await comfyui.wait_for_outputs(
+            prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.89))
+        video_path = None
+        for out in outputs:
+            fn = out.get("filename", "")
+            if fn.endswith((".mp4", ".webm", ".mov")):
+                video_path = await comfyui.download_output(
+                    fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+                break
+        if not video_path:
+            raise RuntimeError(f"H3 Ref2VAが動画を出力しませんでした: {outputs}")
+        newp = dest_dir / f"h3r_{job.id}{video_path.suffix}"
+        video_path.replace(newp)
+        asset_id = _register_asset(project_id, newp, "generated", params)
+        _update_result_assets(job.id, [asset_id])
+        _place_result(params, asset_id)
+        log.info(f"MiniMax H3 Ref2VA done: {length}f, refs={len(names)}img/{len(rv_names)}vid/{len(ra_names)}aud → {newp.name}")
+        return
+
+    # MiniMax H3: 映像+ネイティブ音声を1パス生成(最初/最後フレーム条件付け)
+    if mode == "minimax-h3":
+        from app.services.workflow_builder import build_minimax_h3_video, h3_snap_length, H3_FPS
+        _update_progress(job.id, 0.08)
+        first_name = names[0]
+        last_name = names[-1] if len(names) >= 2 else None
+        length = h3_snap_length(int(round(duration * H3_FPS)))
+        wf = build_minimax_h3_video(
+            prompt=prompt, width=width, height=height, length=length,
+            first_image_name=first_name, last_image_name=last_name,
+            seed=seed, steps=int(params.get("steps") or 15),
+            easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
+        )
+        prompt_id = await comfyui.submit(wf)
+        outputs = await comfyui.wait_for_outputs(
+            prompt_id, lambda p: _update_progress(job.id, 0.08 + p * 0.86))
+        # SaveVideoはmp4(音声込み)を直接出力する — フレーム再結合は不要
+        video_path = None
+        for out in outputs:
+            fn = out.get("filename", "")
+            if fn.endswith((".mp4", ".webm", ".mov")):
+                video_path = await comfyui.download_output(
+                    fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+                break
+        if not video_path:
+            raise RuntimeError(f"H3が動画を出力しませんでした: {outputs}")
+        newp = dest_dir / f"h3_{job.id}{video_path.suffix}"
+        video_path.replace(newp)
+        asset_id = _register_asset(project_id, newp, "generated", params)
+        _update_result_assets(job.id, [asset_id])
+        _place_result(params, asset_id)
+        log.info(f"MiniMax H3 done: {length}f(+audio) → {newp.name}")
+        return
 
     # VACE: 任意フレーム位置に1パスで釘打ち(区間連結なし=つなぎ目の断絶なし)
     if mode == "wan2.2-vace":
@@ -1307,22 +1383,35 @@ async def _create_proxy(job: Job, params: dict) -> None:
             raise ValueError(f"Asset {asset_id} not found")
         src = Path(asset.file_path)
         project_id = asset.project_id
+        asset_type = asset.asset_type
     if not src.exists():
         raise ValueError(f"アセットファイルが見つかりません: {src}")
 
     dest_dir = PROXIES_DIR / str(project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    out = dest_dir / f"{asset_id}.mp4"
 
+    audio_exts = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aiff", ".aif"}
+    is_audio = asset_type == "audio" or src.suffix.lower() in audio_exts
     _update_progress(job.id, 0.1)
-    cmd = [
-        FFMPEG, "-y", "-i", str(src),
-        # downscale to max 640px wide (even dims), fast-decoding H.264, web-streamable
-        "-vf", "scale='min(640,iw)':-2",
-        "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart",
-        "-c:a", "aac", "-b:a", "96k",
-        str(out),
-    ]
+    if is_audio:
+        # 音声プロキシ: PCM wav(数十MB)を回線越しに流すのは重すぎるため、
+        # プレビュー用にAAC 96k(曲全体で数MB)を用意する。レンダリングは常に原本。
+        out = dest_dir / f"{asset_id}.m4a"
+        cmd = [
+            FFMPEG, "-y", "-i", str(src),
+            "-vn", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
+            str(out),
+        ]
+    else:
+        out = dest_dir / f"{asset_id}.mp4"
+        cmd = [
+            FFMPEG, "-y", "-i", str(src),
+            # downscale to max 640px wide (even dims), fast-decoding H.264, web-streamable
+            "-vf", "scale='min(640,iw)':-2",
+            "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart",
+            "-c:a", "aac", "-b:a", "96k",
+            str(out),
+        ]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
@@ -1518,6 +1607,20 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
             generate_image_thumbnail(file_path, asset_id)
     except Exception as e:
         log.warning(f"Thumbnail generation failed for asset {asset_id}: {e}")
+
+    # 生成動画/音声にも軽量プレビュープロキシを用意(uploadと同じ扱い)。
+    # プレビューが原本(高ビットレート)を直接ストリーミングして遅くなるのを防ぐ。
+    if info.asset_type in ("video", "audio"):
+        try:
+            with Session(engine) as session:
+                pj = Job(
+                    project_id=project_id, job_type="create_proxy",
+                    params=json.dumps({"asset_id": asset_id, "project_id": project_id}),
+                )
+                session.add(pj)
+                session.commit()
+        except Exception as e:
+            log.warning(f"Proxy queue failed for asset {asset_id}: {e}")
 
     return asset_id
 

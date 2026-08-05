@@ -19,7 +19,7 @@ import httpx
 
 from app.config import COMFYUI_URL
 
-COMFY_TIMEOUT_S = 600.0   # max wait for a generation job
+COMFY_TIMEOUT_S = 2400.0  # max wait for a generation job(H3等の大型モデルは1本10分超もある)
 POLL_INTERVAL_S = 2.0
 
 

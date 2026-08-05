@@ -127,6 +127,13 @@ class VideoI2VRequest(BaseModel):
     width: int = 640
     height: int = 640
     use_lightning: bool = True     # 4-step Lightning distillation (fast)
+    steps: Optional[int] = None    # サンプリングステップ上書き(H3: 既定20)
+    # H3 Ref2VA用
+    ref_video_asset_ids: Optional[list[int]] = None   # ≤3
+    ref_audio_asset_ids: Optional[list[int]] = None   # ≤3
+    scheduler: Optional[str] = None                    # beta|normal|simple
+    ref_image_size: Optional[str] = None               # match|max
+    easycache: Optional[bool] = None                   # H3: EasyCache(既定ON, Falseで無効)
     # 完成時にタイムラインへ自動配置: {track_id, start_frame, duration_frames}
     place: Optional[dict] = None
 

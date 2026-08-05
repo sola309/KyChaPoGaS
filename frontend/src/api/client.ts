@@ -114,6 +114,7 @@ export interface ClipUpdate {
   start_frame?: number
   duration_frames?: number
   asset_in_frame?: number
+  asset_id?: number | null
   track_id?: number
   speed?: number
   speed_ease?: SpeedEase
@@ -187,6 +188,8 @@ export const assetsApi = {
     `/api/assets/${assetId}/frame-preview?time_sec=${timeSec.toFixed(3)}&height=${height}`,
   extractAudio: (assetId: number) =>
     api.post<Asset>(`/assets/${assetId}/extract-audio`).then(r => r.data),
+  extractClip: (assetId: number, startSec: number, durSec: number) =>
+    api.post<Asset>(`/assets/${assetId}/extract-clip`, null, { params: { start_sec: startSec, dur_sec: durSec } }).then(r => r.data),
   makeProxy:    (assetId: number) =>
     api.post<{ job_id: number; status: string }>(`/assets/${assetId}/proxy`).then(r => r.data),
 }
@@ -215,7 +218,7 @@ export interface I2VKeyframe  { time_sec: number; asset_id: number }
 export interface PlaceSpec       { track_id: number; start_frame: number; duration_frames?: number; replace_clip_id?: number }
 export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number; init_asset_id?: number; denoise?: number; ref_asset_ids?: number[]; use_lightning?: boolean; loras?: [string, number][]; place?: PlaceSpec }
 export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
-export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; place?: PlaceSpec }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; place?: PlaceSpec }
 
 export const jobsApi = {
   list:        (projectId: number) =>
@@ -361,6 +364,8 @@ export const analysisApi = {
     api.post<{ job_id: number; status: string }>(`/analysis/video/${assetId}`).then(r => r.data),
   getResults:    (assetId: number) =>
     api.get<AnalysisResult[]>(`/analysis/${assetId}`).then(r => r.data),
+  getResultsBatch: (assetIds: number[]) =>
+    api.get<Record<number, AnalysisResult[]>>(`/analysis/batch/by-assets`, { params: { asset_ids: assetIds.join(',') } }).then(r => r.data),
   getSummary:    (projectId: number) =>
     api.get<ProjectAnalysisSummary>(`/analysis/project/${projectId}/summary`).then(r => r.data),
   getBeatMatch:  (projectId: number) =>
