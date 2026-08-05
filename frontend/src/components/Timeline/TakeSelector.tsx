@@ -24,12 +24,14 @@ interface Take {
   model?: string
   steps?: number
   easycache?: boolean
+  raw?: Record<string, unknown>   // 全生成パラメータ(詳細トグル用)
 }
 
 export function TakeSelector({ cut, assets, fps, onClose }: Props) {
   const clips = useTimelineStore(s => s.clips)
   const tracks = useTimelineStore(s => s.tracks)
   const [previewId, setPreviewId] = useState<number | null>(null)
+  const [detailId, setDetailId] = useState<number | null>(null)   // 生成情報の詳細トグル
   const [msg, setMsg] = useState('')
 
   const takes = useMemo<Take[]>(() => {
@@ -41,7 +43,7 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
         const place = p?.place
         if (!place || place.start_frame !== cut.s) continue
         if (!String(p?.model ?? '').match(/minimax-h3|wan2\.2|svd/)) continue
-        out.push({ asset: a, seed: p.seed, prompt: p.prompt, model: p.model, steps: p.steps, easycache: p.easycache })
+        out.push({ asset: a, seed: p.seed, prompt: p.prompt, model: p.model, steps: p.steps, easycache: p.easycache, raw: p })
       } catch { /* gen_params壊れは無視 */ }
     }
     return out.sort((a, b) => b.asset.id - a.asset.id)   // 新しい順
@@ -115,10 +117,40 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
                 {t.prompt && (
                   <p className="text-[9px] text-zinc-600 line-clamp-2" title={t.prompt}>{t.prompt}</p>
                 )}
-                <button onClick={() => adopt(t.asset.id)} disabled={isCurrent}
-                        className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40 self-start">
-                  {isCurrent ? '採用中' : '✅ このテイクを採用'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => adopt(t.asset.id)} disabled={isCurrent}
+                          className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40">
+                    {isCurrent ? '採用中' : '✅ このテイクを採用'}
+                  </button>
+                  <button onClick={() => setDetailId(detailId === t.asset.id ? null : t.asset.id)}
+                          className="text-[10px] px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700">
+                    {detailId === t.asset.id ? '▲ 生成情報' : '▼ 生成情報'}
+                  </button>
+                </div>
+                {detailId === t.asset.id && t.raw && (
+                  <div className="text-[9px] text-zinc-400 bg-zinc-900 border border-zinc-800 rounded p-2 flex flex-col gap-0.5">
+                    {([
+                      ['model', t.raw.model], ['seed', t.raw.seed], ['steps', t.raw.steps],
+                      ['scheduler', t.raw.scheduler], ['ref_image_size', t.raw.ref_image_size],
+                      ['easycache', t.raw.easycache], ['size', `${t.raw.width}×${t.raw.height}`],
+                      ['duration', `${Number(t.raw.duration_sec ?? 0).toFixed(2)}s`],
+                      ['参照画像', (t.raw.keyframes as { asset_id: number }[] | undefined)?.map(kf => `#${kf.asset_id}`).join(' ')],
+                      ['参照動画', (t.raw.ref_video_asset_ids as number[] | undefined)?.map(x => `#${x}`).join(' ')],
+                      ['参照音声', (t.raw.ref_audio_asset_ids as number[] | undefined)?.map(x => `#${x}`).join(' ')],
+                    ] as [string, unknown][]).filter(([, v]) => v != null && v !== '' && v !== 'undefined×undefined').map(([k, v]) => (
+                      <div key={k} className="flex gap-2">
+                        <span className="text-zinc-600 w-20 flex-shrink-0">{k}</span>
+                        <span className="break-all">{String(v)}</span>
+                      </div>
+                    ))}
+                    {t.prompt && (
+                      <div className="mt-1 pt-1 border-t border-zinc-800">
+                        <span className="text-zinc-600">prompt</span>
+                        <p className="whitespace-pre-wrap break-words text-zinc-300">{t.prompt}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
