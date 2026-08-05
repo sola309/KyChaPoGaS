@@ -728,8 +728,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         if (!useProxy && (a.file_size_bytes ?? Infinity) > 40e6) continue   // 巨大原本は従来のRangeストリーミングに任せる
         vidFetchingRef.current.add(aid)
         void (async () => {
+          // ハング対策: 60秒で中断してスロットを解放(次のtickで再試行される)
+          const ac = new AbortController()
+          const timer = setTimeout(() => ac.abort(), 60000)
           try {
-            const res = await fetch(assetsApi.fileUrl(aid, useProxy))
+            const res = await fetch(assetsApi.fileUrl(aid, useProxy), { signal: ac.signal })
             const total = Number(res.headers.get('Content-Length') || 0)
             let blob: Blob
             if (res.body && total > 0) {
@@ -764,7 +767,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
                 totalBytes -= e.bytes
               }
             }
-          } catch { vidProgRef.current.delete(aid) } finally { vidFetchingRef.current.delete(aid) }
+          } catch { vidProgRef.current.delete(aid) } finally { clearTimeout(timer); vidFetchingRef.current.delete(aid) }
         })()
       }
     }, 500)
@@ -778,20 +781,42 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
 
   // ── WYSIWYG compositor ────────────────────────────────────────────────────
   // Preload image assets so the canvas can composite them (file = full quality).
-  // タイムラインに配置されている画像のみ。アセットパネルにあるだけの素材は
-  // サムネイル表示に任せ、実ファイルはクリップ化された時点で読む(帯域をタイムライン優先に)。
+  // タイムラインに配置されている画像のみ・再生ヘッド近傍から2並列の逐次ロード。
+  // (以前は全ピンを一斉にnew Image()していたため、100枚規模になるとブラウザの
+  //  同時接続枠を画像が占拠し、動画/音声の読み込みが後ろで枯渇していた)
+  const imgLoadingRef = useRef<Set<number>>(new Set())
   useEffect(() => {
-    const used = new Set(clips.map(c => c.asset_id).filter((id): id is number => id != null))
-    for (const a of assets) {
-      const isImg = a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null)
-      if (isImg && used.has(a.id) && !imgMap.current.has(a.id)) {
+    const tick = () => {
+      if (document.hidden) return
+      const { clips: cs, tracks: ts, currentFrame: f } = useTimelineStore.getState()
+      const used = new Map<number, number>()   // asset id → 優先度(ヘッドからの距離)
+      for (const c of cs) {
+        if (c.asset_id == null) continue
+        const t = ts.find(tk => tk.id === c.track_id)
+        if (!t || t.hidden) continue
+        const p = (c.start_frame <= f && f < c.start_frame + c.duration_frames) ? 0
+          : Math.abs(c.start_frame - f)
+        used.set(c.asset_id, Math.min(used.get(c.asset_id) ?? Infinity, p))
+      }
+      const candidates = assetsRef.current
+        .filter(a => (a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null))
+          && used.has(a.id) && !imgMap.current.has(a.id) && !imgLoadingRef.current.has(a.id))
+        .sort((a, b) => used.get(a.id)! - used.get(b.id)!)
+      for (const a of candidates) {
+        if (imgLoadingRef.current.size >= 2) break
+        imgLoadingRef.current.add(a.id)
         const im = new Image()
-        im.onload = () => setRedraw(r => r + 1)   // re-run the draw effect with fresh state
+        const done = () => { imgLoadingRef.current.delete(a.id); setRedraw(r => r + 1) }
+        im.onload = done
+        im.onerror = done
         im.src = assetsApi.fileUrl(a.id)
         imgMap.current.set(a.id, im)
       }
     }
-  }, [assets, clips])
+    const iv = setInterval(tick, 400)
+    tick()
+    return () => clearInterval(iv)
+  }, [])
 
   // Draw an asset as a LAYER: cover-fit × scale, panned by (x,y), rotated about
   // its anchor. Mirrors the AE-style transform consumed by the render.
