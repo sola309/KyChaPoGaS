@@ -227,7 +227,8 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
         // 終端フレーム(outFrame-1)包含で厳密に切る(隣カットの1フレーム混入防止)
         const srcEnd = (Math.min(outFrame - 1, c.start_frame + c.duration_frames - 1)
           - c.start_frame + c.asset_in_frame) / fps
-        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcEnd - srcStart + 1 / fps, srcEnd)
+        // 2秒未満のカットは最終フレームフリーズで自動延長(H3参照クリップの公式最小2秒)
+        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcEnd - srcStart + 1 / fps, srcEnd, 2.2)
         refVideoIds = [seg.id]
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
       }

@@ -362,6 +362,7 @@ def extract_clip(
     start_sec: float = 0.0,
     dur_sec: float = 5.0,
     end_sec: float | None = None,   # 指定時: 動画はこの時刻に表示中の源フレームまで「包含」で切る(フレーム厳密)
+    pad_to_sec: float | None = None,  # 動画のみ: 出力がこれ未満なら最終フレームをフリーズして延長(H3参照の最小2秒対策)
     session: Session = Depends(get_session),
 ):
     """
@@ -418,6 +419,17 @@ def extract_clip(
     else:
         codec = ["-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
                  "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
+        # 短い参照動画の自動延長: 最終フレームのフリーズで pad_to_sec まで伸ばす。
+        # (H3の参照クリップは公式2〜15秒 — 2秒未満のカットをそのまま渡すと仕様割れになるため)
+        if pad_to_sec and frames_cap is not None:
+            info = _src_video_info(src)
+            if info:
+                fps_v = info[0]
+                target_frames = int(pad_to_sec * fps_v + 0.999)
+                if target_frames > frames_cap:
+                    pad = (target_frames - frames_cap) / fps_v + 0.02
+                    codec = ["-vf", f"tpad=stop_mode=clone:stop_duration={pad:.3f}", *codec]
+                    frames_cap = target_frames
         if frames_cap is not None:
             codec = ["-frames:v", str(frames_cap), *codec]
     proc = sp.run(

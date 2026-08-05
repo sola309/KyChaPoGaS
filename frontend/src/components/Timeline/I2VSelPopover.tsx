@@ -134,7 +134,8 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
     if (vc) {
       const vStart = (sFrame - vc.start_frame + vc.asset_in_frame) / fps
       const vEnd = (eFrame - vc.start_frame + vc.asset_in_frame) / fps
-      const seg = await assetsApi.extractClip(vc.asset_id!, vStart, vEnd - vStart + 1 / fps, vEnd)
+      // 2秒未満のカットは最終フレームフリーズで自動延長(H3参照クリップの公式最小2秒)
+      const seg = await assetsApi.extractClip(vc.asset_id!, vStart, vEnd - vStart + 1 / fps, vEnd, 2.2)
       refVideoIds = [seg.id]
     }
     if (refAudioId !== '') {
