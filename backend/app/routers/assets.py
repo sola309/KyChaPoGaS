@@ -455,8 +455,43 @@ def extract_clip(
     session.commit()
     session.refresh(asset)
     background_tasks.add_task(_make_thumbnail, asset)
-    _queue_proxy(session, asset)
+    # 注: Ref2V用の参照切り出し(ref_*)はプレビュー再生しないためプロキシ生成しない
+    # (以前は全切り出しにプロキシジョブが走り、キューの雑音になっていた)
     return asset
+
+
+@router.get("/{asset_id}/preview")
+def get_preview_image(asset_id: int, long_edge: int = 640, session: Session = Depends(get_session)):
+    """
+    プレビュー合成用の縮小画像(JPEG)。フル解像度PNG(1MB級)をタイムラインの
+    ピン100本規模で配るとロードが数分かかるため、軽量モードはこちらを使う。
+    ディスクキャッシュ+1日Cache-Control。
+    """
+    import subprocess as sp
+    import imageio_ffmpeg
+
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    src = Path(asset.file_path)
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+    le = max(160, min(1280, long_edge))
+    cache_dir = src.parent / ".preview"
+    dest = cache_dir / f"{asset_id}_{le}.jpg"
+    if not dest.exists() or dest.stat().st_mtime < src.stat().st_mtime:
+        cache_dir.mkdir(exist_ok=True)
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        proc = sp.run(
+            [ffmpeg, "-y", "-i", str(src),
+             "-vf", f"scale='if(gte(iw,ih),{le},-2)':'if(gte(iw,ih),-2,{le})':flags=lanczos",
+             "-frames:v", "1", "-q:v", "4", str(dest)],
+            capture_output=True,
+        )
+        if proc.returncode != 0 or not dest.exists():
+            raise HTTPException(status_code=400, detail="preview generation failed")
+    return FileResponse(dest, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.get("/{asset_id}/peaks")

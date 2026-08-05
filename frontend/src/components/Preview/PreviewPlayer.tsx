@@ -809,14 +809,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         const done = () => { imgLoadingRef.current.delete(a.id); setRedraw(r => r + 1) }
         im.onload = done
         im.onerror = done
-        im.src = assetsApi.fileUrl(a.id)
+        // 軽量モード: 640pxプレビューJPEG(1/12サイズ) / 高画質モード: 原本
+        im.src = lightPreview ? `/api/assets/${a.id}/preview` : assetsApi.fileUrl(a.id)
         imgMap.current.set(a.id, im)
       }
     }
     const iv = setInterval(tick, 400)
     tick()
     return () => clearInterval(iv)
-  }, [])
+  }, [lightPreview])
+  // 画質モード切替時は取り直し(URLが変わるため)
+  useEffect(() => { imgMap.current.clear(); imgLoadingRef.current.clear(); setRedraw(r => r + 1) }, [lightPreview])
 
   // Draw an asset as a LAYER: cover-fit × scale, panned by (x,y), rotated about
   // its anchor. Mirrors the AE-style transform consumed by the render.

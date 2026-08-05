@@ -51,11 +51,21 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    was_running = job.status == "running"
     if job.status in ("pending", "running"):
         job.status = "cancelled"
         session.add(job)
         session.commit()
         session.refresh(job)
+    if was_running:
+        # 実行中ジョブはComfyUI側の推論も中断する(しないとゾンビ実行がGPUレーンを塞ぐ)。
+        # interruptは「現在実行中のプロンプト」を止める。対象特定はできないが、
+        # 実行中ジョブのキャンセル時はそれが自ジョブである可能性が高い。
+        try:
+            import httpx
+            httpx.post("http://localhost:8188/interrupt", timeout=5.0)
+        except Exception:
+            pass
     return _to_read(job)
 
 

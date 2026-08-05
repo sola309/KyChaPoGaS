@@ -42,6 +42,10 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
   const [genFilter, setGenFilter] = useState<'all' | 'gen' | 'upload'>('all')
   const [query, setQuery] = useState('')
   const [sortMode, setSortMode] = useState<SortMode>('new')
+  // 中間素材(Ref2Vの参照切り出しref_/抽出フレームframe_)は既定で非表示。
+  // 数が本編素材を圧倒するため(検索時は常に対象に含める)。
+  const [showIntermediate, setShowIntermediate] = useState(false)
+  const isIntermediate = (name: string) => name.startsWith('ref_') || name.startsWith('frame_')
 
   const counts = useMemo(() => {
     const c = { all: assets.length, video: 0, image: 0, audio: 0 }
@@ -54,8 +58,11 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
     return c
   }, [assets])
 
+  const nInter = useMemo(() => assets.filter(a => isIntermediate(a.name)).length, [assets])
+
   const visible = useMemo(() => {
     let list = assets
+    if (!showIntermediate && !query.trim()) list = list.filter(a => !isIntermediate(a.name))
     if (kindFilter !== 'all') list = list.filter(a => assetKind(a) === kindFilter)
     if (genFilter === 'gen') list = list.filter(a => a.asset_type === 'generated')
     if (genFilter === 'upload') list = list.filter(a => a.asset_type !== 'generated')
@@ -67,7 +74,7 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
       sortMode === 'new' ? b.id - a.id :
       sortMode === 'old' ? a.id - b.id :
       a.name.localeCompare(b.name))
-  }, [assets, kindFilter, genFilter, query, sortMode])
+  }, [assets, kindFilter, genFilter, query, sortMode, showIntermediate])
 
   const load = async () => {
     const list = await assetsApi.list(projectId)
@@ -176,6 +183,13 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
             <option value="old">古い順</option>
             <option value="name">名前順</option>
           </select>
+          <button onClick={() => setShowIntermediate(v => !v)}
+                  className={`text-[10px] px-1.5 py-1 rounded border whitespace-nowrap ${
+                    showIntermediate ? 'bg-zinc-700 text-zinc-200 border-zinc-500'
+                                     : 'bg-zinc-800 text-zinc-500 border-zinc-700 hover:text-zinc-300'}`}
+                  title="Ref2Vの参照切り出し(ref_)・抽出フレーム(frame_)の表示切替。検索時は常に対象">
+            🧩中間{nInter}
+          </button>
         </div>
       </div>
 

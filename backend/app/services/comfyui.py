@@ -157,11 +157,13 @@ class ComfyUIConnector:
         """
         elapsed = 0.0
         watcher = None
+        orphan_s = 0.0   # プロンプトがqueueにも完了履歴にも見えない経過時間
         if phase_cb:
             watcher = asyncio.create_task(
                 self._phase_watcher(prompt_id, workflow, phase_cb, progress_cb))
 
         while elapsed < COMFY_TIMEOUT_S:
+            in_queue = True   # 取得失敗時は誤検知しない側に倒す
             async with httpx.AsyncClient(timeout=10.0) as c:
                 # Rough queue position for early progress
                 try:
@@ -170,6 +172,8 @@ class ComfyUIConnector:
                         qdata = rq.json()
                         running = qdata.get("queue_running", [])
                         pending = qdata.get("queue_pending", [])
+                        ids = {item[1] for item in running + pending if len(item) > 1}
+                        in_queue = prompt_id in ids
                         if progress_cb and not running and pending:
                             progress_cb(0.01)  # still queued
                 except Exception:
@@ -180,7 +184,7 @@ class ComfyUIConnector:
                     history = r.json()
                     entry = history.get(prompt_id)
                     if entry:
-                        # Check for error
+                        # Check for error / interruption
                         status = entry.get("status", {})
                         msgs = status.get("messages", [])
                         for mtype, mdata in msgs:
@@ -190,6 +194,17 @@ class ComfyUIConnector:
                                 raise RuntimeError(
                                     mdata.get("exception_message", "ComfyUI execution error")
                                 )
+                            if mtype == "execution_interrupted":
+                                if watcher:
+                                    watcher.cancel()
+                                raise RuntimeError("ComfyUI execution interrupted")
+                        # 完了扱いだがoutputsが空(=中断・保存失敗)を孤児として検出
+                        if status.get("completed") and not entry.get("outputs"):
+                            orphan_s += POLL_INTERVAL_S
+                            if orphan_s > 30:
+                                if watcher:
+                                    watcher.cancel()
+                                raise RuntimeError("ComfyUI prompt finished without outputs (interrupted?)")
 
                         # Collect all image / video outputs
                         outputs: list[dict] = []
@@ -205,6 +220,16 @@ class ComfyUIConnector:
                             if phase_cb:
                                 phase_cb("")
                             return outputs
+
+            # プロンプトがキューにも履歴にも存在しない=消失(ComfyUI再起動・強制クリア等)
+            if not in_queue and (r.status_code != 200 or not history.get(prompt_id)):
+                orphan_s += POLL_INTERVAL_S
+                if orphan_s > 30:
+                    if watcher:
+                        watcher.cancel()
+                    raise RuntimeError("ComfyUIからプロンプトが消失しました(再起動/クリアの可能性)")
+            else:
+                orphan_s = 0.0
 
             await asyncio.sleep(POLL_INTERVAL_S)
             elapsed += POLL_INTERVAL_S
