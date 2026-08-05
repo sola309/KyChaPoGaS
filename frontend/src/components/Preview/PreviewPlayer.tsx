@@ -129,7 +129,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setLoadedAssetId(null)
       return
     }
-    const url = assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path)
+    // メモリ(Blob)キャッシュ済みならそれを使う=境界切替が即時になる
+    const cached = vidBlobRef.current.get(activeClip.asset_id)
+    const url = cached ? cached.url : assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path)
     if (video.getAttribute('src') !== url) {
       video.src = url
       video.load()
@@ -628,12 +630,22 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             if (pr) ranges.push([0, pr])   // 全体デコード型のDL進捗
           }
         } else {
-          const v = videoRef.current
-          if (v && loadedAssetId === c.asset_id) {
-            for (let i = 0; i < v.buffered.length; i++) {
-              const s = v.buffered.start(i)
-              const e = v.buffered.end(i)
-              if (e > a0 && s < a1) ranges.push([Math.max(0, (s - a0) / span), Math.min(1, (e - a0) / span)])
+          // 動画: メモリ(Blob)キャッシュ済み=全区間、取得中=進捗。
+          // レイヤーの上下や再生位置に関係なく「メモリに載っているか」を常時表示する。
+          if (vidBlobRef.current.has(c.asset_id)) {
+            ranges.push([0, 1])
+          } else {
+            const pr = vidProgRef.current.get(c.asset_id)
+            if (pr) ranges.push([0, pr])
+            else {
+              const v = videoRef.current
+              if (v && loadedAssetId === c.asset_id) {
+                for (let i = 0; i < v.buffered.length; i++) {
+                  const s = v.buffered.start(i)
+                  const e = v.buffered.end(i)
+                  if (e > a0 && s < a1) ranges.push([Math.max(0, (s - a0) / span), Math.min(1, (e - a0) / span)])
+                }
+              }
             }
           }
         }
@@ -657,27 +669,110 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     return () => clearInterval(iv)
   }, [loadedAssetId, setClipBuffered])
 
-  // 次に再生されるクリップの先頭を軽く先読みしてHTTPキャッシュを温める。
-  // (512KBのRange取得のみ=帯域・メモリ負荷は最小。1アセット1回だけ)
-  const prefetchedRef = useRef<Set<number>>(new Set())
+  // ── タイムライン最優先の動画ローダ ──────────────────────────────────
+  // タイムライン上の動画(プロキシ優先)を再生ヘッド近傍から順にBlobへ先読みし、
+  // メモリに保持する。クリップの差し替え/移動で優先度は自動で追従し、
+  // タイムラインから消えたアセットのキャッシュ(動画/音声/画像)は即解放する。
+  // バッファバーは「メモリに載っているか」を常時反映(レイヤー位置と無関係)。
+  const vidBlobRef = useRef<Map<number, { url: string; bytes: number }>>(new Map())
+  const vidProgRef = useRef<Map<number, number>>(new Map())
+  const vidFetchingRef = useRef<Set<number>>(new Set())
+  const VID_CACHE_MAX = 400e6   // Blob合計の上限(超過時は再生ヘッドから遠い順に破棄)
   useEffect(() => {
-    const horizon = currentFrame + projectFps * 10   // 10秒先まで
-    const upcoming = clips.filter(c => {
-      const t = tracks.find(tk => tk.id === c.track_id)
-      return t && !t.hidden && (t.track_type === 'video' || t.track_type === 'audio')
-        && c.asset_id != null
-        && c.start_frame > currentFrame && c.start_frame <= horizon
-    })
-    for (const c of upcoming.slice(0, 4)) {
-      const aid = c.asset_id!
-      if (prefetchedRef.current.has(aid)) continue
-      prefetchedRef.current.add(aid)
-      const asset = assets.find(a => a.id === aid)
-      fetch(assetsApi.fileUrl(aid, !!asset?.proxy_path), {
-        headers: { Range: 'bytes=0-524287' },
-      }).catch(() => { prefetchedRef.current.delete(aid) })
-    }
-  }, [currentFrame, clips, tracks, assets, projectFps])
+    const iv = setInterval(() => {
+      if (document.hidden) return
+      const { clips: cs, tracks: ts, currentFrame: f } = useTimelineStore.getState()
+      const all = assetsRef.current
+
+      // タイムラインに存在するアセット集合(非表示トラック含む=消えた時だけ解放)
+      const onTimeline = new Set(cs.map(c => c.asset_id).filter((x): x is number => x != null))
+      for (const [aid, e] of [...vidBlobRef.current]) {
+        if (!onTimeline.has(aid)) {
+          URL.revokeObjectURL(e.url)
+          vidBlobRef.current.delete(aid)
+          vidProgRef.current.delete(aid)
+        }
+      }
+      for (const aid of [...audioBufCacheRef.current.keys()]) {
+        if (!onTimeline.has(aid)) { audioBufCacheRef.current.delete(aid); proxyProgRef.current.delete(aid) }
+      }
+      for (const aid of [...wavMetaRef.current.keys()]) {
+        if (!onTimeline.has(aid)) { wavMetaRef.current.delete(aid); wavHeaderPendingRef.current.delete(aid) }
+      }
+      for (const aid of [...imgMap.current.keys()]) {
+        if (!onTimeline.has(aid)) imgMap.current.delete(aid)
+      }
+
+      // 優先度: 再生ヘッドに重なる > 前方(近い順) > 通過済み
+      const vClips = cs.filter(c => {
+        const t = ts.find(tk => tk.id === c.track_id)
+        return t?.track_type === 'video' && !t.hidden && c.asset_id != null
+      })
+      const pri = new Map<number, number>()
+      for (const c of vClips) {
+        const p = (c.start_frame <= f && f < c.start_frame + c.duration_frames) ? 0
+          : c.start_frame > f ? c.start_frame - f : 1e9 + (f - c.start_frame)
+        pri.set(c.asset_id!, Math.min(pri.get(c.asset_id!) ?? Infinity, p))
+      }
+      const ordered = [...pri.entries()].sort((a, b) => a[1] - b[1]).map(([aid]) => aid)
+
+      // 直列2本まで先読み(ストリーム読みで進捗をバーへ)
+      for (const aid of ordered) {
+        if (vidFetchingRef.current.size >= 2) break
+        if (vidBlobRef.current.has(aid) || vidFetchingRef.current.has(aid)) continue
+        const a = all.find(x => x.id === aid)
+        if (!a) continue
+        const useProxy = !!a.proxy_path
+        if (!useProxy && (a.file_size_bytes ?? Infinity) > 40e6) continue   // 巨大原本は従来のRangeストリーミングに任せる
+        vidFetchingRef.current.add(aid)
+        void (async () => {
+          try {
+            const res = await fetch(assetsApi.fileUrl(aid, useProxy))
+            const total = Number(res.headers.get('Content-Length') || 0)
+            let blob: Blob
+            if (res.body && total > 0) {
+              const reader = res.body.getReader()
+              const parts: BlobPart[] = []
+              let got = 0
+              for (;;) {
+                const { done, value } = await reader.read()
+                if (done) break
+                parts.push(value)
+                got += value.length
+                vidProgRef.current.set(aid, got / total)
+              }
+              blob = new Blob(parts)
+            } else {
+              blob = await res.blob()
+            }
+            vidBlobRef.current.set(aid, { url: URL.createObjectURL(blob), bytes: blob.size })
+            vidProgRef.current.set(aid, 1)
+            // 容量上限: 遠いものから破棄(再生中のアセットは残す)
+            let totalBytes = [...vidBlobRef.current.values()].reduce((s, e) => s + e.bytes, 0)
+            if (totalBytes > VID_CACHE_MAX) {
+              const far = [...vidBlobRef.current.keys()]
+                .sort((x, y) => (pri.get(y) ?? 1e12) - (pri.get(x) ?? 1e12))
+              for (const k of far) {
+                if (totalBytes <= VID_CACHE_MAX) break
+                if (k === loadedAssetId) continue
+                const e = vidBlobRef.current.get(k)!
+                URL.revokeObjectURL(e.url)
+                vidBlobRef.current.delete(k)
+                vidProgRef.current.delete(k)
+                totalBytes -= e.bytes
+              }
+            }
+          } catch { vidProgRef.current.delete(aid) } finally { vidFetchingRef.current.delete(aid) }
+        })()
+      }
+    }, 500)
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedAssetId])
+  useEffect(() => () => {
+    for (const e of vidBlobRef.current.values()) URL.revokeObjectURL(e.url)
+    vidBlobRef.current.clear()
+  }, [])
 
   // ── WYSIWYG compositor ────────────────────────────────────────────────────
   // Preload image assets so the canvas can composite them (file = full quality).
