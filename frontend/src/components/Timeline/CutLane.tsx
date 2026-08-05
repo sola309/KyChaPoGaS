@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
-import type { Clip, Track } from '../../api/client'
+import type { Asset, Clip, Track } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { TakeSelector } from './TakeSelector'
 
 /**
  * 🎬 カット割りレーン v3 — Imageトラックのピンを時刻順に「2個ずつペアリング」して
@@ -19,6 +20,7 @@ import { useTimelineStore } from '../../store/timelineStore'
 interface Props {
   tracks: Track[]
   clips: Clip[]
+  assets: Asset[]
   pixelsPerFrame: number
   fps: number
   totalWidth: number
@@ -30,9 +32,10 @@ interface DragState { cutIdx: number; side: 'l' | 'r'; frame: number; origFrame:
 const hue = (i: number) => `hsl(${Math.round(((i * 0.14) % 1) * 360)}, 45%, 38%)`
 const LANE_H = 26
 
-export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Props) {
+export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth }: Props) {
   const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
   const refSel = useTimelineStore(s => s.refSel)
+  const [takeCut, setTakeCut] = useState<{ s: number; e: number } | null>(null)   // 🗂テイクブラウザ
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const justDraggedRef = useRef(false)   // ドラッグ直後のclick(シーク)誤発火防止
@@ -194,12 +197,13 @@ export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Prop
                             : 'border-black/30 hover:brightness-125'}`}
               style={{ left: s * pixelsPerFrame, width: w,
                        background: isDoomed ? '#7f1d1d' : hue(i % 12) }}
-              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)— クリックで選択(選択KF→i2v/Ref2Vに使用)・端ドラッグで境界調整`}
+              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)— クリック=選択(i2v/Ref2V用)・ダブルクリック=🗂テイク履歴・端ドラッグ=境界調整`}
               onClick={() => {
                 if (justDraggedRef.current) return
                 setCurrentFrame(c.s)
                 toggleCutSelect(c)
               }}
+              onDoubleClick={() => setTakeCut({ s: c.s, e: c.e })}
             >
               <span className="absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none flex gap-1 items-baseline overflow-hidden max-w-full">
                 {w > 34 && <span>C{i + 1}</span>}
@@ -225,6 +229,9 @@ export function CutLane({ tracks, clips, pixelsPerFrame, fps, totalWidth }: Prop
           <div className="absolute top-0.5 bottom-0.5 w-1.5 rounded-sm bg-yellow-400"
                style={{ left: dangling * pixelsPerFrame }}
                title={`未ペアのピン(${(dangling / fps).toFixed(2)}s)— もう1つ置くとカットになります`} />
+        )}
+        {takeCut && (
+          <TakeSelector cut={takeCut} assets={assets} fps={fps} onClose={() => setTakeCut(null)} />
         )}
         {drag && (
           <>

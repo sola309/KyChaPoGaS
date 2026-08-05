@@ -408,6 +408,11 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
     place = params.get("place")
     if not place:
         return
+    # auto=False: 配置せずテイクとして蓄積(place情報はgen_paramsに残り、
+    # テイクブラウザがカット紐付けに使う)。夜間バリエーション生成→朝選択のワークフロー用。
+    if place.get("auto") is False:
+        log.info("place.auto=False → テイクとして蓄積(自動配置スキップ)")
+        return
     with Session(engine) as session:
         # replace_clip_id: 既存クリップのアセットを差し替える(再生成ワークフロー)。
         # 位置・尺・トランスフォームはそのまま残る。

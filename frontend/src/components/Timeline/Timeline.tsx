@@ -847,7 +847,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
           )}
 
           {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
-          <CutLane tracks={tracks} clips={clips} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
+          <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 
           {/* Track lanes */}
           {[...tracks].sort((a, b) => a.order - b.order).map(track => (

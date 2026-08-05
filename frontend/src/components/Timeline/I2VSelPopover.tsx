@@ -50,6 +50,9 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
   const watched = useRef<Set<number>>(new Set())
 
   const [batchPerCut, setBatchPerCut] = useState(true)
+  // テイク数: 2以上でseed違いのバリエーションを蓄積(自動配置なし→🗂テイク履歴から採用)。
+  // 夜間に仕込んで朝選ぶワークフロー用。
+  const [takeCount, setTakeCount] = useState(1)
   // 選択ピンから「完全なカットペア」を導出(カット一括生成用)。
   // Imageトラック全ピンのペアリングのうち、開始/終了ピン両方が選択されているもの。
   const selectedCuts = useMemo(() => {
@@ -166,35 +169,43 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
       }
       if (!shots) throw new Error('Shotsトラックを作成できませんでした')
 
-      // ── カットごとの一括Ref2V ──────────────────────────────────────
+      // ── カットごとの一括Ref2V(×テイク数) ────────────────────────────
       if (engine === 'h3ref' && batchPerCut && selectedCuts.length >= 2) {
         const presets = H3_PRESETS
         const sz = presets[sizeIdx] ?? presets[0]
         const kfSpecs = refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id }))
+        const takes = Math.max(1, takeCount)
+        const seedBase = Math.floor(Math.random() * 900000)
         let n = 0
         for (const cut of selectedCuts) {
           n += 1
           setMsg(`✂️ (${n}/${selectedCuts.length}) 参照を切り出し中… C f${cut.s}-${cut.e}`)
           const outDur = snapH3(Math.round((cut.e - cut.s + 1) / fps * 24)) / 24
-          const refs = await extractRefsForCut(cut.s, cut.e, outDur)
-          const job = await generateVideoI2V({
-            project_id: projectId,
-            keyframes: kfSpecs,
-            duration_sec: outDur,
-            model: 'minimax-h3-ref', prompt: prompt.trim(),
-            width: sz.w, height: sz.h, seed: -1, use_lightning: true,
-            steps: h3Steps, easycache: h3EasyCache,
-            ref_video_asset_ids: refs.refVideoIds,
-            ref_audio_asset_ids: refs.refAudioIds,
-            scheduler: refScheduler, ref_image_size: refImgSize,
-            // 生成はH3の最短長(5.2s〜)になるが、配置はカット長でトリム(先頭から使用)
-            place: { track_id: shots.id, start_frame: cut.s,
-                     duration_frames: cut.e - cut.s + 1 },
-          })
-          watched.current.add(job.id)
+          const refs = await extractRefsForCut(cut.s, cut.e, outDur)   // 参照はテイク間で共有
+          for (let k = 0; k < takes; k++) {
+            const job = await generateVideoI2V({
+              project_id: projectId,
+              keyframes: kfSpecs,
+              duration_sec: outDur,
+              model: 'minimax-h3-ref', prompt: prompt.trim(),
+              width: sz.w, height: sz.h, seed: seedBase + k, use_lightning: true,
+              steps: h3Steps, easycache: h3EasyCache,
+              ref_video_asset_ids: refs.refVideoIds,
+              ref_audio_asset_ids: refs.refAudioIds,
+              scheduler: refScheduler, ref_image_size: refImgSize,
+              // takes>1: 自動配置せずテイク蓄積(🗂テイク履歴から採用)。
+              // takes=1: 従来どおりカット長トリムで自動配置。
+              place: { track_id: shots.id, start_frame: cut.s,
+                       duration_frames: cut.e - cut.s + 1,
+                       ...(takes > 1 ? { auto: false } : {}) },
+            })
+            watched.current.add(job.id)
+          }
         }
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
-        setMsg(`⏳ ${selectedCuts.length}本のRef2Vをキュー投入 — 完了ごとにShotsへカット長で自動配置`)
+        setMsg(takes > 1
+          ? `⏳ ${selectedCuts.length}カット×${takes}テイク=${selectedCuts.length * takes}本をキュー投入 — 完了後カットのダブルクリック(🗂テイク履歴)から採用`
+          : `⏳ ${selectedCuts.length}本のRef2Vをキュー投入 — 完了ごとにShotsへカット長で自動配置`)
         return
       }
       const presets = useH3 ? H3_PRESETS : VID_PRESETS
@@ -218,24 +229,31 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
 
       const kfSpecs = useKfs.map(c => ({ time_sec: (c.start_frame - first.start_frame) / fps * scale, asset_id: c.asset_id! }))
       if (engine === 'h3ref') kfSpecs.push(...refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id })))
-      const job = await generateVideoI2V({
-        project_id: projectId,
-        keyframes: kfSpecs,
-        duration_sec: durSec,
-        model, prompt: prompt.trim(),
-        width: sz.w, height: sz.h, seed: -1, use_lightning: true,
-        ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
-        ...(engine === 'h3ref' ? {
-          ref_video_asset_ids: refVideoIds,
-          ref_audio_asset_ids: refAudioIds,
-          scheduler: refScheduler,
-          ref_image_size: refImgSize,
-        } : {}),
-        place: { track_id: shots.id, start_frame: first.start_frame,
-                 duration_frames: Math.round(durSec * fps) },
-      })
-      watched.current.add(job.id)
-      setMsg(`⏳ ${modeLabel} 生成中(job ${job.id})`)
+      const takes = engine === 'h3ref' ? Math.max(1, takeCount) : 1
+      const seedBase = Math.floor(Math.random() * 900000)
+      for (let k = 0; k < takes; k++) {
+        const job = await generateVideoI2V({
+          project_id: projectId,
+          keyframes: kfSpecs,
+          duration_sec: durSec,
+          model, prompt: prompt.trim(),
+          width: sz.w, height: sz.h, seed: takes > 1 ? seedBase + k : -1, use_lightning: true,
+          ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
+          ...(engine === 'h3ref' ? {
+            ref_video_asset_ids: refVideoIds,
+            ref_audio_asset_ids: refAudioIds,
+            scheduler: refScheduler,
+            ref_image_size: refImgSize,
+          } : {}),
+          place: { track_id: shots.id, start_frame: first.start_frame,
+                   duration_frames: Math.round(durSec * fps),
+                   ...(takes > 1 ? { auto: false } : {}) },
+        })
+        watched.current.add(job.id)
+      }
+      setMsg(takes > 1
+        ? `⏳ ${takes}テイクをキュー投入 — 完了後カットのダブルクリック(🗂テイク履歴)から採用`
+        : `⏳ ${modeLabel} 生成中`)
     } catch (e) { setMsg(e instanceof Error ? e.message : 'エラー') }
   }
 
@@ -305,6 +323,17 @@ export function I2VSelPopover({ projectId, fps, assets }: { projectId: number; f
                   🎬 選択カットごとに一括生成({selectedCuts.length}本) — 各カットの参照動画/歌唱を自動切り出し→順次生成→カット長で自動配置
                 </label>
               )}
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                <span>🗂テイク数</span>
+                <input type="number" min={1} max={8} value={takeCount}
+                       onChange={e => setTakeCount(Math.max(1, Math.min(8, Number(e.target.value))))}
+                       className={inputCls + ' w-14'} />
+                <span className="text-zinc-600">
+                  {takeCount > 1
+                    ? `seed違いで${takeCount}本蓄積(自動配置なし→カットのダブルクリックで選んで採用)。夜間仕込み向け`
+                    : '1=生成後すぐ自動配置'}
+                </span>
+              </div>
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
                 <span>🎤参照音声</span>
                 <select value={refAudioId} onChange={e => setRefAudioId(e.target.value === '' ? '' : Number(e.target.value))}
