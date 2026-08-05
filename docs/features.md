@@ -56,6 +56,7 @@
 - 歌詞一致検査(adherence: ボーカル分離+ASRで反復/脱落検出)
 - 曲解析(punch/energy弧/取りやすさ)・区間リペイント・構成シート(章割り→shotlist雛形)
 - ステム分離(drums/bass/vocal/other 30Hzエンベロープ→モーション駆動)
+- **🎤歌唱分離**(アセット⋯メニュー): BS-RoFormerで「(歌唱)」「(伴奏)」2ステム化 → H3 Ref2Vのリップシンク参照音声に(範囲切り出し+5msフェードで自動セグメント化)
 
 ## 📝 MADビルダー(mad-kit)
 - shotlist.json宣言型: テンプレ18種・FX8種・enter/idle/ambient/グレード/ステム反応
