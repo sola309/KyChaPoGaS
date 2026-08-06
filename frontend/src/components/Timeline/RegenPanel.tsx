@@ -22,6 +22,9 @@ type GenParams = Record<string, unknown> & {
   keyframes?: { time_sec: number; asset_id: number }[]
   duration_sec?: number
   loras?: [string, number][]
+  steps?: number; easycache?: boolean
+  ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]
+  scheduler?: string; ref_image_size?: string
 }
 
 export function RegenPanel({ clip, asset, projectId, fps }: Props) {
@@ -60,7 +63,8 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
   const [h3Steps, setH3Steps] = useState(15)
   const snap4n1 = (n: number) => Math.max(5, Math.round((n - 1) / 4) * 4 + 1)
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
-  const isH3 = vidModel === 'minimax-h3'
+  const isH3 = vidModel.startsWith('minimax-h3')
+  const [easycache, setEasycache] = useState(true)
   const genFps = isH3 ? 24 : 16
   const snapFn = isH3 ? snapH3 : snap4n1
   useEffect(() => {
@@ -74,10 +78,12 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
     setLightning(params.use_lightning !== false)
     const m0 = String(params.model ?? 'wan2.2-flf2v')
     setVidModel(m0)
-    const f0 = m0 === 'minimax-h3' ? 24 : 16
-    const sn = m0 === 'minimax-h3' ? snapH3 : snap4n1
+    const h3 = m0.startsWith('minimax-h3')
+    const f0 = h3 ? 24 : 16
+    const sn = h3 ? snapH3 : snap4n1
     setFrames(sn(Math.round(Number(params.duration_sec ?? 5) * f0)))
-    setH3Steps(Number(params.steps ?? 20))
+    setH3Steps(Number(params.steps ?? 15))
+    setEasycache(params.easycache !== false)
   }, [params])
 
   const sizePresets = kind === 'i2v'
@@ -127,7 +133,8 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
         const newDur = snapFn(frames) / genFps
         const kfScale = oldDur > 0 ? newDur / oldDur : 1
         let kfs = params.keyframes!.map(k => ({ ...k, time_sec: k.time_sec * kfScale }))
-        if (isH3 && kfs.length > 2) kfs = [kfs[0], kfs[kfs.length - 1]]   // H3は最初/最後のみ
+        // H3(FL2VA)は最初/最後のみ。Ref2Vのkeyframesは参照画像なので全て残す
+        if (vidModel === 'minimax-h3' && kfs.length > 2) kfs = [kfs[0], kfs[kfs.length - 1]]
         const job = await generateVideoI2V({
           project_id: projectId,
           keyframes: kfs,
@@ -135,7 +142,14 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
           model: vidModel,
           prompt, negative_prompt: negPrompt,
           width, height, seed, use_lightning: lightning,
-          ...(isH3 ? { steps: h3Steps } : {}),
+          ...(isH3 ? { steps: h3Steps, easycache } : {}),
+          // Ref2V: 参照動画/音声・scheduler・ref_image_sizeを元条件のまま引き継ぐ
+          ...(vidModel === 'minimax-h3-ref' ? {
+            ...(Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length ? { ref_video_asset_ids: params.ref_video_asset_ids } : {}),
+            ...(Array.isArray(params.ref_audio_asset_ids) && params.ref_audio_asset_ids.length ? { ref_audio_asset_ids: params.ref_audio_asset_ids } : {}),
+            scheduler: String(params.scheduler ?? 'beta'),
+            ref_image_size: String(params.ref_image_size ?? 'match'),
+          } : {}),
           place,
         })
         jobId = job.id
@@ -190,11 +204,12 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
                           const m = e.target.value
                           const secs = frames / genFps
                           setVidModel(m)
-                          const nf = m === 'minimax-h3' ? snapH3(Math.round(secs * 24)) : snap4n1(Math.round(secs * 16))
+                          const h3sel = m.startsWith('minimax-h3')
+                          const nf = h3sel ? snapH3(Math.round(secs * 24)) : snap4n1(Math.round(secs * 16))
                           setFrames(nf)
                           // 解像度をエンジンの推奨バケットへスナップ(縦横比は維持)
                           const portrait = height > width
-                          if (m === 'minimax-h3') { setWidth(portrait ? 768 : 1344); setHeight(portrait ? 1344 : 768) }
+                          if (h3sel) { setWidth(portrait ? 768 : 1344); setHeight(portrait ? 1344 : 768) }
                           else if (width % 32 === 0 && (width === 1344 || width === 768 || width === 1152 || width === 640 || width === 960)) {
                             setWidth(portrait ? 720 : 1280); setHeight(portrait ? 1280 : 720)
                           }
@@ -203,13 +218,19 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
                   <option value="wan2.2-flf2v">Wan2.2 FLF2V(高速)</option>
                   <option value="wan2.2-vace">Wan2.2 VACE(中間KF固定)</option>
                   <option value="minimax-h3">MiniMax H3(音声付き・約3分)</option>
+                  <option value="minimax-h3-ref">🎭 H3 Ref2V(参照束)</option>
                 </select>
                 {isH3 && (
-                  <label className="flex items-center gap-1">steps
-                    <input type="number" min={8} max={40} value={h3Steps}
-                           onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
-                           className={inputCls + ' w-14'} />
-                  </label>
+                  <>
+                    <label className="flex items-center gap-1">steps
+                      <input type="number" min={8} max={40} value={h3Steps}
+                             onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
+                             className={inputCls + ' w-14'} />
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer" title="約1.5〜2倍高速(わずかに甘くなる)">
+                      <input type="checkbox" checked={easycache} onChange={e => setEasycache(e.target.checked)} />⚡
+                    </label>
+                  </>
                 )}
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">

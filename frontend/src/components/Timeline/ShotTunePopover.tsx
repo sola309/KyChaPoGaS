@@ -31,7 +31,10 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   const [speed, setSpeed] = useState(clip.speed ?? 1)
   const [showCurve, setShowCurve] = useState(false)
   const [splitAt, setSplitAt] = useState(Math.floor(clip.duration_frames / 2))
+  const [playing, setPlaying] = useState(false)          // 停止=フレーム単位スクラブ / 再生=窓ループ
+  const [scrubSrc, setScrubSrc] = useState(clip.asset_in_frame)   // 現在位置(ソースフレーム)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const stripRef = useRef<HTMLDivElement | null>(null)
 
   const sourceFrames = asset?.duration_sec ? Math.max(1, Math.floor(asset.duration_sec * fps)) : clip.duration_frames
   const usedSrc = Math.round(clip.duration_frames * speed)     // カットが消費するソース量
@@ -52,19 +55,42 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   }, [tracks, clips, clip.start_frame])
   const cutMatch = cut && clip.start_frame === cut.s && clip.duration_frames === cut.e - cut.s + 1
 
-  // プレビュー: ソース窓をクリップ速度でループ再生
+  // プレビュー: 再生中=窓ループ / 停止中=scrubSrc位置のフレーム静止表示
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
+    if (!playing) {
+      v.pause()
+      const t = scrubSrc / fps + 1e-4
+      if (Math.abs(v.currentTime - t) > 0.5 / fps) v.currentTime = t
+      return
+    }
     const t0 = assetIn / fps
     const t1 = (assetIn + usedSrc) / fps
     v.playbackRate = Math.min(4, Math.max(0.1, speed))
-    const onTime = () => { if (v.currentTime >= t1 - 0.03 || v.currentTime < t0 - 0.2) v.currentTime = t0 }
+    const onTime = () => {
+      setScrubSrc(Math.floor(v.currentTime * fps))
+      if (v.currentTime >= t1 - 0.03 || v.currentTime < t0 - 0.2) v.currentTime = t0
+    }
     v.addEventListener('timeupdate', onTime)
-    if (Math.abs(v.currentTime - t0) > 0.2) v.currentTime = t0
+    if (Math.abs(v.currentTime - t0) > 0.2 && v.currentTime > t1) v.currentTime = t0
     v.play().catch(() => {})
     return () => v.removeEventListener('timeupdate', onTime)
-  }, [assetIn, usedSrc, speed, fps])
+  }, [playing, assetIn, usedSrc, speed, fps, scrubSrc])
+
+  const scrubTo = (srcFrame: number) => {
+    setPlaying(false)
+    setScrubSrc(Math.max(0, Math.min(sourceFrames - 1, Math.round(srcFrame))))
+  }
+  const stripScrub = (e: React.PointerEvent) => {
+    const el = stripRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    scrubTo(((e.clientX - rect.left) / rect.width) * sourceFrames)
+  }
+  // 現在位置がカット(窓)内なら、対応するタイムライン出力位置
+  const inWindow = scrubSrc >= assetIn && scrubSrc < assetIn + usedSrc
+  const outFrame = inWindow ? Math.round((scrubSrc - assetIn) / Math.max(0.05, speed)) : null
 
   const applyIn = (val: number) => {
     const nv = Math.max(0, Math.min(maxIn, Math.round(val)))
@@ -99,29 +125,72 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
           <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2">✕</button>
         </div>
 
-        {/* ソース窓プレビュー(選択区間をループ再生) */}
-        <video ref={videoRef} muted playsInline loop={false}
-               src={clip.asset_id != null ? assetsApi.fileUrl(clip.asset_id, !!asset?.proxy_path) : undefined}
-               className="w-full aspect-video bg-black rounded object-contain" />
+        {/* プレビュー: 停止=現在位置の静止フレーム / 再生=カット窓を実速度ループ */}
+        <div className="relative">
+          <video ref={videoRef} muted playsInline loop={false}
+                 src={clip.asset_id != null ? assetsApi.fileUrl(clip.asset_id, !!asset?.proxy_path) : undefined}
+                 className="w-full aspect-video bg-black rounded object-contain" />
+          <span className="absolute bottom-1 right-1.5 font-mono text-[10px] text-white/60 bg-black/50 px-1 rounded pointer-events-none">
+            src {scrubSrc}f{outFrame != null ? ` → out +${outFrame}f (f${clip.start_frame + outFrame})` : '(窓外)'}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setPlaying(p => !p)}
+                  className="text-xs px-3 py-1 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-700">
+            {playing ? '⏸ 停止(コマ調整へ)' : '▶ 窓をループ再生'}
+          </button>
+          {[-10, -1, 1, 10].map(d => (
+            <button key={d} onClick={() => scrubTo(scrubSrc + d)} className={chipCls(false)}>{d > 0 ? `+${d}` : d}f</button>
+          ))}
+          <span className="text-[10px] text-zinc-600 ml-auto">停止中はフィルムストリップのクリック/ドラッグでコマ単位スクラブ</span>
+        </div>
 
-        {/* ソース窓スライダー: 生成全体のどこを使うか */}
+        {/* 上段: カットレイヤー(タイムライン上の尺 — 固定) */}
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] text-zinc-500">カットレイヤー(タイムライン f{clip.start_frame}-{clip.start_frame + clip.duration_frames - 1}・尺固定)</span>
+          <div className="relative h-5 bg-zinc-800 rounded overflow-hidden">
+            <div className="absolute inset-0 bg-purple-900/50 flex items-center pl-1 text-[9px] text-purple-200">
+              {clip.duration_frames}f = {(clip.duration_frames / fps).toFixed(2)}s
+            </div>
+            {outFrame != null && (
+              <div className="absolute top-0 bottom-0 w-px bg-amber-300"
+                   style={{ left: `${(outFrame / clip.duration_frames) * 100}%` }} />
+            )}
+          </div>
+        </div>
+
+        {/* 下段: Shotフル尺(フィルムストリップ)+ソース窓 */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between text-[10px] text-zinc-500">
-            <span>ソース窓(生成 {sourceFrames}f のうち {usedSrc}f を使用)</span>
-            <span>開始 {assetIn}f = {(assetIn / fps).toFixed(2)}s</span>
+            <span>Shotレイヤー(生成フル尺 {sourceFrames}f のうち紫の {usedSrc}f がカットに載る)</span>
+            <span>窓開始 {assetIn}f = {(assetIn / fps).toFixed(2)}s</span>
           </div>
-          <div className="relative h-6 bg-zinc-800 rounded">
-            <div className="absolute top-0 bottom-0 bg-purple-700/60 rounded"
+          <div ref={stripRef}
+               className="relative h-14 bg-zinc-950 rounded overflow-hidden cursor-crosshair select-none"
+               style={{ touchAction: 'none' }}
+               onPointerDown={e => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); stripScrub(e) }}
+               onPointerMove={e => { if (e.buttons & 1) stripScrub(e) }}>
+            {clip.asset_id != null && (
+              <img src={`/api/assets/${clip.asset_id}/filmstrip?count=12`} alt=""
+                   className="absolute inset-0 w-full h-full object-fill opacity-70 pointer-events-none" />
+            )}
+            {/* ソース窓(カットに使われる区間) */}
+            <div className="absolute top-0 bottom-0 border-2 border-purple-400 bg-purple-500/20 pointer-events-none"
                  style={{ left: `${(assetIn / sourceFrames) * 100}%`, width: `${(usedSrc / sourceFrames) * 100}%` }} />
-            <input type="range" min={0} max={maxIn} value={assetIn}
-                   onChange={e => applyIn(Number(e.target.value))}
-                   className="absolute inset-0 w-full opacity-0 cursor-ew-resize" />
+            {/* 現在位置マーカー */}
+            <div className="absolute top-0 bottom-0 w-px bg-amber-300 pointer-events-none"
+                 style={{ left: `${(scrubSrc / sourceFrames) * 100}%` }} />
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-center flex-wrap">
+            <span className="text-[10px] text-zinc-500">窓移動</span>
+            <input type="range" min={0} max={maxIn} value={assetIn}
+                   onChange={e => applyIn(Number(e.target.value))} className="flex-1 min-w-32" />
             {[-30, -5, -1, 1, 5, 30].map(d => (
               <button key={d} onClick={() => applyIn(assetIn + d)} className={chipCls(false)}>{d > 0 ? `+${d}` : d}f</button>
             ))}
-            <span className="text-[10px] text-zinc-600 self-center ml-auto">プレビューは窓区間を実速度でループ</span>
+            <button onClick={() => applyIn(scrubSrc)} className={chipCls(false)} title="現在位置(黄線)を窓の開始フレームにする">
+              ▶ 現在位置を窓開始に
+            </button>
           </div>
         </div>
 

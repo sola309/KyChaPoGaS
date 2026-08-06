@@ -91,6 +91,20 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const projW = activeProject?.width  ?? 1280
   const projH = activeProject?.height ?? 720
 
+  // 現在再生位置のカット番号(CutLaneと同じペアリングから導出 — 表示の唯一のソース)
+  const currentCut = (() => {
+    const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
+    if (!imgTrack) return null
+    const pins = clips.filter(c => c.track_id === imgTrack.id && c.asset_id != null)
+      .map(c => c.start_frame).sort((a, b) => a - b)
+    for (let i = 0; i + 1 < pins.length; i += 2) {
+      if (pins[i] <= currentFrame && currentFrame <= pins[i + 1]) {
+        return { n: i / 2 + 1, s: pins[i], e: pins[i + 1] }
+      }
+    }
+    return null
+  })()
+
   // ベースレイヤー選択: 「再生ヘッドにクリップがある」最上位のVideoトラックを使う。
   // 最上段が空白の区間は透明扱いで下のトラックへフォールスルーする(黒塗りにしない)。
   const activeClip = (() => {
@@ -1172,6 +1186,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-emerald-300 animate-pulse">🎵 音声読込中</span>
             )}
           </div>
+        )}
+        {/* 現在カットバッジ(CutLaneと同一採番) */}
+        {currentCut && (
+          <span className="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-amber-300 pointer-events-none font-mono">
+            C{currentCut.n} <span className="text-white/40">f{currentCut.s}-{currentCut.e}</span>
+          </span>
         )}
         <div className="absolute bottom-2 right-2 font-mono text-[10px] text-white/50 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none">
           {String(Math.floor(currentFrame / projectFps / 60)).padStart(2, '0')}:
