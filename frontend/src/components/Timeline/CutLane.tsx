@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Asset, Clip, Track } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { TakeSelector } from './TakeSelector'
@@ -36,6 +36,15 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
   const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
   const refSel = useTimelineStore(s => s.refSel)
   const [takeCut, setTakeCut] = useState<{ s: number; e: number } | null>(null)   // 🗂テイクブラウザ
+  // Shotsクリップの🗂ボタンなど、レーン外からも開けるようにする
+  useEffect(() => {
+    const onOpen = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as { s: number; e: number } | undefined
+      if (d) setTakeCut({ s: d.s, e: d.e })
+    }
+    window.addEventListener('kychapogas:open-takes', onOpen)
+    return () => window.removeEventListener('kychapogas:open-takes', onOpen)
+  }, [])
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const justDraggedRef = useRef(false)   // ドラッグ直後のclick(シーク)誤発火防止

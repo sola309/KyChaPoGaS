@@ -330,6 +330,21 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         </span>
       </div>
 
+      {/* 🗂テイク履歴: このクリップ位置の生成テイクを一覧(選択時に表示) */}
+      {selected && (
+        <button
+          onClick={e => {
+            e.stopPropagation()
+            window.dispatchEvent(new CustomEvent('kychapogas:open-takes', {
+              detail: { s: clip.start_frame, e: clip.start_frame + clip.duration_frames - 1 },
+            }))
+          }}
+          onPointerDown={e => e.stopPropagation()}
+          className="absolute top-0 right-6 z-20 text-[11px] leading-none px-1 py-0.5 rounded-bl bg-black/50 text-zinc-300 hover:text-amber-300"
+          title="🗂テイク履歴 — このカットの生成テイクを見比べて採用/昇格"
+        >🗂</button>
+      )}
+
       {/* 🔒ロックトグル: 確定カットを再生成・編集から保護(選択時またはロック中に表示) */}
       {(selected || hardLocked) && (
         <button
