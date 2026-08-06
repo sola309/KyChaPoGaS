@@ -233,6 +233,15 @@ export interface ImageGenParams  { project_id: number; prompt: string; negative_
 export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
 export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; place?: PlaceSpec }
 
+export interface NightBatchState {
+  running?: boolean
+  project_id?: number
+  weights?: Record<string, number>
+  counts?: Record<string, number>
+  keep_in_flight?: number
+  last_job_id?: number
+}
+
 export const jobsApi = {
   list:        (projectId: number) =>
     api.get<Job[]>('/jobs/', { params: { project_id: projectId } }).then(r => r.data),
@@ -242,6 +251,12 @@ export const jobsApi = {
   cancel:      (id: number) => api.post<Job>(`/jobs/${id}/cancel`).then(r => r.data),
   delete:      (id: number) => api.delete(`/jobs/${id}`),
   downloadUrl: (id: number) => `/api/jobs/${id}/download`,
+  nightBatchState: () => api.get<NightBatchState>('/jobs/nightbatch/state').then(r => r.data),
+  nightBatchStart: (projectId: number, weights: Record<string, number>, keepInFlight = 2) =>
+    api.post<NightBatchState>('/jobs/nightbatch/start', {
+      project_id: projectId, weights, keep_in_flight: keepInFlight,
+    }).then(r => r.data),
+  nightBatchStop: () => api.post<NightBatchState>('/jobs/nightbatch/stop').then(r => r.data),
   sseUrl:      (projectId: number) => `/api/jobs/stream/sse?project_id=${projectId}`,
 }
 

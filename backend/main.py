@@ -54,6 +54,8 @@ async def lifespan(app: FastAPI):
     from app.services.collab import set_loop
     set_loop(asyncio.get_running_loop())   # enable sync→async edit broadcasts
     runner_task = asyncio.create_task(job_runner.run_forever())
+    from app.services import night_batch
+    night_batch.ensure_started()   # 🌙夜間バッチ常駐ループ(state.runningでON/OFF)
     yield
     runner_task.cancel()
     try:

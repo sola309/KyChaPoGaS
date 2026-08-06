@@ -1,7 +1,7 @@
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../../api/client'
-import { generationApi, type VideoI2VParams } from '../../api/client'
+import { jobsApi, type NightBatchState } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
 
@@ -10,6 +10,7 @@ import { useTimelineStore } from '../../store/timelineStore'
  * 各カットの直近生成パラメータ(gen_params)を土台に seed だけ変えて回すので、
  * 参照画像・プロンプト・参照動画はそのまま。停止するまで公平に本数を積む。
  * 生成物は自動配置せずテイク蓄積(place.auto=false)→ 朝に🗂テイク履歴から採用。
+ * ループはサーバ常駐(ブラウザを閉じても継続・サーバ再起動後も自動再開)。
  * 🔒ロック済みカットは対象から自動除外。
  */
 interface Props {
@@ -44,11 +45,7 @@ export function NightBatchPanel({ projectId, fps, assets, onClose }: Props) {
   useEffect(() => {
     try { localStorage.setItem(PRIO_KEY, JSON.stringify(prioByFrame)) } catch { /* noop */ }
   }, [PRIO_KEY, prioByFrame])
-  const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState('')
-  const [queuedCount, setQueuedCount] = useState<Record<number, number>>({})
-  const runningRef = useRef(false)
-  const KEEP_IN_FLIGHT = 2   // GPUレーンを埋めつつキューを詰まらせない本数
 
   const shotsTrack = tracks.find(t => t.track_type === 'video' && t.name === 'Shots')
   const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
@@ -99,67 +96,41 @@ export function NightBatchPanel({ projectId, fps, assets, onClose }: Props) {
       return next
     })
 
-  // 各カットの生成テンプレ(直近テイクのgen_params)を取得
-  const paramsForCut = (cut: CutRow): Record<string, unknown> | null => {
-    const cands = assets
-      .filter(a => {
-        try {
-          const p = JSON.parse(a.gen_params_json || '{}')
-          return p?.place?.start_frame === cut.s && p?.prompt
-        } catch { return false }
-      })
-      .sort((a, b) => b.id - a.id)
-    if (!cands.length) return null
-    try { return JSON.parse(cands[0].gen_params_json || '{}') } catch { return null }
-  }
-
-  // ラウンドロビン投入ループ: 実行中/待機中が KEEP_IN_FLIGHT 未満なら
-  // 「これまでの投入数が最小のカット」を選んで seed ランダムで1本積む。
+  // サーバ常駐ループの状態をポーリング(ブラウザを閉じても生成は継続する)
+  const [server, setServer] = useState<NightBatchState>({})
   useEffect(() => {
-    if (!running) return
-    const iv = setInterval(async () => {
-      if (!runningRef.current) return
-      const active = useJobStore.getState().jobs
-        .filter(j => j.job_type === 'generate_video_i2v' && (j.status === 'running' || j.status === 'pending'))
-      if (active.length >= KEEP_IN_FLIGHT) return
-      const targets = cuts.filter(c => selected.has(c.n) && !c.locked && c.hasParams)
-      if (!targets.length) { setMsg('対象カットがありません(🔒ロック/生成履歴なしは除外)'); return }
-      // 優先度つき均等配分: 「投入数 ÷ 重み」が最小のカットを次に回す。
-      // ★3のカットは★1の3倍の本数が積まれる(重み等しければ従来どおり完全均等)。
-      const next = [...targets].sort((a, b) => {
-        const ra = (queuedCount[a.n] ?? 0) / (priority[a.n] ?? 1)
-        const rb = (queuedCount[b.n] ?? 0) / (priority[b.n] ?? 1)
-        return ra - rb || (priority[b.n] ?? 1) - (priority[a.n] ?? 1) || a.n - b.n
-      })[0]
-      const base = paramsForCut(next)
-      if (!base) return
-      const body = {
-        ...base,
-        seed: Math.floor(Math.random() * 2 ** 31),
-        place: { ...(base.place as Record<string, unknown>), auto: false },   // テイク蓄積
-      }
+    let alive = true
+    const tick = async () => {
       try {
-        await generationApi.videoI2V(body as unknown as VideoI2VParams)
-        setQueuedCount(m => ({ ...m, [next.n]: (m[next.n] ?? 0) + 1 }))
-        setMsg(`🌙 C${next.n}(★${priority[next.n] ?? 1})をキュー投入 — 累計 ${Object.values(queuedCount).reduce((a, b) => a + b, 0) + 1}本`)
-      } catch {
-        setMsg(`⚠ C${next.n} の投入に失敗 — 次のカットへ`)
-        setQueuedCount(m => ({ ...m, [next.n]: (m[next.n] ?? 0) + 1 }))
-      }
-    }, 15000)
-    return () => clearInterval(iv)
-  }, [running, cuts, selected, queuedCount, priority])
+        const st = await jobsApi.nightBatchState()
+        if (alive) setServer(st)
+      } catch { /* noop */ }
+    }
+    void tick()
+    const iv = setInterval(tick, 5000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [])
+  const running = !!server.running
+  const counts = server.counts ?? {}
 
-  const start = () => {
+  const start = async () => {
     if (!selected.size) { setMsg('カットを選択してください'); return }
-    runningRef.current = true
-    setRunning(true)
-    setMsg('🌙 開始しました — 停止するまで選択カットを均等に生成し続けます')
+    const weights: Record<string, number> = {}
+    for (const c of cuts) {
+      if (c.locked) continue
+      const w = prioByFrame[c.s] ?? 0
+      if (w > 0 && c.hasParams) weights[String(c.s)] = w
+    }
+    try {
+      setServer(await jobsApi.nightBatchStart(projectId, weights))
+      setMsg('🌙 開始しました — ブラウザを閉じてもサーバ側で生成し続けます')
+    } catch { setMsg('⚠ 開始に失敗しました') }
   }
-  const stop = () => {
-    runningRef.current = false
-    setRunning(false)
-    setMsg('⏹ 停止しました(投入済みジョブは最後まで実行されます)')
+  const stop = async () => {
+    try {
+      setServer(await jobsApi.nightBatchStop())
+      setMsg('⏹ 停止しました(投入済みジョブは最後まで実行されます)')
+    } catch { setMsg('⚠ 停止に失敗しました') }
   }
 
   const activeJobs = jobs.filter(j => j.job_type === 'generate_video_i2v' && (j.status === 'running' || j.status === 'pending')).length
@@ -220,7 +191,7 @@ export function NightBatchPanel({ projectId, fps, assets, onClose }: Props) {
                   <span className="text-zinc-500">{(c.s / fps).toFixed(1)}s</span>
                 </span>
                 <span className="text-[9px] text-zinc-500">
-                  テイク{c.takes}{queuedCount[c.n] ? ` / 今回+${queuedCount[c.n]}` : ''}
+                  テイク{c.takes}{counts[String(c.s)] ? ` / 今回+${counts[String(c.s)]}` : ''}
                 </span>
               </button>
             )
@@ -229,7 +200,7 @@ export function NightBatchPanel({ projectId, fps, assets, onClose }: Props) {
 
         <p className="text-[9px] text-zinc-600">
           カットをタップで優先度を設定(なし→★1→★2→★3)。<span className="text-amber-300">★の比率で本数が配分</span>されます(★3は★1の3倍)。
-          各カットの直近生成条件(プロンプト/参照画像/参照動画)をそのまま使い、seedだけランダムにして回します。
+          各カットの直近生成条件(プロンプト/参照画像/参照動画)をそのまま使い、seedだけランダムにして回します。ループはサーバ側で動くのでブラウザを閉じても継続します。
           生成物はタイムラインに自動配置されず🗂テイク履歴に蓄積 — 朝に見比べて採用してください。
           🔒ロック済み・生成履歴なしのカットは自動的に対象外です。
         </p>

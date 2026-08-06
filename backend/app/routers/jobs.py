@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse, FileResponse
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.db.database import get_session, engine
@@ -141,3 +142,41 @@ async def stream_jobs(project_id: int, request: Request):
             "Connection": "keep-alive",
         },
     )
+
+
+# ── 🌙 夜間バッチ生成(サーバ常駐ループ) ─────────────────────────────────
+class NightBatchStart(BaseModel):
+    project_id: int
+    weights: dict[str, int]          # カット開始フレーム(文字列) → 重み1..3
+    keep_in_flight: int = 2
+    reset_counts: bool = True
+
+
+@router.get("/nightbatch/state")
+def nightbatch_state():
+    from app.services import night_batch
+    return night_batch.get_state()
+
+
+@router.post("/nightbatch/start")
+def nightbatch_start(body: NightBatchStart):
+    from app.services import night_batch
+    st = night_batch.get_state()
+    night_batch.set_state({
+        "running": True,
+        "project_id": body.project_id,
+        "weights": {k: int(v) for k, v in body.weights.items() if int(v) > 0},
+        "keep_in_flight": max(1, min(4, body.keep_in_flight)),
+        "counts": {} if body.reset_counts else st.get("counts", {}),
+    })
+    night_batch.ensure_started()
+    return night_batch.get_state()
+
+
+@router.post("/nightbatch/stop")
+def nightbatch_stop():
+    from app.services import night_batch
+    st = night_batch.get_state()
+    st["running"] = False
+    night_batch.set_state(st)
+    return st
