@@ -23,7 +23,11 @@ const TYPE_LABEL: Record<string, string> = {
 export function JobProgressPill() {
   const jobs = useJobStore(s => s.jobs)
   const [collapsed, setCollapsed] = useState(false)
-  const active = jobs.filter(j => j.status === 'running' || j.status === 'pending')
+  // 実行中を先頭に、以降はID順(投入順)。全件スクロール表示。
+  const active = jobs
+    .filter(j => j.status === 'running' || j.status === 'pending')
+    .sort((a, b) => (a.status === 'running' ? 0 : 1) - (b.status === 'running' ? 0 : 1) || a.id - b.id)
+  const cancelJob = useJobStore(s => s.cancelJob)
 
   // どのカットの生成中か表示: SSEはparamsを含まないため、実行中ジョブの詳細を
   // 1回だけ取得してplace.start_frameを取り、Imageトラックのピンペアからカット番号を引く。
@@ -72,7 +76,8 @@ export function JobProgressPill() {
             <button onClick={() => setCollapsed(true)}
                     className="text-zinc-500 hover:text-zinc-200 text-xs px-1">—</button>
           </div>
-          {active.slice(0, 4).map(j => (
+          <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto pr-0.5">
+          {active.map(j => (
             <div key={j.id} className="flex flex-col gap-0.5">
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-zinc-300 truncate">
@@ -80,9 +85,12 @@ export function JobProgressPill() {
                   {cutLabels[j.id] && <span className="text-amber-300 ml-1 font-medium">{cutLabels[j.id]}</span>}
                   <span className="text-zinc-600 ml-1">#{j.id}</span>
                 </span>
-                <span className="text-zinc-400 ml-2 flex-shrink-0">
+                <span className="text-zinc-400 ml-2 flex-shrink-0 flex items-center gap-1">
                   {j.status === 'pending' ? '待機中'
                     : (j as { phase?: string }).phase || `${Math.round(j.progress * 100)}%`}
+                  <button onClick={() => void cancelJob(j.id)}
+                          className="text-zinc-600 hover:text-red-400 px-0.5"
+                          title="このジョブをキャンセル">✕</button>
                 </span>
               </div>
               <div className="h-1 rounded bg-zinc-800 overflow-hidden">
@@ -92,9 +100,7 @@ export function JobProgressPill() {
               </div>
             </div>
           ))}
-          {active.length > 4 && (
-            <span className="text-[9px] text-zinc-600">…ほか{active.length - 4}件</span>
-          )}
+          </div>
         </div>
       )}
     </div>
