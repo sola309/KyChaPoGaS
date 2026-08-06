@@ -68,6 +68,9 @@ interface TimelineState {
   // PreviewPlayerが定期更新し、TrackLaneが配信サービス風のバッファバーとして描画する。
   clipBuffered: Record<number, [number, number][]>
   setClipBuffered: (m: Record<number, [number, number][]>) => void
+  // 高画質(原本)層の読み込み状況(別色バーで表示)
+  clipBufferedHQ: Record<number, [number, number][]>
+  setClipBufferedHQ: (m: Record<number, [number, number][]>) => void
 }
 
 export const useTimelineStore = create<TimelineState>((set, get) => {
@@ -104,6 +107,8 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     previewHidden: [],
     clipBuffered: {},
     setClipBuffered: (m) => set({ clipBuffered: m }),
+    clipBufferedHQ: {},
+    setClipBufferedHQ: (m) => set({ clipBufferedHQ: m }),
 
     toggleTrackHidden: (trackId) => set(s => ({
       previewHidden: s.previewHidden.includes(trackId)

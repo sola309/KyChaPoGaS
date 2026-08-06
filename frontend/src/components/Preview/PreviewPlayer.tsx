@@ -148,9 +148,10 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setLoadedAssetId(null)
       return
     }
-    // 軽量: Blobキャッシュ(プロキシ)優先=境界切替が即時。
-    // 高画質: 原本ファイルをネイティブストリーミング(プロキシ640pでは画質が上がらないため)。
-    const cached = lightPreview ? vidBlobRef.current.get(activeClip.asset_id) : undefined
+    // 軽量: プロキシBlob優先 / 高画質: 原本Blob優先(未取得なら原本ネイティブストリーミング)
+    const cached = lightPreview
+      ? vidBlobRef.current.get(activeClip.asset_id)
+      : vidBlobFullRef.current.get(activeClip.asset_id)
     const url = cached ? cached.url
       : assetsApi.fileUrl(activeClip.asset_id, lightPreview && !!activeAsset?.proxy_path)
     if (video.getAttribute('src') !== url) {
@@ -620,12 +621,14 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // クリップごとの読み込み済み範囲を集計してストアへ(タイムラインのバッファバー用)。
   // audio=wavセグメント/全体デコードの状態、video=プレビュー中素材のbuffered。
   const setClipBuffered = useTimelineStore(s => s.setClipBuffered)
+  const setClipBufferedHQ = useTimelineStore(s => s.setClipBufferedHQ)
   const lastBufJsonRef = useRef('')
   useEffect(() => {
     const iv = setInterval(() => {
       if (document.hidden) return
       const { clips: cs, tracks: ts, projectFps: fps } = useTimelineStore.getState()
       const m: Record<number, [number, number][]> = {}
+      const mh: Record<number, [number, number][]> = {}
       for (const c of cs) {
         if (c.asset_id == null) continue
         const t = ts.find(tk => tk.id === c.track_id)
@@ -669,6 +672,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
               }
             }
           }
+          // 高画質(原本)層 → 別色バー
+          if (vidBlobFullRef.current.has(c.asset_id)) mh[c.id] = [[0, 1]]
+          else {
+            const pf = vidProgFullRef.current.get(c.asset_id)
+            if (pf) mh[c.id] = [[0, Math.round(pf * 200) / 200]]
+          }
         }
         if (ranges.length) {
           ranges.sort((x, y) => x[0] - y[0])
@@ -681,14 +690,15 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           m[c.id] = merged.map(r => [Math.round(r[0] * 200) / 200, Math.round(r[1] * 200) / 200])
         }
       }
-      const j = JSON.stringify(m)
+      const j = JSON.stringify(m) + '|' + JSON.stringify(mh)
       if (j !== lastBufJsonRef.current) {
         lastBufJsonRef.current = j
         setClipBuffered(m)
+        setClipBufferedHQ(mh)
       }
     }, 500)
     return () => clearInterval(iv)
-  }, [loadedAssetId, setClipBuffered])
+  }, [loadedAssetId, setClipBuffered, setClipBufferedHQ])
 
   // ── タイムライン最優先の動画ローダ ──────────────────────────────────
   // タイムライン上の動画(プロキシ優先)を再生ヘッド近傍から順にBlobへ先読みし、
@@ -698,6 +708,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const vidBlobRef = useRef<Map<number, { url: string; bytes: number }>>(new Map())
   const vidProgRef = useRef<Map<number, number>>(new Map())
   const vidFetchingRef = useRef<Set<number>>(new Set())
+  // 高画質(原本)の第2層Blob: 軽量層が読み切れてから段階取得。バーは別色で表示
+  const vidBlobFullRef = useRef<Map<number, { url: string; bytes: number }>>(new Map())
+  const vidProgFullRef = useRef<Map<number, number>>(new Map())
   const VID_CACHE_MAX = 400e6   // Blob合計の上限(超過時は再生ヘッドから遠い順に破棄)
   useEffect(() => {
     const iv = setInterval(() => {
@@ -712,6 +725,13 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           URL.revokeObjectURL(e.url)
           vidBlobRef.current.delete(aid)
           vidProgRef.current.delete(aid)
+        }
+      }
+      for (const [aid, e] of [...vidBlobFullRef.current]) {
+        if (!onTimeline.has(aid)) {
+          URL.revokeObjectURL(e.url)
+          vidBlobFullRef.current.delete(aid)
+          vidProgFullRef.current.delete(aid)
         }
       }
       for (const aid of [...audioBufCacheRef.current.keys()]) {
@@ -740,19 +760,32 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       }
       const ordered = [...pri.entries()].sort((a, b) => a[1] - b[1]).map(([aid]) => aid)
 
-      // 直列2本まで先読み(ストリーム読みで進捗をバーへ)
-      for (const aid of ordered) {
+      // 直列2本まで先読み(ストリーム読みで進捗をバーへ)。
+      // 2段階方式: まず軽量層(プロキシ)を全アセット分読み切り、
+      // 高画質モード中はその後に原本層を段階取得(別色バー)。
+      const lightDone = ordered.every(aid => vidBlobRef.current.has(aid) ||
+        !all.find(x => x.id === aid)?.proxy_path)
+      const stage2 = !lightPreviewRef.current && lightDone
+      const plan: Array<{ aid: number; full: boolean }> = [
+        ...ordered.map(aid => ({ aid, full: false })),
+        ...(stage2 ? ordered.map(aid => ({ aid, full: true })) : []),
+      ]
+      for (const { aid, full } of plan) {
         if (vidFetchingRef.current.size >= 2) break
-        if (vidBlobRef.current.has(aid) || vidFetchingRef.current.has(aid)) continue
+        const key = full ? -aid : aid
+        const tierMap = full ? vidBlobFullRef : vidBlobRef
+        if (tierMap.current.has(aid) || vidFetchingRef.current.has(key)) continue
         const a = all.find(x => x.id === aid)
         if (!a) continue
-        const useProxy = !!a.proxy_path
-        if (!useProxy && (a.file_size_bytes ?? Infinity) > 40e6) continue   // 巨大原本は従来のRangeストリーミングに任せる
-        vidFetchingRef.current.add(aid)
+        const useProxy = !full && !!a.proxy_path
+        if (!useProxy && (a.file_size_bytes ?? Infinity) > (full ? 80e6 : 40e6)) continue  // 巨大原本はRangeストリーミングに任せる
+        if (!full && !a.proxy_path && !lightPreviewRef.current) continue  // プロキシなし原本は第2層で扱う
+        vidFetchingRef.current.add(key)
         void (async () => {
           // ハング対策: 60秒で中断してスロットを解放(次のtickで再試行される)
           const ac = new AbortController()
           const timer = setTimeout(() => ac.abort(), 60000)
+          const progMap = full ? vidProgFullRef : vidProgRef
           try {
             const res = await fetch(assetsApi.fileUrl(aid, useProxy), { signal: ac.signal })
             const total = Number(res.headers.get('Content-Length') || 0)
@@ -766,30 +799,36 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
                 if (done) break
                 parts.push(value)
                 got += value.length
-                vidProgRef.current.set(aid, got / total)
+                progMap.current.set(aid, got / total)
               }
               blob = new Blob(parts)
             } else {
               blob = await res.blob()
             }
-            vidBlobRef.current.set(aid, { url: URL.createObjectURL(blob), bytes: blob.size })
-            vidProgRef.current.set(aid, 1)
-            // 容量上限: 遠いものから破棄(再生中のアセットは残す)
-            let totalBytes = [...vidBlobRef.current.values()].reduce((s, e) => s + e.bytes, 0)
+            tierMap.current.set(aid, { url: URL.createObjectURL(blob), bytes: blob.size })
+            progMap.current.set(aid, 1)
+            // 容量上限: 遠いものから破棄(再生中のアセットは残す)。両層合算
+            const sumBytes = () =>
+              [...vidBlobRef.current.values(), ...vidBlobFullRef.current.values()]
+                .reduce((s, e) => s + e.bytes, 0)
+            let totalBytes = sumBytes()
             if (totalBytes > VID_CACHE_MAX) {
-              const far = [...vidBlobRef.current.keys()]
-                .sort((x, y) => (pri.get(y) ?? 1e12) - (pri.get(x) ?? 1e12))
-              for (const k of far) {
-                if (totalBytes <= VID_CACHE_MAX) break
-                if (k === loadedAssetId) continue
-                const e = vidBlobRef.current.get(k)!
-                URL.revokeObjectURL(e.url)
-                vidBlobRef.current.delete(k)
-                vidProgRef.current.delete(k)
-                totalBytes -= e.bytes
+              // 高画質層の遠いものから先に破棄→次に軽量層
+              for (const [tier, prog] of [[vidBlobFullRef, vidProgFullRef], [vidBlobRef, vidProgRef]] as const) {
+                const far = [...tier.current.keys()]
+                  .sort((x, y) => (pri.get(y) ?? 1e12) - (pri.get(x) ?? 1e12))
+                for (const k of far) {
+                  if (totalBytes <= VID_CACHE_MAX) break
+                  if (k === loadedAssetId) continue
+                  const e = tier.current.get(k)!
+                  URL.revokeObjectURL(e.url)
+                  tier.current.delete(k)
+                  prog.current.delete(k)
+                  totalBytes -= e.bytes
+                }
               }
             }
-          } catch { vidProgRef.current.delete(aid) } finally { clearTimeout(timer); vidFetchingRef.current.delete(aid) }
+          } catch { progMap.current.delete(aid) } finally { clearTimeout(timer); vidFetchingRef.current.delete(key) }
         })()
       }
     }, 500)
@@ -798,7 +837,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   }, [loadedAssetId])
   useEffect(() => () => {
     for (const e of vidBlobRef.current.values()) URL.revokeObjectURL(e.url)
+    for (const e of vidBlobFullRef.current.values()) URL.revokeObjectURL(e.url)
     vidBlobRef.current.clear()
+    vidBlobFullRef.current.clear()
   }, [])
 
   // ── WYSIWYG compositor ────────────────────────────────────────────────────
@@ -826,8 +867,10 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null)
       const wantPreview = assetsRef.current.filter(a => isImgAsset(a)
         && used.has(a.id) && !imgMapPreview.current.has(a.id) && !imgLoadingRef.current.has(a.id))
-      const wantFull = lightPreviewRef.current ? [] : assetsRef.current.filter(a => isImgAsset(a)
-        && used.has(a.id) && !imgMapFull.current.has(a.id) && !imgLoadingRef.current.has(-a.id))
+      // 2段階方式: 軽量(preview)を全部読み切ってから高画質(full)を開始する
+      const wantFull = (lightPreviewRef.current || wantPreview.length > 0) ? []
+        : assetsRef.current.filter(a => isImgAsset(a)
+          && used.has(a.id) && !imgMapFull.current.has(a.id) && !imgLoadingRef.current.has(-a.id))
       const candidates = [
         ...wantPreview.map(a => ({ a, full: false })),
         ...wantFull.map(a => ({ a, full: true })),

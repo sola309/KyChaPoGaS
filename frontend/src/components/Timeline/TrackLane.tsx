@@ -36,6 +36,7 @@ export function TrackLane({
   const reorderTrack = useTimelineStore(s => s.reorderTrack)
   const addClip = useTimelineStore(s => s.addClip)
   const clipBuffered = useTimelineStore(s => s.clipBuffered)
+  const clipBufferedHQ = useTimelineStore(s => s.clipBufferedHQ)
   const others = useCollabStore(s => s.others)
   const { activeProject } = useProjectStore()
   const fps = activeProject?.fps ?? 30
@@ -256,6 +257,14 @@ export function TrackLane({
                       key={i}
                       className="absolute top-0 bottom-0 rounded-full bg-sky-400/80"
                       style={{ left: `${s * 100}%`, width: `${Math.max(0.5, (e - s) * 100)}%` }}
+                    />
+                  ))}
+                  {/* 高画質(原本)層の読み込みはアンバーの細線で上乗せ表示 */}
+                  {(clipBufferedHQ[clip.id] ?? []).map(([s, e], i) => (
+                    <div
+                      key={`hq${i}`}
+                      className="absolute top-0 rounded-full bg-amber-400"
+                      style={{ left: `${s * 100}%`, width: `${Math.max(0.5, (e - s) * 100)}%`, height: '40%' }}
                     />
                   ))}
                 </div>
