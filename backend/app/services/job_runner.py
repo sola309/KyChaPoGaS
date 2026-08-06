@@ -419,12 +419,23 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
         if place.get("replace_clip_id"):
             clip = session.get(Clip, int(place["replace_clip_id"]))
             if clip:
+                if clip.locked:
+                    log.info(f"clip {clip.id} は🔒ロック中 → 差し替えず、テイクとして蓄積")
+                    return
                 clip.asset_id = asset_id
                 session.add(clip)
                 session.commit()
                 log.info(f"replaced clip {clip.id} asset → {asset_id}")
                 return
         if not place.get("track_id"):
+            return
+        # 同一位置に🔒ロック済みクリップがある場合は重ね置きしない(テイク蓄積扱い)
+        existing = session.exec(
+            select(Clip).where(Clip.track_id == int(place["track_id"]),
+                               Clip.start_frame == int(place.get("start_frame", 0)))
+        ).all()
+        if any(c.locked for c in existing):
+            log.info("配置先に🔒ロック済みクリップ → 自動配置スキップ(テイク蓄積)")
             return
         clip = Clip(
             track_id=int(place["track_id"]),

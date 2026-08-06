@@ -37,6 +37,8 @@ class ClipBase(SQLModel):
     # コマ打ち(アニメ風フレームホールド): 0=off, 12=2コマ打ち相当, 8=3コマ打ち相当。
     # 速度リマップ後の出力タイムベースに適用される。
     posterize_fps: float = 0
+    # 🔒ロック: 確定カット。移動/トリム/削除/アセット差し替え/再生成の自動配置から保護。
+    locked: bool = False
 
 
 class Clip(ClipBase, table=True):
@@ -65,6 +67,7 @@ class ClipUpdate(SQLModel):
     kind: Optional[str] = None
     attrs_json: Optional[str] = None
     posterize_fps: Optional[float] = None
+    locked: Optional[bool] = None
 
 
 class ClipRead(ClipBase):

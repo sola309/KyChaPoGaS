@@ -46,6 +46,9 @@ def update_clip(clip_id: int, data: ClipUpdate, session: Session = Depends(get_s
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
     changed = data.model_dump(exclude_unset=True)
+    # 🔒ロック中はロック解除以外の変更を拒否(再生成スクリプト等の誤上書きも防ぐ)
+    if clip.locked and set(changed) - {"locked"}:
+        raise HTTPException(status_code=409, detail="このクリップは🔒ロックされています(解除してから編集してください)")
     for field, value in changed.items():
         setattr(clip, field, value)
     session.add(clip)
@@ -71,6 +74,8 @@ def delete_clip(clip_id: int, session: Session = Depends(get_session)):
     clip = session.get(Clip, clip_id)
     if not clip:
         raise HTTPException(status_code=404, detail="Clip not found")
+    if clip.locked:
+        raise HTTPException(status_code=409, detail="このクリップは🔒ロックされています(解除してから削除してください)")
     proj = _proj_of_clip(clip, session)
     track_id = clip.track_id
     session.delete(clip)

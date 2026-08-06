@@ -109,6 +109,7 @@ export interface Clip {
   attrs_json: string
   /** コマ打ち(アニメ風ホールド): 0=off, 12=2コマ, 8=3コマ */
   posterize_fps: number
+  locked?: boolean
 }
 
 export interface ClipUpdate {
@@ -127,6 +128,7 @@ export interface ClipUpdate {
   blend?: Clip['blend']
   transform_json?: string
   posterize_fps?: number
+  locked?: boolean
 }
 
 // extras are optional on create (backend defaults)

@@ -59,9 +59,15 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       if (sid) openShotEditor(sid)
     } catch { /* noop */ }
   }
-  const locked = !!remoteLock
+  const hardLocked = !!clip.locked   // 🔒確定カット(ユーザーが明示的にロック)
+  const locked = !!remoteLock || hardLocked
   const scenes = useAnalysisStore(s => s.scenes)
   const motion = useAnalysisStore(s => s.motion)
+
+  const toggleLock = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    await updateClip(clip.id, { locked: !clip.locked })
+  }
 
   // Video/audio clips have a finite source (duration_sec); images do not and can
   // be stretched freely (freeze-frame / placeholder). For finite sources the
@@ -86,7 +92,10 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   // ── Main body: move ──────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
-    if (locked) return                 // another collaborator is editing this clip
+    if (locked) {                      // 🔒 or 共同編集ロック: 選択のみ許可、移動不可
+      if (hardLocked) onSelect(clip.id)
+      return
+    }
     onSelect(clip.id)
     setEditingClipId(clip.id)
     const origFrame = clip.start_frame
@@ -316,9 +325,21 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         onPointerDown={handlePointerDown}
       >
         <span className="truncate leading-tight">
+          {hardLocked && <span className="mr-0.5">🔒</span>}
           {asset?.name ?? `clip ${clip.id}`}
         </span>
       </div>
+
+      {/* 🔒ロックトグル: 確定カットを再生成・編集から保護(選択時またはロック中に表示) */}
+      {(selected || hardLocked) && (
+        <button
+          onClick={toggleLock}
+          onPointerDown={e => e.stopPropagation()}
+          className={`absolute top-0 right-0 z-20 text-[11px] leading-none px-1 py-0.5 rounded-bl
+            ${hardLocked ? 'bg-amber-600/90 text-white' : 'bg-black/50 text-zinc-300 hover:text-amber-300'}`}
+          title={hardLocked ? '🔒ロック中: 移動/削除/再生成の上書きから保護。クリックで解除' : 'このカットをロック(確定・再生成対象外にする)'}
+        >{hardLocked ? '🔒' : '🔓'}</button>
+      )}
 
       {/* Scene change markers (video clips) */}
       {assetScenes && (

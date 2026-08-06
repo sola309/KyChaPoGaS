@@ -58,6 +58,10 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
     const st = useTimelineStore.getState()
     let shots = shotsTrack
     if (!shots) return
+    if (currentClip?.locked) {
+      setMsg('🔒 このカットはロックされています — クリップの🔒を解除してから採用してください')
+      return
+    }
     const dur = cut.e - cut.s + 1
     if (currentClip) {
       await st.updateClip(currentClip.id, { asset_id: assetId, duration_frames: dur })

@@ -264,8 +264,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
       redo()
       return
     }
+    const selClip = selectedClipId !== null
+      ? useTimelineStore.getState().clips.find(c => c.id === selectedClipId) : undefined
     if ((e.key === 's' || e.key === 'S') && !ctrl) {
-      if (selectedClipId !== null) {
+      if (selectedClipId !== null && !selClip?.locked) {
         splitClip(selectedClipId, currentFrame)
       }
       return
@@ -277,7 +279,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
       return
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (selectedClipId !== null) {
+      if (selectedClipId !== null && !selClip?.locked) {   // 🔒ロック中は削除不可
         deleteClip(selectedClipId)
         setSelectedClipId(null)
       }

@@ -66,6 +66,9 @@ def _migrate(conn) -> None:
     if "asset" in tables and "starred" not in columns("asset"):
         conn.execute(text("ALTER TABLE asset ADD COLUMN starred BOOLEAN DEFAULT 0"))
         log.info("Migration: added asset.starred")
+    if "clip" in tables and "locked" not in columns("clip"):
+        conn.execute(text("ALTER TABLE clip ADD COLUMN locked BOOLEAN DEFAULT 0"))
+        log.info("Migration: added clip.locked")
     if "asset" in tables and "gen_params_json" not in columns("asset"):
         conn.execute(text("ALTER TABLE asset ADD COLUMN gen_params_json VARCHAR DEFAULT ''"))
         log.info("Migration: added asset.gen_params_json")
