@@ -13,7 +13,7 @@ import { useTimelineStore } from '../../store/timelineStore'
  * 🔒ロック済みカットは対象から自動除外。
  */
 interface Props {
-  projectId: number   // 呼び出し互換(生成条件はgen_params由来のため未使用)
+  projectId: number   // ★優先度のlocalStorageキーに使用
   fps: number
   assets: Asset[]
   onClose: () => void
@@ -29,16 +29,21 @@ interface CutRow {
   takes: number
 }
 
-export function NightBatchPanel({ fps, assets, onClose }: Props) {
+export function NightBatchPanel({ projectId, fps, assets, onClose }: Props) {
   const tracks = useTimelineStore(s => s.tracks)
   const clips = useTimelineStore(s => s.clips)
   const jobs = useJobStore(s => s.jobs)
-  // 優先度: カット番号 → 重み(1〜3)。未選択カットは対象外。
+  // 優先度: カット開始フレーム → 重み(1〜3)。未選択カットは対象外。
   // 重みは「投入本数の比率」= ★3は★1の3倍の頻度で回る。
-  const [priority, setPriority] = useState<Record<number, number>>({})
-  const selected = useMemo(
-    () => new Set(Object.entries(priority).filter(([, w]) => w > 0).map(([n]) => Number(n))),
-    [priority])
+  // パネルを閉じても維持されるようlocalStorageへ永続化(カット番号ではなく
+  // 開始フレームをキーにするので、前方のカット増減で★がズレない)。
+  const PRIO_KEY = `kychapogas:nightprio:${projectId}`
+  const [prioByFrame, setPrioByFrame] = useState<Record<number, number>>(() => {
+    try { return JSON.parse(localStorage.getItem(PRIO_KEY) || '{}') } catch { return {} }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(PRIO_KEY, JSON.stringify(prioByFrame)) } catch { /* noop */ }
+  }, [PRIO_KEY, prioByFrame])
   const [running, setRunning] = useState(false)
   const [msg, setMsg] = useState('')
   const [queuedCount, setQueuedCount] = useState<Record<number, number>>({})
@@ -71,14 +76,26 @@ export function NightBatchPanel({ fps, assets, onClose }: Props) {
     return out
   }, [imgTrack, shotsTrack, clips, assets])
 
+  // カット番号→重み(🔒ロック済みは常に対象外 = ★無効)
+  const priority = useMemo(() => {
+    const m: Record<number, number> = {}
+    for (const c of cuts) {
+      if (c.locked) continue
+      const w = prioByFrame[c.s] ?? 0
+      if (w > 0) m[c.n] = w
+    }
+    return m
+  }, [cuts, prioByFrame])
+  const selected = useMemo(() => new Set(Object.keys(priority).map(Number)), [priority])
+
   const eligible = cuts.filter(c => !c.locked && c.hasParams)
 
   // タップで 無効→★1→★2→★3→無効 と巡回
-  const cyclePriority = (n: number) =>
-    setPriority(prev => {
-      const w = (prev[n] ?? 0) + 1
+  const cyclePriority = (frame: number) =>
+    setPrioByFrame(prev => {
+      const w = (prev[frame] ?? 0) + 1
       const next = { ...prev }
-      if (w > 3) delete next[n]; else next[n] = w
+      if (w > 3) delete next[frame]; else next[frame] = w
       return next
     })
 
@@ -157,9 +174,9 @@ export function NightBatchPanel({ fps, assets, onClose }: Props) {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap text-[10px]">
-          <button onClick={() => setPriority(Object.fromEntries(eligible.map(c => [c.n, 1])))}
+          <button onClick={() => setPrioByFrame(Object.fromEntries(eligible.map(c => [c.s, 1])))}
                   className="px-2 py-1 rounded bg-zinc-800 text-zinc-300 hover:bg-zinc-700">全★1({eligible.length})</button>
-          <button onClick={() => setPriority({})}
+          <button onClick={() => setPrioByFrame({})}
                   className="px-2 py-1 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700">クリア</button>
           <span className="text-zinc-500">
             選択 {selected.size}件(★3:{Object.values(priority).filter(w => w === 3).length} /
@@ -184,19 +201,21 @@ export function NightBatchPanel({ fps, assets, onClose }: Props) {
             const w = priority[c.n] ?? 0
             const disabled = c.locked || !c.hasParams
             return (
-              <button key={c.n} onClick={() => !disabled && cyclePriority(c.n)} disabled={disabled}
+              <button key={c.n} onClick={() => !disabled && cyclePriority(c.s)} disabled={disabled}
                       className={`text-left text-[10px] px-2 py-1.5 rounded border flex flex-col gap-0.5
                         ${disabled ? 'border-zinc-800 bg-zinc-950 text-zinc-600'
                           : w === 3 ? 'border-amber-400 bg-amber-950/40 text-amber-100'
                           : w === 2 ? 'border-purple-400 bg-purple-950/40 text-purple-100'
                           : w === 1 ? 'border-zinc-500 bg-zinc-800 text-zinc-200'
                                : 'border-zinc-700 bg-zinc-800/40 text-zinc-400 hover:border-zinc-500'}`}
-                      title={c.locked ? '🔒ロック中のため対象外'
+                      title={c.locked ? '🔒ロック中 — ★は無効(解除すると再び対象になります)'
                         : !c.hasParams ? '生成履歴がないため対象外'
                         : 'タップで優先度: なし→★1→★2→★3(★の比率で本数配分)'}>
                 <span className="flex items-center gap-1">
                   {c.locked && '🔒'}
-                  <span className={w ? 'text-amber-300' : 'text-zinc-700'}>{'★'.repeat(w) || '☆'}</span>
+                  <span className={w ? 'text-amber-300' : 'text-zinc-700'}>
+                    {c.locked ? '—' : ('★'.repeat(w) || '☆')}
+                  </span>
                   C{c.n}
                   <span className="text-zinc-500">{(c.s / fps).toFixed(1)}s</span>
                 </span>
