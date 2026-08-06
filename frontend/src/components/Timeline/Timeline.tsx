@@ -15,6 +15,7 @@ import { CutLane } from './CutLane'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
+import { PinSwapModal } from './PinSwapModal'
 import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
 
@@ -74,6 +75,9 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [curveSrcFrames, setCurveSrcFrames] = useState(0)   // ∿編集中のソース量(開いた時点で固定)
   const [showInspector, setShowInspector] = useState(false)
   const [showShotTune, setShowShotTune] = useState(false)
+  const [showPinSwap, setShowPinSwap] = useState(false)
+  const refSel = useTimelineStore(s => s.refSel)
+  const swapPin = refSel.length >= 1 ? clips.find(c => c.id === refSel[refSel.length - 1]) ?? null : null
 
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
@@ -765,6 +769,17 @@ export function Timeline({ projectId, fps, assets }: Props) {
         )}
 
         <I2VSelPopover projectId={projectId} fps={fps} assets={assets} />
+
+        {swapPin && (
+          <button onClick={() => setShowPinSwap(true)}
+                  className="text-[11px] px-2 py-0.5 rounded border bg-amber-950/60 text-amber-300 border-amber-700 hover:bg-amber-900/60"
+                  title={`選択中ピン(f${swapPin.start_frame})の画像を差し替え — 画像アセット/動画フレームから`}>
+            🖼 差し替え
+          </button>
+        )}
+        {showPinSwap && swapPin && (
+          <PinSwapModal pin={swapPin} assets={assets} fps={fps} onClose={() => setShowPinSwap(false)} />
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* Zoom (touch-friendly — no Ctrl+wheel needed) */}
