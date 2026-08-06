@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import mimetypes
+import random
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +29,16 @@ from app.models.job import Job
 from app.models import Track, Clip, Asset, AssetCreate, Project
 
 log = logging.getLogger("job_runner")
+
+
+def _resolve_seed(params: dict) -> int:
+    """seed=-1(ランダム)をここで実値に確定し、params(→gen_params_json)に書き戻す。
+    再生成UIやテイク履歴に「実際に使われたseed」が表示されるようにするため。"""
+    s = int(params.get("seed", -1))
+    if s == -1:
+        s = random.randint(0, 2**31 - 1)
+        params["seed"] = s
+    return s
 
 GENERATED_DIR = Path(__file__).parent.parent.parent / "data" / "generated"
 PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
@@ -466,7 +477,7 @@ async def _generate_image(job: Job, params: dict) -> None:
     model_id   = params.get("model", "")
     width      = int(params.get("width",  1024))
     height     = int(params.get("height", 1024))
-    seed       = int(params.get("seed", -1))
+    seed       = _resolve_seed(params)
 
     # ✏️ AI編集モデル(Qwen-2511 / HiDream-O1 / FLUX.2 klein KV)
     from app.services.workflow_builder import IMAGE_EDIT_MODELS
@@ -631,7 +642,7 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
     keyframes  = params.get("keyframes", [])
     fps        = int(params.get("fps", 6))
     strength   = float(params.get("motion_strength", 0.6))
-    seed       = int(params.get("seed", -1))
+    seed       = _resolve_seed(params)
 
     if not keyframes:
         raise ValueError("I2V には最低1つのキーフレームが必要です")
@@ -782,7 +793,7 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
     project_id = params["project_id"]
     keyframes  = params.get("keyframes", [])
     mode       = params.get("model", "wan2.2-flf2v")
-    seed       = int(params.get("seed", -1))
+    seed       = _resolve_seed(params)
     width      = int(params.get("width", 640))
     height     = int(params.get("height", 640))
     prompt     = params.get("prompt", "")
@@ -1037,7 +1048,7 @@ async def _generate_audio(job: Job, params: dict) -> None:
     duration   = float(params.get("duration_sec", 30.0))
     vocal_lang = params.get("vocal_language", "en")
     instrumental = params.get("instrumental", None)
-    seed       = int(params.get("seed", -1))
+    seed       = _resolve_seed(params)
 
     _update_progress(job.id, 0.1)
     if params.get("cover_src_asset"):

@@ -51,7 +51,13 @@ export function VideoFramePicker({ assets, fps, busy = false, onInsert, compact 
     seekTo(clamped)
   }
 
-  useEffect(() => { setVfTime(0); seekTarget.current = null; seekBusy.current = false }, [vfAssetId])
+  useEffect(() => {
+    setVfTime(0); seekTarget.current = null; seekBusy.current = false
+    // src属性の差し替えだけではブラウザが再読込しないケースがあるため明示load
+    videoRef.current?.load()
+  }, [vfAssetId])
+  const [vidError, setVidError] = useState(false)
+  useEffect(() => { setVidError(false) }, [vfAssetId])
 
   // フィルムストリップのドラッグスクラブ
   const stripScrub = (e: React.PointerEvent<HTMLImageElement>) => {
@@ -83,13 +89,19 @@ export function VideoFramePicker({ assets, fps, busy = false, onInsert, compact 
                onPointerDown={e => { scrubbing.current = true; e.currentTarget.setPointerCapture(e.pointerId); stripScrub(e) }}
                onPointerMove={e => { if (scrubbing.current) stripScrub(e) }}
                onPointerUp={e => { scrubbing.current = false; e.currentTarget.releasePointerCapture(e.pointerId) }} />
-          {/* プレビュー: <video>ローカルシーク(高速) */}
-          <video ref={videoRef}
+          {/* プレビュー: <video>ローカルシーク(高速)。key=アセットIDで要素ごと作り直し(確実にロード) */}
+          <video key={vfAsset.id}
+                 ref={videoRef}
                  src={assetsApi.fileUrl(vfAsset.id, !!vfAsset.proxy_path)}
                  muted playsInline preload="auto"
                  onSeeked={handleSeeked}
+                 onError={() => setVidError(true)}
+                 onLoadedData={() => setVidError(false)}
                  className="w-full rounded border border-zinc-700 bg-black"
                  style={{ maxHeight: large ? '52vh' : compact ? '200px' : '300px', objectFit: 'contain' }} />
+          {vidError && (
+            <p className="text-[10px] text-red-400">⚠ 動画の読み込みに失敗しました(#{vfAsset.id} {vfAsset.name}) — プロキシ未生成の可能性。アセット⋯→📦プロキシ生成後に再試行してください</p>
+          )}
           <div className="flex items-center gap-1.5">
             <button onClick={() => setTime(vfTime - 1 / fps)}
                     className="text-xs px-1.5 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700">-1f</button>
