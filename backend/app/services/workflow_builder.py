@@ -1227,6 +1227,7 @@ def build_minimax_h3_ref_video(
     scheduler: str = "beta",              # 公式Tips: 参照過多時はbeta/normalがsimpleより安定
     ref_image_size: str = "match",        # match=速度優先 / max=同一性優先(2048短辺)
     easycache: bool = True,
+    use_ref_video_audio: bool = False,    # 参照動画の音声を添付するか(既定OFF)
 ) -> dict:
     """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。"""
     if not (ref_image_names or ref_video_names or ref_audio_names):
@@ -1273,7 +1274,10 @@ def build_minimax_h3_ref_video(
         wf[f"rvid{i}"] = {"class_type": "LoadVideo", "inputs": {"file": name}}
         wf[f"rvc{i}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"rvid{i}", 0]}}
         cond_inputs[f"ref_videos.ref_video_{i+1}"] = [f"rvc{i}", 0]
-        cond_inputs[f"ref_video_audios.ref_video_audio_{i+1}"] = [f"rvc{i}", 1]
+        # 参照動画の音声は既定で添付しない: <Audio N>の番号がズレる上に
+        # 元動画のセリフ/SFXが出力へ混入する(音声はテキストエンコーダにも入らず視覚的利得ゼロ)
+        if use_ref_video_audio:
+            cond_inputs[f"ref_video_audios.ref_video_audio_{i+1}"] = [f"rvc{i}", 1]
     for i, name in enumerate((ref_audio_names or [])[:3]):
         wf[f"raud{i}"] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
         cond_inputs[f"ref_audios.ref_audio_{i+1}"] = [f"raud{i}", 0]

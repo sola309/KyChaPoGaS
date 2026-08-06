@@ -876,6 +876,7 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
             scheduler=str(params.get("scheduler") or "beta"),
             ref_image_size=str(params.get("ref_image_size") or "match"),
             easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
+            use_ref_video_audio=bool(params.get("use_ref_video_audio")),
         )
         prompt_id = await comfyui.submit(wf)
         outputs = await comfyui.wait_for_outputs(
