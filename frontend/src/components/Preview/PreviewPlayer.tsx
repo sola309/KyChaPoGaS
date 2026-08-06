@@ -67,7 +67,12 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const [capturing, setCapturing] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const compRef = useRef<HTMLCanvasElement>(null)        // WYSIWYG compositor
-  const imgMap = useRef<Map<number, HTMLImageElement>>(new Map())
+  // 合成用画像の2層キャッシュ: preview(640px JPEG)とfull(原本)。
+  // 高画質切替時はpreviewを表示したままfullを段階的に読み込む(全消去→再読込だと
+  // ピン100枚規模でフルPNG計100MB超の読み直しになり数分固まるため)。
+  const imgMapPreview = useRef<Map<number, HTMLImageElement>>(new Map())
+  const imgMapFull = useRef<Map<number, HTMLImageElement>>(new Map())
+  const lightPreviewRef = useRef(true)
   const refSel = useTimelineStore(s => s.refSel)         // 選択中のImage(Ref)ピン
   const [redraw, setRedraw] = useState(0)                // bumped when an image loads
   // 直前に確定した動画フレームのキャッシュ。シーク中(readyState低下)に黒フレームを
@@ -715,8 +720,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       for (const aid of [...wavMetaRef.current.keys()]) {
         if (!onTimeline.has(aid)) { wavMetaRef.current.delete(aid); wavHeaderPendingRef.current.delete(aid) }
       }
-      for (const aid of [...imgMap.current.keys()]) {
-        if (!onTimeline.has(aid)) imgMap.current.delete(aid)
+      for (const aid of [...imgMapPreview.current.keys()]) {
+        if (!onTimeline.has(aid)) imgMapPreview.current.delete(aid)
+      }
+      for (const aid of [...imgMapFull.current.keys()]) {
+        if (!onTimeline.has(aid)) imgMapFull.current.delete(aid)
       }
 
       // 優先度: 再生ヘッドに重なる > 前方(近い順) > 通過済み
@@ -812,28 +820,42 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           : Math.abs(c.start_frame - f)
         used.set(c.asset_id, Math.min(used.get(c.asset_id) ?? Infinity, p))
       }
-      const candidates = assetsRef.current
-        .filter(a => (a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null))
-          && used.has(a.id) && !imgMap.current.has(a.id) && !imgLoadingRef.current.has(a.id))
-        .sort((a, b) => used.get(a.id)! - used.get(b.id)!)
-      for (const a of candidates) {
+      // まずpreview層(640px)を全対象に読み、高画質モード中はfull層も追加で読む。
+      // fullはpreviewが揃った後に段階的に(=切替直後も既存previewで即表示できる)
+      const isImgAsset = (a: typeof assetsRef.current[number]) =>
+        a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null)
+      const wantPreview = assetsRef.current.filter(a => isImgAsset(a)
+        && used.has(a.id) && !imgMapPreview.current.has(a.id) && !imgLoadingRef.current.has(a.id))
+      const wantFull = lightPreviewRef.current ? [] : assetsRef.current.filter(a => isImgAsset(a)
+        && used.has(a.id) && !imgMapFull.current.has(a.id) && !imgLoadingRef.current.has(-a.id))
+      const candidates = [
+        ...wantPreview.map(a => ({ a, full: false })),
+        ...wantFull.map(a => ({ a, full: true })),
+      ].sort((x, y) => (used.get(x.a.id)! + (x.full ? 1e6 : 0)) - (used.get(y.a.id)! + (y.full ? 1e6 : 0)))
+      for (const { a, full } of candidates) {
         if (imgLoadingRef.current.size >= 2) break
-        imgLoadingRef.current.add(a.id)
+        const key = full ? -a.id : a.id      // full層は負キーで進行管理
+        imgLoadingRef.current.add(key)
         const im = new Image()
-        const done = () => { imgLoadingRef.current.delete(a.id); setRedraw(r => r + 1) }
+        const done = () => { imgLoadingRef.current.delete(key); setRedraw(r => r + 1) }
         im.onload = done
         im.onerror = done
-        // 軽量モード: 640pxプレビューJPEG(1/12サイズ) / 高画質モード: 原本
-        im.src = lightPreview ? `/api/assets/${a.id}/preview` : assetsApi.fileUrl(a.id)
-        imgMap.current.set(a.id, im)
+        im.src = full ? assetsApi.fileUrl(a.id) : `/api/assets/${a.id}/preview`
+        ;(full ? imgMapFull : imgMapPreview).current.set(a.id, im)
       }
     }
     const iv = setInterval(tick, 400)
     tick()
     return () => clearInterval(iv)
-  }, [lightPreview])
-  // 画質モード切替時は取り直し(URLが変わるため)
-  useEffect(() => { imgMap.current.clear(); imgLoadingRef.current.clear(); setRedraw(r => r + 1) }, [lightPreview])
+  }, [])
+  useEffect(() => { lightPreviewRef.current = lightPreview; setRedraw(r => r + 1) }, [lightPreview])
+  // 合成用画像の取得: 高画質モードではfull優先(未着ならpreviewで代替)、軽量はpreview優先
+  const getCompImg = (assetId: number): HTMLImageElement | undefined => {
+    const full = imgMapFull.current.get(assetId)
+    const prev = imgMapPreview.current.get(assetId)
+    const ok = (im?: HTMLImageElement) => (im && im.complete && im.naturalWidth ? im : undefined)
+    return lightPreviewRef.current ? (ok(prev) ?? ok(full)) : (ok(full) ?? ok(prev))
+  }
 
   // Draw an asset as a LAYER: cover-fit × scale, panned by (x,y), rotated about
   // its anchor. Mirrors the AE-style transform consumed by the render.
@@ -894,8 +916,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         for (let i = 0; i + 1 < pins.length; i += 2) {
           // 終端ピン=カット最終フレーム(包含)
           if (currentFrame >= pins[i].start_frame && currentFrame <= pins[i + 1].start_frame) {
-            const im = imgMap.current.get(pins[i].asset_id!)
-            if (im && im.complete && im.naturalWidth) {
+            const im = getCompImg(pins[i].asset_id!)
+            if (im) {
               const cs = Math.max(projW / im.naturalWidth, projH / im.naturalHeight)
               const dw = im.naturalWidth * cs, dh = im.naturalHeight * cs
               ctx.drawImage(im, (projW - dw) / 2, (projH - dh) / 2, dw, dh)
@@ -925,8 +947,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         const asset = assets.find(a => a.id === clip.asset_id)
         const isImg = asset && (asset.asset_type === 'image' || (asset.asset_type === 'generated' && asset.duration_sec == null))
         if (isImg) {
-          const im = imgMap.current.get(clip.asset_id)
-          if (im && im.complete && im.naturalWidth) drawLayer(ctx, im, im.naturalWidth, im.naturalHeight, xf)
+          const im = getCompImg(clip.asset_id)
+          if (im) drawLayer(ctx, im, im.naturalWidth, im.naturalHeight, xf)
         } else {
           const v = videoRef.current
           const cache = videoCacheRef.current
@@ -971,8 +993,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       const selClip = [...refSel].reverse()
         .map(id => clips.find(c => c.id === id))
         .find(c => c && c.asset_id != null)
-      const im = selClip?.asset_id != null ? imgMap.current.get(selClip.asset_id) : undefined
-      if (im && im.complete && im.naturalWidth) {
+      const im = selClip?.asset_id != null ? getCompImg(selClip.asset_id) : undefined
+      if (im) {
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
         const cs = Math.min(projW / im.naturalWidth, projH / im.naturalHeight)
