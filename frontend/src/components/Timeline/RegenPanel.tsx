@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { Asset, Clip } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
+import { RefImagePicker } from '../RefImagePicker'
 
 // 🔁 再生成パネル — 生成アセットのクリップを選択すると、そのアセットを作った
 // 生成パラメータ(asset.gen_params_json)を開き、prompt/seed等を微調整して
@@ -13,6 +14,7 @@ interface Props {
   asset: Asset
   projectId: number
   fps: number
+  assets?: Asset[]   // Ref2Vの参照画像ピッカー用(未指定時はピッカー非表示)
 }
 
 type GenParams = Record<string, unknown> & {
@@ -27,7 +29,7 @@ type GenParams = Record<string, unknown> & {
   scheduler?: string; ref_image_size?: string
 }
 
-export function RegenPanel({ clip, asset, projectId, fps }: Props) {
+export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
   const { generateImage, generateVideoI2V, jobs } = useJobStore()
   const { loadTimeline } = useTimelineStore()
   const [open, setOpen] = useState(false)
@@ -65,6 +67,10 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
   const isH3 = vidModel.startsWith('minimax-h3')
   const [easycache, setEasycache] = useState(true)
+  // Ref2V: 参照画像(=keyframes)は通常パネルと同じ視覚ピッカーで編集可能に
+  const [refImgIds, setRefImgIds] = useState<number[]>([])
+  const [refScheduler, setRefScheduler] = useState('beta')
+  const [refImgSize, setRefImgSize] = useState('match')
   const genFps = isH3 ? 24 : 16
   const snapFn = isH3 ? snapH3 : snap4n1
   useEffect(() => {
@@ -84,6 +90,9 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
     setFrames(sn(Math.round(Number(params.duration_sec ?? 5) * f0)))
     setH3Steps(Number(params.steps ?? 15))
     setEasycache(params.easycache !== false)
+    setRefImgIds(Array.isArray(params.keyframes) ? params.keyframes.map(k => k.asset_id) : [])
+    setRefScheduler(String(params.scheduler ?? 'beta'))
+    setRefImgSize(String(params.ref_image_size ?? 'match'))
   }, [params])
 
   const sizePresets = kind === 'i2v'
@@ -132,8 +141,11 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
         const oldDur = Number(params.duration_sec ?? 3)
         const newDur = snapFn(frames) / genFps
         const kfScale = oldDur > 0 ? newDur / oldDur : 1
-        let kfs = params.keyframes!.map(k => ({ ...k, time_sec: k.time_sec * kfScale }))
-        // H3(FL2VA)は最初/最後のみ。Ref2Vのkeyframesは参照画像なので全て残す
+        // Ref2V: keyframes=参照画像。ピッカーの現在の選択をそのまま使う(通常パネルと同一挙動)
+        let kfs = vidModel === 'minimax-h3-ref'
+          ? refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id }))
+          : params.keyframes!.map(k => ({ ...k, time_sec: k.time_sec * kfScale }))
+        // H3(FL2VA)は最初/最後のみ
         if (vidModel === 'minimax-h3' && kfs.length > 2) kfs = [kfs[0], kfs[kfs.length - 1]]
         const job = await generateVideoI2V({
           project_id: projectId,
@@ -147,8 +159,8 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
           ...(vidModel === 'minimax-h3-ref' ? {
             ...(Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length ? { ref_video_asset_ids: params.ref_video_asset_ids } : {}),
             ...(Array.isArray(params.ref_audio_asset_ids) && params.ref_audio_asset_ids.length ? { ref_audio_asset_ids: params.ref_audio_asset_ids } : {}),
-            scheduler: String(params.scheduler ?? 'beta'),
-            ref_image_size: String(params.ref_image_size ?? 'match'),
+            scheduler: refScheduler,
+            ref_image_size: refImgSize,
           } : {}),
           place,
         })
@@ -233,6 +245,29 @@ export function RegenPanel({ clip, asset, projectId, fps }: Props) {
                   </>
                 )}
               </div>
+              {vidModel === 'minimax-h3-ref' && (
+                <>
+                  <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
+                    <span>🎥参照動画 {Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length
+                      ? params.ref_video_asset_ids.map(x => `#${x}`).join(' ') : 'なし'}</span>
+                    <span>🎤参照音声 {Array.isArray(params.ref_audio_asset_ids) && params.ref_audio_asset_ids.length
+                      ? params.ref_audio_asset_ids.map(x => `#${x}`).join(' ') : 'なし'}</span>
+                    <select value={refImgSize} onChange={e => setRefImgSize(e.target.value)} className={inputCls}
+                            title="match=速度優先 / max=同一性優先">
+                      <option value="match">match</option>
+                      <option value="max">max(同一性)</option>
+                    </select>
+                    <select value={refScheduler} onChange={e => setRefScheduler(e.target.value)} className={inputCls}>
+                      <option value="beta">beta</option>
+                      <option value="normal">normal</option>
+                      <option value="simple">simple</option>
+                    </select>
+                  </div>
+                  {assets && (
+                    <RefImagePicker assets={assets} selected={refImgIds} onChange={setRefImgIds} fps={fps} />
+                  )}
+                </>
+              )}
               <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
                 <span>フレーム数</span>
                 <input type="number" step={isH3 ? 17 : 4} min={5} value={frames}

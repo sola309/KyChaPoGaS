@@ -82,12 +82,47 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
     setPlaying(false)
     setScrubSrc(Math.max(0, Math.min(sourceFrames - 1, Math.round(srcFrame))))
   }
-  const stripScrub = (e: React.PointerEvent) => {
+  const stripFrameAt = (clientX: number) => {
     const el = stripRef.current
-    if (!el) return
+    if (!el) return 0
     const rect = el.getBoundingClientRect()
-    scrubTo(((e.clientX - rect.left) / rect.width) * sourceFrames)
+    return ((clientX - rect.left) / rect.width) * sourceFrames
   }
+  // タイムラインと同じ操作系:
+  //  - 窓(紫ブロック)をドラッグ = クリップ移動と同様に窓を動かす
+  //  - 窓の外をクリック/ドラッグ = 再生ヘッドのシーク(スクラブ)
+  const dragWinRef = useRef<{ grabOffset: number } | null>(null)
+  const stripDown = (e: React.PointerEvent) => {
+    ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
+    const f = stripFrameAt(e.clientX)
+    if (f >= assetIn && f < assetIn + usedSrc) {
+      dragWinRef.current = { grabOffset: f - assetIn }   // 窓ドラッグ開始
+    } else {
+      dragWinRef.current = null
+      scrubTo(f)
+    }
+  }
+  const stripMove = (e: React.PointerEvent) => {
+    if (!(e.buttons & 1)) return
+    const f = stripFrameAt(e.clientX)
+    if (dragWinRef.current) applyIn(f - dragWinRef.current.grabOffset)
+    else scrubTo(f)
+  }
+  const stripUp = () => { dragWinRef.current = null }
+
+  // Space=再生/停止・←→=±1f(Shiftで±10f) — タイムラインと同じキー操作
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.code === 'Space') { e.preventDefault(); e.stopPropagation(); setPlaying(p => !p) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); scrubTo(scrubSrc - (e.shiftKey ? 10 : 1)) }
+      if (e.key === 'ArrowRight') { e.preventDefault(); scrubTo(scrubSrc + (e.shiftKey ? 10 : 1)) }
+    }
+    window.addEventListener('keydown', onKey, { capture: true })
+    return () => window.removeEventListener('keydown', onKey, { capture: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrubSrc, sourceFrames])
   // 現在位置がカット(窓)内なら、対応するタイムライン出力位置
   const inWindow = scrubSrc >= assetIn && scrubSrc < assetIn + usedSrc
   const outFrame = inWindow ? Math.round((scrubSrc - assetIn) / Math.max(0.05, speed)) : null
@@ -166,30 +201,24 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
             <span>窓開始 {assetIn}f = {(assetIn / fps).toFixed(2)}s</span>
           </div>
           <div ref={stripRef}
-               className="relative h-14 bg-zinc-950 rounded overflow-hidden cursor-crosshair select-none"
+               className="relative h-14 bg-zinc-950 rounded overflow-hidden select-none"
                style={{ touchAction: 'none' }}
-               onPointerDown={e => { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); stripScrub(e) }}
-               onPointerMove={e => { if (e.buttons & 1) stripScrub(e) }}>
+               onPointerDown={stripDown} onPointerMove={stripMove} onPointerUp={stripUp}>
             {clip.asset_id != null && (
               <img src={`/api/assets/${clip.asset_id}/filmstrip?count=12`} alt=""
                    className="absolute inset-0 w-full h-full object-fill opacity-70 pointer-events-none" />
             )}
-            {/* ソース窓(カットに使われる区間) */}
-            <div className="absolute top-0 bottom-0 border-2 border-purple-400 bg-purple-500/20 pointer-events-none"
+            {/* ソース窓 = タイムラインのクリップと同じ「掴んでドラッグで移動」 */}
+            <div className="absolute top-0 bottom-0 border-2 border-purple-400 bg-purple-500/20 pointer-events-none cursor-grab"
                  style={{ left: `${(assetIn / sourceFrames) * 100}%`, width: `${(usedSrc / sourceFrames) * 100}%` }} />
-            {/* 現在位置マーカー */}
+            {/* 再生ヘッド */}
             <div className="absolute top-0 bottom-0 w-px bg-amber-300 pointer-events-none"
                  style={{ left: `${(scrubSrc / sourceFrames) * 100}%` }} />
           </div>
-          <div className="flex gap-1 items-center flex-wrap">
-            <span className="text-[10px] text-zinc-500">窓移動</span>
-            <input type="range" min={0} max={maxIn} value={assetIn}
-                   onChange={e => applyIn(Number(e.target.value))} className="flex-1 min-w-32" />
-            {[-30, -5, -1, 1, 5, 30].map(d => (
-              <button key={d} onClick={() => applyIn(assetIn + d)} className={chipCls(false)}>{d > 0 ? `+${d}` : d}f</button>
-            ))}
-            <button onClick={() => applyIn(scrubSrc)} className={chipCls(false)} title="現在位置(黄線)を窓の開始フレームにする">
-              ▶ 現在位置を窓開始に
+          <div className="flex gap-1 items-center flex-wrap text-[10px] text-zinc-600">
+            <span>窓ドラッグ=移動 / 外クリック=シーク / Space=再生 / ←→=±1f(Shiftで±10f)</span>
+            <button onClick={() => applyIn(scrubSrc)} className={chipCls(false) + ' ml-auto'} title="再生ヘッド位置を窓の開始フレームにする">
+              ▶ ヘッド位置を窓開始に
             </button>
           </div>
         </div>

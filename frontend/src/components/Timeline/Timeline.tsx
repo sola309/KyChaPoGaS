@@ -749,7 +749,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
         )}
 
         {selectedClip && selAsset && selAsset.gen_params_json && (
-          <RegenPanel clip={selectedClip} asset={selAsset} projectId={projectId} fps={fps} />
+          <RegenPanel clip={selectedClip} asset={selAsset} projectId={projectId} fps={fps} assets={assets} />
         )}
 
         {selectedClip && selTrack?.track_type === 'video' && selAsset?.duration_sec != null && (
