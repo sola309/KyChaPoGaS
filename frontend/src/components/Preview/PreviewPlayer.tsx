@@ -62,6 +62,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const videoRef  = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
   const [loadedAssetId, setLoadedAssetId] = useState<number | null>(null)
+  // 高画質Blob到着時にsrc選択effectを再評価させるカウンタ(再生中の画質アップグレード用)
+  const [vidTierBump, setVidTierBump] = useState(0)
   const [videoBuffering, setVideoBuffering] = useState(false)
   const [audioBuffering, setAudioBuffering] = useState(false)
   const [capturing, setCapturing] = useState(false)
@@ -148,18 +150,27 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setLoadedAssetId(null)
       return
     }
-    // 軽量: プロキシBlob優先 / 高画質: 原本Blob優先(未取得なら原本ネイティブストリーミング)
-    const cached = lightPreview
-      ? vidBlobRef.current.get(activeClip.asset_id)
-      : vidBlobFullRef.current.get(activeClip.asset_id)
-    const url = cached ? cached.url
-      : assetsApi.fileUrl(activeClip.asset_id, lightPreview && !!activeAsset?.proxy_path)
+    // 軽量: プロキシBlob→プロキシURL。
+    // 高画質: 原本Blob→(未ロードなら)軽量Blob/プロキシで先に再生し、原本が届き次第
+    //         再生位置を保ったまま差し替える(vidTierBumpで再実行される)。
+    const full = vidBlobFullRef.current.get(activeClip.asset_id)
+    const light = vidBlobRef.current.get(activeClip.asset_id)
+    const url = lightPreview
+      ? (light?.url ?? assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path))
+      : (full?.url ?? light?.url ?? assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path))
     if (video.getAttribute('src') !== url) {
+      // 同一アセット内の画質アップグレードは再生位置・再生状態を引き継ぐ
+      const sameAsset = loadedAssetId === activeClip.asset_id
+      const t = sameAsset ? video.currentTime : 0
+      const wasPlaying = sameAsset && !video.paused
       video.src = url
       video.load()
+      if (sameAsset && t > 0) video.currentTime = t
+      if (wasPlaying) video.play().catch(() => {})
       setLoadedAssetId(activeClip.asset_id)
     }
-  }, [activeClip?.asset_id, activeAsset?.proxy_path, lightPreview])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClip?.asset_id, activeAsset?.proxy_path, lightPreview, vidTierBump])
 
   // シーク完了・デコード完了のたびに合成を再描画する(スクラブ時に古いフレームが
   // 残らないように)。video.currentTime代入は非同期なので、seekedを待たないと
@@ -807,6 +818,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             }
             tierMap.current.set(aid, { url: URL.createObjectURL(blob), bytes: blob.size })
             progMap.current.set(aid, 1)
+            // 高画質Blob到着: 再生中でも同一アセットなら位置を保って差し替え
+            if (full) setVidTierBump(b => b + 1)
             // 容量上限: 遠いものから破棄(再生中のアセットは残す)。両層合算
             const sumBytes = () =>
               [...vidBlobRef.current.values(), ...vidBlobFullRef.current.values()]
