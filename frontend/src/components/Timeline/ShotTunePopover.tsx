@@ -67,16 +67,27 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
     }
     const t0 = assetIn / fps
     const t1 = (assetIn + usedSrc) / fps
-    v.playbackRate = Math.min(4, Math.max(0.1, speed))
+    // 加減速カーブ("curve:")があれば現在位置の瞬間速度をplaybackRateへ反映
+    const ease = clip.speed_ease ?? 'linear'
+    const rel = typeof ease === 'string' && ease.startsWith('curve:')
+      ? ease.slice(6).split(';')[0].trim().split(/\s+/).map(Number).filter(n => isFinite(n) && n > 0)
+      : null
+    const rateAt = (t: number) => {
+      if (!rel || rel.length === 0) return speed
+      const u = Math.max(0, Math.min(0.999, (t * fps - assetIn) / Math.max(1, usedSrc)))
+      return speed * rel[Math.floor(u * rel.length)]
+    }
+    v.playbackRate = Math.min(4, Math.max(0.1, rateAt(v.currentTime)))
     const onTime = () => {
       setScrubSrc(Math.floor(v.currentTime * fps))
+      v.playbackRate = Math.min(4, Math.max(0.1, rateAt(v.currentTime)))
       if (v.currentTime >= t1 - 0.03 || v.currentTime < t0 - 0.2) v.currentTime = t0
     }
     v.addEventListener('timeupdate', onTime)
     if (Math.abs(v.currentTime - t0) > 0.2 && v.currentTime > t1) v.currentTime = t0
     v.play().catch(() => {})
     return () => v.removeEventListener('timeupdate', onTime)
-  }, [playing, assetIn, usedSrc, speed, fps, scrubSrc])
+  }, [playing, assetIn, usedSrc, speed, fps, scrubSrc, clip.speed_ease])
 
   const scrubTo = (srcFrame: number) => {
     setPlaying(false)
@@ -129,6 +140,12 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
 
   const applyIn = (val: number) => {
     const nv = Math.max(0, Math.min(maxIn, Math.round(val)))
+    // 停止中はプレビューを窓に追従させる(窓内の相対位置を維持)。
+    // これがないと窓を動かしてもプレビューが元のフレームに固定されたままになる。
+    if (!playing) {
+      const relPos = Math.max(0, Math.min(usedSrc - 1, scrubSrc - assetIn))
+      setScrubSrc(nv + relPos)
+    }
     setAssetIn(nv)
     liveUpdateClip(clip.id, { asset_in_frame: nv })
   }
@@ -244,6 +261,7 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
             onLive={pts => {
               const { rel, mean } = samplesFromPoints(pts)
               const flat = rel.every(v => Math.abs(v - 1) < 1e-3)
+              setSpeed(mean)   // パネル内ループ再生の基準速度も即時更新
               liveUpdateClip(clip.id, { speed: mean, speed_ease: flat ? 'linear' : easeStringFromPoints(pts) })
             }}
             onApply={(pts) => {
