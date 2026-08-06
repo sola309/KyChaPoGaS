@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useJobStore } from '../store/jobStore'
+import { useTimelineStore } from '../store/timelineStore'
+import { jobsApi } from '../api/client'
 
 // 🔄 生成進捗ピル — 実行中/待機中ジョブを画面右下に常時表示する。
 // どのタブにいても進捗率とフェーズ(モデル読み込み中など)が見える。
@@ -22,6 +24,38 @@ export function JobProgressPill() {
   const jobs = useJobStore(s => s.jobs)
   const [collapsed, setCollapsed] = useState(false)
   const active = jobs.filter(j => j.status === 'running' || j.status === 'pending')
+
+  // どのカットの生成中か表示: SSEはparamsを含まないため、実行中ジョブの詳細を
+  // 1回だけ取得してplace.start_frameを取り、Imageトラックのピンペアからカット番号を引く。
+  const [cutLabels, setCutLabels] = useState<Record<number, string>>({})
+  const fetchedRef = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    for (const j of active) {
+      if (j.job_type !== 'generate_video_i2v' || fetchedRef.current.has(j.id)) continue
+      fetchedRef.current.add(j.id)
+      void (async () => {
+        try {
+          const detail = await jobsApi.get(j.id)
+          const p = typeof detail.params === 'string' ? JSON.parse(detail.params) : detail.params
+          const sf = p?.place?.start_frame
+          if (sf == null) return
+          const st = useTimelineStore.getState()
+          const imgTrack = st.tracks.find(t => t.track_type === 'reference' && t.name === 'Image')
+          if (!imgTrack) return
+          const pins = st.clips.filter(c => c.track_id === imgTrack.id && c.asset_id != null)
+            .map(c => c.start_frame).sort((a, b) => a - b)
+          for (let i = 0; i + 1 < pins.length; i += 2) {
+            if (pins[i] <= sf && sf <= pins[i + 1]) {
+              setCutLabels(m => ({ ...m, [j.id]: `C${i / 2 + 1}` }))
+              return
+            }
+          }
+          setCutLabels(m => ({ ...m, [j.id]: `f${sf}` }))
+        } catch { /* 表示補助のみ・失敗は無視 */ }
+      })()
+    }
+  }, [active])
+
   if (active.length === 0) return null
 
   return (
@@ -42,7 +76,9 @@ export function JobProgressPill() {
             <div key={j.id} className="flex flex-col gap-0.5">
               <div className="flex items-center justify-between text-[10px]">
                 <span className="text-zinc-300 truncate">
-                  {TYPE_LABEL[j.job_type] ?? j.job_type} <span className="text-zinc-600">#{j.id}</span>
+                  {TYPE_LABEL[j.job_type] ?? j.job_type}
+                  {cutLabels[j.id] && <span className="text-amber-300 ml-1 font-medium">{cutLabels[j.id]}</span>}
+                  <span className="text-zinc-600 ml-1">#{j.id}</span>
                 </span>
                 <span className="text-zinc-400 ml-2 flex-shrink-0">
                   {j.status === 'pending' ? '待機中'

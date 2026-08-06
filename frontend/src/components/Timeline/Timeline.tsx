@@ -16,6 +16,7 @@ import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
 import { PinSwapModal } from './PinSwapModal'
+import { NightBatchPanel } from './NightBatchPanel'
 import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
 
@@ -76,6 +77,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   const [showInspector, setShowInspector] = useState(false)
   const [showShotTune, setShowShotTune] = useState(false)
   const [showPinSwap, setShowPinSwap] = useState(false)
+  const [showNightBatch, setShowNightBatch] = useState(false)
   const refSel = useTimelineStore(s => s.refSel)
   const swapPin = refSel.length >= 1 ? clips.find(c => c.id === refSel[refSel.length - 1]) ?? null : null
 
@@ -781,6 +783,16 @@ export function Timeline({ projectId, fps, assets }: Props) {
         )}
         {showPinSwap && swapPin && (
           <PinSwapModal pin={swapPin} assets={assets} fps={fps} onClose={() => setShowPinSwap(false)} />
+        )}
+
+        <button onClick={() => setShowNightBatch(true)}
+                className="text-[11px] px-2 py-0.5 rounded border bg-indigo-950/60 text-indigo-300 border-indigo-700 hover:bg-indigo-900/60"
+                title="夜間優先生成: 選んだカットを均等にランダムシードで生成し続ける(停止するまで)">
+          🌙 夜間生成
+        </button>
+        {showNightBatch && (
+          <NightBatchPanel projectId={projectId} fps={fps} assets={assets}
+                           onClose={() => setShowNightBatch(false)} />
         )}
 
         <div className="ml-auto flex items-center gap-2">

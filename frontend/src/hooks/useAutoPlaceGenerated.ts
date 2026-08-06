@@ -55,6 +55,12 @@ export function useAutoPlaceGenerated(
           try {
             const asset = await assetsApi.get(aid)
             onAsset(asset)
+            // place指定つきの生成(カット位置へのサーバ側自動配置/テイク蓄積)は
+            // ここでの「タイムライン末尾に追加」を行わない — 二重配置の原因だった。
+            try {
+              const gp = JSON.parse(asset.gen_params_json || '{}')
+              if (gp && gp.place) continue
+            } catch { /* gen_params無しの旧素材は従来動作 */ }
             const dur = asset.duration_sec
               ? Math.max(1, Math.round(asset.duration_sec * fps))
               : Math.round(3 * fps)   // images: default 3s
