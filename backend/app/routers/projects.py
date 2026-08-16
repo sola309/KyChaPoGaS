@@ -1,3 +1,5 @@
+from pathlib import Path
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from datetime import datetime
@@ -94,3 +96,29 @@ async def import_project_ep(file: UploadFile = File(...)):
     finally:
         tmp.unlink(missing_ok=True)
     return {"project_id": pid}
+
+# ── 📖 制作バイブル ───────────────────────────────────────────────────────────
+# プロジェクト単位の制作知識(キャスト名簿・画作りルール等)を1つのJSONで保持する。
+# シーン/カット意図はタイムラインのピン(attrs_json)側に住み、ここには置かない。
+# ユーザーが意図を書き、Claudeがプロンプト設計時に読む・議論の結果を書き戻す、の双方向を想定。
+_BIBLE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "bible"
+
+
+def _bible_path(project_id: int) -> Path:
+    _BIBLE_DIR.mkdir(parents=True, exist_ok=True)
+    return _BIBLE_DIR / f"{project_id}.json"
+
+
+@router.get("/{project_id}/bible")
+def get_bible(project_id: int):
+    p = _bible_path(project_id)
+    if not p.exists():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@router.put("/{project_id}/bible")
+def put_bible(project_id: int, body: dict):
+    _bible_path(project_id).write_text(
+        json.dumps(body, ensure_ascii=False, indent=1), encoding="utf-8")
+    return body

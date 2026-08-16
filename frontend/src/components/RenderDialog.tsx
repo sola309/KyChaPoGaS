@@ -1,10 +1,19 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useProjectStore } from '../store/projectStore'
 import { useJobStore } from '../store/jobStore'
-import { jobsApi } from '../api/client'
+import { jobsApi, type RenderFile } from '../api/client'
 
 interface Props {
   onClose: () => void
+}
+
+const fmtSize = (b: number) =>
+  b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : `${Math.round(b / (1 << 20))} MB`
+
+const fmtWhen = (iso: string) => {
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z')
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 export function RenderDialog({ onClose }: Props) {
@@ -46,10 +55,31 @@ export function RenderDialog({ onClose }: Props) {
     j.job_type === 'render_final' && (j.status === 'pending' || j.status === 'running')
   )
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+  // 📥 書き出し履歴 — 実在するファイルだけをAPIから取る。
+  // レンダリングが完了したら自動で並び直すよう、完了本数の変化を見て取り直す。
+  const [renders, setRenders] = useState<RenderFile[]>([])
+  const doneCount = jobs.filter(j => j.job_type === 'render_final' && j.status === 'completed').length
+  const projectId = activeProject.id
+  const loadRenders = useCallback(() => {
+    jobsApi.listRenders(projectId).then(setRenders).catch(() => setRenders([]))
+  }, [projectId])
+  useEffect(() => { loadRenders() }, [loadRenders, doneCount])
+
+  const removeRender = async (id: number) => {
+    if (!window.confirm(`書き出しファイル render_${id}.mp4 を削除しますか？`)) return
+    await jobsApi.deleteRender(id)
+    loadRenders()
+  }
+
+  // body直下に出す。タイムライン内に描くと、祖先が作る重なり文脈に閉じ込められ、
+  // 端末やブラウザによってはツールバーやジョブ一覧の下に潜ってしまう(スマホで発生)。
+  // z は他のモーダルより上の層にして、生成ジョブ一覧(z-[90])にも確実に勝たせる。
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-2 sm:p-6"
+         onClick={onClose}>
       <div
-        className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-80 p-5"
+        className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-80 max-w-full p-5
+                   max-h-[85dvh] overflow-y-auto overscroll-contain"
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-sm font-bold text-white mb-4">最終レンダリング</h2>
@@ -123,10 +153,43 @@ export function RenderDialog({ onClose }: Props) {
           </button>
         </div>
 
+        {/* 書き出し履歴 — ここから選んでダウンロードする */}
+        <div className="mt-4 pt-3 border-t border-zinc-800">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] text-zinc-300">📥 書き出し履歴</span>
+            <span className="text-[10px] text-zinc-600">{renders.length}件</span>
+          </div>
+          {renders.length === 0 ? (
+            <p className="text-[10px] text-zinc-600">まだ書き出したファイルはありません。</p>
+          ) : (
+            <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-0.5">
+              {renders.map(r => (
+                <div key={r.job_id}
+                     className="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[11px] text-zinc-200 truncate">{r.filename}</div>
+                    <div className="text-[9px] text-zinc-500">
+                      {fmtWhen(r.created_at)}　{r.width}×{r.height}
+                      {r.fps ? `@${r.fps}` : ''}　{r.preset}　{fmtSize(r.size_bytes)}
+                    </div>
+                  </div>
+                  <a href={jobsApi.downloadUrl(r.job_id)} download={r.filename}
+                     className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white flex-shrink-0"
+                     title="このファイルをダウンロード">⬇ 保存</a>
+                  <button onClick={() => void removeRender(r.job_id)}
+                          className="text-zinc-600 hover:text-red-400 text-xs px-0.5 flex-shrink-0"
+                          title="書き出しファイルを削除">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <p className="mt-3 text-[10px] text-zinc-600 text-center">
           ジョブキュー（⚙タブ）で進捗を確認できます
         </p>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

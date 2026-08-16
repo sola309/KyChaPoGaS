@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { Asset, TransitionType, BeatMatchResult } from '../../api/client'
-import { clipsApi, jobsApi, analysisApi, assetsApi } from '../../api/client'
+import { clipsApi, jobsApi, analysisApi, assetsApi, tracksApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { useCollabStore } from '../../store/collabStore'
@@ -12,6 +12,7 @@ import { RenderDialog } from '../RenderDialog'
 import { createPortal } from 'react-dom'
 import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoints } from './SpeedCurveEditor'
 import { CutLane } from './CutLane'
+import { SceneLane } from './SceneLane'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
@@ -92,6 +93,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   // ・自動抽出画像(frame_*)のピンは、移動後に新しい時刻のフレームへ自動で差し替える。
   //   手動で選んだ画像や色ピンは勝手に置き換えない。
   const gapFillBusyRef = useRef(false)
+  const remapTimer = useRef<number | null>(null)   // テイク再紐付けのデバウンス
   useEffect(() => {
     const videoFrameAssetAt = async (frame: number): Promise<number | null> => {
       const st = useTimelineStore.getState()
@@ -171,11 +173,38 @@ export function Timeline({ projectId, fps, assets }: Props) {
       const ids = ((ev as CustomEvent).detail?.clipIds ?? []) as number[]
       for (const id of ids) void refreshPinImage(id)
     }
+    // テイクの紐付け直しは手動操作(kychapogas:remap-takes)でのみ走らせる。
+    // ピンを動かすたびに自動で書き換えると、短いカットが隣り合う箇所で
+    // 取り違えが起きるうえ、いつ書き換わったかが追えなくなるため。
+    const onRemapRequested = () => remapTakesToCuts()
+    // 🗂 カット割りが変わったらテイクの紐付けを追従させる。
+    // テイクは生成時のplace.start_frameでカットに紐付くため、ピンを動かすと履歴から消える。
+    // 連続ドラッグで叩き続けないよう、最後の操作から少し待ってから1回だけ実行する。
+    const remapTakesToCuts = () => {
+      if (remapTimer.current) window.clearTimeout(remapTimer.current)
+      remapTimer.current = window.setTimeout(async () => {
+        const st = useTimelineStore.getState()
+        const img = st.tracks.find(t => t.track_type === 'reference' && t.name === 'Image')
+        if (!img) return
+        const pins = st.clips.filter(c => c.track_id === img.id && c.asset_id != null)
+          .sort((a, b) => a.start_frame - b.start_frame)
+        const starts: number[] = []
+        for (let i = 0; i + 1 < pins.length; i += 2) starts.push(pins[i].start_frame)
+        if (!starts.length) return
+        try {
+          const r = await assetsApi.remapTakes(projectId, starts)
+          window.dispatchEvent(new CustomEvent('kychapogas:toast',
+            { detail: `🗂 テイクの紐付けを整えました: ${r.updated}件` }))
+        } catch { /* 失敗しても編集は妨げない(表示側の±8f照合が保険になる) */ }
+      }, 50)
+    }
     window.addEventListener('kychapogas:pin-moved', onPinMoved)
     window.addEventListener('kychapogas:pin-roll', onPinRoll)
+    window.addEventListener('kychapogas:remap-takes', onRemapRequested)
     return () => {
       window.removeEventListener('kychapogas:pin-moved', onPinMoved)
       window.removeEventListener('kychapogas:pin-roll', onPinRoll)
+      window.removeEventListener('kychapogas:remap-takes', onRemapRequested)
     }
   }, [fps, assets])
 
@@ -819,6 +848,25 @@ export function Timeline({ projectId, fps, assets }: Props) {
             className="text-[11px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
             title="タイムライン全体を1本の動画に焼き込み（プリコンポーズ）→ライブラリに追加"
           >🎬 焼き込み</button>
+          {/* ⇔ 比較表示: 映像レイヤーをコンポジションとして左右に並べる。
+              1回のレンダーの中で並ぶので、2本の動画を突き合わせる必要がなく
+              フレームのずれが原理的に生じない。もう一度押すと全画面に戻る。 */}
+          <button
+            onClick={async () => {
+              const vids = tracks.filter(t => t.track_type === 'video').sort((a, b) => a.order - b.order)
+              const on = vids.some(t => (t.layout_json ?? '') !== '')
+              // 右=最背面(参照)の1本だけ指定し、残りの映像レイヤーは左にまとめる。
+              // Scenes等レイヤーが増えても割り当てが崩れない。
+              await tracksApi.compareLayout(projectId, !on, undefined, vids[vids.length - 1]?.id)
+              await syncFromServer(projectId)   // 編集履歴を消さずにトラックだけ取り直す
+              useUIStore.getState().pushToast(on ? '比較表示を解除しました' : '比較表示: 左右に並べました', 'info')
+            }}
+            className={`text-[11px] px-2 py-0.5 rounded ${
+              tracks.some(t => t.track_type === 'video' && (t.layout_json ?? '') !== '')
+                ? 'bg-amber-700 hover:bg-amber-600 text-amber-50'
+                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'}`}
+            title="映像レイヤーを左右に並べて比較(最前面=左 / その次=右)。もう一度押すと戻る"
+          >⇔ 比較</button>
           <button
             onClick={() => setShowRenderDialog(true)}
             className="text-[11px] px-3 py-0.5 rounded bg-purple-800 hover:bg-purple-700 text-purple-100 font-medium"
@@ -839,7 +887,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
         onPointerDown={handlePinchDown} onPointerMove={handlePinchMove}
         onPointerUp={handlePinchUp} onPointerCancel={handlePinchUp}
         style={{ touchAction: 'pan-x pan-y' }}>
-        <div className="flex flex-col min-h-full relative">
+        {/* w-max: 各行の包含ブロックを中身(ラベル112px + タイムライン全幅)まで広げる。
+            これが無いと行の幅がスクロール表示域までしか無く、ラベル列の
+            sticky left-0 に可動域が生まれないため、横スクロールで左に隠れてしまう。 */}
+        <div className="flex flex-col min-h-full relative w-max min-w-full">
           {/* Ruler row */}
           <div className="flex flex-shrink-0 sticky top-0 z-10 bg-zinc-900">
             <div className="w-28 flex-shrink-0 border-r border-b border-zinc-700 bg-zinc-900 sticky left-0 z-30" />
@@ -889,6 +940,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
             </div>
           )}
 
+          {/* 🏞シーンレーン(同一空間のカット群+ロケーションプレート) */}
+          <SceneLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} totalWidth={totalWidth} />
           {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
           <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 

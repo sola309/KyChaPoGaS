@@ -54,6 +54,16 @@ def _migrate(conn) -> None:
         conn.execute(text("ALTER TABLE track ADD COLUMN hidden BOOLEAN DEFAULT 0"))
         log.info("Migration: added track.hidden")
 
+    # ── Clip time-remap (Scenes: シーンチェンジ位置の手動補正) ────────────
+    if "clip" in tables and "remap_json" not in columns("clip"):
+        conn.execute(text("ALTER TABLE clip ADD COLUMN remap_json VARCHAR DEFAULT ''"))
+        log.info("Migration: added clip.remap_json")
+
+    # ── Track layout (レイヤーをコンポジションとして配置する) ──────────────
+    if "track" in tables and "layout_json" not in columns("track"):
+        conn.execute(text("ALTER TABLE track ADD COLUMN layout_json VARCHAR DEFAULT ''"))
+        log.info("Migration: added track.layout_json")
+
     # ── Project folder (UIグループ折りたたみ) ─────────────────────────────
     if "project" in tables and "folder" not in columns("project"):
         conn.execute(text("ALTER TABLE project ADD COLUMN folder VARCHAR"))

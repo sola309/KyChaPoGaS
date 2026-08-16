@@ -4,6 +4,7 @@ import type { Asset, Clip } from '../../api/client'
 import { useJobStore } from '../../store/jobStore'
 import { useTimelineStore } from '../../store/timelineStore'
 import { RefImagePicker } from '../RefImagePicker'
+import { deriveCutsWithScene } from './SceneLane'
 
 // 🔁 再生成パネル — 生成アセットのクリップを選択すると、そのアセットを作った
 // 生成パラメータ(asset.gen_params_json)を開き、prompt/seed等を微調整して
@@ -24,7 +25,7 @@ type GenParams = Record<string, unknown> & {
   keyframes?: { time_sec: number; asset_id: number }[]
   duration_sec?: number
   loras?: [string, number][]
-  steps?: number; easycache?: boolean
+  steps?: number; easycache?: boolean; turbo_lora?: number
   ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]
   scheduler?: string; ref_image_size?: string
 }
@@ -67,8 +68,21 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
   const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
   const isH3 = vidModel.startsWith('minimax-h3')
   const [easycache, setEasycache] = useState(true)
+  // 🚀Turbo: lightx2v蒸留LoRA。4stepで約30%短縮するがテクスチャが平坦化するのでT1下見向け
+  const [turbo, setTurbo] = useState(false)
   // Ref2V: 参照画像(=keyframes)は通常パネルと同じ視覚ピッカーで編集可能に
   const [refImgIds, setRefImgIds] = useState<number[]>([])
+  // 🏞 このクリップが属するシーン(カット開始フレームで照合)。プレートはRef2V参照へ自動添付
+  const tlTracks = useTimelineStore(s => s.tracks)
+  const tlClips = useTimelineStore(s => s.clips)
+  const cutInfo = useMemo(
+    () => deriveCutsWithScene(tlTracks, tlClips, assets ?? []).find(c => c.s === clip.start_frame),
+    [tlTracks, tlClips, assets, clip.start_frame])
+  const scene = cutInfo?.scene ?? null
+  // 🖼 構図アンカー: ピンに差し込まれた完成イメージ。あれば参照束の先頭に置く
+  const anchor = cutInfo?.anchor ?? null
+  const [attachPlates, setAttachPlates] = useState(true)
+  const [attachAnchor, setAttachAnchor] = useState(true)
   const [refScheduler, setRefScheduler] = useState('beta')
   const [refImgSize, setRefImgSize] = useState('match')
   const genFps = isH3 ? 24 : 16
@@ -90,6 +104,7 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
     setFrames(sn(Math.round(Number(params.duration_sec ?? 5) * f0)))
     setH3Steps(Number(params.steps ?? 15))
     setEasycache(params.easycache !== false)
+    setTurbo(Boolean(params.turbo_lora))
     setRefImgIds(Array.isArray(params.keyframes) ? params.keyframes.map(k => k.asset_id) : [])
     setRefScheduler(String(params.scheduler ?? 'beta'))
     setRefImgSize(String(params.ref_image_size ?? 'match'))
@@ -142,8 +157,14 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
         const newDur = snapFn(frames) / genFps
         const kfScale = oldDur > 0 ? newDur / oldDur : 1
         // Ref2V: keyframes=参照画像。ピッカーの現在の選択をそのまま使う(通常パネルと同一挙動)
+        const withAnchor = vidModel === 'minimax-h3-ref' && anchor && attachAnchor
+          ? [anchor, ...refImgIds.filter(id => id !== anchor)]
+          : refImgIds
+        const withPlates = vidModel === 'minimax-h3-ref' && scene && attachPlates && scene.plates.length
+          ? [...new Set([...withAnchor, ...scene.plates])]
+          : withAnchor
         let kfs = vidModel === 'minimax-h3-ref'
-          ? refImgIds.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id }))
+          ? withPlates.slice(0, 9).map(id => ({ time_sec: 0, asset_id: id }))
           : params.keyframes!.map(k => ({ ...k, time_sec: k.time_sec * kfScale }))
         // H3(FL2VA)は最初/最後のみ
         if (vidModel === 'minimax-h3' && kfs.length > 2) kfs = [kfs[0], kfs[kfs.length - 1]]
@@ -154,7 +175,7 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
           model: vidModel,
           prompt, negative_prompt: negPrompt,
           width, height, seed, use_lightning: lightning,
-          ...(isH3 ? { steps: h3Steps, easycache } : {}),
+          ...(isH3 ? { steps: h3Steps, easycache, ...(turbo ? { turbo_lora: 0.75 } : {}) } : {}),
           // Ref2V: 参照動画/音声・scheduler・ref_image_sizeを元条件のまま引き継ぐ
           ...(vidModel === 'minimax-h3-ref' ? {
             ...(Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length ? { ref_video_asset_ids: params.ref_video_asset_ids } : {}),
@@ -235,12 +256,18 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
                 {isH3 && (
                   <>
                     <label className="flex items-center gap-1">steps
-                      <input type="number" min={8} max={40} value={h3Steps}
-                             onChange={e => setH3Steps(Math.max(8, Math.min(40, Number(e.target.value))))}
+                      <input type="number" min={turbo ? 4 : 8} max={40} value={h3Steps}
+                             onChange={e => setH3Steps(Math.max(turbo ? 4 : 8, Math.min(40, Number(e.target.value))))}
                              className={inputCls + ' w-14'} />
                     </label>
                     <label className="flex items-center gap-1 cursor-pointer" title="約1.5〜2倍高速(わずかに甘くなる)">
                       <input type="checkbox" checked={easycache} onChange={e => setEasycache(e.target.checked)} />⚡
+                    </label>
+                    <label className="flex items-center gap-1 cursor-pointer"
+                           title="Turbo LoRA: 4stepで約30%短縮。テクスチャが平坦化し生成音声は無音になるためT1下見向け">
+                      <input type="checkbox" checked={turbo}
+                             onChange={e => { setTurbo(e.target.checked); if (e.target.checked) setH3Steps(4) }} />
+                      <span className={turbo ? 'text-amber-400' : ''}>🚀</span>
                     </label>
                   </>
                 )}
@@ -248,6 +275,21 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
               {vidModel === 'minimax-h3-ref' && (
                 <>
                   <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 flex-wrap">
+                    {anchor != null && (
+                      <label className="flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded border border-emerald-700 bg-emerald-900/30"
+                             title="このカットのピンに差し込まれた完成イメージを、構図とルックの基準として参照束の先頭に渡します">
+                        <input type="checkbox" checked={attachAnchor} onChange={e => setAttachAnchor(e.target.checked)} />
+                        🖼構図アンカー #{anchor}
+                      </label>
+                    )}
+                    {scene && (
+                      <label className="flex items-center gap-1 cursor-pointer px-1.5 py-0.5 rounded border"
+                             style={{ borderColor: scene.color, background: scene.color + '22' }}
+                             title={`シーン「${scene.name || '未定義'}」のロケーションプレート${scene.plates.length}枚を参照画像へ自動添付(環境の同一性を保つ)`}>
+                        <input type="checkbox" checked={attachPlates} onChange={e => setAttachPlates(e.target.checked)} />
+                        🏞{scene.name || 'シーン'}({scene.plates.length})
+                      </label>
+                    )}
                     <span>🎥参照動画 {Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length
                       ? params.ref_video_asset_ids.map(x => `#${x}`).join(' ') : 'なし'}</span>
                     <span>🎤参照音声 {Array.isArray(params.ref_audio_asset_ids) && params.ref_audio_asset_ids.length

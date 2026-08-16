@@ -37,6 +37,14 @@ class ClipBase(SQLModel):
     # コマ打ち(アニメ風フレームホールド): 0=off, 12=2コマ打ち相当, 8=3コマ打ち相当。
     # 速度リマップ後の出力タイムベースに適用される。
     posterize_fps: float = 0
+    # ⏱ 時間リマップ(Scenes向け)。複数カットを一度に生成したときの
+    # シーンチェンジ位置のわずかなズレを、キーで手動補正する。
+    #   {"keys": [{"t": 出力フレーム(クリップ先頭=0), "src": 素材フレーム(素材先頭=0),
+    #              "hold": コマ打ちfps(0=なし, このキーから次のキーまでの区間に適用)}]}
+    # キー間は線形。先頭は暗黙 {t:0, src:asset_in_frame}、最終キー以降は等速で継続。
+    # keysが空/未設定なら従来どおり speed/speed_ease/posterize_fps が効く。
+    # keysがあるときは speed/speed_ease/posterize_fps より優先される。
+    remap_json: str = ""
     # 🔒ロック: 確定カット。移動/トリム/削除/アセット差し替え/再生成の自動配置から保護。
     locked: bool = False
 
@@ -67,6 +75,7 @@ class ClipUpdate(SQLModel):
     kind: Optional[str] = None
     attrs_json: Optional[str] = None
     posterize_fps: Optional[float] = None
+    remap_json: Optional[str] = None
     locked: Optional[bool] = None
 
 

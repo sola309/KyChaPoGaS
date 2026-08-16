@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/uiStore'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
 import { MotionCanvas } from './MotionCanvas'
+import { RemapEditor } from './RemapEditor'
 import { allKeyframeTimes, removeKeyframe, TPROPS } from '../Preview/transformEval'
 
 const CLIP_COLORS: Record<string, string> = {
@@ -25,6 +26,8 @@ const HANDLE_PX = COARSE ? 16 : 6  // trim handle width in px
 interface Props {
   clip: Clip
   asset: Asset | undefined
+  /** 所属トラック名(⏱リマップは Scenes のクリップにだけ出す) */
+  trackName?: string
   pixelsPerFrame: number
   trackHeight: number
   onSelect: (id: number) => void
@@ -37,7 +40,7 @@ interface Props {
   remoteLock?: { name: string; color: string } | null
 }
 
-export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock }: Props) {
+export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock, trackName }: Props) {
   const snap = snapFrame ?? ((f: number) => f)
   // 個別セレクタ購読(アクション参照は安定)— 全ストア購読だと再生中30fpsの
   // currentFrame更新で全ClipBlockが再レンダされてしまう
@@ -80,14 +83,57 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   const assetMotion = asset ? motion[asset.id] : undefined
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [remapOpen, setRemapOpen] = useState(false)   // ⏱リマップエディタ
 
   const left  = clip.start_frame * pixelsPerFrame
   const width = Math.max(clip.duration_frames * pixelsPerFrame, HANDLE_PX * 2 + 4)
   const colorClass = CLIP_COLORS[asset?.asset_type ?? 'video']
 
-  // Interactions use Pointer Events so mouse, touch, and pen all work. The
-  // draggable surfaces set touch-action:none (below) so a finger-drag edits the
-  // clip instead of scrolling the timeline.
+  // Interactions use Pointer Events so mouse, touch, and pen all work.
+  // タッチは「長押しでドラッグ開始」: 以前は touch-action:none で指の動きが即編集に
+  // なり、タイムラインを流し見しようとしたフリックが素材移動になる誤操作が多かった。
+  // いまは クリップ上のフリック=スクロール / 長押し(350ms)してから動かす=編集。
+  // マウス・ペンは従来どおり即ドラッグ。
+  const LONG_PRESS_MS = 350
+  const SLOP_PX = 10
+  const touchGate = (e: React.PointerEvent, begin: (e: React.PointerEvent) => void) => {
+    if (e.pointerType !== 'touch') { begin(e); return }
+    e.stopPropagation()
+    const x0 = e.clientX, y0 = e.clientY
+    let armed = false, moved = false
+    const cleanup = () => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+    }
+    const timer = window.setTimeout(() => {
+      armed = true
+      cleanup()
+      navigator.vibrate?.(15)                       // 掴んだ合図(対応端末のみ)
+      // 掴んだあとに親のパンスクロールが発火しないよう、指を離すまで抑止
+      const blockScroll = (ev: TouchEvent) => ev.preventDefault()
+      document.addEventListener('touchmove', blockScroll, { passive: false })
+      const unblock = () => {
+        document.removeEventListener('touchmove', blockScroll)
+        window.removeEventListener('pointerup', unblock)
+        window.removeEventListener('pointercancel', unblock)
+      }
+      window.addEventListener('pointerup', unblock)
+      window.addEventListener('pointercancel', unblock)
+      begin(e)
+    }, LONG_PRESS_MS)
+    const onMove = (ev: PointerEvent) => {
+      if (Math.hypot(ev.clientX - x0, ev.clientY - y0) > SLOP_PX) { moved = true; cleanup() }
+    }
+    const onEnd = () => {
+      cleanup()
+      if (!armed && !moved) onSelect(clip.id)       // ただのタップ=選択
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+  }
 
   // ── Main body: move ──────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -214,6 +260,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
 
   return (
     <div
+      data-clip-id={clip.id}
       className={`absolute top-1 rounded border text-[10px] text-white overflow-hidden select-none
         ${colorClass} ${selected ? 'ring-2 ring-purple-300' : ''} ${dragging ? 'opacity-80' : ''} ${locked ? 'opacity-70' : ''}`}
       style={{
@@ -314,15 +361,15 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       {/* Left trim handle */}
       <div
         className="clip-trim-handle absolute left-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
-        style={{ width: HANDLE_PX, touchAction: 'none' }}
-        onPointerDown={handleLeftTrimDown}
+        style={{ width: HANDLE_PX, touchAction: 'pan-x pan-y' }}
+        onPointerDown={e => touchGate(e, handleLeftTrimDown)}
       />
 
       {/* Label (main drag area) */}
       <div
         className={`absolute inset-0 px-2 py-0.5 flex items-center cursor-grab ${dragging ? 'cursor-grabbing' : ''}`}
-        style={{ left: HANDLE_PX, right: HANDLE_PX, touchAction: 'none' }}
-        onPointerDown={handlePointerDown}
+        style={{ left: HANDLE_PX, right: HANDLE_PX, touchAction: 'pan-x pan-y' }}
+        onPointerDown={e => touchGate(e, handlePointerDown)}
       >
         <span className="truncate leading-tight">
           {hardLocked && <span className="mr-0.5">🔒</span>}
@@ -330,13 +377,29 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         </span>
       </div>
 
+      {/* ⏱リマップ(Scenesのみ): マルチカット生成のシーンチェンジ位置を補正 */}
+      {selected && trackName === 'Scenes' && (
+        <button
+          onClick={e => { e.stopPropagation(); setRemapOpen(true) }}
+          onPointerDown={e => e.stopPropagation()}
+          className={`absolute top-0 right-12 z-20 text-[11px] leading-none px-1 py-0.5 rounded-bl bg-black/50
+                      ${(clip.remap_json ?? '') !== '' ? 'text-amber-300' : 'text-zinc-300 hover:text-amber-300'}`}
+          title="⏱時間リマップ — シーンチェンジ位置のズレをキーで補正"
+        >⏱</button>
+      )}
+      {remapOpen && (
+        <RemapEditor clip={clip} asset={asset} fps={useTimelineStore.getState().projectFps}
+                     onClose={() => setRemapOpen(false)} />
+      )}
+
       {/* 🗂テイク履歴: このクリップ位置の生成テイクを一覧(選択時に表示) */}
       {selected && (
         <button
           onClick={e => {
             e.stopPropagation()
             window.dispatchEvent(new CustomEvent('kychapogas:open-takes', {
-              detail: { s: clip.start_frame, e: clip.start_frame + clip.duration_frames - 1 },
+              detail: { s: clip.start_frame, e: clip.start_frame + clip.duration_frames - 1,
+                        clipId: clip.id },   // 採用の書き換え先はこのクリップだけ
             }))
           }}
           onPointerDown={e => e.stopPropagation()}
@@ -381,8 +444,8 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       {/* Right trim handle */}
       <div
         className="clip-trim-handle absolute right-0 top-0 bottom-0 z-10 cursor-ew-resize bg-white/0 hover:bg-white/25 transition-colors"
-        style={{ width: HANDLE_PX, touchAction: 'none' }}
-        onPointerDown={handleRightTrimDown}
+        style={{ width: HANDLE_PX, touchAction: 'pan-x pan-y' }}
+        onPointerDown={e => touchGate(e, handleRightTrimDown)}
       />
     </div>
   )

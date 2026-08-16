@@ -69,21 +69,56 @@ def _recover_orphans() -> None:
             session.commit()
             log.warning(f"Recovered {len(orphans)} orphaned running job(s) → failed: "
                         f"{[j.id for j in orphans]}")
+    # 持ち主を失ったComfyUI側のプロンプトも一掃する。
+    # 残しておくと結果を誰も回収しない計算でGPUが埋まり、再投入したジョブが
+    # その後ろで待たされて「5%のまま進まない」ように見える。
+    from app.services.comfyui import comfyui
+    dropped = comfyui.drop_all_queued_sync()
+    if dropped:
+        log.warning(f"ComfyUIの孤児プロンプトを破棄: {dropped}件")
+
+
+def _sweep_zombies(live_ids: set[int]) -> None:
+    """実行中の実体が居ないのに status='running' のまま残った行を失敗に倒す。
+
+    タスクが CancelledError 等の BaseException で終わると _run_job の except を
+    すり抜けて終端状態が書かれず、UIに永久に消えない「実行中」が積み上がる。
+    走っているタスクの job.id 以外の running は実体が無いので回収する。
+    """
+    with Session(engine) as session:
+        stale = session.exec(select(Job).where(Job.status == "running")).all()
+        hit = [j for j in stale if j.id not in live_ids]
+        for j in hit:
+            j.status = "failed"
+            j.error_msg = "実行タスクが失われました(再投入してください)"
+            j.completed_at = datetime.utcnow()
+            session.add(j)
+        if hit:
+            session.commit()
+            log.warning(f"ゾンビ実行中ジョブを回収: {[j.id for j in hit]}")
 
 
 async def run_forever() -> None:
     log.info("Job runner started (lanes: heavy / light)")
     _recover_orphans()
     running: dict[str, asyncio.Task] = {}
+    lane_job: dict[str, int] = {}      # レーンが今実際に走らせている job.id
+    sweep = 0
     while True:
         try:
             for lane in ("heavy", "light"):
                 t = running.get(lane)
                 if t and not t.done():
                     continue
+                lane_job.pop(lane, None)
                 job = _claim_next(lane)
                 if job:
                     running[lane] = asyncio.create_task(_run_job(job))
+                    lane_job[lane] = job.id
+            # 30秒ごとに実体を失った'running'を掃除する
+            sweep += 1
+            if sweep % 15 == 0:
+                _sweep_zombies(set(lane_job.values()))
         except Exception as e:
             log.error(f"Job runner error: {e}")
         await asyncio.sleep(2)
@@ -357,7 +392,11 @@ async def _render_final(job: Job, params: dict) -> None:
             raise ValueError(f"Project {project_id} not found")
         tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
         clips  = session.exec(select(Clip).where(Clip.track_id.in_([t.id for t in tracks]))).all()
-        assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+        # クリップが実際に参照しているアセットを引く。プロジェクトで絞ると、
+        # 他プロジェクトの素材を使ったクリップ(複製したタイムライン等)が
+        # 全て「素材なし」になって黒く落ちる。
+        ids = {c.asset_id for c in clips if c.asset_id}
+        assets = session.exec(select(Asset).where(Asset.id.in_(ids))).all() if ids else []
         fps    = float(params.get("fps",    project.fps))
         width  = int(params.get("width",  project.width))
         height = int(params.get("height", project.height))
@@ -388,7 +427,8 @@ async def _precompose(job: Job, params: dict) -> None:
             raise ValueError(f"Project {project_id} not found")
         tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
         clips  = session.exec(select(Clip).where(Clip.track_id.in_([t.id for t in tracks]))).all()
-        assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+        ids = {c.asset_id for c in clips if c.asset_id}
+        assets = session.exec(select(Asset).where(Asset.id.in_(ids))).all() if ids else []
         fps    = float(params.get("fps",    project.fps))
         width  = int(params.get("width",  project.width))
         height = int(params.get("height", project.height))
@@ -411,10 +451,34 @@ async def _precompose(job: Job, params: dict) -> None:
 
 # ── generate_image ────────────────────────────────────────────────────────────
 
+def _fit_speed(session: Session, asset_id: int, duration_frames: int, project_fps: float) -> float:
+    """生成物をカット尺へ収めるための再生速度。
+
+    H3は最小124フレーム(=24fpsで5.17秒)しか作れないため、それより短いカットでは
+    「短い参照の動きを長い尺へ引き伸ばした」映像が返る(実測: 2.23秒指定で歩行が43%速度)。
+    生成物全体をカット尺に詰め直すと、動きの速さが参照どおりに戻る。
+    """
+    asset = session.get(Asset, asset_id)
+    if not asset or not asset.duration_sec or duration_frames <= 0 or project_fps <= 0:
+        return 1.0
+    slot_sec = duration_frames / project_fps
+    if slot_sec <= 0:
+        return 1.0
+    speed = asset.duration_sec / slot_sec
+    # 上限3倍。極端に短いカット(0.3秒等)では要求倍率が10倍を超え、全編を詰め込むと
+    # 一瞬の明滅にしかならない。その場合は3倍までに留め、頭から必要な分だけを使う
+    # (=残りは切り捨て)。速いカットは元々「一瞬の出来事」なのでこれで用が足りる。
+    speed = min(speed, 3.0)
+    # 等倍付近は触らない(誤差で微妙な速度がつくのを避ける)
+    return round(speed, 3) if speed > 1.02 else 1.0
+
+
 def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> None:
     """
     params["place"] = {track_id, start_frame, duration_frames?} が指定されていれば
     完成アセットをそのタイムライン位置へクリップ配置する(タイムライン第一原則)。
+
+    place["fit_speed"]=True のとき、生成物の全長がカット尺に収まる速度を自動設定する。
     """
     place = params.get("place")
     if not place:
@@ -448,12 +512,15 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
         if any(c.locked for c in existing):
             log.info("配置先に🔒ロック済みクリップ → 自動配置スキップ(テイク蓄積)")
             return
+        dur = int(place.get("duration_frames", fallback_duration))
         clip = Clip(
             track_id=int(place["track_id"]),
             asset_id=asset_id,
             start_frame=int(place.get("start_frame", 0)),
-            duration_frames=int(place.get("duration_frames", fallback_duration)),
+            duration_frames=dur,
         )
+        # 再生速度の自動調整は廃止(2026-08-12 ユーザー指示)。
+        # 生成物は常に等倍で配置し、カット尺で頭から切る。速度変更は人間の判断で行う。
         session.add(clip)
         session.commit()
     log.info(f"placed asset {asset_id} on track {place['track_id']} @ {place.get('start_frame', 0)}")
@@ -747,7 +814,8 @@ async def _generate_video_s2v(job: Job, params: dict) -> None:
         steps=int(params.get("steps", 20)))
     prompt_id = await comfyui.submit(wf)
     outputs = await comfyui.wait_for_outputs(
-        prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.85))
+        prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.85),
+        phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
 
     dest_dir = GENERATED_DIR / str(project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -877,10 +945,13 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
             ref_image_size=str(params.get("ref_image_size") or "match"),
             easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
             use_ref_video_audio=bool(params.get("use_ref_video_audio")),
+            turbo_lora=(float(params["turbo_lora"]) if params.get("turbo_lora") else None),
+            preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
         )
         prompt_id = await comfyui.submit(wf)
         outputs = await comfyui.wait_for_outputs(
-            prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.89))
+            prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.89),
+            phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
         video_path = None
         for out in outputs:
             fn = out.get("filename", "")
@@ -910,10 +981,12 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
             first_image_name=first_name, last_image_name=last_name,
             seed=seed, steps=int(params.get("steps") or 15),
             easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
+            preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
         )
         prompt_id = await comfyui.submit(wf)
         outputs = await comfyui.wait_for_outputs(
-            prompt_id, lambda p: _update_progress(job.id, 0.08 + p * 0.86))
+            prompt_id, lambda p: _update_progress(job.id, 0.08 + p * 0.86),
+            phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
         # SaveVideoはmp4(音声込み)を直接出力する — フレーム再結合は不要
         video_path = None
         for out in outputs:
@@ -956,7 +1029,8 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
         )
         prompt_id = await comfyui.submit(wf)
         outputs = await comfyui.wait_for_outputs(
-            prompt_id, lambda p: _update_progress(job.id, 0.10 + p * 0.80))
+            prompt_id, lambda p: _update_progress(job.id, 0.10 + p * 0.80),
+            phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
         all_frames = []
         for i, out in enumerate(outputs):
             fn = out.get("filename", "")

@@ -355,7 +355,8 @@ def get_thumbnail(asset_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/{asset_id}/file")
-def get_asset_file(asset_id: int, proxy: bool = False, session: Session = Depends(get_session)):
+def get_asset_file(asset_id: int, proxy: bool = False, download: bool = False,
+                   session: Session = Depends(get_session)):
     asset = session.get(Asset, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
@@ -366,7 +367,15 @@ def get_asset_file(asset_id: int, proxy: bool = False, session: Session = Depend
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
     media_type, _ = mimetypes.guess_type(str(path))
-    return FileResponse(path, media_type=media_type or "application/octet-stream")
+    headers = {}
+    if download:
+        # download=true のときだけ添付扱いにする。既定はインライン(プレビュー再生用)。
+        name = asset.name or path.name
+        if not Path(name).suffix:
+            name += path.suffix
+        headers["Content-Disposition"] = f'attachment; filename="{name}"'
+    return FileResponse(path, media_type=media_type or "application/octet-stream",
+                        headers=headers)
 
 
 @router.post("/{asset_id}/extract-clip", response_model=AssetRead, status_code=201)
@@ -766,3 +775,55 @@ def get_motion_series(asset_id: int, session: Session = Depends(get_session)):
             "duration_sec": asset.duration_sec}
     cache.write_text(json.dumps(data))
     return data
+
+
+# ── 🗂 テイク紐付けの追従 ─────────────────────────────────────────────────────
+# テイク(生成アセット)は gen_params.place.start_frame でカットに紐付く。
+# カット割りのピンを動かすと開始フレームがずれ、テイク履歴から消えてしまうため、
+# ピン編集のたびにこのエンドポイントで「現在のカット開始」へ寄せ直す。
+# 生成時の位置は place.orig_start_frame に一度だけ退避し、来歴は失わない。
+class RemapTakes(_BM):
+    project_id: int
+    starts: list[int]        # 現在のカット開始フレーム(昇順)
+    tolerance: int = 24      # この範囲内のズレだけ寄せる(別カットへの誤吸着を防ぐ)
+
+
+@router.post("/remap-takes")
+def remap_takes(body: RemapTakes, session: Session = Depends(get_session)):
+    if not body.starts:
+        return {"updated": 0, "detail": []}
+    starts = sorted(body.starts)
+    rows = session.exec(select(Asset).where(Asset.project_id == body.project_id)).all()
+    updated, detail = 0, []
+    for a in rows:
+        if not a.gen_params_json:
+            continue
+        try:
+            p = json.loads(a.gen_params_json)
+        except Exception:
+            continue
+        place = p.get("place")
+        if not isinstance(place, dict) or not isinstance(place.get("start_frame"), int):
+            continue
+        cur = place["start_frame"]
+        if cur in starts:
+            continue
+        near = min(starts, key=lambda s: abs(s - cur))
+        # 許容幅は「隣のカット開始までの距離の半分」を超えない。
+        # 0.3秒カットが連続する箇所(C11/C12, C39/C40 等)で固定24フレームの許容を
+        # 使うと、隣のカットへ取り違えて紐付けてしまうため。
+        i = starts.index(near)
+        gap = min([abs(near - starts[j]) for j in (i - 1, i + 1) if 0 <= j < len(starts)] or [10 ** 9])
+        limit = min(body.tolerance, max(1, gap // 2))
+        if abs(near - cur) > limit:
+            continue          # 遠いものは触らない(消えたカットのテイクは孤立のまま残す)
+        place.setdefault("orig_start_frame", cur)
+        place["start_frame"] = near
+        p["place"] = place
+        a.gen_params_json = json.dumps(p, ensure_ascii=False)
+        session.add(a)
+        updated += 1
+        detail.append({"asset": a.id, "from": cur, "to": near})
+    if updated:
+        session.commit()
+    return {"updated": updated, "detail": detail[:50]}

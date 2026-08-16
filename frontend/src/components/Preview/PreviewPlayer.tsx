@@ -27,6 +27,7 @@ import { useUIStore } from '../../store/uiStore'
 import type { Asset } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { evalTransform, parseElement, type TextProps, type XForm } from './transformEval'
+import { parseRemapKeys, remapSrcFrame } from '../Timeline/remap'
 
 interface Props {
   assets: Asset[]
@@ -56,6 +57,68 @@ function curveIntegralAt(rel: number[], u: number): number {
   return acc / n
 }
 
+/**
+ * 比較表示など「複数の映像レイヤーを同時に見せる」ときの追加<video>。
+ * プレビュー本体は<video>を1つしか持たないため、そのままだと2枚目以降の
+ * レイヤーが1枚目の直前フレームで埋められ、左右とも同じ絵になってしまう。
+ * トラック1本につき1要素を持たせ、drawComposite から直接読む。
+ */
+function LayerVideo({ trackId, clip, proxy, projectFps, currentFrame, playing, reg, onFrame }: {
+  trackId: number
+  clip: { asset_id: number | null; start_frame: number; asset_in_frame: number; speed: number
+          duration_frames: number; remap_json?: string } | null
+  proxy: boolean
+  projectFps: number
+  currentFrame: number
+  playing: boolean
+  reg: (trackId: number, el: HTMLVideoElement | null) => void
+  onFrame: () => void
+}) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const src = clip?.asset_id != null ? assetsApi.fileUrl(clip.asset_id, proxy) : ''
+
+  useEffect(() => {
+    reg(trackId, ref.current)
+    return () => reg(trackId, null)
+  }, [trackId, reg])
+
+  useEffect(() => {
+    const v = ref.current
+    if (!v || !src) return
+    if (v.getAttribute('src') !== src) { v.setAttribute('src', src); v.load() }
+  }, [src])
+
+  // タイムラインの時計に追従(本体の<video>と同じ式)
+  useEffect(() => {
+    const v = ref.current
+    if (!v || !clip) return
+    const sp = clip.speed > 0 ? clip.speed : 1
+    const rel = currentFrame - clip.start_frame
+    const rk = parseRemapKeys(clip.remap_json, clip.duration_frames, clip.asset_in_frame)
+    const at = rk
+      ? remapSrcFrame(rk, rel, projectFps) / projectFps
+      : (clip.asset_in_frame + rel * sp) / projectFps
+    if (playing) {
+      if (Math.abs(v.currentTime - at) > 0.25) v.currentTime = Math.max(0, at)
+      if (v.paused) v.play().catch(() => {})
+    } else {
+      if (!v.paused) v.pause()
+      const target = Math.max(0, at) + 1e-4
+      if (Math.abs(v.currentTime - target) > 0.5 / projectFps) v.currentTime = target
+    }
+  }, [currentFrame, playing, clip, projectFps])
+
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    const bump = () => onFrame()
+    for (const ev of ['seeked', 'loadeddata', 'canplay']) v.addEventListener(ev, bump)
+    return () => { for (const ev of ['seeked', 'loadeddata', 'canplay']) v.removeEventListener(ev, bump) }
+  }, [onFrame])
+
+  return <video ref={ref} muted playsInline preload="auto" className="hidden" />
+}
+
 export function PreviewPlayer({ assets, onAsset }: Props) {
   const { tracks, clips, currentFrame, projectFps, setCurrentFrame, placeClip, previewHidden } = useTimelineStore()
   const { activeProject } = useProjectStore()
@@ -80,6 +143,20 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // 直前に確定した動画フレームのキャッシュ。シーク中(readyState低下)に黒フレームを
   // 出さず、前のフレームを描き続けるために使う(シーク完了ごとに更新)。
   const videoCacheRef = useRef<{ canvas: HTMLCanvasElement | null; assetId: number | null }>({ canvas: null, assetId: null })
+
+  // 比較表示中か(映像トラックのどれかに配置指定がある)。ONの間だけレイヤーごとに
+  // <video>を用意する — 常時やるとデコード本数が増えて重くなるため。
+  const bumpRedraw = useRef(() => setRedraw(n => n + 1)).current
+  const compareMode = tracks.some(t => t.track_type === 'video' && (t.layout_json ?? '') !== '')
+  // 比較表示を切り替えたら保持フレームは捨てる(古い再生位置の絵が一瞬出るのを防ぐ)
+  useEffect(() => { layerCacheRef.current.clear() }, [compareMode])
+  const layerVidsRef = useRef<Map<number, HTMLVideoElement>>(new Map())
+  // レイヤーごとの直前確定フレーム(読み込み中の黒点滅を防ぐ)
+  const layerCacheRef = useRef<Map<number, HTMLCanvasElement>>(new Map())
+  const regLayerVid = useRef((trackId: number, el: HTMLVideoElement | null) => {
+    if (el) layerVidsRef.current.set(trackId, el)
+    else layerVidsRef.current.delete(trackId)
+  }).current
   // コマ打ちプレビュー: スロット(=ホールド区間)が変わった時だけビデオフレームを取り込む
   const holdCacheRef = useRef<{ clipId: number | null; slot: number; canvas: HTMLCanvasElement | null }>({ clipId: null, slot: -1, canvas: null })
   const [box, setBox] = useState({ w: 0, h: 0 })   // fitted project-frame box (px)
@@ -155,9 +232,15 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     //         再生位置を保ったまま差し替える(vidTierBumpで再実行される)。
     const full = vidBlobFullRef.current.get(activeClip.asset_id)
     const light = vidBlobRef.current.get(activeClip.asset_id)
-    const url = lightPreview
-      ? (light?.url ?? assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path))
-      : (full?.url ?? light?.url ?? assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path))
+    const direct = assetsApi.fileUrl(activeClip.asset_id, !!activeAsset?.proxy_path)
+    const sameAsset = loadedAssetId === activeClip.asset_id
+    const cur = video.getAttribute('src') ?? ''
+    let url = lightPreview ? (light?.url ?? direct) : (full?.url ?? light?.url ?? direct)
+    // 貼り替えは「原本Blobへの昇格」のときだけにする。
+    // プロキシURL→軽量Blob は中身が同じなのに load() をやり直すことになり、
+    // 他アセットのBlob到着(vidTierBump)のたびに読み込みが振り出しに戻って、
+    // いつまでも再生可能にならないことがあった(=二重・三重読み込み)。
+    if (sameAsset && cur && url !== full?.url) url = cur
     if (video.getAttribute('src') !== url) {
       // 同一アセット内の画質アップグレードは再生位置・再生状態を引き継ぐ
       const sameAsset = loadedAssetId === activeClip.asset_id
@@ -249,7 +332,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     const consumed = relCurve
       ? activeClip.duration_frames * sp * curveIntegralAt(relCurve, relFrames / Math.max(1, activeClip.duration_frames))
       : relFrames * sp
-    const assetTime = (activeClip.asset_in_frame + consumed) / projectFps
+    // ⏱ 時間リマップがあれば speed/ease より優先(レンダラと同じ規則)
+    const rk = parseRemapKeys(activeClip.remap_json, activeClip.duration_frames, activeClip.asset_in_frame)
+    const assetTime = rk
+      ? remapSrcFrame(rk, relFrames, projectFps) / projectFps
+      : (activeClip.asset_in_frame + consumed) / projectFps
     if (playing) {
       if (Math.abs(video.currentTime - assetTime) > 0.25) video.currentTime = Math.max(0, assetTime)  // drift correction only
       if (video.paused) video.play().catch(() => {})
@@ -915,6 +1002,18 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
 
   // Draw an asset as a LAYER: cover-fit × scale, panned by (x,y), rotated about
   // its anchor. Mirrors the AE-style transform consumed by the render.
+  /** トラックの layout_json → 出力画面内の配置矩形(px)。空/全画面なら null */
+  const trackLayout = (raw?: string) => {
+    if (!raw || !raw.trim()) return null
+    try {
+      const d = JSON.parse(raw) as { x?: number; y?: number; w?: number; h?: number; fit?: string }
+      const x = d.x ?? 0, y = d.y ?? 0, w = d.w ?? 1, h = d.h ?? 1
+      if (x === 0 && y === 0 && w === 1 && h === 1) return null
+      return { x: x * projW, y: y * projH, w: Math.max(1, w * projW), h: Math.max(1, h * projH),
+               fit: d.fit ?? 'contain' }
+    } catch { return null }
+  }
+
   const drawLayer = (ctx: CanvasRenderingContext2D, src: CanvasImageSource,
                      iw: number, ih: number, xf: XForm) => {
     if (!iw || !ih) return
@@ -965,7 +1064,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     // 音とカット割りの一致を再生しながら確認できる。実素材レイヤーがあれば隠れる。
     {
       const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
-      if (imgTrack) {
+      // 比較表示中は敷かない(左右のパネルの後ろに透けて比較の邪魔になる)
+      if (imgTrack && !compareMode) {
         const pins = clips
           .filter(c => c.track_id === imgTrack.id && c.asset_id != null)
           .sort((a, b) => a.start_frame - b.start_frame)
@@ -993,6 +1093,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       const prog = (currentFrame - clip.start_frame) / Math.max(1, clip.duration_frames)
       const xf = evalTransform(clip.transform_json, prog, currentFrame)
       ctx.save()
+      // レイヤー(トラック)の配置。比較表示で左右に分けるのはここ。
+      // 矩形へ縮小し、はみ出しは切る。レンダラーの _layout_pass と同じ見え方。
+      const lay = trackLayout(tr.layout_json)
+      if (lay) {
+        ctx.beginPath(); ctx.rect(lay.x, lay.y, lay.w, lay.h); ctx.clip()
+        const k = lay.fit === 'cover'
+          ? Math.max(lay.w / projW, lay.h / projH)
+          : Math.min(lay.w / projW, lay.h / projH)
+        ctx.translate(lay.x + (lay.w - projW * k) / 2, lay.y + (lay.h - projH * k) / 2)
+        ctx.scale(k, k)
+      }
       ctx.globalAlpha = (clip.opacity ?? 1) * (clip.asset_id == null ? 1 : xf.opacity)
       ctx.globalCompositeOperation = clip.blend === 'screen' ? 'screen'
         : clip.blend === 'add' ? 'lighter' : clip.blend === 'multiply' ? 'multiply' : 'source-over'
@@ -1009,7 +1120,26 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           const v = videoRef.current
           const cache = videoCacheRef.current
           const holdFps = clip.posterize_fps ?? 0
-          if (v && loadedAssetId === clip.asset_id && v.readyState >= 2 && !v.seeking) {
+          const lv = layerVidsRef.current.get(tr.id)
+          if (compareMode && lv) {
+            // 比較表示中: このレイヤー専用の<video>だけを使う。
+            // 本体<video>やその直前フレームへ落とすと、他レイヤーと同じ絵になる。
+            const lc = layerCacheRef.current
+            if (lv.readyState >= 2 && lv.videoWidth) {
+              drawLayer(ctx, lv, lv.videoWidth, lv.videoHeight, xf)
+              // カットが変わると<video>は読み込み直しになり readyState が落ちる。
+              // その間を直前の確定フレームで埋めないと黒く点滅するのでキャッシュする。
+              let cc = lc.get(tr.id)
+              if (!cc) { cc = document.createElement('canvas'); lc.set(tr.id, cc) }
+              if (cc.width !== lv.videoWidth || cc.height !== lv.videoHeight) {
+                cc.width = lv.videoWidth; cc.height = lv.videoHeight
+              }
+              cc.getContext('2d')?.drawImage(lv, 0, 0)
+            } else {
+              const cc = lc.get(tr.id)
+              if (cc && cc.width) drawLayer(ctx, cc, cc.width, cc.height, xf)
+            }
+          } else if (v && loadedAssetId === clip.asset_id && v.readyState >= 2 && !v.seeking) {
             if (holdFps > 0.5) {
               // 🎞 コマ打ち: 出力時間をホールド間隔で量子化し、区間が変わった時だけ取り込む
               const outSec = (currentFrame - clip.start_frame) / projectFps
@@ -1033,7 +1163,10 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             }
             cache.canvas.getContext('2d')?.drawImage(v, 0, 0)
             cache.assetId = clip.asset_id
-          } else if (cache.canvas && cache.canvas.width) {
+          } else if (clip.id === activeClip?.id && cache.canvas && cache.canvas.width) {
+            // 直前フレームのキャッシュは本体<video>のもの。別レイヤーに流用すると
+            // そのレイヤーが上のレイヤーと同じ絵になってしまうので、本体が担当する
+            // クリップにだけ使う。
             // シーク中・ロード中・クリップ切替中は直前の確定フレームで埋める。
             // アセットが変わる境界でも下層(Video/Imageトラック)を一瞬見せない。
             drawLayer(ctx, cache.canvas, cache.canvas.width, cache.canvas.height, xf)
@@ -1216,6 +1349,29 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       <div ref={canvasRef} className="flex-1 relative flex items-center justify-center min-h-0">
         {/* HTML5 video — hidden frame-source; the compositor draws its frame */}
         <video ref={videoRef} className="hidden" playsInline preload="auto" />
+        {/* 比較表示中は映像レイヤーごとに<video>を持たせる(本体1本だと全レイヤーが同じ絵になる) */}
+        {compareMode && tracks
+          .filter(t => t.track_type === 'video' && !t.hidden && !previewHidden.includes(t.id))
+          .map(t => {
+            const c = clips.find(c2 => c2.track_id === t.id
+              && c2.start_frame <= currentFrame && c2.start_frame + c2.duration_frames > currentFrame)
+            const a = c?.asset_id != null ? assets.find(x => x.id === c.asset_id) : null
+            const isVid = a?.asset_type === 'video'
+              || (a?.asset_type === 'generated' && a?.duration_sec != null)
+            return (
+              <LayerVideo
+                key={t.id}
+                trackId={t.id}
+                clip={isVid && c ? c : null}
+                proxy={lightPreview && !!a?.proxy_path}
+                projectFps={projectFps}
+                currentFrame={currentFrame}
+                playing={playing}
+                reg={regLayerVid}
+                onFrame={bumpRedraw}
+              />
+            )
+          })}
 
         {/* WYSIWYG compositor: all video tracks composited at the playhead
             (transforms / opacity / blend / text) so the timeline is what-you-see. */}

@@ -231,6 +231,7 @@ export function TrackLane({
               <ClipBlock
                 clip={clip}
                 asset={asset}
+                trackName={track.name}
                 pixelsPerFrame={pixelsPerFrame}
                 trackHeight={height}
                 selected={selectedClipId === clip.id}

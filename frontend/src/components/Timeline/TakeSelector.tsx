@@ -12,10 +12,18 @@ import { useTimelineStore } from '../../store/timelineStore'
  */
 interface Props {
   cut: { s: number; e: number }
+  /** 🗂を押したクリップ。採用が書き換えるのはこのクリップだけ。
+      未指定(カット割りレーンからのダブルクリック)は従来どおり Shots の該当カット。 */
+  sourceClipId?: number
   assets: Asset[]
   fps: number
   onClose: () => void
 }
+
+/** カット位置の微調整でテイクが行方不明にならないための許容幅(フレーム)。
+ *  テイクは gen_params.place.start_frame で紐付くが、参照動画の差し替え等でピンを
+ *  数コマ動かすと完全一致しなくなる。カット長より十分小さい幅で寄せて拾う。 */
+const SNAP = 8
 
 interface Take {
   asset: Asset
@@ -27,6 +35,18 @@ interface Take {
   raw?: Record<string, unknown>   // 全生成パラメータ(詳細トグル用)
   tier: 1 | 2 | 3                 // 検証段階(生成条件から自動判定)
   promptHash: string              // プロンプト版の識別子(同一文面=同一版)
+  jobId?: number                  // 生成ジョブ番号(ログや会話での指示に使う)
+  drift: number                   // 生成時のカット開始との差(フレーム)。0以外はピン移動後
+  spanFrames: number              // 生成時に確保した長さ。カット長を超える=複数カットにまたがるテイク
+  srcStart: number                // 生成時のカット開始フレーム(部分採用のオフセット計算に使う)
+}
+
+// 生成物のファイル名は `<種別>_<ジョブID>.<拡張子>` で作られる(job_runner)。
+// ジョブ番号は会話やログでテイクを一意に指す識別子になるので、そこから復元する。
+const jobIdOf = (filePath: string): number | undefined => {
+  const base = filePath.split('/').pop() ?? ''
+  const m = base.match(/^(?:h3r|h3|s2v|wanseg|video|mg|music)_(\d+)(?:[._])/)
+  return m ? Number(m[1]) : undefined
 }
 
 /**
@@ -38,6 +58,9 @@ interface Take {
 const tierOf = (p: Record<string, unknown>): 1 | 2 | 3 => {
   const px = Number(p.width ?? 0) * Number(p.height ?? 0)
   const steps = Number(p.steps ?? 20)
+  // 🚀Turbo LoRAはモデルの重み自体が変わるため、同じseedでも非Turboでは再現しない。
+  // 本番解像度で回していてもT2(=シードを本番へ引き継げる構成)とは呼べないのでT1扱い。
+  if (p.turbo_lora) return 1
   if (px < 900000) return 1              // 1344x768(1.03MP)未満=下見
   return steps <= 10 ? 2 : 3
 }
@@ -53,7 +76,7 @@ const hashStr = (s: string): string => {
   return (h >>> 0).toString(16).slice(0, 4)
 }
 
-export function TakeSelector({ cut, assets, fps, onClose }: Props) {
+export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props) {
   const clips = useTimelineStore(s => s.clips)
   const tracks = useTimelineStore(s => s.tracks)
   const [previewId, setPreviewId] = useState<number | null>(null)
@@ -68,20 +91,36 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
       try {
         const p = JSON.parse(a.gen_params_json)
         const place = p?.place
-        if (!place || place.start_frame !== cut.s) continue
+        if (!place || typeof place.start_frame !== 'number') continue
+        const drift = place.start_frame - cut.s
+        const span = Number(place.duration_frames ?? 0)
+        // このカットで生成されたものに加えて、このカットを内側に含む長いテイク
+        // (C18-20をまとめて作ったもの等)も出す。部分だけをShotsへ採るため。
+        const startsHere = Math.abs(drift) <= SNAP
+        const covers = place.start_frame - SNAP <= cut.s && place.start_frame + span >= cut.e
+        if (!startsHere && !covers) continue
         if (!String(p?.model ?? '').match(/minimax-h3|wan2\.2|svd/)) continue
         out.push({ asset: a, seed: p.seed, prompt: p.prompt, model: p.model, steps: p.steps,
                    easycache: p.easycache, raw: p,
-                   tier: tierOf(p), promptHash: hashStr(String(p.prompt ?? '')) })
+                   tier: tierOf(p), promptHash: hashStr(String(p.prompt ?? '')),
+                   jobId: jobIdOf(a.file_path), drift,
+                   spanFrames: span, srcStart: place.start_frame })
       } catch { /* gen_params壊れは無視 */ }
     }
     return out.sort((a, b) => b.asset.id - a.asset.id)   // 新しい順
-  }, [assets, cut.s])
+  }, [assets, cut.s, cut.e])
 
   const shotsTrack = tracks.find(t => t.track_type === 'video' && t.name === 'Shots')
   const currentClip = shotsTrack
     ? clips.find(c => c.track_id === shotsTrack.id && c.start_frame === cut.s)
     : undefined
+  const cutLen = cut.e - cut.s + 1
+  const isSpan = (t: Take) => t.spanFrames > cutLen
+  // 採用の書き換え先。🗂を押したクリップがあればそれ一択(他のレイヤーには触らない)。
+  // 無ければ従来どおり Shots の該当カット(無ければ新規作成)。
+  const sourceClip = sourceClipId != null ? clips.find(c => c.id === sourceClipId) : undefined
+  const sourceTrack = sourceClip ? tracks.find(x => x.id === sourceClip.track_id) : undefined
+  const targetClip = sourceClip ?? currentClip
 
   // 昇格: 同じプロンプトのまま上位Tierの条件で再実行する。
   // T1→T2は解像度が変わるためシードは意味を持たない(新規サンプル)。
@@ -92,6 +131,7 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
     p.steps = to === 2 ? 8 : 20
     p.easycache = false
     p.ref_image_size = 'max'
+    delete p.turbo_lora          // 昇格先は常に素のモデル(Turboはテクスチャが平坦化するため下見専用)
     if (to === 3 && t.tier === 2) p.seed = t.seed          // T2→T3のみシード継承
     else p.seed = Math.floor(Math.random() * 2 ** 31)
     p.place = { ...((p.place as Record<string, unknown>) ?? {}), auto: false }
@@ -103,21 +143,33 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
     } catch { setMsg('⚠ 昇格に失敗しました') }
   }
 
-  const adopt = async (assetId: number) => {
+  const adopt = async (tk: Take) => {
     const st = useTimelineStore.getState()
-    let shots = shotsTrack
-    if (!shots) return
-    if (currentClip?.locked) {
-      setMsg('🔒 このカットはロックされています — クリップの🔒を解除してから採用してください')
+    const target = sourceClip ?? currentClip
+    // このテイクの中で、対象クリップの開始位置が何フレーム目に当たるか(頭出し)
+    const offAt = (startFrame: number) => Math.max(0, startFrame - tk.srcStart)
+
+    if (target) {
+      if (target.locked) {
+        setMsg('🔒 このクリップはロックされています — 🔒を解除してから採用してください')
+        return
+      }
+      // 書き換えるのは素材と頭出しだけ。開始位置・長さ・レイヤーには触れない。
+      await st.updateClip(target.id, { asset_id: tk.asset.id, asset_in_frame: offAt(target.start_frame) })
+      const off = offAt(target.start_frame)
+      setMsg(off
+        ? `✅ #${tk.asset.id} の ${(off / fps).toFixed(2)}秒地点から採用しました(${sourceTrack?.name ?? 'Shots'})`
+        : `✅ #${tk.asset.id} を採用しました(${sourceTrack?.name ?? 'Shots'})`)
       return
     }
-    const dur = cut.e - cut.s + 1
-    if (currentClip) {
-      await st.updateClip(currentClip.id, { asset_id: assetId, duration_frames: dur })
-    } else {
-      await st.addClip(shots.id, assetId, cut.s, dur)
-    }
-    setMsg(`✅ #${assetId} をC(f${cut.s})に採用しました`)
+
+    // クリップが無い(カット割りレーンから開いた空きカット): Shots に新規作成
+    const shots = shotsTrack
+    if (!shots) return
+    const c = await st.addClip(shots.id, tk.asset.id, cut.s, cutLen)
+    const off = offAt(cut.s)
+    if (off) await st.updateClip(c.id, { asset_in_frame: off })
+    setMsg(`✅ #${tk.asset.id} を Shots の f${cut.s} に配置しました`)
   }
 
   return createPortal(
@@ -129,8 +181,28 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
           <span className="text-sm text-zinc-200">
             🗂 テイク履歴 — カット f{cut.s}–{cut.e}({((cut.e + 1 - cut.s) / fps).toFixed(2)}秒)
             <span className="text-zinc-500 ml-2 text-xs">{takes.length}テイク</span>
+            {takes.some(t => t.drift !== 0) && (
+              <span className="ml-2 text-[10px] text-amber-400/90"
+                    title="カット位置を動かしたあとのテイクも±8フレームまで拾っています">
+                ±{SNAP}fで照合中
+              </span>
+            )}
           </span>
-          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2">✕</button>
+          <span className="flex items-center gap-2">
+            {/* 採用の書き換え先を明示(誤操作でも他レイヤーに波及しないことの見える化) */}
+            <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
+              採用先: {sourceTrack ? `${sourceTrack.name} クリップ(f${sourceClip!.start_frame}・${sourceClip!.duration_frames}f)` : `Shots f${cut.s}`}
+            </span>
+            {/* カット位置を動かしたあとに、テイクの紐付けを現在のカット割りへ手動で寄せ直す。
+                自動実行にすると短いカットが隣り合う箇所で取り違えるため手動にしている。 */}
+            <button
+              onClick={() => window.dispatchEvent(new Event('kychapogas:remap-takes'))}
+              title="カット位置を動かしたあと、テイクの紐付けを現在のカット割りに合わせ直します(隣のカットへは移りません)"
+              className="text-[10px] px-2 py-1 rounded border border-zinc-700 bg-zinc-900 text-zinc-400 hover:text-zinc-100">
+              🗂 紐付けを整える
+            </button>
+            <button onClick={onClose} className="text-zinc-400 hover:text-zinc-100 text-lg leading-none px-2">✕</button>
+          </span>
         </div>
 
         {takes.length === 0 && (
@@ -159,7 +231,7 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {takes.filter(t => tierFilter === 0 || t.tier === tierFilter).map(t => {
-            const isCurrent = currentClip?.asset_id === t.asset.id
+            const isCurrent = targetClip?.asset_id === t.asset.id
             const showVideo = previewId === t.asset.id
             return (
               <div key={t.asset.id}
@@ -177,7 +249,9 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
                     </>
                   )}
                   {isCurrent && (
-                    <span className="absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-600 text-white">採用中</span>
+                    <span className="absolute top-1 left-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-600 text-white">
+                      採用中
+                    </span>
                   )}
                   <span className={`absolute top-1 right-1 text-[9px] px-1.5 py-0.5 rounded border ${TIER_STYLE[t.tier].cls}`}>
                     {TIER_STYLE[t.tier].label}
@@ -187,18 +261,45 @@ export function TakeSelector({ cut, assets, fps, onClose }: Props) {
                   <span className="px-1 rounded bg-zinc-800 text-zinc-300" title="プロンプト版(同じ文面=同じ版)">
                     P:{t.promptHash}
                   </span>
+                  {t.drift !== 0 && (
+                    <span className="px-1 rounded bg-zinc-800 text-zinc-500 border border-zinc-700"
+                          title={`生成時のカット開始 f${t.raw?.place ? (t.raw.place as Record<string, unknown>).start_frame : '?'} から ${-t.drift > 0 ? '+' : ''}${-t.drift}f 移動しています`}>
+                      {t.drift > 0 ? '▸' : '◂'}{Math.abs(t.drift)}f
+                    </span>
+                  )}
+                  {t.jobId != null && (
+                    <span className="px-1 rounded bg-amber-900/60 text-amber-200 border border-amber-700/60"
+                          title="生成ジョブ番号 — 会話やログでこのテイクを指すときに使う">
+                      job {t.jobId}
+                    </span>
+                  )}
+                  {Boolean(t.raw?.turbo_lora) && (
+                    <span className="px-1 rounded bg-amber-800/70 text-amber-200 border border-amber-600/60"
+                          title="Turbo LoRAで生成(4step・約30%高速)。テクスチャが平坦で、このseedは非Turboでは再現しません">
+                      🚀Turbo
+                    </span>
+                  )}
                   <span>#{t.asset.id}</span>
                   {t.seed != null && <span>seed {t.seed}</span>}
                   {t.steps != null && <span>{t.steps}st</span>}
                   {t.raw?.width != null && <span className="text-zinc-600">{String(t.raw.width)}×{String(t.raw.height)}</span>}
                   {t.easycache != null && <span>{t.easycache ? '⚡EC' : 'EC無'}</span>}
                 </div>
+                {isSpan(t) && (
+                  <p className="text-[9px] text-sky-400">
+                    🎬 複数カット({(t.spanFrames / fps).toFixed(1)}秒 / f{t.srcStart}〜f{t.srcStart + t.spanFrames - 1})
+                    — このカットはその {((cut.s - t.srcStart) / fps).toFixed(2)}秒地点
+                  </p>
+                )}
                 {t.prompt && (
                   <p className="text-[9px] text-zinc-600 line-clamp-2" title={t.prompt}>{t.prompt}</p>
                 )}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => adopt(t.asset.id)} disabled={isCurrent}
-                          className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40">
+                  <button onClick={() => adopt(t)} disabled={isCurrent}
+                          className="text-xs px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white disabled:opacity-40"
+                          title={isSpan(t)
+                            ? `${t.spanFrames}フレームのテイク — 採用先クリップの位置に合わせて頭出しされます`
+                            : undefined}>
                     {isCurrent ? '採用中' : '✅ 採用'}
                   </button>
                   {t.tier === 1 && (

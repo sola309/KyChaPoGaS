@@ -35,12 +35,12 @@ const LANE_H = 26
 export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth }: Props) {
   const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
   const refSel = useTimelineStore(s => s.refSel)
-  const [takeCut, setTakeCut] = useState<{ s: number; e: number } | null>(null)   // 🗂テイクブラウザ
+  const [takeCut, setTakeCut] = useState<{ s: number; e: number; clipId?: number } | null>(null)   // 🗂テイクブラウザ
   // Shotsクリップの🗂ボタンなど、レーン外からも開けるようにする
   useEffect(() => {
     const onOpen = (ev: Event) => {
-      const d = (ev as CustomEvent).detail as { s: number; e: number } | undefined
-      if (d) setTakeCut({ s: d.s, e: d.e })
+      const d = (ev as CustomEvent).detail as { s: number; e: number; clipId?: number } | undefined
+      if (d) setTakeCut({ s: d.s, e: d.e, clipId: d.clipId })
     }
     window.addEventListener('kychapogas:open-takes', onOpen)
     return () => window.removeEventListener('kychapogas:open-takes', onOpen)
@@ -240,7 +240,7 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
                title={`未ペアのピン(${(dangling / fps).toFixed(2)}s)— もう1つ置くとカットになります`} />
         )}
         {takeCut && (
-          <TakeSelector cut={takeCut} assets={assets} fps={fps} onClose={() => setTakeCut(null)} />
+          <TakeSelector cut={takeCut} sourceClipId={takeCut.clipId} assets={assets} fps={fps} onClose={() => setTakeCut(null)} />
         )}
         {drag && (
           <>

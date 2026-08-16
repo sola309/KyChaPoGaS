@@ -392,6 +392,12 @@ function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDele
                 📦 軽量プロキシを生成 <span className="text-[10px] text-zinc-500">プレビュー/スクラブが軽くなる</span>
               </button>
             )}
+            {/* 元ファイルをそのまま保存する。比較動画や書き出し素材を手元に持ち出す用。 */}
+            <a href={assetsApi.downloadUrl(asset.id)} download={asset.name}
+               onClick={() => setMenuOpen(false)}
+               className="text-left text-sm px-3 py-2.5 rounded hover:bg-zinc-800 text-zinc-200">
+              ⬇ ダウンロード <span className="text-[10px] text-zinc-500">元ファイルをそのまま保存</span>
+            </a>
             {isForeign ? (
               <p className="text-[10px] text-zinc-500 px-3 py-2">他プロジェクトの共有アセットのため、削除は元のプロジェクトから行ってください</p>
             ) : (

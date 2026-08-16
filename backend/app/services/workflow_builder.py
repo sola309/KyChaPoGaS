@@ -1141,18 +1141,23 @@ def h3_snap_length(frames: int) -> int:
     return min(362, n + (5 - (n % 17)) % 17)
 
 
-def _h3_apply_easycache(wf: dict) -> None:
-    """EasyCache(ComfyUIネイティブ)をUNETとguider/schedulerの間に挿入。
-    ステップ間の特徴再利用で約1.5〜2倍(内容依存)。副作用はわずかな甘さ/動きの平滑化。"""
+def _h3_apply_easycache(wf: dict, src: str = "unet") -> None:
+    """EasyCacheノードを src と guider/scheduler の間に挿入。
+    ステップ間の特徴再利用で約1.5〜2倍(内容依存)。副作用はわずかな甘さ/動きの平滑化。
+
+    src は「モデルを供給しているノード」。LoRAを挟んだ場合は "unet" ではなく LoRA ノードを
+    渡すこと。"unet" のままだとEasyCacheがLoRA前の素のUNETに繋がり、どこからも参照されない
+    孤立ノードになって(ComfyUIが未使用ノードを刈るため)無言で効かなくなる。
+    """
     wf["ecache"] = {"class_type": "EasyCache", "inputs": {
-        "model": ["unet", 0],
+        "model": [src, 0],
         "reuse_threshold": 0.2, "start_percent": 0.15, "end_percent": 0.95,
         "verbose": False,
     }}
     for node in wf.values():
         ins = node.get("inputs", {})
         for k, v in ins.items():
-            if node is not wf["ecache"] and isinstance(v, list) and v and v[0] == "unet":
+            if node is not wf["ecache"] and isinstance(v, list) and v and v[0] == src:
                 ins[k] = ["ecache", 0]
 
 
@@ -1166,6 +1171,7 @@ def build_minimax_h3_video(
     seed: int = -1,
     steps: int = 20,
     easycache: bool = True,
+    preview_steps: int | None = None,   # 🎬予告編(Ref2VAと同じ仕組み。詳細はbuild_minimax_h3_ref_video参照)
 ) -> dict:
     s = _seed(seed)
     width = max(32, (width // 32) * 32)
@@ -1206,12 +1212,27 @@ def build_minimax_h3_video(
     if last_image_name:
         wf["img_l"] = {"class_type": "LoadImage", "inputs": {"image": last_image_name}}
         wf["cond"]["inputs"]["last_frame"] = ["img_l", 0]
+    if preview_steps and 0 < preview_steps < steps:
+        # Ref2VAと同一の予告編: シグマ列の先頭N段だけ走らせ、denoised_output(x0予測)から描く
+        wf["split"] = {"class_type": "SplitSigmas",
+                       "inputs": {"sigmas": ["sched", 0], "step": int(preview_steps)}}
+        wf["ks"]["inputs"]["sigmas"] = ["split", 0]
+        wf["vdec"]["inputs"]["samples"] = ["ks", 1]
+        wf["adec"]["inputs"]["samples"] = ["ks", 1]
     if easycache:
         _h3_apply_easycache(wf)
     return wf
 
 
 H3_REF_UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
+
+# lightx2v蒸留のTurbo LoRA(Kijai再パック版 — プルーン版UNET向け)。
+# fl2v蒸留だがRef2VA経路へ転移することを実測で確認済み(構図・キャラ・ポーズは一致)。
+# 実測: 4step+LoRA=305秒 vs 通常8step=435秒(約30%短縮)。固定オーバーヘッド約175秒が下限。
+# 代償: ①瓦礫等のテクスチャが平坦化する ②音声ブランチが崩壊する(RMS -20dB→-52dB、実質無音)
+# 本アプリは生成音声を使わないため②は無害。①があるのでT1下見向け。
+H3_TURBO_LORA = "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors"
+H3_TURBO_SAMPLER = "sa_solver"   # er_sde/sa_solverを実測比較し、錆色と暖色の保持が良い方を採用
 
 
 def build_minimax_h3_ref_video(
@@ -1228,8 +1249,18 @@ def build_minimax_h3_ref_video(
     ref_image_size: str = "match",        # match=速度優先 / max=同一性優先(2048短辺)
     easycache: bool = True,
     use_ref_video_audio: bool = False,    # 参照動画の音声を添付するか(既定OFF)
+    turbo_lora: float | None = None,      # Turbo LoRA強度(0.75推奨)。指定時はサンプラーも切替
+    preview_steps: int | None = None,     # 🎬予告編: stepsのスケジュールのうち先頭N段だけ実行
 ) -> dict:
-    """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。"""
+    """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。
+
+    preview_steps を指定すると「予告編」モードになる。steps段のシグマ列を作ってから
+    SplitSigmasで先頭N段だけを取り出して走らせるため、res_multistep(決定論的)の性質により
+    **完走時とまったく同じ軌道の途中経過**が得られる。ボケてはいるが構図・被写体の大きさ・
+    配置は完成形と一致するので、シード選抜に使える。選んだシードを preview_steps なしで
+    同条件で回せば、その予告編がそのまま仕上がる。
+    (steps=5 と指定するのとは別物: あちらはシグマ列自体が変わり、別の軌道になる)
+    """
     if not (ref_image_names or ref_video_names or ref_audio_names):
         raise ValueError("Ref2VAには参照が最低1つ必要です")
     s_ = _seed(seed)
@@ -1282,6 +1313,29 @@ def build_minimax_h3_ref_video(
         wf[f"raud{i}"] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
         cond_inputs[f"ref_audios.ref_audio_{i+1}"] = [f"raud{i}", 0]
     wf["cond"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": cond_inputs}
+    if preview_steps and 0 < preview_steps < steps:
+        # 先頭 preview_steps 段のシグマだけを取り出す(high_sigmas=前半)。
+        # ここで止めたラテントにはまだノイズが残るので、そのままデコードすると砂嵐になる。
+        # SamplerCustomAdvanced の2つ目の出力 denoised_output(=x0予測)を使うと、
+        # 「この軌道が行き着く先」の推定画が得られる — これが予告編の実体。
+        wf["split"] = {"class_type": "SplitSigmas",
+                       "inputs": {"sigmas": ["sched", 0], "step": int(preview_steps)}}
+        wf["ks"]["inputs"]["sigmas"] = ["split", 0]
+        wf["vdec"]["inputs"]["samples"] = ["ks", 1]
+        wf["adec"]["inputs"]["samples"] = ["ks", 1]
+    if turbo_lora:
+        # UNETを直接参照している全ノード(guider/sched)をLoRA経由に付け替える。
+        # EasyCache挿入より先に行うこと(挿入後はguiderのmodelがEasyCache出力を指すため)。
+        wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"lora_name": H3_TURBO_LORA,
+                                      "strength_model": float(turbo_lora), "model": ["unet", 0]}}
+        for nid, node in wf.items():
+            if nid in ("unet", "turbolora"):
+                continue
+            m = node.get("inputs", {}).get("model")
+            if isinstance(m, list) and m[0] == "unet":
+                node["inputs"]["model"] = ["turbolora", 0]
+        wf["smp"]["inputs"]["sampler_name"] = H3_TURBO_SAMPLER
     if easycache:
-        _h3_apply_easycache(wf)
+        _h3_apply_easycache(wf, src="turbolora" if turbo_lora else "unet")
     return wf

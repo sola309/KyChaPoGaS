@@ -77,6 +77,8 @@ export interface Track {
   track_type: 'video' | 'audio' | 'reference'
   order: number
   hidden?: boolean
+  /** レイヤーの配置(コンポジション)。JSON文字列 {x,y,w,h,fit}。空なら全画面 */
+  layout_json?: string
 }
 
 export type TransitionType = '' | 'cross' | 'white' | 'black'
@@ -109,6 +111,7 @@ export interface Clip {
   attrs_json: string
   /** コマ打ち(アニメ風ホールド): 0=off, 12=2コマ, 8=3コマ */
   posterize_fps: number
+  remap_json?: string
   locked?: boolean
 }
 
@@ -127,24 +130,31 @@ export interface ClipUpdate {
   opacity?: number
   blend?: Clip['blend']
   transform_json?: string
+  attrs_json?: string
   posterize_fps?: number
+  remap_json?: string
   locked?: boolean
 }
 
 // extras are optional on create (backend defaults)
 export type ClipCreate = Omit<Clip, 'id' | 'speed' | 'speed_ease' | 'transition_in'
   | 'transition_frames' | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json'
-  | 'kind' | 'attrs_json' | 'posterize_fps'>
+  | 'kind' | 'attrs_json' | 'posterize_fps' | 'remap_json'>
   & Partial<Pick<Clip, 'speed' | 'speed_ease' | 'transition_in' | 'transition_frames'
-  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json' | 'kind' | 'attrs_json' | 'posterize_fps'>>
+  | 'fade_in_frames' | 'fade_out_frames' | 'opacity' | 'blend' | 'transform_json' | 'kind' | 'attrs_json' | 'posterize_fps' | 'remap_json'>>
 
 export const tracksApi = {
   list:   (projectId: number) =>
     api.get<Track[]>('/tracks/', { params: { project_id: projectId } }).then(r => r.data),
   create: (data: Omit<Track, 'id'>) => api.post<Track>('/tracks/', data).then(r => r.data),
-  update: (id: number, data: { name?: string; order?: number; hidden?: boolean }) =>
+  update: (id: number, data: { name?: string; order?: number; hidden?: boolean; layout_json?: string }) =>
     api.patch<Track>(`/tracks/${id}`, null, { params: data }).then(r => r.data),
   delete: (id: number) => api.delete(`/tracks/${id}`),
+  /** 比較表示: 2つの映像トラックを画面の左右に並べる(enable=false で全画面に戻す) */
+  compareLayout: (projectId: number, enable: boolean, leftId?: number, rightId?: number) =>
+    api.post('/tracks/compare-layout', null, {
+      params: { project_id: projectId, enable, left_track_id: leftId, right_track_id: rightId },
+    }).then(r => r.data),
 }
 
 export const clipsApi = {
@@ -182,9 +192,15 @@ export const assetsApi = {
     }).then(r => r.data)
   },
   thumbnailUrl: (assetId: number) => `/api/assets/${assetId}/thumbnail`,
+  // 🗂 カット割り編集後にテイクの紐付けを現在のカット開始へ寄せ直す
+  remapTakes: (projectId: number, starts: number[], tolerance = 24) =>
+    api.post<{ updated: number }>('/assets/remap-takes',
+      { project_id: projectId, starts, tolerance }).then(r => r.data),
   filmstripUrl: (assetId: number, count?: number) => `/api/assets/${assetId}/filmstrip${count ? `?count=${count}` : ''}`,
   fileUrl:      (assetId: number, useProxy = false) =>
     `/api/assets/${assetId}/file${useProxy ? '?proxy=1' : ''}`,
+  /** 保存用: Content-Disposition: attachment を付けて元ファイルを返す */
+  downloadUrl:  (assetId: number) => `/api/assets/${assetId}/file?download=1`,
   extractFrame: (assetId: number, timeSec: number, longEdge?: number) =>
     api.post<Asset>(`/assets/${assetId}/extract-frame`, null, { params: { time_sec: timeSec, ...(longEdge ? { long_edge: longEdge } : {}) } }).then(r => r.data),
   framePreviewUrl: (assetId: number, timeSec: number, height = 360) =>
@@ -231,7 +247,20 @@ export interface I2VKeyframe  { time_sec: number; asset_id: number }
 export interface PlaceSpec       { track_id: number; start_frame: number; duration_frames?: number; replace_clip_id?: number }
 export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number; init_asset_id?: number; denoise?: number; ref_asset_ids?: number[]; use_lightning?: boolean; loras?: [string, number][]; place?: PlaceSpec }
 export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
-export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; place?: PlaceSpec }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; turbo_lora?: number; place?: PlaceSpec }
+
+/** 書き出し済みファイル1件(GET /jobs/renders) */
+export interface RenderFile {
+  job_id: number
+  filename: string
+  size_bytes: number
+  created_at: string
+  width?: number
+  height?: number
+  fps?: number
+  preset: string
+  download_url: string
+}
 
 export interface NightBatchState {
   running?: boolean
@@ -251,6 +280,9 @@ export const jobsApi = {
   cancel:      (id: number) => api.post<Job>(`/jobs/${id}/cancel`).then(r => r.data),
   delete:      (id: number) => api.delete(`/jobs/${id}`),
   downloadUrl: (id: number) => `/api/jobs/${id}/download`,
+  listRenders: (projectId: number) =>
+    api.get<RenderFile[]>('/jobs/renders', { params: { project_id: projectId } }).then(r => r.data),
+  deleteRender: (id: number) => api.delete(`/jobs/renders/${id}`),
   nightBatchState: () => api.get<NightBatchState>('/jobs/nightbatch/state').then(r => r.data),
   nightBatchStart: (projectId: number, weights: Record<string, number>, keepInFlight = 2) =>
     api.post<NightBatchState>('/jobs/nightbatch/start', {

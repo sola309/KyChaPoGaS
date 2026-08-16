@@ -20,6 +20,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
@@ -131,8 +132,40 @@ def _cubic_bezier_y_at_x(x: float, x1: float, y1: float, x2: float, y2: float, i
     return by((lo + hi) / 2)
 
 
+@lru_cache(maxsize=512)
+def _has_alpha(path: str) -> bool:
+    """素材が透過を持つか(pix_fmtにアルファがあるか)。判定できなければ False。
+
+    透過素材は全画面テロップ/FXとして contain で重ねる。不透明素材は cover で
+    埋めないと、縦横比のわずかな差が端の隙間になって下のトラックが覗く。
+    """
+    try:
+        r = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=pix_fmt", "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=15)
+        pix = (r.stdout or "").strip().lower()
+    except Exception:
+        return False
+    return any(k in pix for k in ("rgba", "bgra", "argb", "abgr", "yuva", "ya8", "ya16", "pal8"))
+
+
+@lru_cache(maxsize=512)
+def _src_fps(path: str) -> float:
+    """素材の実fps。プレビューと同じ『その時刻を含むフレーム』を選ぶために要る。"""
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=r_frame_rate", "-of", "csv=p=0", path],
+            capture_output=True, text=True, timeout=20).stdout.strip()
+        num, _, den = out.partition("/")
+        return float(num) / float(den or 1)
+    except Exception:
+        return 0.0
+
+
 def _scale_pad_fps(w: int, h: int, fps: float, alpha: bool = False,
-                   fit: str = "contain") -> str:
+                   fit: str = "contain", fps_start: float = 0.0) -> str:
     fmt = ",format=rgba" if alpha else ""
     # lanczos = sharper up/down-scaling than the default (bicubic), which matters
     # for crisp footage/MG and avoids the "soft" look on rescale.
@@ -145,7 +178,11 @@ def _scale_pad_fps(w: int, h: int, fps: float, alpha: bool = False,
         pad_color = ":color=black@0" if alpha else ""
         body = (f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2{pad_color}")
-    return f"{body},fps={fps}{fmt}"
+    # round=up: 出力時刻に対して「その時刻を含む(=以前の)素材フレーム」を選ぶ。
+    # プレビュー(video.currentTime が指すフレーム)と同じ規則になる。
+    # start_time: -ss を素材フレーム境界へ丸めた分の位相を戻す。
+    st = f":start_time={fps_start:.6f}" if fps_start > 1e-9 else ""
+    return f"{body},fps={fps}:round=up{st}{fmt}"
 
 
 # Video encoder args. The timeline is assembled by re-encoding each clip into temp
@@ -215,6 +252,86 @@ def configure_encoder(mode: str = "auto") -> str:
     FFMPEG, _VENC = _BUNDLED_FFMPEG, _X264_FAST_ARGS
     _X264 = _VENC
     return "x264_fast"
+
+
+def parse_remap(raw: str, dur_frames: int, asset_in_frame: int) -> list[dict] | None:
+    """remap_json → 完全なキー列(暗黙の端点を補ったもの)。無効/空なら None。
+
+    返り値: [{"t": 出力フレーム, "src": 素材フレーム, "hold": fps}] 昇順・2点以上。
+    先頭キーが t>0 なら {t:0, src:asset_in_frame} を暗黙追加。
+    最終キーが t<dur なら等速(1x)で末尾まで継続する暗黙キーを追加。
+    """
+    if not raw or not raw.strip():
+        return None
+    try:
+        keys = json.loads(raw).get("keys") or []
+    except Exception:
+        return None
+    ks = sorted(
+        ({"t": int(k["t"]), "src": float(k["src"]), "hold": float(k.get("hold") or 0)}
+         for k in keys if isinstance(k, dict) and "t" in k and "src" in k),
+        key=lambda k: k["t"])
+    # 同一tは後勝ちで潰す(線形補間の分母0を防ぐ)
+    dedup: list[dict] = []
+    for k in ks:
+        if dedup and dedup[-1]["t"] == k["t"]:
+            dedup[-1] = k
+        else:
+            dedup.append(k)
+    ks = [k for k in dedup if 0 <= k["t"] <= dur_frames]
+    if not ks:
+        return None
+    if ks[0]["t"] > 0:
+        ks.insert(0, {"t": 0, "src": float(asset_in_frame), "hold": 0})
+    last = ks[-1]
+    if last["t"] < dur_frames:
+        ks.append({"t": dur_frames, "src": last["src"] + (dur_frames - last["t"]),
+                   "hold": last["hold"]})
+    return ks if len(ks) >= 2 else None
+
+
+async def _extract_remap_segment(src: str, out: Path, keys: list[dict],
+                                 dur_sec: float, w: int, h: int, fps: float,
+                                 fit: str = "contain", keep_alpha: bool = False) -> None:
+    """キー列(parse_remap済み)に従い、区分ごとの等速リマップで切り出して連結する。
+
+    各区間: 出力尺 = Δt/fps、消費ソース = Δsrc/fps、速度 = Δsrc/Δt。
+    Δsrc=0 はフリーズ(1フレームを tpad で伸ばす)。hold はその区間のコマ打ち。
+    """
+    vf = _scale_pad_fps(w, h, fps, alpha=keep_alpha, fit=fit)
+    enc = _QTRLE if keep_alpha else _X264
+    parts: list[Path] = []
+    for i in range(len(keys) - 1):
+        k0, k1 = keys[i], keys[i + 1]
+        seg_out = max(1.0 / fps, (k1["t"] - k0["t"]) / fps)
+        seg_src = max(0.0, (k1["src"] - k0["src"]) / fps)
+        hold_fps = float(k0.get("hold") or 0)
+        hold = (f"fps={hold_fps:g}," if 0.5 < hold_fps < fps else "")
+        part = out.parent / (f"{out.stem}_rm{i:02d}.mov" if keep_alpha else f"{out.stem}_rm{i:02d}.mp4")
+        if seg_src < 0.5 / fps:
+            # フリーズ区間: 開始位置の1フレームを尺いっぱいに伸ばす
+            cmd = [FFMPEG, "-y",
+                   "-ss", f"{k0['src'] / fps:.6f}", "-i", src,
+                   "-vf", f"{vf},tpad=stop_mode=clone:stop_duration={seg_out:.6f}",
+                   "-t", f"{seg_out:.6f}", *enc, "-an", str(part)]
+        else:
+            seg_speed = max(0.05, seg_src / seg_out)
+            cmd = [FFMPEG, "-y",
+                   "-ss", f"{k0['src'] / fps:.6f}", "-t", f"{seg_src:.6f}", "-i", src,
+                   "-vf", (f"setpts=PTS/{seg_speed:.6f},{hold}{vf},"
+                           f"tpad=stop_mode=clone:stop_duration={seg_out:.6f}"),
+                   "-t", f"{seg_out:.6f}", *enc, "-an", str(part)]
+        await _run(cmd)
+        parts.append(part)
+    joined = out.parent / (f"{out.stem}_rmj.mov" if keep_alpha else f"{out.stem}_rmj.mp4")
+    await _concat(parts, joined)
+    cmd = [FFMPEG, "-y", "-i", str(joined),
+           "-vf", f"tpad=stop_mode=clone:stop_duration={dur_sec:.6f}",
+           "-t", f"{dur_sec:.6f}", *(_QTRLE if keep_alpha else _VENC), "-an", str(out)]
+    await _run(cmd)
+    joined.unlink(missing_ok=True)
+    for pt in parts:
+        pt.unlink(missing_ok=True)
 
 
 async def _extract_segment(src: str, out: Path, in_sec: float,
@@ -294,10 +411,23 @@ async def _extract_segment(src: str, out: Path, in_sec: float,
     if dur_sec * fps < 16 or keep_alpha:
         pts = None
     if pts is None:
+        # 出力の尺はフレーム数で確定させる。-t(秒)任せだと、素材fpsで割り切れない
+        # 尺(例: 83f=2.7667秒 は 24fps素材の66.4コマ)のときに1フレーム多く出て、
+        # 連結するほどカット位置がタイムラインから後ろへずれていく(音ズレの原因)。
+        # 開始位置(-ss)は一切変えない — ここを動かすと絵が別のフレームになる。
+        n_out = max(1, int(round(dur_sec * fps)))
+        # 開始位置は「その時刻を含む素材フレームの先頭」へ丸める。
+        # -ss に生の秒を渡すと、ffmpeg は PTS>=指定時刻 の次フレームを掴むため、
+        # プレビュー(その時刻を含むフレームを表示)より1コマ先の絵で始まってしまう。
+        sfps = _src_fps(src)
+        ss = (int(in_sec * sfps + 1e-6) / sfps) if sfps > 0 else in_sec
+        vf = _scale_pad_fps(w, h, fps, alpha=keep_alpha, fit=fit, fps_start=in_sec - ss)
         cmd = [
             FFMPEG, "-y",
-            "-ss", f"{in_sec:.6f}", "-t", f"{source_span:.6f}", "-i", src,
-            "-vf", f"setpts=PTS/{speed:.6f},{hold}{vf}",
+            "-ss", f"{ss:.6f}", "-t", f"{source_span + 2.0 / fps:.6f}", "-i", src,
+            "-vf", (f"setpts=PTS/{speed:.6f},{hold}{vf},"
+                    f"tpad=stop_mode=clone:stop_duration={2.0 / fps:.6f}"),
+            "-frames:v", str(n_out),
             *(_QTRLE if keep_alpha else _X264),
             "-an",
             str(out),
@@ -671,7 +801,7 @@ async def _transform_pass(src: Path, out: Path, transform: dict,
 async def _overlay_pass(base: Path, seg: Path, out: Path,
                         start_sec: float, dur_sec: float,
                         opacity: float, blend: str,
-                        w: int, h: int) -> None:
+                        w: int, h: int, fps: float = 30.0) -> None:
     """
     Composite one overlay segment onto the base video at its timeline position.
 
@@ -680,7 +810,11 @@ async def _overlay_pass(base: Path, seg: Path, out: Path,
     Frames outside [start, start+dur] pass through unchanged.
     """
     end_sec = start_sec + dur_sec
-    enable = f"between(t,{start_sec:.6f},{end_sec:.6f})"
+    # 区間の判定はフレームの中心で行う。境界を秒でそのまま書くと、
+    # 413/30=13.7666666… のように6桁表示が実値より大きくなる位置で
+    # 先頭1フレームが区間から外れ、そのカットだけ1フレーム遅れて出る。
+    half = 0.5 / max(1.0, fps)
+    enable = f"between(t,{start_sec - half:.6f},{end_sec - half:.6f})"
     if blend in ("screen", "add", "multiply"):
         # blend needs equal-length streams → pad the overlay to the base span.
         fc = (
@@ -759,7 +893,7 @@ async def _overlay_transform_pass(seg: Path, out: Path, transform: dict,
 
 async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h: int,
                          base_ss: float = 0.0, base_t: Optional[float] = None,
-                         progress_cb=None) -> None:
+                         progress_cb=None, fps: float = 30.0) -> None:
     """Composite overlays onto base in ONE filter_complex pass. Optionally over a
     time WINDOW of the base ([base_ss, base_ss+base_t]) with per-overlay input seek
     — this is what lets the dispatcher run independent time-chunks in parallel.
@@ -785,7 +919,8 @@ async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h:
         start = float(ov["start"]); dur = float(ov["dur"]); end = start + dur
         op = max(0.0, min(1.0, float(ov.get("opacity", 1.0))))
         blend = ov.get("blend", "normal") or "normal"
-        enable = f"between(t,{start:.6f},{end:.6f})"
+        half = 0.5 / max(1.0, fps)
+        enable = f"between(t,{start - half:.6f},{end - half:.6f})"
         if blend in ("screen", "add", "multiply"):
             parts.append(
                 f"[{idx}:v]scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,"
@@ -810,6 +945,51 @@ async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h:
     await _run(cmd, progress_cb)
 
 
+def parse_layout(raw: str) -> dict | None:
+    """track.layout_json を {x,y,w,h,fit} に正規化する。全画面(既定)なら None。
+
+    x/y/w/h は出力画面に対する比率(0..1)。レイヤーを AE のコンポジションのように
+    画面内の任意の矩形へ収める。比較用に「Shots=左半分 / Video=右半分」と置けば、
+    1回のレンダーの中で並ぶので、2本の動画を突き合わせる工程自体が要らなくなる。
+    """
+    if not raw or not str(raw).strip():
+        return None
+    try:
+        d = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(d, dict):
+        return None
+    x, y = float(d.get("x", 0.0)), float(d.get("y", 0.0))
+    w, h = float(d.get("w", 1.0)), float(d.get("h", 1.0))
+    if (x, y, w, h) == (0.0, 0.0, 1.0, 1.0):
+        return None
+    return {"x": x, "y": y, "w": max(0.01, w), "h": max(0.01, h),
+            "fit": d.get("fit", "contain"), "bg": d.get("bg", "black")}
+
+
+async def _layout_pass(src: Path, out: Path, lay: dict, w: int, h: int,
+                       fps: float, keep_alpha: bool = False) -> None:
+    """全画面のセグメントを、レイアウトが指す矩形へ縮小配置する。
+
+    出力サイズは変えない。矩形外は透明(オーバーレイ)または背景色(ベース)で埋める。
+    整数丸めで1pxずれないよう、矩形は偶数に揃える。
+    """
+    iw = max(2, int(round(w * lay["w"])) // 2 * 2)
+    ih = max(2, int(round(h * lay["h"])) // 2 * 2)
+    ox, oy = int(round(w * lay["x"])), int(round(h * lay["y"]))
+    fitv = ("increase" if lay["fit"] == "cover" else "decrease")
+    inner = (f"scale={iw}:{ih}:force_original_aspect_ratio={fitv}:flags=lanczos,"
+             + (f"crop={iw}:{ih}" if lay["fit"] == "cover"
+                else f"pad={iw}:{ih}:(ow-iw)/2:(oh-ih)/2:color=black@0"))
+    pad_col = "black@0" if keep_alpha else lay.get("bg", "black")
+    vf = f"{inner},pad={w}:{h}:{ox}:{oy}:color={pad_col}"
+    if keep_alpha:
+        vf = "format=rgba," + vf + ",format=rgba"
+    args = [*_QTRLE] if keep_alpha else [*_X264, "-pix_fmt", "yuv420p"]
+    await _run([FFMPEG, "-y", "-i", str(src), "-vf", vf, "-r", str(fps), *args, str(out)])
+
+
 async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
                               w: int, h: int, total_dur: float = 0.0, fps: float = 30.0,
                               progress_cb=None) -> None:
@@ -828,7 +1008,7 @@ async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
     total_frames = max(1, round(total_dur * fps)) if total_dur > 0 else 0
     n = min(cores, max(1, math.ceil(total_dur / 4.0))) if total_dur > 0 else 1
     if n <= 1 or len(overlays) < 3 or cores < 2 or total_frames < 2 * n:
-        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb)
+        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps)
         return
     try:
         chunk_frames = math.ceil(total_frames / n)
@@ -848,12 +1028,12 @@ async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
                 if s < c0 + clen and e > c0:                 # overlaps this chunk
                     a0, a1 = max(s, c0), min(e, c0 + clen)
                     ovs.append({**ov, "start": a0 - c0, "dur": a1 - a0, "seek": max(0.0, c0 - s)})
-            tasks.append(_composite_one(base, ovs, cf, w, h, base_ss=c0, base_t=clen))
+            tasks.append(_composite_one(base, ovs, cf, w, h, base_ss=c0, base_t=clen, fps=fps))
         await asyncio.gather(*tasks)
         await _concat(chunk_files, out, progress_cb)
     except Exception:
         # any issue with chunking → safe single-pass fallback
-        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb)
+        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps)
 
 
 async def _extract_audio_segment(src: str, out: Path,
@@ -878,7 +1058,7 @@ async def _extract_audio_segment(src: str, out: Path,
     if afilters:
         cmd += ["-af", ",".join(afilters)]
     cmd += [
-        "-vn", "-c:a", "aac", "-b:a", "192k",
+        "-vn", "-c:a", "aac", "-b:a", "320k",
         str(raw),
     ]
     await _run(cmd)
@@ -890,7 +1070,7 @@ async def _extract_audio_segment(src: str, out: Path,
             "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={timeline_start}",
             "-i", str(raw),
             "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[outa]",
-            "-map", "[outa]", "-c:a", "aac", "-b:a", "192k",
+            "-map", "[outa]", "-c:a", "aac", "-b:a", "320k",
             str(out),
         ]
         await _run(cmd2)
@@ -929,7 +1109,7 @@ async def _mix_audio_into_video(video: Path, audio_segments: list[Path],
         "-map", "0:v",
         "-map", audio_map,
         "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "256k",
+        "-c:a", "aac", "-b:a", "320k",
         "-movflags", "+faststart",   # moov atom up front → instant web/iOS playback
         "-t", str(total_dur),
         str(out),
@@ -985,6 +1165,9 @@ async def render_timeline(
         v_track = video_tracks[0] if video_tracks else None
         a_track = audio_tracks[0] if audio_tracks else None
         overlay_tracks = video_tracks[1:]
+        base_layout = parse_layout(getattr(v_track, "layout_json", "") or "") if v_track else None
+        overlay_layouts = [parse_layout(getattr(t, "layout_json", "") or "")
+                           for t in overlay_tracks]
 
         v_clips = sorted(
             [c for c in clips if v_track and c.track_id == v_track.id],
@@ -1048,22 +1231,35 @@ async def render_timeline(
                     await _image_segment(asset.file_path, seg_file, clip_dur,
                                          width, height, fps, fit="cover")
                 else:
-                    await _extract_segment(
-                        asset.file_path, seg_file,
-                        clip.asset_in_frame / fps,
-                        clip_dur,
-                        width, height, fps,
-                        speed=getattr(clip, "speed", 1.0) or 1.0,
-                        ease=getattr(clip, "speed_ease", "linear") or "linear",
-                        fit="cover",
-                        hold_fps=getattr(clip, "posterize_fps", 0) or 0,
-                    )
+                    remap_keys = parse_remap(getattr(clip, "remap_json", "") or "",
+                                             clip.duration_frames, clip.asset_in_frame)
+                    if remap_keys:
+                        # ⏱ 時間リマップ: キー列が speed/ease/posterize より優先
+                        await _extract_remap_segment(
+                            asset.file_path, seg_file, remap_keys,
+                            clip_dur, width, height, fps, fit="cover")
+                    else:
+                        await _extract_segment(
+                            asset.file_path, seg_file,
+                            clip.asset_in_frame / fps,
+                            clip_dur,
+                            width, height, fps,
+                            speed=getattr(clip, "speed", 1.0) or 1.0,
+                            ease=getattr(clip, "speed_ease", "linear") or "linear",
+                            fit="cover",
+                            hold_fps=getattr(clip, "posterize_fps", 0) or 0,
+                        )
                 # Animated zoom/pan/shake (transform keyframes)
                 tr = parse_transform(getattr(clip, "transform_json", "") or "")
                 if tr:
                     tr_file = tmp_root / f"seg_{n:04d}_tr.mp4"
                     await _transform_pass(seg_file, tr_file, tr, clip_dur, fps, width, height)
                     seg_file = tr_file
+                # レイヤー(トラック)のレイアウト。比較表示で左右に分けるのはここ。
+                if base_layout:
+                    ly_file = tmp_root / f"seg_{n:04d}_ly.mp4"
+                    await _layout_pass(seg_file, ly_file, base_layout, width, height, fps)
+                    seg_file = ly_file
                 segs.append([seg_file, clip_dur, trans, trans_sec])
             else:
                 # Missing asset → black placeholder
@@ -1126,27 +1322,47 @@ async def render_timeline(
             oseg = tmp_root / f"ovseg_{oi:04d}.mov"   # mov preserves alpha
             is_image = (asset.asset_type == "image"
                         or (asset.asset_type == "generated" and asset.duration_sec is None))
-            # A LAYER transform → cover-fit (matches the preview) so the bake lines up;
-            # a plain full-frame alpha overlay (telop/FX) stays contain-fit as before.
+            # フィットの決め方:
+            #   LAYER変換あり → cover(プレビューの合成と揃えて焼き込みをずらさない)
+            #   透過素材(テロップ/FX)  → contain(全画面前提。切ると端の絵が欠ける)
+            #   不透明な映像/画像      → cover
+            # 不透明素材をcontainにすると、素材と出力の縦横比がわずかに違うだけで
+            # 上下(または左右)に数ピクセルの余白ができ、そこから下のトラックが覗く。
+            # 生成物は864x480(1.800)や1344x768(1.750)で、出力1280x720(1.778)と
+            # 完全一致しないため必ず起きる。短辺基準で埋めて溢れを切る。
             o_tr = parse_transform(getattr(oc, "transform_json", "") or "")
-            ofit = "cover" if o_tr else "contain"
+            ofit = "cover" if (o_tr or not _has_alpha(asset.file_path)) else "contain"
             if is_image:
                 await _image_segment(asset.file_path, oseg, oc_dur, width, height, fps,
                                      keep_alpha=True, fit=ofit)
             else:
-                await _extract_segment(
-                    asset.file_path, oseg,
-                    oc.asset_in_frame / fps, oc_dur,
-                    width, height, fps,
-                    speed=getattr(oc, "speed", 1.0) or 1.0,
-                    ease=getattr(oc, "speed_ease", "linear") or "linear",
-                    hold_fps=getattr(oc, "posterize_fps", 0) or 0,
-                    keep_alpha=True, fit=ofit,
-                )
+                # ⏱時間リマップは重ね合わせ側でも効かせる。Scenes等は必ずこちらを通るため、
+                # ここに無いとプレビューだけ合っていて書き出しに反映されない。
+                o_remap = parse_remap(getattr(oc, "remap_json", "") or "",
+                                      oc.duration_frames, oc.asset_in_frame)
+                if o_remap:
+                    await _extract_remap_segment(
+                        asset.file_path, oseg, o_remap, oc_dur,
+                        width, height, fps, fit=ofit, keep_alpha=True)
+                else:
+                    await _extract_segment(
+                        asset.file_path, oseg,
+                        oc.asset_in_frame / fps, oc_dur,
+                        width, height, fps,
+                        speed=getattr(oc, "speed", 1.0) or 1.0,
+                        ease=getattr(oc, "speed_ease", "linear") or "linear",
+                        hold_fps=getattr(oc, "posterize_fps", 0) or 0,
+                        keep_alpha=True, fit=ofit,
+                    )
             if o_tr:
                 otr_seg = tmp_root / f"ovseg_{oi:04d}_tr.mov"
                 await _overlay_transform_pass(oseg, otr_seg, o_tr, oc_dur, fps, width, height)
                 oseg = otr_seg
+            o_lay = overlay_layouts[t_idx] if t_idx < len(overlay_layouts) else None
+            if o_lay:
+                oly_seg = tmp_root / f"ovseg_{oi:04d}_ly.mov"
+                await _layout_pass(oseg, oly_seg, o_lay, width, height, fps, keep_alpha=True)
+                oseg = oly_seg
             overlays.append({
                 "path": oseg,
                 "start": oc.start_frame / fps,

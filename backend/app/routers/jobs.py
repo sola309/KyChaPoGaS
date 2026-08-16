@@ -39,6 +39,59 @@ def create_job(data: JobCreate, session: Session = Depends(get_session)):
     return _to_read(job)
 
 
+@router.get("/renders")
+def list_renders(project_id: int, session: Session = Depends(get_session)):
+    """書き出し済みファイルの一覧。
+
+    ルート宣言は "/{job_id}" より前に置くこと(でないと renders が job_id として食われる)。
+    ファイルが実在するものだけを、新しい順で返す。
+    """
+    jobs = session.exec(
+        select(Job)
+        .where(Job.project_id == project_id, Job.job_type == "render_final",
+               Job.status == "completed")
+        .order_by(Job.created_at.desc())
+    ).all()
+    rows = []
+    for j in jobs:
+        path = export_path(project_id, j.id)
+        if not path.exists():
+            continue
+        try:
+            params = json.loads(j.params)
+        except Exception:
+            params = {}
+        rows.append({
+            "job_id": j.id,
+            "filename": f"render_{j.id}.mp4",
+            "size_bytes": path.stat().st_size,
+            "created_at": (j.completed_at or j.created_at).isoformat(),
+            "width": params.get("width"),
+            "height": params.get("height"),
+            "fps": params.get("fps"),
+            # encoder=x264_fast は 720pレビュー プリセット
+            "preset": "レビュー" if params.get("encoder") == "x264_fast" else "本番",
+            "download_url": f"/api/jobs/{j.id}/download",
+        })
+    return rows
+
+
+@router.delete("/renders/{job_id}", status_code=204)
+def delete_render(job_id: int, session: Session = Depends(get_session)):
+    """書き出しファイルだけを消す(ジョブ履歴は残す)。"""
+    job = session.get(Job, job_id)
+    if not job or job.job_type != "render_final":
+        raise HTTPException(status_code=404, detail="Render not found")
+    params = json.loads(job.params)
+    project_id = params.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=400, detail="No project_id in job params")
+    path = export_path(project_id, job_id)
+    if path.exists():
+        path.unlink()
+    return None
+
+
 @router.get("/{job_id}", response_model=JobRead)
 def get_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(Job, job_id)
@@ -111,12 +164,28 @@ async def stream_jobs(project_id: int, request: Request):
         while not await request.is_disconnected():
             # New session per poll (thread-safe for SQLite)
             with Session(engine) as session:
-                jobs = session.exec(
+                # 実行中・待機中は件数を切らずに必ず全部送る。
+                # (直近50件だけを送ると、キューが長いときに古い実行中ジョブが
+                #  枠外に落ちてUIの進捗が止まって見える)
+                active = session.exec(
+                    select(Job)
+                    .where(Job.project_id == project_id)
+                    .where(Job.status.in_(("running", "pending")))
+                    .order_by(Job.created_at.desc())
+                ).all()
+                recent = session.exec(
                     select(Job)
                     .where(Job.project_id == project_id)
                     .order_by(Job.created_at.desc())
                     .limit(50)
                 ).all()
+                seen: set[int] = set()
+                jobs = []
+                for j in [*active, *recent]:
+                    if j.id not in seen:
+                        seen.add(j.id)
+                        jobs.append(j)
+                jobs.sort(key=lambda j: (j.created_at, j.id), reverse=True)
                 rows = []
                 for j in jobs:
                     d = _to_read(j).model_dump(mode="json")

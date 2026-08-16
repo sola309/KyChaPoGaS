@@ -26,6 +26,8 @@ POLL_INTERVAL_S = 2.0
 class ComfyUIConnector:
     def __init__(self, base_url: str = COMFYUI_URL):
         self.base_url = base_url.rstrip("/")
+        self._client_ids: dict[str, str] = {}    # prompt_id → 投稿時のclient_id
+        self._live_progress: set[str] = set()    # 実測進捗が届いているprompt_id
 
     # ── Availability ──────────────────────────────────────────────────────────
 
@@ -36,6 +38,36 @@ class ComfyUIConnector:
                 return r.status_code == 200
         except Exception:
             return False
+
+    def drop_all_queued_sync(self) -> int:
+        """ComfyUI のキューを空にする(実行中は中断・待機は削除)。
+
+        バックエンドが再起動すると、そのとき走っていたジョブは失われるが、
+        ComfyUI 側に投げたプロンプトはキューに残って計算され続ける。
+        結果を回収する持ち主が居ないので GPU が丸ごと無駄になり、さらに
+        再起動後の本物のジョブがその後ろで待たされる。起動時に一掃する。
+        (起動直後は生きているジョブが存在しないため、消して安全)
+        """
+        import urllib.error
+        import urllib.request
+        n = 0
+        try:
+            with urllib.request.urlopen(f"{self.base_url}/queue", timeout=5) as r:
+                q = json.loads(r.read())
+            n = len(q.get("queue_running", [])) + len(q.get("queue_pending", []))
+            if not n:
+                return 0
+            for path, body in (("/interrupt", b"{}"), ("/queue", b'{"clear": true}')):
+                req = urllib.request.Request(f"{self.base_url}{path}", data=body,
+                                             headers={"Content-Type": "application/json"},
+                                             method="POST")
+                try:
+                    urllib.request.urlopen(req, timeout=5).read()
+                except urllib.error.URLError:
+                    pass
+        except Exception:
+            return 0
+        return n
 
     # ── Model discovery ───────────────────────────────────────────────────────
 
@@ -83,7 +115,12 @@ class ComfyUIConnector:
     # ── Workflow submission ───────────────────────────────────────────────────
 
     async def submit(self, workflow: dict[str, Any]) -> str:
-        """Submit a workflow. Returns prompt_id."""
+        """Submit a workflow. Returns prompt_id.
+
+        ComfyUI は client_id 付きで投げたプロンプトの進捗イベントを、その
+        client_id の WebSocket にだけ送る。進捗を実測するには監視側が同じ
+        client_id で繋ぐ必要があるので、prompt_id との対応を控えておく。
+        """
         client_id = str(uuid.uuid4())
         async with httpx.AsyncClient(timeout=30.0) as c:
             r = await c.post(
@@ -95,7 +132,12 @@ class ComfyUIConnector:
             if "error" in data:
                 details = data.get("node_errors", {})
                 raise RuntimeError(f"ComfyUI workflow error: {data['error']}  details={details}")
-            return data["prompt_id"]
+            pid = data["prompt_id"]
+            self._client_ids[pid] = client_id
+            if len(self._client_ids) > 64:          # 取り置きは直近ぶんだけ
+                for k in list(self._client_ids)[:-32]:
+                    self._client_ids.pop(k, None)
+            return pid
 
     # ── Polling ───────────────────────────────────────────────────────────────
 
@@ -116,7 +158,8 @@ class ComfyUIConnector:
         """
         try:
             import websockets
-            ws_url = self.base_url.replace("http", "ws", 1) + "/ws?clientId=kychapogas_phase"
+            cid = self._client_ids.get(prompt_id) or "kychapogas_phase"
+            ws_url = self.base_url.replace("http", "ws", 1) + f"/ws?clientId={cid}"
             async with websockets.connect(ws_url, open_timeout=5) as ws:
                 while True:
                     raw = await ws.recv()
@@ -139,6 +182,7 @@ class ComfyUIConnector:
                         v, m = data.get("value", 0), data.get("max", 1)
                         phase_cb(f"生成中 {v}/{m}")
                         if progress_cb and m:
+                            self._live_progress.add(prompt_id)
                             progress_cb(0.05 + 0.88 * (v / m))
         except Exception:
             pass  # WS不可でもポーリングで続行
@@ -237,7 +281,10 @@ class ComfyUIConnector:
             # Rough progress estimate (assumes ~2 min for a typical generation)
             # WSフェーズ監視が生きている場合は実測進捗が来るのでこちらは出さない
             if progress_cb and not (watcher and not watcher.done()):
-                progress_cb(min(0.9, 0.05 + elapsed / 120.0))
+                if prompt_id not in self._live_progress:
+                    # 実測が取れないときだけの粗い推定。取れているなら上書きしない
+                    # (推定は102秒で0.9に飽和するため、長い生成では85%で止まって見える)
+                    progress_cb(min(0.9, 0.05 + elapsed / 120.0))
 
         if watcher:
             watcher.cancel()
