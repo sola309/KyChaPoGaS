@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { Timeline } from '../components/Timeline/Timeline'
 import { PreviewPlayer } from '../components/Preview/PreviewPlayer'
 import { RightPanel } from '../components/RightPanel/RightPanel'
 import { ShotEditor } from '../components/ShotEditor/ShotEditor'
 import { useUIStore } from '../store/uiStore'
+import { useTimelineStore } from '../store/timelineStore'
 import type { Asset } from '../api/client'
 import { assetsApi, api } from '../api/client'
 import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
@@ -40,6 +41,27 @@ export function ProjectView() {
     if (!activeProject) return
     assetsApi.list(activeProject.id).then(setAssets)
   }, [activeProject?.id])
+
+  // 別プロジェクト所属の素材(複製プロジェクトのクリップが参照)は一覧に来ないため、
+  // クリップの参照から不足分を個別取得して合流する。これが無いとプレビューが
+  // 素材の種別を判定できず、動画が永遠に「読込中」になる(AniPAFE 24fps の clip840)。
+  const tlClips = useTimelineStore(st => st.clips)
+  const fetchedMissing = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    const have = new Set(assets.map(a => a.id))
+    const missing = [...new Set(tlClips.map(c => c.asset_id)
+      .filter((x): x is number => x != null && !have.has(x) && !fetchedMissing.current.has(x)))]
+    if (!missing.length) return
+    missing.forEach(id => fetchedMissing.current.add(id))
+    void Promise.all(missing.map(id => assetsApi.get(id).catch(() => null)))
+      .then(rs => {
+        const got = rs.filter((a): a is Asset => !!a)
+        if (got.length) setAssets(prev => {
+          const h = new Set(prev.map(a => a.id))
+          return [...prev, ...got.filter(a => !h.has(a.id))]
+        })
+      })
+  }, [tlClips, assets])
 
   // Add a generated asset to the library (dedup by id)
   const addAsset = useCallback((asset: Asset) => {

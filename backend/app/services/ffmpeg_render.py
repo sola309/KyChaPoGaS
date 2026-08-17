@@ -17,6 +17,7 @@ Approach: temp-segment concat (avoids complex filter_complex for first pass)
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -1151,6 +1152,47 @@ async def render_timeline(
     try:
         asset_map = {a.id: a for a in assets}
 
+        # ── ⬆ 高解像度版への自動差し替え ──────────────────────────────────
+        # scripts/upscale_assets.py が作った拡大版アセットは
+        # gen_params_json に {"upscale_of": <元アセットID>} を持つ。
+        # 書き出しの縦解像度が元素材より大きいときだけ、そちらを使う。
+        # タイムライン/プレビューは軽い元素材のままなので操作感は変わらない。
+        upscaled: dict[int, object] = {}
+        for a in assets:
+            origin = None
+            gp = getattr(a, "gen_params_json", "") or ""
+            if "upscale_of" in gp:
+                try:
+                    origin = json.loads(gp).get("upscale_of")
+                except Exception:
+                    origin = None
+            if origin is None:
+                # 命名規約からの復元: up_<元アセットID>_<元の名前>.mp4
+                m = re.match(r"^up_(\d+)_", getattr(a, "name", "") or "")
+                if m:
+                    origin = int(m.group(1))
+            if not isinstance(origin, int):
+                continue
+            cur = upscaled.get(origin)
+            # 同じ元に複数あれば大きいほうを採る
+            if cur is None or (a.height or 0) > (getattr(cur, "height", 0) or 0):
+                upscaled[origin] = a
+
+        def _pick(asset):
+            """書き出し解像度に見合う素材を選ぶ(無ければ元のまま)"""
+            if asset is None:
+                return None
+            up = upscaled.get(asset.id)
+            if up is None or not Path(up.file_path).exists():
+                return asset
+            if (asset.height or 0) >= height:
+                return asset          # 元で足りているなら拡大版は使わない
+            return up
+
+        if upscaled:
+            _lg.getLogger(__name__).info(
+                f"upscaled assets available: {len(upscaled)} (render height={height})")
+
         # ── Identify tracks ───────────────────────────────────────────────────
         # First video track (by order) is the BASE; further video tracks are
         # OVERLAYS composited on top (alpha/blend), in track order.
@@ -1218,7 +1260,7 @@ async def render_timeline(
             trans_sec = min(trans_sec, clip_dur * 0.9, 2.0)
 
             # Clip segment
-            asset = asset_map.get(clip.asset_id)
+            asset = _pick(asset_map.get(clip.asset_id))
             if asset and Path(asset.file_path).exists():
                 seg_file = tmp_root / f"seg_{n:04d}.mp4"
                 # Still images (freeze-frames / placeholders) loop for the clip
@@ -1315,7 +1357,7 @@ async def render_timeline(
         # many 歌詞テロップ). Transparent MGs (alpha .mov) float over the footage.
         overlays: list[dict] = []
         for oi, (t_idx, oc) in enumerate(o_clips):
-            asset = asset_map.get(oc.asset_id)
+            asset = _pick(asset_map.get(oc.asset_id))
             if not asset or not Path(asset.file_path).exists():
                 continue
             oc_dur = oc.duration_frames / fps
@@ -1385,7 +1427,7 @@ async def render_timeline(
         # ── Audio segments ────────────────────────────────────────────────────
         audio_segs: list[Path] = []
         for i, clip in enumerate(a_clips):
-            asset = asset_map.get(clip.asset_id)
+            asset = _pick(asset_map.get(clip.asset_id))
             if not asset or not Path(asset.file_path).exists():
                 continue
             seg_file = tmp_root / f"audio_{i:04d}.aac"

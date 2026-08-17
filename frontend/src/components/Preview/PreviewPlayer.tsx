@@ -28,6 +28,8 @@ import type { Asset } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { evalTransform, parseElement, type TextProps, type XForm } from './transformEval'
 import { parseRemapKeys, remapSrcFrame } from '../Timeline/remap'
+import { parsePreviz, drawPrevizBase, drawPrevizFx, type Previz } from '../Timeline/previz'
+import { useAnalysisStore } from '../../store/analysisStore'
 
 interface Props {
   assets: Asset[]
@@ -162,6 +164,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const [box, setBox] = useState({ w: 0, h: 0 })   // fitted project-frame box (px)
   const [guideMode, setGuideMode] = useState<'off' | 'thirds' | 'safe'>('off')
   const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
+  // 🎞プレビズ: ベース映像の代わりに、カットごとの previz 設定(移動/フラッシュ/暗転)を
+  // 手続きノイズで描く。絵柄が無くても動きのリズムを試行錯誤するためのモード。
+  // 完全にフロントエンドの描画なので、生成キューにもレンダーにも影響しない。
+  const [previzMode, setPrevizMode] = useState(false)
+  const beatsMap = useAnalysisStore(s => s.beats)
   // 差分再生モード: |今フレーム−前フレーム| を表示し、画面全体の動き量を数値化。
   // カット=鋭いスパイク / カメラ・モーション=持続的な山。音ハメ加速の指標検証用。
   const [diffMode, setDiffMode] = useState(false)
@@ -1083,8 +1090,49 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         }
       }
     }
+    // 🎞プレビズ: 現在フレームが属するカットの previz 設定を引く
+    let pvCut: { s: number; e: number; idx: number; pv: Previz | null; intent: string } | null = null
+    if (previzMode) {
+      const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
+      if (imgTrack) {
+        const pins = clips
+          .filter(c => c.track_id === imgTrack.id && c.asset_id != null)
+          .sort((a, b) => a.start_frame - b.start_frame)
+        for (let i = 0; i + 1 < pins.length; i += 2) {
+          if (currentFrame >= pins[i].start_frame && currentFrame <= pins[i + 1].start_frame) {
+            let intent = ''
+            try { intent = JSON.parse(pins[i].attrs_json || '{}').intent ?? '' } catch { /* noop */ }
+            pvCut = { s: pins[i].start_frame, e: pins[i + 1].start_frame, idx: i / 2 + 1,
+                      pv: parsePreviz(pins[i].attrs_json), intent }
+            break
+          }
+        }
+      }
+      // ノイズ地(共有モジュール — ポップアップのプレビューと同一の描画)
+      const rel = pvCut ? currentFrame - pvCut.s : currentFrame
+      const dur = pvCut ? Math.max(1, pvCut.e - pvCut.s) : 60
+      drawPrevizBase(ctx, projW, projH, pvCut?.pv ?? null, rel, dur)
+      // カット番号と意図を薄く重ねる(脳内書き出しの手がかり)
+      if (pvCut) {
+        ctx.save()
+        ctx.fillStyle = 'rgba(255,255,255,0.14)'
+        ctx.font = `900 ${Math.round(projH * 0.28)}px Arial`
+        ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'
+        ctx.fillText(`C${pvCut.idx}`, projW * 0.03, projH * 0.98)
+        if (pvCut.intent) {
+          ctx.fillStyle = 'rgba(255,255,255,0.5)'
+          ctx.font = `${Math.round(projH * 0.032)}px sans-serif`
+          const txt = pvCut.intent.slice(0, 42)
+          ctx.fillText(txt, projW * 0.03, projH * 0.07)
+        }
+        ctx.restore()
+      }
+    }
+
     // UI上で上にあるトラック(order小)ほど最前面 → 下から順に描き、最後に上を重ねる
-    const vts = tracks.filter(t => t.track_type === 'video' && !t.hidden).sort((a, b) => b.order - a.order)
+    // 🎞プレビズ中はベース(最背面)の映像トラックをノイズで置き換えるので描かない
+    const vtsAll = tracks.filter(t => t.track_type === 'video' && !t.hidden).sort((a, b) => b.order - a.order)
+    const vts = previzMode ? vtsAll.slice(1) : vtsAll
     for (const tr of vts) {
       if (previewHidden.includes(tr.id)) continue   // hidden in preview (not render)
       const clip = clips.filter(c => c.track_id === tr.id)
@@ -1192,6 +1240,27 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       }
     }
 
+    // 🎞プレビズ: フラッシュ/暗転は全画面効果として最後に重ねる(共有モジュール)
+    if (previzMode && pvCut) {
+      const rel = currentFrame - pvCut.s
+      const dur = Math.max(1, pvCut.e - pvCut.s)
+      // カット内ビート(拍フラッシュ用)
+      const beatRel: number[] = []
+      if (pvCut.pv?.flash === 'beat') {
+        for (const c of clips) {
+          const b = c.asset_id != null ? beatsMap[c.asset_id] : undefined
+          if (!b) continue
+          const inSec = c.asset_in_frame / projectFps
+          for (const bt of b.beats) {
+            const bf = Math.round(c.start_frame + (bt - inSec) * projectFps) - pvCut.s
+            if (bf >= 0 && bf < dur) beatRel.push(bf)
+          }
+          break
+        }
+      }
+      drawPrevizFx(ctx, projW, projH, pvCut.pv, rel, dur, beatRel)
+    }
+
     if (diffMode) applyDiffView(cv, ctx)
   }
 
@@ -1251,7 +1320,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     pctx.drawImage(tmp, 0, 0)
   }
 
-  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview, diffMode, refSel])
+  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview, diffMode, refSel, previzMode, beatsMap])
 
   // Measure the fitted project-frame box (object-contain) for the frame guides
   useEffect(() => {
@@ -1502,6 +1571,13 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           className={`ml-auto text-[10px] px-2 py-0.5 rounded ${lightPreview ? 'bg-emerald-800 text-emerald-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           title="軽量プレビュー: 描画解像度を下げて動作を軽く（書き出し画質は不変）"
         >⚡ {lightPreview ? '軽量' : '高画質'}</button>
+        <button
+          onClick={() => setPrevizMode(v => !v)}
+          className={`text-[11px] px-2 py-0.5 rounded ${previzMode
+            ? 'bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100'
+            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
+          title="🎞プレビズ: ベース映像をノイズ表現に置き換え、カットごとの移動/フラッシュ/暗転設定(カット割りを右クリック)を確かめる"
+        >🎞</button>
 
         <button
           onClick={cycleGuide}

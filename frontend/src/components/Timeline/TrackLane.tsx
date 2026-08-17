@@ -190,7 +190,7 @@ export function TrackLane({
               {/* Audio waveform overlay */}
               {isAudio && clip.asset_id != null && (
                 <div
-                  className="absolute pointer-events-none"
+                  className="absolute pointer-events-none z-10"
                   style={{
                     left:   clip.start_frame * pixelsPerFrame + 6,
                     width:  Math.max(clipWidth - 12, 2),

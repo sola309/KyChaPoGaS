@@ -397,6 +397,16 @@ async def _render_final(job: Job, params: dict) -> None:
         # 全て「素材なし」になって黒く落ちる。
         ids = {c.asset_id for c in clips if c.asset_id}
         assets = session.exec(select(Asset).where(Asset.id.in_(ids))).all() if ids else []
+        # ⬆ 高解像度版(scripts/upscale_assets.py が作る up_<元ID>_*)も渡す。
+        # クリップからは参照されていないので、ID一致だけでは取れない。
+        # レンダラが書き出し解像度に応じて元素材と差し替える。
+        if ids:
+            ups = session.exec(select(Asset).where(Asset.project_id == project_id)
+                               .where(Asset.name.startswith("up_"))).all()
+            keep = {a.id: a for a in assets}
+            for a in ups:
+                keep.setdefault(a.id, a)
+            assets = list(keep.values())
         fps    = float(params.get("fps",    project.fps))
         width  = int(params.get("width",  project.width))
         height = int(params.get("height", project.height))
@@ -429,6 +439,16 @@ async def _precompose(job: Job, params: dict) -> None:
         clips  = session.exec(select(Clip).where(Clip.track_id.in_([t.id for t in tracks]))).all()
         ids = {c.asset_id for c in clips if c.asset_id}
         assets = session.exec(select(Asset).where(Asset.id.in_(ids))).all() if ids else []
+        # ⬆ 高解像度版(scripts/upscale_assets.py が作る up_<元ID>_*)も渡す。
+        # クリップからは参照されていないので、ID一致だけでは取れない。
+        # レンダラが書き出し解像度に応じて元素材と差し替える。
+        if ids:
+            ups = session.exec(select(Asset).where(Asset.project_id == project_id)
+                               .where(Asset.name.startswith("up_"))).all()
+            keep = {a.id: a for a in assets}
+            for a in ups:
+                keep.setdefault(a.id, a)
+            assets = list(keep.values())
         fps    = float(params.get("fps",    project.fps))
         width  = int(params.get("width",  project.width))
         height = int(params.get("height", project.height))

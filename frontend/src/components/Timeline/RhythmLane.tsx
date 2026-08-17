@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, useState } from 'react'
 import type { Clip } from '../../api/client'
 import { useAnalysisStore } from '../../store/analysisStore'
 
@@ -58,10 +58,38 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
     return nz.length ? Math.max(nz[Math.floor(nz.length * 0.6)], 0.05) : 0.05
   }, [timeline])
 
+  // ── 可視窓の追従 ─────────────────────────────────────────────────────
+  // 以前は全幅を1枚のcanvasに描き、16000pxで打ち切っていた。最大ズーム(10px/f)では
+  // frame1600=約67秒で描画が途切れる(ユーザー報告の「1:07から消える」の正体)。
+  // canvasには辺長の実装上限もあるため全幅を1枚にはできない。スクロール位置を追い、
+  // 画面幅+左右2000pxの窓だけを描いて absolute で置く方式にする。
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [view, setView] = useState({ x: 0, w: 6000 })
+  useEffect(() => {
+    const el = wrapRef.current?.closest('.overflow-auto') as HTMLElement | null
+    if (!el) return
+    let raf = 0
+    const update = () => {
+      raf = 0
+      const x = Math.max(0, el.scrollLeft - 2000)
+      const w = Math.max(0, Math.min(totalWidth - x, el.clientWidth + 4000))
+      setView(v => (Math.abs(v.x - x) > 1000 || Math.abs(v.w - w) > 500) ? { x, w } : v)
+    }
+    const on = () => { if (!raf) raf = requestAnimationFrame(update) }
+    update()
+    el.addEventListener('scroll', on)
+    window.addEventListener('resize', on)
+    return () => {
+      el.removeEventListener('scroll', on)
+      window.removeEventListener('resize', on)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [totalWidth])
+
   useEffect(() => {
     const canvas = ref.current
-    if (!canvas || timeline.length === 0) return
-    const w = Math.min(totalWidth, 16000)
+    if (!canvas || timeline.length === 0 || view.w <= 0) return
+    const w = view.w
     const dpr = window.devicePixelRatio || 1
     canvas.width = Math.round(w * dpr)
     canvas.height = LANE_H * dpr
@@ -74,7 +102,7 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
     const vmax = 0.25   // 表示レンジ（スパイク0.8は飽和してよい）
     ctx.fillStyle = 'rgba(214,64,93,0.55)'
     for (let x = 0; x < w; x++) {
-      const f = Math.floor(x / pixelsPerFrame)
+      const f = Math.floor((view.x + x) / pixelsPerFrame)
       if (f >= timeline.length) break
       const v = timeline[f]
       if (v <= 0) continue
@@ -84,7 +112,8 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
 
     // ビートティック
     for (const bf of beatFrames) {
-      const x = bf * pixelsPerFrame
+      const x = bf * pixelsPerFrame - view.x
+      if (x < -6) continue
       if (x > w) break
       const lo = Math.max(0, bf - 2), hi = Math.min(timeline.length - 1, bf + 2)
       let peak = 0
@@ -97,20 +126,26 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
         ctx.fill()
       }
     }
-  }, [timeline, beatFrames, pixelsPerFrame, totalWidth, threshold])
+  }, [timeline, beatFrames, pixelsPerFrame, totalWidth, threshold, view])
 
   if (timeline.length === 0) return null
   return (
-    <canvas
-      ref={ref}
-      height={LANE_H}
-      className="block cursor-pointer"
-      style={{ width: Math.min(totalWidth, 16000), height: LANE_H }}
+    <div
+      ref={wrapRef}
+      className="relative cursor-pointer"
+      style={{ width: totalWidth, height: LANE_H }}
       title="リズムレーン: 赤=画面の変化量 / 緑=ビートに山あり / 琥珀▼=ビートに変化なし（クリックでシーク）"
       onClick={e => {
         const x = e.nativeEvent.offsetX
         onSeek(Math.max(0, Math.round(x / pixelsPerFrame)))
       }}
-    />
+    >
+      <canvas
+        ref={ref}
+        height={LANE_H}
+        className="absolute top-0 pointer-events-none"
+        style={{ left: view.x, width: view.w, height: LANE_H }}
+      />
+    </div>
   )
 }

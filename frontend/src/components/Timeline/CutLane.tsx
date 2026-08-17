@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Asset, Clip, Track } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { TakeSelector } from './TakeSelector'
+import { PrevizPopover } from './PrevizPopover'
 
 /**
  * 🎬 カット割りレーン v3 — Imageトラックのピンを時刻順に「2個ずつペアリング」して
@@ -36,6 +37,8 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
   const setCurrentFrame = useTimelineStore(s => s.setCurrentFrame)
   const refSel = useTimelineStore(s => s.refSel)
   const [takeCut, setTakeCut] = useState<{ s: number; e: number; clipId?: number } | null>(null)   // 🗂テイクブラウザ
+  const [previzCut, setPrevizCut] = useState<{ idx: number; pinId: number; frames: number; start: number } | null>(null)  // 🎞プレビズ
+  const previzPress = useRef<number | null>(null)   // タッチ長押し検出
   // Shotsクリップの🗂ボタンなど、レーン外からも開けるようにする
   useEffect(() => {
     const onOpen = (ev: Event) => {
@@ -213,6 +216,26 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
                 toggleCutSelect(c)
               }}
               onDoubleClick={() => setTakeCut({ s: c.s, e: c.e })}
+              // 🎞プレビズ: 右クリック(タッチは長押し500ms)でカットの動き設定を開く
+              onContextMenu={ev => {
+                ev.preventDefault()
+                setPrevizCut({ idx: i + 1, pinId: c.sId, frames: c.e + 1 - c.s, start: c.s })
+              }}
+              onPointerDown={ev => {
+                if (ev.pointerType !== 'touch') return
+                const x0 = ev.clientX, y0 = ev.clientY
+                previzPress.current = window.setTimeout(() => {
+                  setPrevizCut({ idx: i + 1, pinId: c.sId, frames: c.e + 1 - c.s, start: c.s })
+                }, 500)
+                const cancel = (mv: PointerEvent) => {
+                  if (mv.type === 'pointermove' && Math.hypot(mv.clientX - x0, mv.clientY - y0) < 8) return
+                  if (previzPress.current) { clearTimeout(previzPress.current); previzPress.current = null }
+                  window.removeEventListener('pointermove', cancel)
+                  window.removeEventListener('pointerup', cancel)
+                }
+                window.addEventListener('pointermove', cancel)
+                window.addEventListener('pointerup', cancel)
+              }}
             >
               <span className="absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none flex gap-1 items-baseline overflow-hidden max-w-full">
                 {w > 34 && <span>C{i + 1}</span>}
@@ -241,6 +264,11 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
         )}
         {takeCut && (
           <TakeSelector cut={takeCut} sourceClipId={takeCut.clipId} assets={assets} fps={fps} onClose={() => setTakeCut(null)} />
+        )}
+        {previzCut && (
+          <PrevizPopover cutIndex={previzCut.idx} pinClipId={previzCut.pinId}
+                         fps={fps} cutFrames={previzCut.frames} cutStartFrame={previzCut.start}
+                         onClose={() => setPrevizCut(null)} />
         )}
         {drag && (
           <>
