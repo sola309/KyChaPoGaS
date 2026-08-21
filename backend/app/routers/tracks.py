@@ -102,3 +102,101 @@ def compare_layout(project_id: int, left_track_id: int | None = None,
         out.append({"id": t.id, "name": t.name, "layout": t.layout_json})
     session.commit()
     return {"enabled": True, "left": lid, "right": rid, "tracks": out}
+
+
+# ── Scenes枠の同期 ────────────────────────────────────────────────────────────
+
+@router.post("/scenes-sync")
+def scenes_sync(project_id: int, session: Session = Depends(get_session)):
+    """Scenes トラックをカット割り(ピン列)へ同期する。
+
+    AniPAFE2026 の運用方針: 生成は Scenes のカット枠に合わせて行うので、
+    **全カットぶんの枠を空クリップで先に敷いておく**。生成・テイク採用は
+    枠の asset_id を差し替えるだけになり、位置や尺を触らない。
+    これで「配置時のはみ出し」「トリムが短いまま」系の事故が構造的に消える。
+
+    連動の仕組み — 枠は attrs_json.cut_bind = [開始ピンID, 終了ピンID] で
+    **ピンに束縛**される。カット境界を微調整(ピンを移動)しても、この同期を
+    走らせれば枠が追従する。フレーム位置ではなくピンIDで結ぶのは、
+    位置は編集で変わるがIDは変わらないため。
+
+    - cut_bind を持つクリップ → ピンの現在位置から開始/尺を再計算
+    - cut_bind の無い既存クリップ → 覆っているカット範囲から束縛を推定して付与
+      (C4-C5 のような複数カットまたぎは [先頭カットの開始ピン, 末尾カットの終了ピン])
+    - どのクリップにも覆われていないカット → 空クリップ(asset_id=None)を新規作成
+    - 束縛先のピンが消えたクリップ → 触らない(勝手に消さない)
+    """
+    import json as _json
+    from app.models import Clip
+
+    tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
+    img = next((t for t in tracks if t.track_type == "reference" and t.name == "Image"), None)
+    scenes = next((t for t in tracks if t.track_type == "video" and t.name == "Scenes"), None)
+    if not img or not scenes:
+        raise HTTPException(status_code=404, detail="Image/Scenesトラックがありません")
+
+    pins = session.exec(
+        select(Clip).where(Clip.track_id == img.id, Clip.asset_id.is_not(None))
+        .order_by(Clip.start_frame)
+    ).all()
+    cuts = [(pins[i], pins[i + 1]) for i in range(0, len(pins) - 1, 2)]
+    pin_by_id = {p.id: p for p in pins}
+
+    clips = session.exec(select(Clip).where(Clip.track_id == scenes.id)).all()
+    moved = bound = created = 0
+
+    # 1) 束縛済みクリップをピンの現在位置へ追従させる
+    for c in clips:
+        try:
+            attrs = _json.loads(c.attrs_json) if c.attrs_json else {}
+        except Exception:
+            attrs = {}
+        bind = attrs.get("cut_bind")
+        if not (isinstance(bind, list) and len(bind) == 2):
+            continue
+        sp, ep = pin_by_id.get(bind[0]), pin_by_id.get(bind[1])
+        if not sp or not ep:
+            continue                      # ピンが消えた枠は触らない
+        want_s, want_d = sp.start_frame, ep.start_frame - sp.start_frame + 1
+        if c.start_frame != want_s or c.duration_frames != want_d:
+            c.start_frame, c.duration_frames = want_s, want_d
+            session.add(c); moved += 1
+
+    # 2) 未束縛クリップに束縛を推定して付与(既存配置を壊さない)
+    for c in clips:
+        try:
+            attrs = _json.loads(c.attrs_json) if c.attrs_json else {}
+        except Exception:
+            attrs = {}
+        if attrs.get("cut_bind"):
+            continue
+        end = c.start_frame + c.duration_frames - 1
+        covered = [(sp, ep) for sp, ep in cuts
+                   if sp.start_frame >= c.start_frame and ep.start_frame <= end + 3]
+        inside = next(((sp, ep) for sp, ep in cuts
+                       if sp.start_frame <= c.start_frame <= ep.start_frame), None)
+        pick = None
+        if covered:
+            pick = (covered[0][0], covered[-1][1])
+        elif inside:
+            pick = inside
+        if pick:
+            attrs["cut_bind"] = [pick[0].id, pick[1].id]
+            c.attrs_json = _json.dumps(attrs, ensure_ascii=False)
+            session.add(c); bound += 1
+
+    # 3) 空のカットに枠を敷く
+    session.flush()
+    occupied = []
+    for c in clips:
+        occupied.append((c.start_frame, c.start_frame + c.duration_frames - 1))
+    for sp, ep in cuts:
+        if any(s <= sp.start_frame <= e for s, e in occupied):
+            continue
+        nc = Clip(track_id=scenes.id, asset_id=None, start_frame=sp.start_frame,
+                  duration_frames=ep.start_frame - sp.start_frame + 1,
+                  attrs_json=_json.dumps({"cut_bind": [sp.id, ep.id]}))
+        session.add(nc); created += 1
+
+    session.commit()
+    return {"cuts": len(cuts), "moved": moved, "bound": bound, "created": created}

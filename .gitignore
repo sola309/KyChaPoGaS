@@ -82,3 +82,11 @@ tools/cutlass/
 tools/lightx2v/
 # svc-kit: 歌声変換素材(音声データ大容量・権利配慮につき非公開)
 tools/svc-kit/
+
+# 隔離venvつきの解析ツール(2026-08-22)。自作スクリプトだけ追跡する
+tools/adtof-pytorch/
+!tools/adtof-pytorch/transcribe.py
+tools/music-struct/.venv/
+tools/music-struct/.shim/
+tools/music-struct/demix/
+tools/music-struct/__pycache__/

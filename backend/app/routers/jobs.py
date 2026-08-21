@@ -14,8 +14,29 @@ from app.services.ffmpeg_render import export_path
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _to_read(job: Job) -> JobRead:
-    return JobRead.from_orm(job)
+def _slim_params(p: dict) -> dict:
+    """一覧・SSE用にプロンプト本文を落とす。
+
+    実測で一覧応答857KBの86%がH3プロンプト(1本4-15KB)だった。フロントは
+    ジョブのparams.promptを一切読まない(再生成はasset.gen_params_json側を使う)ので、
+    落としても壊れない。SSEは2秒ごとに全件再送するため、ここが最大の帯域源。
+    先頭だけ残して文字数を付す(「プロンプトあり」の表示判定用)。
+    個別取得(GET /jobs/{id})は従来どおり全文を返す。
+    """
+    out = dict(p)
+    for k in ("prompt", "negative_prompt"):
+        v = out.get(k)
+        if isinstance(v, str) and len(v) > 120:
+            out[k + "_chars"] = len(v)
+            out[k] = v[:120]
+    return out
+
+
+def _to_read(job: Job, slim: bool = False) -> JobRead:
+    r = JobRead.from_orm(job)
+    if slim and isinstance(r.params, dict):
+        r.params = _slim_params(r.params)
+    return r
 
 
 @router.get("/", response_model=list[JobRead])
@@ -23,7 +44,7 @@ def list_jobs(project_id: int, session: Session = Depends(get_session)):
     jobs = session.exec(
         select(Job).where(Job.project_id == project_id).order_by(Job.created_at.desc())
     ).all()
-    return [_to_read(j) for j in jobs]
+    return [_to_read(j, slim=True) for j in jobs]
 
 
 @router.post("/", response_model=JobRead, status_code=201)
@@ -188,7 +209,7 @@ async def stream_jobs(project_id: int, request: Request):
                 jobs.sort(key=lambda j: (j.created_at, j.id), reverse=True)
                 rows = []
                 for j in jobs:
-                    d = _to_read(j).model_dump(mode="json")
+                    d = _to_read(j, slim=True).model_dump(mode="json")
                     # 帯域削減: 巨大フィールドはストリームから除外
                     # (必要になった1件だけGET /jobs/{id}で取得する)
                     d.pop("params", None)

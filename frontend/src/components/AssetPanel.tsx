@@ -208,6 +208,41 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
   )
 }
 
+/** サムネイルクリックで開く原寸プレビュー。画像はそのまま、動画は再生できる。
+ *  一覧のサムネ(56x36)では生成結果の判断がつかないため。Escか背景クリックで閉じる。 */
+function AssetLightbox({ asset, onClose }: { asset: Asset; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const kind = assetKind(asset)
+  return createPortal(
+    <div className="fixed inset-0 z-[200] bg-black/85 flex items-center justify-center p-4 sm:p-8"
+         onClick={onClose}>
+      <div className="max-w-[96vw] max-h-[92vh] flex flex-col items-center gap-2"
+           onClick={e => e.stopPropagation()}>
+        {kind === 'video' ? (
+          <video src={assetsApi.fileUrl(asset.id, !!asset.proxy_path)} controls autoPlay loop
+                 className="max-w-full max-h-[84vh] w-[min(1120px,90vw)] rounded shadow-2xl bg-black" />
+        ) : kind === 'image' ? (
+          <img src={assetsApi.fileUrl(asset.id)} alt={asset.name}
+               className="max-w-full max-h-[84vh] rounded shadow-2xl object-contain" />
+        ) : (
+          <audio src={assetsApi.fileUrl(asset.id)} controls autoPlay className="w-[min(480px,90vw)]" />
+        )}
+        <div className="flex items-center gap-3 text-xs text-zinc-300">
+          <span className="truncate max-w-[60vw]">{asset.name}</span>
+          {asset.width ? <span className="text-zinc-500">{asset.width}×{asset.height}</span> : null}
+          {asset.duration_sec ? <span className="text-zinc-500">{formatDuration(asset.duration_sec)}</span> : null}
+          <button onClick={onClose}
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200">✕ 閉じる</button>
+        </div>
+      </div>
+    </div>,
+    document.body)
+}
+
 function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDelete: (id: number) => void; currentProjectId?: number }) {
   const isForeign = currentProjectId != null && asset.project_id !== currentProjectId
   const handleStar = async (e: React.MouseEvent) => {
@@ -264,6 +299,7 @@ function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDele
     e.dataTransfer.setData('assetId', String(asset.id))
     e.dataTransfer.effectAllowed = 'copy'
   }
+  const [lightbox, setLightbox] = useState(false)
 
   return (
     <div
@@ -272,8 +308,11 @@ function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDele
       onDragStart={handleDragStart}
       title="タイムラインにドラッグ"
     >
-      {/* Thumbnail */}
-      <div className="w-14 h-9 rounded overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center">
+      {lightbox && <AssetLightbox asset={asset} onClose={() => setLightbox(false)} />}
+      {/* Thumbnail — クリックで原寸プレビュー(ドラッグ配置はそのまま生きる) */}
+      <div className="w-14 h-9 rounded overflow-hidden bg-zinc-800 flex-shrink-0 flex items-center justify-center cursor-zoom-in"
+           onClick={e => { e.stopPropagation(); setLightbox(true) }}
+           title="クリックで拡大プレビュー">
         {assetKind(asset) !== 'audio' && !thumbError ? (
           <img
             src={assetsApi.thumbnailUrl(asset.id)}

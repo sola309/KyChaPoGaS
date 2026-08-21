@@ -948,7 +948,62 @@ FLUX2_KLEIN_TE      = "qwen_3_8b_fp8mixed.safetensors"
 FLUX2_VAE           = "flux2-vae.safetensors"
 
 # UI/API向けの編集モデルID
-IMAGE_EDIT_MODELS = {"qwen-edit-2511", "qwen-edit-2511-fp8", "hidream-o1-dev", "flux2-klein-kv"}
+IMAGE_EDIT_MODELS = {"qwen-edit-2511", "qwen-edit-2511-fp8", "hidream-o1-dev", "flux2-klein-kv", "minimax-h3-edit"}
+
+
+def build_minimax_h3_edit(
+    ref_image_names: list[str],     # /upload/image 済み(1〜9枚)。image1が編集対象(source)
+    prompt: str,
+    width: int = 832,
+    height: int = 1216,
+    seed: int = -1,
+    quality_profile: str = "recommended | 5 frames",
+    source_fidelity: float = 0.6,
+) -> dict:
+    """MiniMax H3 Image Studio (Reference Edit): H3のRef2VA能力で静止画を編集。
+    短いフレームパケットを生成し、鮮明さ/類似度スコアで最良1フレームを自動選抜する。
+    画像1が編集対象(<Picture 1>)、2枚目以降は追加参照(<Picture 2>〜)。
+    Qwen-Editより遅い(≈2分)が指示追従が強く、複数参照でキャラ・武器・背景を同時に縛れる。
+    ⚠ custom_nodes/ComfyUI-MiniMax-H3-Image-Studio のロードが前提(ComfyUI再起動が必要)。
+    """
+    if not ref_image_names:
+        raise ValueError("H3編集には参照画像が最低1枚必要です")
+    s = _seed(seed)
+    prep_inputs = {
+        "clip": ["clip", 0], "vae": ["vae", 0], "source_image": ["img0", 0],
+        "edit_instruction": prompt, "width": width, "height": height,
+        "quality_profile": quality_profile, "source_fidelity": source_fidelity,
+        "source_fit": "contain_pad", "reference_detail": "max_identity_2048",
+        "optimize_for_still": True,
+    }
+    wf: dict[str, dict] = {
+        "unet": {"class_type": "UNETLoader",
+                 "inputs": {"unet_name": "minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+                            "weight_dtype": "default"}},
+        "clip": {"class_type": "CLIPLoader",
+                 "inputs": {"clip_name": H3_TE, "type": "minimax", "device": "default"}},
+        "vae":  {"class_type": "VAELoader", "inputs": {"vae_name": H3_VIDEO_VAE}},
+        "img0": {"class_type": "LoadImage", "inputs": {"image": ref_image_names[0]}},
+        "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": s}},
+        "preset": {"class_type": "H3ImageSamplingPreset",
+                   "inputs": {"model": ["unet", 0], "sampling_profile": "base quality | RES 20 steps"}},
+        "guide": {"class_type": "BasicGuider", "inputs": {"model": ["preset", 0], "conditioning": ["prep", 0]}},
+        "ks": {"class_type": "SamplerCustomAdvanced",
+               "inputs": {"noise": ["noise", 0], "guider": ["guide", 0], "sampler": ["preset", 1],
+                          "sigmas": ["preset", 2], "latent_image": ["prep", 1]}},
+        "dec": {"class_type": "H3ImageDecode", "inputs": {"samples": ["ks", 0], "vae": ["vae", 0]}},
+        "sel": {"class_type": "H3ImageFrameSelector",
+                "inputs": {"frames": ["dec", 0], "strategy": "decode_recommended", "manual_index": 0,
+                           "skip_first_frames": 0, "candidate_start": 0.0, "candidate_end": 1.0,
+                           "similarity_weight": 0.6, "top_k": 4}},
+        "save": {"class_type": "SaveImage",
+                 "inputs": {"images": ["sel", 0], "filename_prefix": "kychapogas_edit_h3"}},
+    }
+    for i, name in enumerate(ref_image_names[1:9], start=2):
+        wf[f"img{i-1}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        prep_inputs[f"reference_image_{i}"] = [f"img{i-1}", 0]
+    wf["prep"] = {"class_type": "H3ReferenceEditPrepare", "inputs": prep_inputs}
+    return wf
 
 
 def build_qwen_image_edit(
@@ -1298,20 +1353,22 @@ def build_minimax_h3_ref_video(
                  "inputs": {"video": ["vid", 0], "filename_prefix": "video/kychapogas_h3r",
                             "format": "auto", "codec": "auto"}},
     }
+    # Autogrowのスロット名は range(max) 由来の0始まり(ref_image_0..8)。
+    # 1始まりで書くと8枚までは偶然通り、9枚目のref_image_9だけが存在せず落ちる。
     for i, name in enumerate((ref_image_names or [])[:9]):
         wf[f"rimg{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
-        cond_inputs[f"ref_images.ref_image_{i+1}"] = [f"rimg{i}", 0]
+        cond_inputs[f"ref_images.ref_image_{i}"] = [f"rimg{i}", 0]
     for i, name in enumerate((ref_video_names or [])[:3]):
         wf[f"rvid{i}"] = {"class_type": "LoadVideo", "inputs": {"file": name}}
         wf[f"rvc{i}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"rvid{i}", 0]}}
-        cond_inputs[f"ref_videos.ref_video_{i+1}"] = [f"rvc{i}", 0]
+        cond_inputs[f"ref_videos.ref_video_{i}"] = [f"rvc{i}", 0]
         # 参照動画の音声は既定で添付しない: <Audio N>の番号がズレる上に
         # 元動画のセリフ/SFXが出力へ混入する(音声はテキストエンコーダにも入らず視覚的利得ゼロ)
         if use_ref_video_audio:
-            cond_inputs[f"ref_video_audios.ref_video_audio_{i+1}"] = [f"rvc{i}", 1]
+            cond_inputs[f"ref_video_audios.ref_video_audio_{i}"] = [f"rvc{i}", 1]
     for i, name in enumerate((ref_audio_names or [])[:3]):
         wf[f"raud{i}"] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
-        cond_inputs[f"ref_audios.ref_audio_{i+1}"] = [f"raud{i}", 0]
+        cond_inputs[f"ref_audios.ref_audio_{i}"] = [f"raud{i}", 0]
     wf["cond"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": cond_inputs}
     if preview_steps and 0 < preview_steps < steps:
         # 先頭 preview_steps 段のシグマだけを取り出す(high_sigmas=前半)。

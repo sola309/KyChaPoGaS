@@ -12,7 +12,9 @@ import { RenderDialog } from '../RenderDialog'
 import { createPortal } from 'react-dom'
 import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoints } from './SpeedCurveEditor'
 import { CutLane } from './CutLane'
-import { SceneLane } from './SceneLane'
+import { SceneLane, deriveCutsWithScene } from './SceneLane'
+import { BoardSheet } from './BoardSheet'
+import { StoryScroll } from './StoryScroll'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
@@ -20,6 +22,8 @@ import { PinSwapModal } from './PinSwapModal'
 import { NightBatchPanel } from './NightBatchPanel'
 import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
+import { MotionBudgetLane } from './MotionBudgetLane'
+import { MB_ROWS, MB_ALL, MB_COMPACT } from './motionBudgetRows'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -69,7 +73,9 @@ export function Timeline({ projectId, fps, assets }: Props) {
     }
   }, [pixelsPerFrame])
   const containerRef   = useRef<HTMLDivElement>(null)
-  const [showRenderDialog, setShowRenderDialog] = useState(false)
+    const [boardSheetOpen, setBoardSheetOpen] = useState(false)   // 🎬 コンテ表
+  const [storyOpen, setStoryOpen] = useState(false)             // 📜 ストーリー
+const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [beatMatch, setBeatMatch] = useState<BeatMatchResult | null>(null)
   const [scoring, setScoring] = useState(false)
@@ -193,8 +199,12 @@ export function Timeline({ projectId, fps, assets }: Props) {
         if (!starts.length) return
         try {
           const r = await assetsApi.remapTakes(projectId, starts)
+          // Scenes枠もカット割りへ追従させる(枠はピンIDに束縛されている)。
+          // これでピンを微調整しても、枠の位置と尺が自動で付いてくる。
+          const sy = await tracksApi.scenesSync(projectId)
+          if (sy.moved || sy.created) await st.syncFromServer(projectId)
           window.dispatchEvent(new CustomEvent('kychapogas:toast',
-            { detail: `🗂 テイクの紐付けを整えました: ${r.updated}件` }))
+            { detail: `🗂 テイク${r.updated}件 / 枠 追従${sy.moved}・新設${sy.created}` }))
         } catch { /* 失敗しても編集は妨げない(表示側の±8f照合が保険になる) */ }
       }, 50)
     }
@@ -228,6 +238,50 @@ export function Timeline({ projectId, fps, assets }: Props) {
     }
     return null
   }, [clips, beats])
+
+  // 移動量バジェットの上限(画面幅%)。ここを動かして「音に対して画がどれくらい動くべきか」を
+  // 実映像と見比べながら決める。既定18%は4-5秒のカットでゆるいトラック相当。
+  const [motionMaxPct, setMotionMaxPct] = useState(
+    () => Number(localStorage.getItem('kychapogas:motionMax') ?? 18))
+  useEffect(() => { localStorage.setItem('kychapogas:motionMax', String(motionMaxPct)) }, [motionMaxPct])
+  // 全系列を出すか、要点だけか。既定は全系列(最終結果だけだと判断できないため)
+  const [motionFull, setMotionFull] = useState(
+    () => localStorage.getItem('kychapogas:motionFull') !== '0')
+  useEffect(() => { localStorage.setItem('kychapogas:motionFull', motionFull ? '1' : '0') }, [motionFull])
+  // 打撃の表示下限。0だと検出した全部(毎秒1.3本)が出るので、目立つものへ絞れるようにする
+  const [hitMin, setHitMin] = useState(
+    () => Number(localStorage.getItem('kychapogas:hitMin') ?? 0.25))
+  useEffect(() => { localStorage.setItem('kychapogas:hitMin', String(hitMin)) }, [hitMin])
+  const motionRows = motionFull ? MB_ALL : MB_COMPACT
+
+  // 盛り上げの手動編集。レーン側でドラッグ操作を解決し、確定した配列がここに来る。
+  // 自動判定は当てにならない場面があるので(実測: allin1の境界では5箇所すべて「平坦」)、
+  // 音楽的な「ここは溜め/ここは引き」の判断は人が置けるようにしている。
+  const saveBuildups = useCallback(async (next: Array<{ start_sec: number; end_sec: number
+                                                        target: string; kind: string
+                                                        slope: number; break: number }>) => {
+    const songId = beatInfo?.clip.asset_id
+    if (songId == null) return
+    // 楽観更新してから保存(戻り待ちだと連続操作で取りこぼす)
+    useAnalysisStore.setState(s2 => ({ buildupOverride: { ...s2.buildupOverride, [songId]: next } }))
+    try {
+      if (next.length) await analysisApi.putOverride(songId, 'audio_structure', { buildups: next })
+      else await analysisApi.clearOverride(songId, 'audio_structure')
+    } catch { /* 失敗してもUIは次の再読込で戻る */ }
+  }, [beatInfo])
+
+  // 盛り上げの端を吸着させる小節線(フレーム)。拍だと細かすぎて 音楽的に意味が薄い。
+  const downbeatFrames = useMemo(() => {
+    if (!beatInfo) return [] as number[]
+    const assetInSec = beatInfo.clip.asset_in_frame / fps
+    return (beatInfo.beat.downbeats ?? [])
+      .map(t => Math.round(beatInfo.clip.start_frame + (t - assetInSec) * fps))
+      .filter(f => f >= 0)
+  }, [beatInfo, fps])
+  // 移動量バジェットは楽曲(=拍解析を持つクリップ)に紐づく
+  const motionCuts = useMemo(
+    () => deriveCutsWithScene(tracks, clips, assets).map(c => ({ idx: c.idx, s: c.s, e: c.e })),
+    [tracks, clips, assets])
 
   // Beat positions in timeline-frame space (for beat-snapping clip edges)
   const beatFrames = useMemo(() => {
@@ -454,6 +508,21 @@ export function Timeline({ projectId, fps, assets }: Props) {
           className="text-[11px] px-2 py-0.5 rounded bg-amber-900 hover:bg-amber-800 text-amber-200"
           title="参照キーフレームトラック（I2V生成用）"
         >+ Ref</button>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('kychapogas:open-board'))}
+          title="📋 絵コンテ（再生ヘッド位置のシーン）— シーンレーンのブロックを右クリック/長押しでも開けます"
+          className="text-[11px] px-2 py-0.5 rounded bg-emerald-900 hover:bg-emerald-800 text-emerald-200"
+        >📋 絵コンテ</button>
+        <button
+          onClick={() => setBoardSheetOpen(true)}
+          title="🎬 コンテ表（全カットの一覧 — 絵コンテ静止画・歌詞・意図・尺。検討用）"
+          className="text-[11px] px-2 py-0.5 rounded bg-cyan-900 hover:bg-cyan-800 text-cyan-200"
+        >🎬 コンテ表</button>
+        <button
+          onClick={() => setStoryOpen(true)}
+          title="📜 ストーリー（縦スクロールの絵コンテ台本 — Claudeの演出意図・コメント対話）"
+          className="text-[11px] px-2 py-0.5 rounded bg-violet-900 hover:bg-violet-800 text-violet-200"
+        >📜 ストーリー</button>
 
         <button
           onClick={() => setSnapEnabled(v => !v)}
@@ -920,6 +989,62 @@ export function Timeline({ projectId, fps, assets }: Props) {
             </div>
           )}
 
+          {/* 移動量バジェット: 音から出した「どれくらい画が動くべきか」 */}
+          {beatInfo && (
+            <div className="flex flex-shrink-0 border-b border-zinc-800">
+              <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950
+                              sticky left-0 z-30 flex flex-col">
+                {/* 行の高さをレーンと厳密に揃える(ズレると別の行のラベルに見える) */}
+                {motionRows.map((r, i) => (
+                  <div key={r} className="flex items-center justify-between px-1.5 leading-none
+                                          border-b border-zinc-900/60"
+                       style={{ height: MB_ROWS[r].h }}>
+                    <span className="text-[8px] text-zinc-500">{MB_ROWS[r].label}</span>
+                    {i === 0 && (
+                      <button onClick={() => setMotionFull(v => !v)}
+                              className="text-[8px] px-1 rounded bg-zinc-800 text-zinc-400
+                                         hover:bg-zinc-700 leading-none"
+                              title="全系列(構造/盛上げ/移動量/歌唱/粒度/打撃/等級) ⇄ 要点のみ">
+                        {motionFull ? '簡易' : '全部'}
+                      </button>
+                    )}
+                    {r === 'snare' && (
+                      <span className="flex items-center gap-1">
+                        <input type="range" min={0} max={0.9} step={0.05} value={hitMin}
+                               onChange={e => setHitMin(Number(e.target.value))}
+                               className="w-10 h-1 accent-red-500"
+                               title="打撃の表示下限。上げるほど目立つ当たりだけが残る" />
+                        <span className="text-[8px] text-red-400 tabular-nums">{hitMin.toFixed(2)}</span>
+                      </span>
+                    )}
+                    {r === 'move' && (
+                      <span className="flex items-center gap-1">
+                        <input type="range" min={6} max={40} step={1} value={motionMaxPct}
+                               onChange={e => setMotionMaxPct(Number(e.target.value))}
+                               className="w-10 h-1 accent-sky-500"
+                               title="移動量の上限(画面幅%)。実映像と見比べて体感に合う値へ" />
+                        <span className="text-[8px] text-sky-400 tabular-nums">{motionMaxPct}%</span>
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <MotionBudgetLane
+                songAssetId={beatInfo.clip.asset_id ?? null}
+                cuts={motionCuts}
+                pixelsPerFrame={pixelsPerFrame}
+                totalWidth={totalWidth}
+                projectFps={fps}
+                maxPct={motionMaxPct}
+                hitMin={hitMin}
+                rows={motionRows}
+                snapFrames={downbeatFrames}
+                onBuildupsChange={saveBuildups}
+                onSeek={setCurrentFrame}
+              />
+            </div>
+          )}
+
           {/* Rhythm lane: 合成モーション×ビート（音ハメの見える化） */}
           {beatInfo && (
             <div className="flex flex-shrink-0 border-b border-zinc-800">
@@ -928,8 +1053,10 @@ export function Timeline({ projectId, fps, assets }: Props) {
               </div>
               <RhythmLane
                 clips={clips.filter(c => {
-                  const baseVideo = tracks.find(t => t.track_type === 'video')
-                  return baseVideo && c.track_id === baseVideo.id
+                  // 「最初に見つかった映像トラック」だと、そこが空(AniPAFE2026のScenes)のときレーンごと消える。
+                  // 画面の変化はどの映像レイヤーで起きても変化なので、映像トラック全部を合成対象にする。
+                  const videoIds = new Set(tracks.filter(t => t.track_type === 'video').map(t => t.id))
+                  return videoIds.has(c.track_id)
                 })}
                 beatFrames={beatFrames}
                 pixelsPerFrame={pixelsPerFrame}
@@ -942,6 +1069,14 @@ export function Timeline({ projectId, fps, assets }: Props) {
 
           {/* 🏞シーンレーン(同一空間のカット群+ロケーションプレート) */}
           <SceneLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} totalWidth={totalWidth} />
+          {boardSheetOpen && (
+            <BoardSheet tracks={tracks} clips={clips} assets={assets} fps={fps}
+                        onClose={() => setBoardSheetOpen(false)} />
+          )}
+          {storyOpen && (
+            <StoryScroll tracks={tracks} clips={clips} assets={assets} fps={fps}
+                         onClose={() => setStoryOpen(false)} />
+          )}
           {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
           <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 

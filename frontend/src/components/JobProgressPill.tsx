@@ -63,7 +63,7 @@ export function JobProgressPill() {
   if (active.length === 0) return null
 
   return (
-    <div className="fixed bottom-3 right-3 z-[90] flex flex-col items-end gap-1">
+    <div className="safe-bottom-mgn fixed bottom-3 right-3 z-[90] flex flex-col items-end gap-1">
       {collapsed ? (
         <button onClick={() => setCollapsed(false)}
                 className="px-3 py-1.5 rounded-full bg-zinc-900/95 border border-purple-700 text-purple-200 text-xs shadow-xl">

@@ -1080,6 +1080,29 @@ async def _extract_audio_segment(src: str, out: Path,
         raw.rename(out)
 
 
+# ── 撮影パス(共通グレード) ────────────────────────────────────────────────────
+# カットごとに生成AIが勝手な「現像」をするため、並べただけでは明度も色相も揃わない
+# (実測: 同一ブロック内で明度0.17→0.24→0.28→0.02)。実制作の撮影(コンポジット)と
+# 同じく、タイムライン全体へ一律の決定論処理を最後に掛けて画面を揃える。
+# チェーンは docs/anipafe2026-color-script.md の設計に従う:
+#   前ぼかし(AIのマイクロシャープを均す) → 黒締め → 弱ビネット → 決定論グレイン
+# グレインの all_seed 固定で再レンダしても同一の粒になる(差分確認を壊さない)。
+_GRADE_CHAINS = {
+    "film": ("gblur=sigma=0.35,"
+             "colorlevels=rimin=0.015:gimin=0.015:bimin=0.015,"
+             "vignette=angle=PI/8,"
+             "noise=all_seed=309:alls=6:allf=t"),
+}
+
+
+async def _grade_pass(src: Path, out: Path, chain: str, progress_cb=None) -> None:
+    """全尺への一括グレード。1回だけの追加再エンコードなので crf16 系の
+    _VENC で視覚ロスなしに保つ(多段再エンコ対策の原則と同じ)。"""
+    cmd = [FFMPEG, "-y", "-i", str(src), "-vf", chain,
+           *_VENC, "-an", str(out)]
+    await _run(cmd, progress_cb)
+
+
 async def _mix_audio_into_video(video: Path, audio_segments: list[Path],
                                  total_dur: float, out: Path,
                                  progress_cb=None) -> None:
@@ -1131,10 +1154,15 @@ async def render_timeline(
     height: int,
     progress_cb=None,
     encoder: str | None = None,
+    grade: str | None = None,
 ) -> Path:
     """
     Render the timeline to an MP4 file.
     Returns the output file path.
+
+    grade: 撮影パスの選択。None=設定(RENDER_GRADE, 既定"film") / "off"=無効。
+    precompose のように「後で最終レンダを通る」出力は必ず "off" を渡すこと
+    (でないとグレードが二重掛けになる)。
     """
     # Pick CPU (x264) or GPU (nvenc) encoder for this render.
     # encoder引数(ジョブ単位の上書き — 720pレビュー等) > 設定 > config の順。
@@ -1421,8 +1449,26 @@ async def render_timeline(
             )
             video_only = merged_out
 
+        # ── 撮影パス(共通グレード) ────────────────────────────────────────────
+        # オーバーレイ合成後・音声muxの前に全尺へ一律適用。プレビュー側は
+        # PreviewPlayer の同名トグルが同じ見た目を近似する(完全一致は書き出しのみ)。
+        if grade is None:
+            try:
+                from app.services import settings_store as _S2
+                grade = str(_S2.get("RENDER_GRADE", "film"))
+            except Exception:
+                grade = "film"
+        chain = _GRADE_CHAINS.get(grade or "")
+        if chain:
+            graded = tmp_root / "graded.mp4"
+            await _grade_pass(
+                video_only, graded, chain,
+                progress_cb=lambda p: progress_cb(0.78 + 0.05 * p) if progress_cb else None)
+            video_only = graded
+            _lg.getLogger(__name__).info(f"grade pass applied: {grade}")
+
         if progress_cb:
-            progress_cb(0.78)
+            progress_cb(0.83)
 
         # ── Audio segments ────────────────────────────────────────────────────
         audio_segs: list[Path] = []

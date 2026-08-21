@@ -22,7 +22,7 @@ export function MobileNotice() {
   if (!show) return null
   return (
     <div
-      className="fixed inset-x-0 top-0 z-[60] bg-purple-900/95 text-purple-50 text-xs px-3 py-2 flex items-center gap-2 shadow"
+      className="safe-top-pad fixed inset-x-0 top-0 z-[60] bg-purple-900/95 text-purple-50 text-xs px-3 py-2 flex items-center gap-2 shadow"
       style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}
     >
       <span className="flex-1">

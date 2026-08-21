@@ -28,8 +28,10 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
 
   // タイムライン合成カーブ（フレーム単位）
   const timeline = useMemo(() => {
-    if (!clips.length) return new Float32Array(0)
-    const total = Math.max(...clips.map(c => c.start_frame + c.duration_frames))
+    // 映像がまだ無くてもビートは見せる(カット割り前に音だけ置いた状態でも使えるように)
+    const lastBeat = beatFrames.length ? beatFrames[beatFrames.length - 1] : 0
+    if (!clips.length && !lastBeat) return new Float32Array(0)
+    const total = Math.max(lastBeat, ...clips.map(c => c.start_frame + c.duration_frames))
     const tl = new Float32Array(total + 1)
     const sorted = [...clips].sort((a, b) => a.start_frame - b.start_frame)
     sorted.forEach((c, i) => {
@@ -50,7 +52,7 @@ export function RhythmLane({ clips, beatFrames, pixelsPerFrame, totalWidth, proj
       if (c.start_frame <= total) tl[c.start_frame] = Math.max(tl[c.start_frame], spike)
     })
     return tl
-  }, [clips, curves, projectFps])
+  }, [clips, curves, projectFps, beatFrames])
 
   // ビート判定しきい値（スコアラーと同じ60パーセンタイル）
   const threshold = useMemo(() => {

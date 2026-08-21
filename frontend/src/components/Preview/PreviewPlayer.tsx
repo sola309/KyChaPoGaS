@@ -145,6 +145,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // 直前に確定した動画フレームのキャッシュ。シーク中(readyState低下)に黒フレームを
   // 出さず、前のフレームを描き続けるために使う(シーク完了ごとに更新)。
   const videoCacheRef = useRef<{ canvas: HTMLCanvasElement | null; assetId: number | null }>({ canvas: null, assetId: null })
+  // 境界フリーズ: 主<video>が次クリップを読み込む間、最後に完成した合成フレーム全体で
+  // 画面を固める。レイヤー単位の穴埋め(直前クリップのキャッシュ等)は「別の位置の絵」が
+  // 一瞬混ざる事故を起こすため、フレーム全体を凍らせるのが唯一安全。
+  const lastGoodRef = useRef<{ canvas: HTMLCanvasElement | null } >({ canvas: null })
+  const frozeRef = useRef(false)          // 直近のdrawがフリーズ経路だったか(保存の抑止)
 
   // 比較表示中か(映像トラックのどれかに配置指定がある)。ONの間だけレイヤーごとに
   // <video>を用意する — 常時やるとデコード本数が増えて重くなるため。
@@ -163,6 +168,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const holdCacheRef = useRef<{ clipId: number | null; slot: number; canvas: HTMLCanvasElement | null }>({ clipId: null, slot: -1, canvas: null })
   const [box, setBox] = useState({ w: 0, h: 0 })   // fitted project-frame box (px)
   const [guideMode, setGuideMode] = useState<'off' | 'thirds' | 'safe'>('off')
+  // 撮影パス(共通グレード)のプレビュー近似。書き出しの _GRADE_CHAINS "film"
+  // (前ぼかし→黒締め→弱ビネット→グレイン)をCSSで模す。完全一致は書き出しのみだが、
+  // 「グレード無しの絵で合否判定してしまう」ズレを消すため既定ON。
+  const [gradeOn, setGradeOn] = useState(() => localStorage.getItem('kychapogas:grade') !== 'off')
+  useEffect(() => { localStorage.setItem('kychapogas:grade', gradeOn ? 'film' : 'off') }, [gradeOn])
   const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
   // 🎞プレビズ: ベース映像の代わりに、カットごとの previz 設定(移動/フラッシュ/暗転)を
   // 手続きノイズで描く。絵柄が無くても動きのリズムを試行錯誤するためのモード。
@@ -203,8 +213,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       .sort((a, b) => a.order - b.order)
       .filter(t => t.track_type === 'video' && !t.hidden)
     for (const t of vTracks) {
+      // asset_id が null の「空枠」(scenes-sync が敷くカット台座)は飛ばす。
+      // ここで空枠を拾うと主<video>が解放され、後ろのトラックの実素材が
+      // 再生されなくなる。空枠は描画上も存在しない扱いが正しい。
       const hit = clips
-        .filter(c => c.track_id === t.id)
+        .filter(c => c.track_id === t.id && c.asset_id != null)
         .find(c => c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
       if (hit) return hit
     }
@@ -1066,13 +1079,50 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     ctx.setTransform(s, 0, 0, s, 0, 0)                 // draw in projW×projH space
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
+    // ── 境界フリーズ判定 ──────────────────────────────────────────
+    // 主動画が担当するクリップがこのフレームを覆っているのに、<video>がまだ
+    // その素材を表示できる状態でない(読み込み/シーク中)なら、部分的に合成せず
+    // 最後の完成フレームをそのまま出す。部分合成は「読み込めたレイヤーだけが
+    // 描かれ、下のピンや別位置のキャッシュが覗く」フラッシュの温床になる。
+    {
+      const vv = videoRef.current
+      const needVideo = activeClip && activeClip.asset_id != null && (() => {
+        const a = assets.find(x => x.id === activeClip.asset_id)
+        return !!a && !(a.asset_type === 'image' || (a.asset_type === 'generated' && a.duration_sec == null))
+      })()
+      const videoReady = !!vv && loadedAssetId === activeClip?.asset_id
+        && vv.readyState >= 2 && !vv.seeking
+      if (!compareMode && !diffMode && !previzMode && needVideo && !videoReady) {
+        const lg = lastGoodRef.current.canvas
+        if (lg && lg.width) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0)
+          ctx.drawImage(lg, 0, 0, cv.width, cv.height)
+        }
+        frozeRef.current = true
+        return                       // 黒のまま(初回)か、直前の完成フレームで固定
+      }
+      frozeRef.current = false
+    }
     // 🎬 カット割り背景: Imageトラックのピン(時刻順2個ペア=カット)の現在カット
     // 開始画像を最背面に敷く。プレースホルダの色がプレビューに出るため、
-    // 音とカット割りの一致を再生しながら確認できる。実素材レイヤーがあれば隠れる。
+    // 音とカット割りの一致を再生しながら確認できる。
+    //
+    // ⚠ 「実素材レイヤーがあれば隠れる」前提は再生中に破れる。クリップ境界で
+    //    <video>が次の素材を読み込む数フレームは上のレイヤーが何も描けず、
+    //    このピン背景が一瞬露出してフラッシュに見える(コマ送りでは読み込みが
+    //    追いつくので起きない。スマホは読み込みが遅いぶん顕著)。
+    //    素材クリップがこのフレームを覆っているなら、読み込み中でもピンは
+    //    描かない — 覆っているのに下が見えるのはレイヤー順として誤りだから。
     {
       const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
+      const covered = clips.some(c => {
+        if (c.asset_id == null) return false
+        const tr = tracks.find(t => t.id === c.track_id)
+        if (!tr || tr.track_type !== 'video' || tr.hidden) return false
+        return c.start_frame <= currentFrame && currentFrame < c.start_frame + c.duration_frames
+      })
       // 比較表示中は敷かない(左右のパネルの後ろに透けて比較の邪魔になる)
-      if (imgTrack && !compareMode) {
+      if (imgTrack && !compareMode && !covered) {
         const pins = clips
           .filter(c => c.track_id === imgTrack.id && c.asset_id != null)
           .sort((a, b) => a.start_frame - b.start_frame)
@@ -1320,7 +1370,22 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     pctx.drawImage(tmp, 0, 0)
   }
 
-  useEffect(() => { drawComposite() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview, diffMode, refSel, previzMode, beatsMap])
+  // 完成フレームの保存(境界フリーズ用)。通常表示で最後まで合成できたフレームだけを
+  // 残す。差分/比較/プレビズ/ピン全画面は合成結果が特殊なので保存しない。
+  const snapshotGood = () => {
+    const cv = compRef.current
+    if (!cv || !cv.width) return
+    if (diffMode || compareMode || previzMode || refSel.length > 0) return
+    if (frozeRef.current) return    // フリーズ描画は「完成フレーム」ではない
+    const lg = lastGoodRef.current
+    if (!lg.canvas) lg.canvas = document.createElement('canvas')
+    if (lg.canvas.width !== cv.width || lg.canvas.height !== cv.height) {
+      lg.canvas.width = cv.width; lg.canvas.height = cv.height
+    }
+    lg.canvas.getContext('2d')?.drawImage(cv, 0, 0)
+  }
+
+  useEffect(() => { drawComposite(); snapshotGood() }, [currentFrame, clips, tracks, assets, loadedAssetId, projW, projH, redraw, previewHidden, lightPreview, diffMode, refSel, previzMode, beatsMap])
 
   // Measure the fitted project-frame box (object-contain) for the frame guides
   useEffect(() => {
@@ -1444,7 +1509,27 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
 
         {/* WYSIWYG compositor: all video tracks composited at the playhead
             (transforms / opacity / blend / text) so the timeline is what-you-see. */}
-        <canvas ref={compRef} className="max-w-full max-h-full object-contain" />
+        <canvas ref={compRef} className="max-w-full max-h-full object-contain"
+                style={gradeOn ? {
+                  // 撮影パス近似: gblur0.35→blur / 黒締め→contrast+brightness
+                  filter: 'blur(0.35px) contrast(1.035) brightness(0.985)',
+                } : undefined} />
+        {/* 撮影パス近似の残り2段: 弱ビネット + 静的グレイン(SVG feTurbulence)。
+            書き出しのグレインは時間変化するが、プレビューは負荷を避け100%静止。 */}
+        {gradeOn && box.w > 1 && (
+          <div className="absolute pointer-events-none"
+               style={{
+                 width: box.w, height: box.h, left: '50%', top: '50%',
+                 transform: 'translate(-50%, -50%)',
+                 background: 'radial-gradient(ellipse 105% 105% at 50% 50%, transparent 62%, rgba(0,0,0,0.22) 100%)',
+               }}>
+            <div className="absolute inset-0"
+                 style={{
+                   opacity: 0.05, mixBlendMode: 'overlay',
+                   backgroundImage: `url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='309'/></filter><rect width='128' height='128' filter='url(%23n)'/></svg>")`,
+                 }} />
+          </div>
+        )}
 
 
         {/* Project frame boundary + design guides (overlaid on the fitted frame) */}
@@ -1578,6 +1663,14 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
           title="🎞プレビズ: ベース映像をノイズ表現に置き換え、カットごとの移動/フラッシュ/暗転設定(カット割りを右クリック)を確かめる"
         >🎞</button>
+
+        <button
+          onClick={() => setGradeOn(v => !v)}
+          className={`text-[10px] px-2 py-0.5 rounded ${gradeOn
+            ? 'bg-violet-800 hover:bg-violet-700 text-violet-100'
+            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          title="撮影(共通グレード): 書き出し時の統一処理(黒締め/ビネット/グレイン)をプレビューでも近似表示。OFFは素の絵"
+        >🎛 {gradeOn ? '撮影' : '素'}</button>
 
         <button
           onClick={cycleGuide}

@@ -150,6 +150,10 @@ export const tracksApi = {
   update: (id: number, data: { name?: string; order?: number; hidden?: boolean; layout_json?: string }) =>
     api.patch<Track>(`/tracks/${id}`, null, { params: data }).then(r => r.data),
   delete: (id: number) => api.delete(`/tracks/${id}`),
+  /** Scenes枠をカット割りへ同期(空カットへ枠を敷き、ピン移動に追従させる) */
+  scenesSync: (projectId: number) =>
+    api.post<{ cuts: number; moved: number; bound: number; created: number }>(
+      '/tracks/scenes-sync', null, { params: { project_id: projectId } }).then(r => r.data),
   /** 比較表示: 2つの映像トラックを画面の左右に並べる(enable=false で全画面に戻す) */
   compareLayout: (projectId: number, enable: boolean, leftId?: number, rightId?: number) =>
     api.post('/tracks/compare-layout', null, {
@@ -387,11 +391,63 @@ export interface MotionCurve {
   frame_count: number
 }
 
+/** 移動量バジェット — 曲から出した「どれくらい画が動くべきか」。
+ *  move_pct は画面幅に対する%(1カットの尺いっぱいで動かす前提の総量)。
+ *  sustain/punch/grain は曲内のパーセンタイル順位(0-1)。 */
+export interface AudioMotion {
+  fps: number
+  /** 何フレームごとに1点か(送信量削減のための間引き)。配列添字 = frame / decim */
+  decim: number
+  frames: number
+  duration_sec: number
+  move_pct: number[]
+  sustain: number[]
+  punch: number[]
+  grain: number[]
+  /** 打撃の離散点(HPSSで打楽器を分離してオンセット検出)。t=秒, v=強さ0-1 */
+  hits?: { t: number; v: number }[]
+  /** 歌唱の濃さ(芝居の密度) 0-1。ステムがある場合のみ */
+  voice?: number[]
+  base_max_pct: number
+  structure_applied?: boolean
+}
+
+/** ドラム個別打点(ADTOF 5クラス)。t=秒, v=強さ0-1 */
+export interface AudioDrums {
+  fps: number
+  engine: string
+  classes: {
+    kick?: { t: number; v: number }[]
+    snare?: { t: number; v: number }[]
+    tom?: { t: number; v: number }[]
+    hihat?: { t: number; v: number }[]
+    cymbal?: { t: number; v: number }[]
+  }
+}
+
+/** 楽曲構造 — 区間ラベルと「サビ前の盛り上げ」 */
+export interface AudioStructure {
+  /** 'allin1' のときは副(参考)。未設定なら主(自作) */
+  engine?: string
+  /** 副のみ: allin1が返すBPM。この曲では倍テンポを誤り(103 vs 実測214.29)なので使わない */
+  bpm?: number | null
+  bar_count: number
+  sections: { label: string; start_sec: number; end_sec: number; bars: number
+              raw_label?: string
+              energy?: number; vocal?: number; repeat?: number }[]
+  buildups: { start_sec: number; end_sec: number; target: string
+              slope: number; break: number; kind: '抜き' | '上昇' | '平坦' }[]
+  has_vocal_stem: boolean
+  has_inst_stem: boolean
+}
+
 export interface AnalysisResult {
   id: number
   asset_id: number
   analysis_type: 'audio_beats' | 'scene_changes' | 'motion' | 'motion_curve'
-  result: BeatAnalysis | SceneAnalysis | MotionAnalysis
+    | 'audio_motion' | 'audio_structure' | 'audio_structure_alt'
+    | 'audio_structure_override' | 'audio_drums'
+  result: BeatAnalysis | SceneAnalysis | MotionAnalysis | AudioMotion | AudioStructure | AudioDrums
   created_at: string
 }
 
@@ -418,6 +474,12 @@ export interface BeatMatchResult {
 }
 
 export const analysisApi = {
+  /** 盛り上げ判定などの手動上書き。解析を再実行しても消えない別種別で保存される */
+  putOverride: (assetId: number, kind: string, body: unknown) =>
+    api.put(`/analysis/${assetId}/override/${kind}`, body).then(r => r.data),
+  clearOverride: (assetId: number, kind: string) =>
+    api.delete(`/analysis/${assetId}/override/${kind}`).then(r => r.data),
+
   triggerAudio:  (assetId: number) =>
     api.post<{ job_id: number; status: string }>(`/analysis/audio/${assetId}`).then(r => r.data),
   triggerVideo:  (assetId: number) =>

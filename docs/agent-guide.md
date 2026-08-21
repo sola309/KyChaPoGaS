@@ -56,6 +56,29 @@ generate_audio {prompt: <英語caption>, lyrics: <構造タグ付き歌詞>, dur
 # 歌詞の譜割りは POST /api/music/lyrics/check (mora linter) で事前検査可能
 ```
 
+### P4.5: MiniMax H3 で映像生成（最重要・落とし穴が多い）
+
+```
+create_generation_job {job_type: generate_video_i2v, model: minimax-h3-ref,
+                       keyframes: [{asset_id}...≤9], ref_audio_asset_ids, ref_video_asset_ids,
+                       width: 1344, height: 768, steps: 25, scheduler: beta}
+```
+
+**書く前に必ず `docs/h3-official-sources.md`（公式資料インデックス）で該当ガイドを読み直し、`docs/h3-prompt-writing.md`（実測知見）を確認すること。記憶で書くと外す。**要点だけ再掲:
+
+1. **音声は映像のタイミングを駆動しない**（公式明記）。音ハメは
+   `analyze_audio` → 拍時刻を**プロンプトに数値で書く**のが正攻法。実測誤差 0.4〜1.1 フレーム。
+2. **retention マーカー**: 「同じキャラのまま構図だけ自由」は `partially_preserved`。
+   `attribute_transfer` は**別人への付け替え**の意味なので誤用しない。
+   参照の役割を `subject definition only, not a target frame` と書けば構図は自由になる。
+3. **否定文は逆効果**（negative prompt が無いため）。排除したいものは
+   「代わりに何があるか」を肯定形で書く。
+4. **尺は 17n+5 かつ下限 124 フレーム**。5.17秒未満のカットは作れない。
+5. カメラは `Pull Out` 等の固定語彙 + `large/small amplitude` + `slow/fast speed`。
+   ただし時間配分は語彙では直らない。**「その時刻に何が見えるか」**で書く。
+6. `place.auto=false` は「配置せずテイク蓄積」。配置したいなら false にしない。
+7. ⚠ **生成中に backend/ を編集しない**（uvicorn --reload でジョブが死ぬ）。
+
 ### P5: タイムライン編集
 ```
 analyze_audio {asset_id}          # まずBPM/ビート検出

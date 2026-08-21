@@ -69,6 +69,25 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
+/* ── Safe Area (iPhoneノッチ/Dynamic Island/ホームインジケータ) ──────────────
+ * モーダル類は createPortal(document.body) で .app-root の外に出るため、
+ * .app-root のパディングでは守れない。全画面オーバーレイ(.fixed.inset-0)へ
+ * 一括で env() インセットを与える。
+ * ノッチの無い環境(desktop/Android平面/通常Safari縦)では env()=0 だが、
+ * 既存の p-2/p-3 を 0 で上書きしないよう、実測で inset>0 のときだけ
+ * <html class="has-notch"> を付けて発動させる(main.tsxで判定)。
+ * max(env, 12px) により横向きでノッチが側面へ移った際も上下に最低限の
+ * 余白が残り、閉じるボタンは常にタップ可能領域に入る。 */
+html.has-notch .fixed.inset-0 {
+  padding-top:    max(env(safe-area-inset-top),    12px);
+  padding-bottom: max(env(safe-area-inset-bottom), 12px);
+  padding-left:   max(env(safe-area-inset-left),   12px);
+  padding-right:  max(env(safe-area-inset-right),  12px);
+}
+/* 端に貼り付くバー/ピル用ユーティリティ(該当コンポーネントに付与) */
+.safe-top-pad    { padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem); }
+.safe-bottom-mgn { margin-bottom: env(safe-area-inset-bottom, 0px); }
+
 /* Smooth, momentum scrolling for the timeline / panels on touch */
 .overflow-auto, .overflow-y-auto, .overflow-x-auto {
   -webkit-overflow-scrolling: touch;

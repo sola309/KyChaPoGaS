@@ -55,6 +55,10 @@ export function useAutoPlaceGenerated(
           try {
             const asset = await assetsApi.get(aid)
             onAsset(asset)
+            // 静止画はライブラリ追加のみ(タイムラインへ置かない)。
+            // 絵コンテ量産で数十枚がScenesに積まれて散らかった実害への対処。
+            // 動画・音楽は従来どおり末尾に自動配置する。
+            if (job.job_type === 'generate_image') continue
             // place指定つきの生成(カット位置へのサーバ側自動配置/テイク蓄積)は
             // ここでの「タイムライン末尾に追加」を行わない — 二重配置の原因だった。
             try {

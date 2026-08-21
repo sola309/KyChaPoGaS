@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset, Clip, Track } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { CastPanel } from '../CastPanel'
+import { StoryboardPopover } from './StoryboardPopover'
+import { EMPTY_BOARD, type Storyboard } from './storyboard'
 
 /**
  * 🏞 シーンレーン — カット割りの上位レイヤー。「同じ場所/空間」を共有するカット群を
@@ -25,6 +27,7 @@ export interface SceneInfo {
   color: string
   plates: number[]      // ロケーションプレート(環境参照画像のアセットID)
   notes?: string        // シーンの意図・参照動画・空間設定などの議論メモ(Claudeが読み書きする)
+  board?: Storyboard    // 📋 絵コンテ(本文/参照アセット/演出ピン)。Claudeがプロンプトへ起こす
 }
 
 export const sceneOfPin = (pin: Clip | undefined): SceneInfo | null => {
@@ -90,12 +93,31 @@ interface Props {
 
 export function SceneLane({ tracks, clips, assets, pixelsPerFrame, totalWidth }: Props) {
   const updateClip = useTimelineStore(s => s.updateClip)
+  const projectFps = useTimelineStore(s => s.projectFps)
+  const currentFrame = useTimelineStore(s => s.currentFrame)
   const [editCut, setEditCut] = useState<number | null>(null)   // 編集中カットのstart frame
   const [nameDraft, setNameDraft] = useState('')
   const [msg, setMsg] = useState('')
   const [castOpen, setCastOpen] = useState(false)
 
   const cuts = useMemo(() => deriveCutsWithScene(tracks, clips, assets), [tracks, clips, assets])
+  // ツールバー等レーン外からも開けるようにする(スマホはレーン内のボタンが小さすぎて押せない)
+  const cutsRef = useRef(cuts); cutsRef.current = cuts
+  const frameRef = useRef(0); frameRef.current = currentFrame
+  useEffect(() => {
+    const onOpen = () => {
+      const cs = cutsRef.current
+      const here = cs.find(c => c.s <= frameRef.current && frameRef.current <= c.e) ?? cs.find(c => c.scene)
+      if (here?.scene) setBoardScene(here.scene.id)
+      else setMsg('再生ヘッドの位置にシーンがありません')
+    }
+    window.addEventListener('kychapogas:open-board', onOpen)
+    return () => window.removeEventListener('kychapogas:open-board', onOpen)
+  }, [])
+  const [boardScene, setBoardScene] = useState<string | null>(null)
+  const boardPress = useRef<number | null>(null)        // タッチ長押しのタイマー
+  const boardLongPressed = useRef(false)               // 長押し成立フラグ(直後のclickを捨てる)   // 📋 絵コンテを開くシーンID
+
   const scenes = useMemo(() => {
     const m = new Map<string, SceneInfo>()
     for (const c of cuts) if (c.scene) m.set(c.scene.id, c.scene)
@@ -140,16 +162,51 @@ export function SceneLane({ tracks, clips, assets, pixelsPerFrame, totalWidth }:
     <div className="flex flex-shrink-0 border-b border-zinc-800/70" style={{ height: 20 }}>
       {/* 左ヘッダ列 — 他レーン(CutLane等)と同じ w-28 + sticky で桁を揃える */}
       <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex items-center gap-1 px-2 sticky left-0 z-30">
-        <span className="text-[9px] text-zinc-500">🏞 シーン {scenes.length}</span>
+        <span className="text-[9px] text-zinc-500">🏞 {scenes.length}</span>
+        {/* スマホ用の確実な入口: 再生ヘッド位置のシーンの絵コンテを開く
+            (シーンブロックは高さ14pxで指では狙いにくい) */}
+        <button onClick={() => {
+                  const here = cuts.find(c => c.s <= currentFrame && currentFrame <= c.e) ?? cuts.find(c => c.scene)
+                  if (here?.scene) setBoardScene(here.scene.id)
+                  else setMsg('再生ヘッドの位置にシーンがありません')
+                }}
+                title="📋 絵コンテ(再生ヘッド位置のシーン) — シーンを右クリック/長押しでも開けます"
+                className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-100">📋</button>
         <button onClick={() => setCastOpen(true)} title="📖 キャスト名簿(キャラ定義と参照画像 — 共通/プロジェクト別)"
-                className="ml-auto text-[10px] text-zinc-600 hover:text-zinc-200">📖</button>
+                className="text-[10px] text-zinc-600 hover:text-zinc-200">📖</button>
       </div>
       <div className="relative flex-shrink-0 bg-zinc-950/60" style={{ width: totalWidth }}>
       {cuts.map(c => {
         const w = Math.max(2, (c.e - c.s + 1) * pixelsPerFrame)
         return (
           <button key={c.s}
-                  onClick={() => { setEditCut(c.s); setNameDraft('') }}
+                  onClick={() => {
+                    // 長押しで絵コンテを開いた直後の click は捨てる(離指で両方開くのを防ぐ)
+                    if (boardLongPressed.current) { boardLongPressed.current = false; return }
+                    setEditCut(c.s); setNameDraft('')
+                  }}
+                  onContextMenu={ev => {
+                    ev.preventDefault()
+                    if (c.scene) setBoardScene(c.scene.id)     // 📋 絵コンテ(右クリック)
+                  }}
+                  onPointerDown={ev => {
+                    // スマホには右クリックが無いので長押しでも開く(CutLaneのプレビズと同じ方式)
+                    if (ev.pointerType !== 'touch' || !c.scene) return
+                    const sid = c.scene.id
+                    const x0 = ev.clientX, y0 = ev.clientY
+                    boardPress.current = window.setTimeout(() => {
+                      boardLongPressed.current = true
+                      setBoardScene(sid)
+                    }, 500)
+                    const cancel = (mv: PointerEvent) => {
+                      if (mv.type === 'pointermove' && Math.hypot(mv.clientX - x0, mv.clientY - y0) < 8) return
+                      if (boardPress.current) { clearTimeout(boardPress.current); boardPress.current = null }
+                      window.removeEventListener('pointermove', cancel)
+                      window.removeEventListener('pointerup', cancel)
+                    }
+                    window.addEventListener('pointermove', cancel)
+                    window.addEventListener('pointerup', cancel)
+                  }}
                   title={`C${c.idx}` + (c.scene ? ` / シーン: ${c.scene.name || '未定義'}(プレート${c.scene.plates.length})` : ' / シーン未設定')
                          + (c.intent ? `\n🎯 ${c.intent}` : '\n🎯 意図メモなし — クリックで記入')
                          + (c.reading ? `\n🎬 ${c.reading}` : '\n🎬 参照カットの解釈まだ')}
@@ -179,6 +236,27 @@ export function SceneLane({ tracks, clips, assets, pixelsPerFrame, totalWidth }:
       })}
 
       {castOpen && projectId != null && <CastPanel projectId={projectId} onClose={() => setCastOpen(false)} />}
+
+      {/* 📋 絵コンテ — シーンを右クリックで開く。保存はシーン情報(scene.board)へ */}
+      {boardScene && (() => {
+        const sc = scenes.find(x => x.id === boardScene)
+        if (!sc) return null
+        const mine = cuts.filter(c => c.scene?.id === boardScene)
+        if (!mine.length) return null
+        const range = { s: Math.min(...mine.map(c => c.s)), e: Math.max(...mine.map(c => c.e)) }
+        return (
+          <StoryboardPopover
+            projectId={projectId ?? undefined}
+            sceneName={sc.name || `シーン${sceneSeq.get(sc.id) ?? '?'}`}
+            sceneRange={range}
+            board={sc.board ?? EMPTY_BOARD}
+            assets={assets}
+            fps={projectFps}
+            onChange={bd => void updateSceneEverywhere({ ...sc, board: bd })}
+            onClose={() => setBoardScene(null)}
+          />
+        )
+      })()}
       {editing && createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60"
              onClick={() => { setEditCut(null); setMsg('') }}>

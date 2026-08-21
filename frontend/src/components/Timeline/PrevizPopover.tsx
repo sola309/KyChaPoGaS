@@ -150,8 +150,12 @@ export function PrevizPopover({ cutIndex, pinClipId, fps, cutFrames, cutStartFra
       const master = entries[0]
       let raf = 0
       const tick = () => {
+        // 表示フレームは四捨五入。切り捨てだと常に平均0.5フレーム遅れて見え、
+        // 実測でも最大1.16フレーム(48ms)の遅れになっていた。
+        // HTMLAudioElement.currentTime はバッファ更新の粒度で階段状に返るため、
+        // 端数を捨てるとその階段がそのまま遅れとして残る。
         const F = master.el.currentTime * fps + master.c.start_frame - master.c.asset_in_frame
-        let r = Math.floor(F - cutStartFrame)
+        let r = Math.round(F - cutStartFrame)
         if (r >= cutFrames || master.el.ended) { seekAll(0); r = 0 }
         if (r >= 0) {
           renderRef.current(r)

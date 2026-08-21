@@ -422,6 +422,7 @@ async def _render_final(job: Job, params: dict) -> None:
         fps=fps, width=width, height=height,
         progress_cb=progress_cb,
         encoder=params.get("encoder"),
+        grade=params.get("grade"),   # None=設定既定(film) / "off"で無効化
     )
 
 
@@ -462,6 +463,7 @@ async def _precompose(job: Job, params: dict) -> None:
         fps=fps, width=width, height=height,
         progress_cb=progress_cb,
         encoder=params.get("encoder"),
+        grade="off",   # 素材化される出力: 最終レンダでも掛かるため二重掛けを防ぐ
     )
     asset_id = _register_asset(project_id, output, "generated", params)
     _update_result_assets(job.id, [asset_id])
@@ -491,6 +493,43 @@ def _fit_speed(session: Session, asset_id: int, duration_frames: int, project_fp
     speed = min(speed, 3.0)
     # 等倍付近は触らない(誤差で微妙な速度がつくのを避ける)
     return round(speed, 3) if speed > 1.02 else 1.0
+
+
+def _clamp_to_cut(session, project_id, start: int, dur: int) -> int:
+    """配置尺をカット境界で切る。
+
+    カット境界は Image(reference) トラックのピン列(2本1組)から導出する。
+    戻り値は「startから始めて完全にカバーできる最後のカット終端」までの尺。
+    ピンが無い/導出できない場合は元の尺のまま返す(切りすぎ事故を避ける)。
+    """
+    try:
+        if not project_id:
+            return dur
+        img = session.exec(
+            select(Track).where(Track.project_id == int(project_id),
+                                Track.track_type == "reference",
+                                Track.name == "Image")
+        ).first()
+        if not img:
+            return dur
+        pins = session.exec(
+            select(Clip).where(Clip.track_id == img.id, Clip.asset_id.is_not(None))
+            .order_by(Clip.start_frame)
+        ).all()
+        ends = [pins[i + 1].start_frame for i in range(0, len(pins) - 1, 2)]
+        best = None
+        for e in ends:
+            if e >= start and (e - start + 1) <= dur:
+                best = e
+        if best is None:
+            return dur
+        want = best - start + 1
+        if want < dur:
+            log.info(f"place: カット境界でクリップ {dur}f → {want}f (末尾{dur - want}fトリム)")
+        return want
+    except Exception as e:
+        log.warning(f"place: カット境界クリップに失敗、元の尺のまま配置: {e}")
+        return dur
 
 
 def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> None:
@@ -533,10 +572,31 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
             log.info("配置先に🔒ロック済みクリップ → 自動配置スキップ(テイク蓄積)")
             return
         dur = int(place.get("duration_frames", fallback_duration))
+        start = int(place.get("start_frame", 0))
+        # ── 空枠への充填 ──────────────────────────────────────────────
+        # scenes-sync が全カットに枠(asset_id=None)を敷く運用。配置先に空枠が
+        # あるなら asset を差し替えるだけにする。位置と尺は枠(=ピン束縛)が正で、
+        # 生成側の尺で上書きしない — これで「はみ出し」も「短いまま」も起きない。
+        slot = next((c for c in session.exec(
+            select(Clip).where(Clip.track_id == int(place["track_id"]),
+                               Clip.start_frame == start)).all()
+            if c.asset_id is None and not c.locked), None)
+        if slot is not None:
+            slot.asset_id = asset_id
+            session.add(slot)
+            session.commit()
+            log.info(f"placed asset {asset_id} into empty slot clip {slot.id} @ {start}")
+            return
+        # ── カット境界へのクリッピング ────────────────────────────────
+        # H3の尺スナップ(17n+5)でカット尺より長く生成されるため、そのまま置くと
+        # 末尾が次のカットへはみ出す(実測: 全長で14クリップがはみ出していた)。
+        # 「完全にカバーできる最後のカット終端」で切る — 複数カットまとめ生成
+        # (C4-C5の222f等)は正当なので、カット1個分に一律で切ってはいけない。
+        dur = _clamp_to_cut(session, params.get("project_id"), start, dur)
         clip = Clip(
             track_id=int(place["track_id"]),
             asset_id=asset_id,
-            start_frame=int(place.get("start_frame", 0)),
+            start_frame=start,
             duration_frames=dur,
         )
         # 再生速度の自動調整は廃止(2026-08-12 ユーザー指示)。
@@ -585,7 +645,14 @@ async def _generate_image(job: Job, params: dict) -> None:
                 if i == 0 and a.width and a.height:
                     first_dims = (a.width, a.height)
                 names.append((await comfyui.upload_image(Path(a.file_path))).get("name", Path(a.file_path).name))
-        if model_id in ("qwen-edit-2511", "qwen-edit-2511-fp8"):
+        if model_id == "minimax-h3-edit":
+            from app.services.workflow_builder import build_minimax_h3_edit
+            workflow = build_minimax_h3_edit(
+                names, prompt,
+                width=int(params.get("width") or 832),
+                height=int(params.get("height") or 1216),
+                seed=seed)
+        elif model_id in ("qwen-edit-2511", "qwen-edit-2511-fp8"):
             workflow = build_qwen_image_edit(
                 names, prompt, seed=seed,
                 use_lightning=bool(params.get("use_lightning", True)),
@@ -1186,6 +1253,22 @@ async def _generate_audio(job: Job, params: dict) -> None:
 
 # ── analyze_audio ─────────────────────────────────────────────────────────────
 
+def _store_analysis(asset_id: int, kind: str, data: dict) -> None:
+    """解析結果のupsert(同じ種別は1アセットに1件)"""
+    from app.models.analysis import AnalysisResult
+    with Session(engine) as session:
+        old = session.exec(
+            select(AnalysisResult)  # type: ignore[arg-type]
+            .where(AnalysisResult.asset_id == asset_id)
+            .where(AnalysisResult.analysis_type == kind)
+        ).first()
+        if old:
+            session.delete(old)
+        session.add(AnalysisResult(asset_id=asset_id, analysis_type=kind,
+                                   result_json=json.dumps(data, ensure_ascii=False)))
+        session.commit()
+
+
 async def _analyze_audio(job: Job, params: dict) -> None:
     from app.services.audio_analyzer import analyze_beats
     from app.models.analysis import AnalysisResult
@@ -1223,281 +1306,184 @@ async def _analyze_audio(job: Job, params: dict) -> None:
 
     log.info(f"Audio analysis done: asset={asset_id} bpm={result['bpm']}")
 
+    # ── ステム(歌唱/伴奏)の自動検出 ────────────────────────────────────
+    # 「<曲名>(歌唱).wav」「<曲名>(伴奏).wav」の命名で同じプロジェクトに置かれる。
+    # ステムがあると駆動力を伴奏だけから取れる(混合はボーカルの低域が乗って濁る)。
+    vocal_path = inst_path = None
+    with Session(engine) as session:
+        from app.models import Asset as _A
+        stem = file_path.stem
+        sibs = session.exec(select(_A).where(_A.project_id == asset.project_id)).all()
+        for a2 in sibs:
+            n = Path(a2.file_path).stem
+            if not n.startswith(stem):
+                continue
+            if "歌唱" in n or "vocal" in n.lower():
+                vocal_path = Path(a2.file_path)
+            elif "伴奏" in n or "inst" in n.lower():
+                inst_path = Path(a2.file_path)
+    if vocal_path or inst_path:
+        log.info(f"stems found: vocal={bool(vocal_path)} inst={bool(inst_path)}")
 
-# ── analyze_video ─────────────────────────────────────────────────────────────
+    # ── 楽曲構造(区間ラベル + サビ前の盛り上げ) ────────────────────────
+    structure = None
+    try:
+        from app.services.audio_analyzer import analyze_song_structure
+        _update_progress(job.id, 0.91)
+        structure = await asyncio.get_event_loop().run_in_executor(
+            None, analyze_song_structure, file_path, vocal_path, inst_path,
+            result["downbeats"])
+        _store_analysis(asset_id, "audio_structure", structure)
+        log.info(f"Structure done: {len(structure['sections'])} sections")
+    except Exception as e:
+        log.warning(f"Structure failed: {e}")
 
-async def _analyze_video(job: Job, params: dict) -> None:
-    from app.services.video_analyzer import analyze_scenes, analyze_motion, analyze_motion_curve
-    from app.models.analysis import AnalysisResult
+    # ── 移動量バジェット(帯域別エネルギー→推奨移動量) ─────────────────────
+    # 拍解析と同じ素材から続けて出す。失敗しても拍解析は残す(こちらは補助情報)。
+    try:
+        from app.services.audio_analyzer import analyze_motion_budget
+        _update_progress(job.id, 0.93)
+        mb = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: analyze_motion_budget(
+                file_path, structure=structure,
+                inst_path=inst_path, vocal_path=vocal_path)
+        )
+        _store_analysis(asset_id, "audio_motion", mb)
+        log.info(f"Motion budget done: asset={asset_id} frames={mb['frames']}")
+    except Exception as e:
+        log.warning(f"Motion budget failed (beats kept): {e}")
+
+    # ── 楽曲構造(副): allin1 ──────────────────────────────────────────
+    # 主(自作)と併記して人が判断する。重い(CPUで約2.5分)ので最後に回す。
+    try:
+        from app.services.audio_analyzer import analyze_structure_allin1
+        _update_progress(job.id, 0.94)
+        a1 = await asyncio.get_event_loop().run_in_executor(
+            None, analyze_structure_allin1, file_path)
+        log.info(f"allin1 structure done: {len(a1['sections'])} sections")
+        # 境界はallin1、盛り上げ判定は自作 —— 統合して主(audio_structure)にする。
+        # 移動量バジェットはこの主を見るので、精度の高い境界がそのまま効く。
+        #
+        # 副(audio_structure_alt)には **自作** を入れる。ここにallin1を入れると
+        # 主と同一内容になり、副の行がただの重複表示になってしまう(実測で確認)。
+        # 副の役割は「主とどこが違うか」を見せることなので、比較対象は自作側。
+        if structure:
+            from app.services.audio_analyzer import merge_structures
+            merged = merge_structures(structure, a1, result["downbeats"])
+            _store_analysis(asset_id, "audio_structure_alt", structure)   # 自作=比較用
+            _store_analysis(asset_id, "audio_structure", merged)          # 統合=主
+            structure = merged
+            log.info(f"structure merged: {len(merged['sections'])} sections, "
+                     f"{len(merged['buildups'])} buildups")
+        else:
+            _store_analysis(asset_id, "audio_structure", a1)
+    except Exception as e:
+        log.warning(f"allin1 structure failed (主は残る): {e}")
+
+    # ── ドラム個別打点(5クラス) ───────────────────────────────────────
+    # 伴奏ステムがあればそちらを使う(歌が混ざると誤検出が増える)。
+    try:
+        from app.services.audio_analyzer import analyze_drums
+        _update_progress(job.id, 0.96)
+        src = inst_path or file_path
+        dr = await asyncio.get_event_loop().run_in_executor(None, analyze_drums, src)
+        _store_analysis(asset_id, "audio_drums", dr)
+        log.info("Drums done: " + " ".join(
+            f"{k}={len(v)}" for k, v in dr.get("classes", {}).items()))
+    except Exception as e:
+        log.warning(f"Drum transcription failed: {e}")
+
+
+# ── アセット登録 ──────────────────────────────────────────────────────────────
+
+def _register_asset(project_id: int, file_path: Path, source: str, gen_params: dict) -> int:
+    """Register a generated file as an Asset in the DB. Returns asset_id."""
+    from app.services.media_info import probe
+    from app.services.thumbnail import generate_video_thumbnail, generate_image_thumbnail
+
+    info = probe(file_path)
+    slim = dict(gen_params or {})   # keyframes含む全パラメータ(再生成に使う)
+    asset = Asset(
+        project_id=project_id,
+        name=file_path.name,
+        asset_type="generated",
+        file_path=str(file_path),
+        duration_sec=info.duration_sec,
+        width=info.width,
+        height=info.height,
+        file_size_bytes=info.file_size_bytes,
+        gen_params_json=json.dumps(slim, ensure_ascii=False),
+    )
+
+    with Session(engine) as session:
+        session.add(asset)
+        session.commit()
+        session.refresh(asset)
+        asset_id = asset.id
+
+    # Generate thumbnail in background (sync but fast enough)
+    try:
+        if info.asset_type == "video":
+            generate_video_thumbnail(file_path, asset_id)
+        elif info.asset_type in ("image", "generated"):
+            generate_image_thumbnail(file_path, asset_id)
+    except Exception as e:
+        log.warning(f"Thumbnail generation failed for asset {asset_id}: {e}")
+
+    return asset_id
+
+
+# ── 復元(2026-08-21) ────────────────────────────────────────────────────────
+# 会話ログに残っていたソースから復元した関数群。
+# 事故: 解析ブロックを追記する際、置換範囲を『指定位置〜ファイル末尾』にしてしまい、
+#       以降の関数定義13個を消した。バックアップもgitも無く、ログから拾い直した。
+
+
+async def _create_proxy(job: Job, params: dict) -> None:
+    import imageio_ffmpeg
+    FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
     asset_id = params["asset_id"]
     with Session(engine) as session:
-        from app.models import Asset
         asset = session.get(Asset, asset_id)
         if not asset:
             raise ValueError(f"Asset {asset_id} not found")
-        file_path = Path(asset.file_path)
-
-    _update_progress(job.id, 0.05)
-
-    scene_result = await asyncio.get_event_loop().run_in_executor(
-        None, analyze_scenes, file_path
-    )
-    _update_progress(job.id, 0.45)
-
-    motion_result = await asyncio.get_event_loop().run_in_executor(
-        None, analyze_motion, file_path
-    )
-    _update_progress(job.id, 0.7)
-
-    curve_result = await asyncio.get_event_loop().run_in_executor(
-        None, analyze_motion_curve, file_path
-    )
-    _update_progress(job.id, 0.95)
-
-    with Session(engine) as session:
-        for atype, result in (
-            ("scene_changes", scene_result),
-            ("motion", motion_result),
-            ("motion_curve", curve_result),
-        ):
-            old = session.exec(
-                select(AnalysisResult)  # type: ignore[arg-type]
-                .where(AnalysisResult.asset_id == asset_id)
-                .where(AnalysisResult.analysis_type == atype)
-            ).first()
-            if old:
-                session.delete(old)
-            session.add(AnalysisResult(
-                asset_id=asset_id,
-                analysis_type=atype,
-                result_json=json.dumps(result),
-            ))
-        session.commit()
-
-    log.info(
-        f"Video analysis done: asset={asset_id} "
-        f"scenes={scene_result['scene_count']}"
-    )
-
-
-# ── render_motion_graphics: HTML/CSS/JS → video clip ──────────────────────────
-
-async def _render_motion_graphics(job: Job, params: dict) -> None:
-    from app.services.motion_graphics import render_html_to_video
-
-    project_id = params["project_id"]
-    # Server-side templates (single source of truth, shared by UI + AI).
-    template = params.get("template")
-    if template == "lyric_motion":
-        from app.services.lyric_motion import build_lyric_motion_html
-        html = build_lyric_motion_html(params.get("style", "pop"))
-    else:
-        html = params.get("html", "")
-    if not html.strip():
-        raise ValueError("html が空です")
-
-    transparent = bool(params.get("transparent", False))
-    dest_dir = GENERATED_DIR / str(project_id)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    out = dest_dir / (f"mg_{job.id}.mov" if transparent else f"mg_{job.id}.mp4")
-
-    # Data-driven MG: expose the project's real beat grid (+ params.lyrics) to
-    # the page as window.kycha, so templates can sync to the actual music.
-    duration_sec = float(params.get("duration_sec", 3.0))
-    offset_sec = float(params.get("offset_sec", 0.0))   # MGをタイムラインのどこに置くか
-    lyrics = params.get("lyrics", "")
-    if not lyrics:
-        # Auto-fetch the song lyrics from the project's most recent music job.
-        try:
-            with Session(engine) as session:
-                audio_jobs = session.exec(
-                    select(Job)
-                    .where(Job.project_id == project_id)
-                    .where(Job.job_type == "generate_audio")
-                    .order_by(Job.id.desc())
-                ).all()
-            for aj in audio_jobs:
-                p = json.loads(aj.params) if isinstance(aj.params, str) else (aj.params or {})
-                if p.get("lyrics"):
-                    lyrics = p["lyrics"]
-                    break
-        except Exception as e:
-            log.warning(f"lyrics autofetch failed: {e}")
-    inject: dict = {
-        "duration": duration_sec, "offset": offset_sec,
-        "fps": float(params.get("fps", 30)),
-        "lyrics": lyrics,
-        "bpm": None, "beats": [], "downbeats": [],
-    }
-    try:
-        from app.services import command_api
-        with Session(engine) as session:
-            grid = command_api.get_beat_grid(project_id, session)
-        if "error" not in grid:
-            from app.models import Project as _P
-            with Session(engine) as session:
-                proj = session.get(_P, project_id)
-            pfps = proj.fps if proj else 30.0
-            # MGローカル秒 (offsetを引いてクリップ内時刻に変換)
-            beats = [round(b["frame"] / pfps - offset_sec, 4) for b in grid["beats"]]
-            downs = [round(f / pfps - offset_sec, 4) for f in grid["downbeat_frames"]]
-            inject.update({
-                "bpm": grid.get("bpm"),
-                "beats": [t for t in beats if -0.05 <= t <= duration_sec + 0.05],
-                "downbeats": [t for t in downs if -0.05 <= t <= duration_sec + 0.05],
-            })
-    except Exception as e:
-        log.warning(f"MG beat injection skipped: {e}")
-
-    await render_html_to_video(
-        html, out,
-        duration_sec=duration_sec,
-        fps=float(params.get("fps", 30)),
-        width=int(params.get("width", 1280)),
-        height=int(params.get("height", 720)),
-        transparent=transparent,
-        inject_data=inject,
-        progress_cb=lambda p: _update_progress(job.id, 0.05 + 0.9 * p),
-    )
-
-    asset_id = _register_asset(project_id, out, "generated", params)
-    _update_result_assets(job.id, [asset_id])
-    _update_progress(job.id, 1.0)
-    log.info(f"Motion graphics done → asset {asset_id}")
-
-
-# ── decompose_character: image → See-Through layers → rigged puppet ───────────
-
-REPO_ROOT      = Path(__file__).parent.parent.parent.parent
-SEE_THROUGH    = REPO_ROOT / "tools" / "see-through"
-PUPPETS_DIR    = Path(__file__).parent.parent.parent / "data" / "puppets"
-
-
-async def _decompose_character(job: Job, params: dict) -> None:
-    """
-    キャラ画像 → See-Through で23パーツ分解(+遮蔽補完) → パペット登録。
-
-    See-Through is a separate, heavy venv (its own torch/models), so we shell out
-    to it rather than importing into the backend process. Output lands in
-    data/puppets/<puppet_id>/ (manifest.json + per-layer PNGs), served by the
-    puppet router and rigged by the companion frontend.
-    """
-    import re
-
-    st_py = SEE_THROUGH / ".venv" / "bin" / "python"
-    if not st_py.exists():
-        raise RuntimeError("See-Through 未導入（tools/see-through/.venv が無い）")
-
-    project_id = params["project_id"]
-    puppet_id = params.get("puppet_id") or f"char_{job.id}"
-    puppet_id = re.sub(r"[^a-zA-Z0-9_-]", "_", puppet_id)
-    name = params.get("name") or puppet_id
-
-    # source image (project asset, or explicit path)
-    if params.get("asset_id"):
-        with Session(engine) as session:
-            asset = session.get(Asset, params["asset_id"])
-            if not asset:
-                raise ValueError(f"Asset {params['asset_id']} not found")
-            src = Path(asset.file_path)
-    else:
-        src = Path(params["image_path"])
+        src = Path(asset.file_path)
+        project_id = asset.project_id
     if not src.exists():
-        raise ValueError(f"画像が見つかりません: {src}")
+        raise ValueError(f"アセットファイルが見つかりません: {src}")
 
-    # stage the input inside See-Through and run the pipeline
-    in_dir = SEE_THROUGH / "input"
-    in_dir.mkdir(exist_ok=True)
-    stem = f"{puppet_id}"
-    staged = in_dir / f"{stem}.png"
-    shutil.copy(src, staged)
-    _update_progress(job.id, 0.05)
+    dest_dir = PROXIES_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"{asset_id}.mp4"
 
-    async def run(cmd: list[str], cwd: Path):
-        proc = await asyncio.create_subprocess_exec(
-            *[str(c) for c in cmd], cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-        )
-        out, _ = await proc.communicate()
-        if proc.returncode != 0:
-            tail = out.decode(errors="replace")[-1500:]
-            raise RuntimeError(f"{cmd[1]} failed:\n{tail}")
-        return out
+    _update_progress(job.id, 0.1)
+    cmd = [
+        FFMPEG, "-y", "-i", str(src),
+        # downscale to max 640px wide (even dims), fast-decoding H.264, web-streamable
+        "-vf", "scale='min(640,iw)':-2",
+        "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "96k",
+        str(out),
+    ]
+    proc = await asyncio.create_subprocess_exec(
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode != 0 or not out.exists():
+        raise RuntimeError(f"プロキシ生成に失敗: {stderr.decode()[-400:]}")
 
-    # 1) layer decomposition → PSD (~9 min on GB10)
-    log.info(f"decompose_character: layerdiff on {staged.name}")
-    await run([st_py, "inference/scripts/inference_psd.py",
-               "--srcp", str(staged), "--save_to_psd"], cwd=SEE_THROUGH)
-    _update_progress(job.id, 0.85)
-
-    out_dir = SEE_THROUGH / "workspace" / "layerdiff_output" / stem
-    psd = SEE_THROUGH / "workspace" / "layerdiff_output" / f"{stem}.psd"
-    if not psd.exists():
-        raise RuntimeError("See-Through 出力PSDが見つかりません")
-
-    # 2) PSD → puppet manifest (build_puppet uses See-Through's psd-tools)
-    log.info("decompose_character: building puppet manifest")
-    await run([st_py, str(REPO_ROOT / "scripts" / "build_puppet.py"),
-               str(out_dir), str(psd), puppet_id, name], cwd=SEE_THROUGH)
-    _update_progress(job.id, 0.95)
-
-    manifest = PUPPETS_DIR / puppet_id / "manifest.json"
-    if not manifest.exists():
-        raise RuntimeError("パペット・マニフェスト生成に失敗")
-
-    # 3) Rig Compiler v2 — canonical z-order, semantic depth, skin/eye/mouth rig
-    # metadata (so any decomposed character gets high-fidelity rigging).
-    log.info("decompose_character: compiling high-fidelity rig (v2)")
-    await run([st_py, str(REPO_ROOT / "scripts" / "rig_compiler.py"),
-               str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
-    _update_progress(job.id, 0.9)
-
-    # 3.5) fast_rig(実験的) — face_mode="fast" 明示時のみ。検証の結果、
-    # テンプレ口差分は品質不足(口パッチが襟に浸食・判押し感)のため既定はsdxl。
-    face_mode = params.get("face_mode", "sdxl")
-    backend_py = REPO_ROOT / "backend" / ".venv" / "bin" / "python"
-    if face_mode == "fast":
-        try:
-            await run([backend_py, str(REPO_ROOT / "scripts" / "fast_rig.py"),
-                       str(PUPPETS_DIR / puppet_id)], cwd=REPO_ROOT)
-        except Exception as e:
-            log.warning(f"fast_rig failed (rig自体は有効): {e}")
-    _update_progress(job.id, 0.93)
-
-    # 4) 描き差分(口形素あいうえお+閉眼/半眼)をSDXL inpaintで生成(face_mode=sdxl時)。
-    # ComfyUIが落ちている場合はスキップ(後から face_variants.py で追加可能)。
-    from app.services.comfyui import comfyui as _comfy
-    if face_mode == "sdxl" and await _comfy.is_available():
-        log.info("decompose_character: generating face variants (visemes/eyelids)")
-        base_tags = params.get("base_tags",
-                               "1girl, anime, masterpiece, best quality, flat color")
-        try:
-            await run([backend_py, str(REPO_ROOT / "scripts" / "face_variants.py"),
-                       "--puppet", puppet_id, "--model", "waiNSFWIllustrious_v170.safetensors",
-                       "--base-tags", base_tags], cwd=REPO_ROOT)
-        except Exception as e:
-            log.warning(f"face variants failed (rig自体は完成、後から追加可): {e}")
-    elif face_mode == "sdxl":
-        log.warning("ComfyUI停止中のためface variantsをスキップ(後から追加可)")
-    _update_progress(job.id, 0.97)
-
-    # record the puppet id on the job result (no asset row — puppets are their own store)
     with Session(engine) as session:
-        j = session.get(Job, job.id)
-        if j:
-            j.result_asset_ids = json.dumps([])
-            j.params = json.dumps({**params, "puppet_id": puppet_id})
-            session.add(j)
+        a = session.get(Asset, asset_id)
+        if a:
+            a.proxy_path = str(out)
+            session.add(a)
             session.commit()
     _update_progress(job.id, 1.0)
-    log.info(f"decompose_character done → puppet '{puppet_id}'")
+    log.info(f"Proxy created: asset {asset_id} → {out.name} ({out.stat().st_size/1e6:.1f}MB)")
 
 
-# ── separate_vocals: 音楽→歌唱(vocals)/伴奏(inst)の2ステム分離 ──────────────
-
-SEPARATOR_BIN = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "audio-separator"
-SEPARATOR_MODEL = "model_bs_roformer_ep_317_sdr_12.9755.ckpt"   # BS-RoFormer(J-POPボーカルで現行最良級)
+# ── Asset registration ────────────────────────────────────────────────────────
 
 
 async def _separate_vocals(job: Job, params: dict) -> None:
@@ -1565,282 +1551,96 @@ async def _separate_vocals(job: Job, params: dict) -> None:
                                        {"source_asset_id": asset_id, "stem": label}))
     _update_result_assets(job.id, ids)
     _update_progress(job.id, 1.0)
-    log.info(f"Vocal separation done: asset {asset_id} → {ids}")
 
 
-# ── create_proxy: low-res preview proxy for a video asset ─────────────────────
+async def _decompose_character(job: Job, params: dict) -> None:
+    """
+    キャラ画像 → See-Through で23パーツ分解(+遮蔽補完) → パペット登録。
 
-async def _create_proxy(job: Job, params: dict) -> None:
-    import imageio_ffmpeg
-    FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+    See-Through is a separate, heavy venv (its own torch/models), so we shell out
+    to it rather than importing into the backend process. Output lands in
+    data/puppets/<puppet_id>/ (manifest.json + per-layer PNGs), served by the
+    puppet router and rigged by the companion frontend.
+    """
+    import re
 
-    asset_id = params["asset_id"]
-    with Session(engine) as session:
-        asset = session.get(Asset, asset_id)
-        if not asset:
-            raise ValueError(f"Asset {asset_id} not found")
-        src = Path(asset.file_path)
-        project_id = asset.project_id
-        asset_type = asset.asset_type
-    if not src.exists():
-        raise ValueError(f"アセットファイルが見つかりません: {src}")
+    st_py = SEE_THROUGH / ".venv" / "bin" / "python"
+    if not st_py.exists():
+        raise RuntimeError("See-Through 未導入（tools/see-through/.venv が無い）")
 
-    dest_dir = PROXIES_DIR / str(project_id)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-
-    audio_exts = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aiff", ".aif"}
-    is_audio = asset_type == "audio" or src.suffix.lower() in audio_exts
-    _update_progress(job.id, 0.1)
-    if is_audio:
-        # 音声プロキシ: PCM wav(数十MB)を回線越しに流すのは重すぎるため、
-        # プレビュー用にAAC 96k(曲全体で数MB)を用意する。レンダリングは常に原本。
-        out = dest_dir / f"{asset_id}.m4a"
-        cmd = [
-            FFMPEG, "-y", "-i", str(src),
-            "-vn", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
-            str(out),
-        ]
-    else:
-        out = dest_dir / f"{asset_id}.mp4"
-        cmd = [
-            FFMPEG, "-y", "-i", str(src),
-            # downscale to max 640px wide (even dims), fast-decoding H.264, web-streamable
-            "-vf", "scale='min(640,iw)':-2",
-            "-c:v", "libx264", "-crf", "28", "-preset", "veryfast", "-movflags", "+faststart",
-            "-c:a", "aac", "-b:a", "96k",
-            str(out),
-        ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-    )
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0 or not out.exists():
-        raise RuntimeError(f"プロキシ生成に失敗: {stderr.decode()[-400:]}")
-
-    with Session(engine) as session:
-        a = session.get(Asset, asset_id)
-        if a:
-            a.proxy_path = str(out)
-            session.add(a)
-            session.commit()
-    _update_progress(job.id, 1.0)
-    log.info(f"Proxy created: asset {asset_id} → {out.name} ({out.stat().st_size/1e6:.1f}MB)")
-
-
-# ── Asset registration ────────────────────────────────────────────────────────
-
-async def _puppet_clip(job: Job, params: dict) -> None:
-    """コンパニオンを透過webm素材化(MAD/動画用)。idle/talk/nodのループ系モーション。"""
-    import tempfile
-    from app.services.ffmpeg_render import FFMPEG
-
-    pid = params["puppet_id"]
-    motion = params.get("motion", "idle")
-    dur = float(params.get("duration", 4))
-    fps = int(params.get("fps", 30))
     project_id = params["project_id"]
+    puppet_id = params.get("puppet_id") or f"char_{job.id}"
+    puppet_id = re.sub(r"[^a-zA-Z0-9_-]", "_", puppet_id)
+    name = params.get("name") or puppet_id
 
-    with tempfile.TemporaryDirectory(prefix="puppet_clip_") as td:
-        # keyframes: スタジオのモーションエディタのトラックJSONを渡す
-        extra: list[str] = []
-        if motion == "keyframes":
-            mj = Path(td) / "motion.json"
-            mj.write_text(json.dumps({"tracks": params.get("keyframes") or {}},
-                                     ensure_ascii=False))
-            extra = [str(mj)]
+    # source image (project asset, or explicit path)
+    if params.get("asset_id"):
+        with Session(engine) as session:
+            asset = session.get(Asset, params["asset_id"])
+            if not asset:
+                raise ValueError(f"Asset {params['asset_id']} not found")
+            src = Path(asset.file_path)
+    else:
+        src = Path(params["image_path"])
+    if not src.exists():
+        raise ValueError(f"画像が見つかりません: {src}")
+
+    # stage the input inside See-Through and run the pipeline
+    in_dir = SEE_THROUGH / "input"
+    in_dir.mkdir(exist_ok=True)
+    stem = f"{puppet_id}"
+    staged = in_dir / f"{stem}.png"
+    shutil.copy(src, staged)
+    _update_progress(job.id, 0.05)
+
+    async def run(cmd: list[str], cwd: Path):
         proc = await asyncio.create_subprocess_exec(
-            "node", str(REPO_ROOT / "frontend" / "puppet_clip.mjs"),
-            pid, motion, str(dur), str(fps), td, *extra,
+            *[str(c) for c in cmd], cwd=str(cwd),
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-            cwd=str(REPO_ROOT / "frontend"))
+        )
         out, _ = await proc.communicate()
         if proc.returncode != 0:
-            raise RuntimeError(f"puppet_clip.mjs failed:\n{out.decode(errors='replace')[-800:]}")
-        _update_progress(job.id, 0.8)
-        dest_dir = GENERATED_DIR / str(project_id)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        outp = dest_dir / f"puppet_{pid}_{motion}_{job.id}.webm"
-        proc2 = await asyncio.create_subprocess_exec(
-            str(FFMPEG), "-y", "-framerate", str(fps), "-i", f"{td}/f%05d.png",
-            "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "24",
-            "-auto-alt-ref", "0", str(outp),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-        o2, _ = await proc2.communicate()
-        if proc2.returncode != 0 or not outp.exists():
-            raise RuntimeError(f"webm encode failed:\n{o2.decode(errors='replace')[-500:]}")
-    asset_id = _register_asset(project_id, outp, "puppet_clip",
-                               {"puppet_id": pid, "motion": motion, "duration": dur, "fps": fps})
-    _update_result_assets(job.id, [asset_id])
+            tail = out.decode(errors="replace")[-1500:]
+            raise RuntimeError(f"{cmd[1]} failed:\
+{tail}")
+        return out
 
+    # 1) layer decomposition → PSD (~9 min on GB10)
+    log.info(f"decompose_character: layerdiff on {staged.name}")
+    await run([st_py, "inference/scripts/inference_psd.py",
+               "--srcp", str(staged), "--save_to_psd"], cwd=SEE_THROUGH)
+    _update_progress(job.id, 0.85)
 
-async def _vlm_review(job: Job, params: dict) -> None:
-    """レンダー動画をローカルVLMで意味QA→コメントキューに自動起票(lightレーン)。"""
-    from app.services.ffmpeg_render import FFMPEG
-    from app.services import vlm_review as V
+    out_dir = SEE_THROUGH / "workspace" / "layerdiff_output" / stem
+    psd = SEE_THROUGH / "workspace" / "layerdiff_output" / f"{stem}.psd"
+    if not psd.exists():
+        raise RuntimeError("See-Through 出力PSDが見つかりません")
 
-    with Session(engine) as session:
-        asset = session.get(Asset, params["asset_id"])
-        if not asset:
-            raise ValueError(f"Asset {params['asset_id']} not found")
-        src, project_id = Path(asset.file_path), asset.project_id
-    _update_progress(job.id, 0.05)
-    findings = await asyncio.to_thread(
-        V.review_video, src, str(FFMPEG), int(params.get("frames", 12)))
-    n = V.file_comments(project_id, findings, src.stem)
-    _update_progress(job.id, 1.0)
-    with Session(engine) as session:
-        j = session.get(Job, job.id)
-        j.result_json = json.dumps({"findings": findings, "comments_filed": n},
-                                   ensure_ascii=False)
-        session.add(j); session.commit()
-
-
-async def _interpolate(job: Job, params: dict) -> None:
-    """
-    フレーム補間: 低fpsの生成動画(Wan等)を滑らかな高fpsへ。
-    まずは ffmpeg minterpolate(動き補償)。RIFE系への昇格パスは stem-kit venv(torch)
-    + Practical-RIFE を想定(tools/README参照)。
-    """
-    from app.services.ffmpeg_render import FFMPEG
-
-    with Session(engine) as session:
-        asset = session.get(Asset, params["asset_id"])
-        if not asset:
-            raise ValueError(f"Asset {params['asset_id']} not found")
-        src = Path(asset.file_path)
-        project_id = asset.project_id
-
-    fps = int(params.get("fps", 60))
-    dest_dir = GENERATED_DIR / str(project_id)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    is_webm = src.suffix.lower() == ".webm"
-    out = dest_dir / f"{src.stem}_{fps}fps_{job.id}{'.webm' if is_webm else '.mp4'}"
-
-    vcodec = (["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "24", "-pix_fmt", "yuva420p"]
-              if is_webm else ["-c:v", "libx264", "-crf", "16", "-preset", "medium"])
-    cmd = [str(FFMPEG), "-y", "-i", str(src),
-           "-vf", f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
-           *vcodec, "-an", str(out)]
-    _update_progress(job.id, 0.1)
-    proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
-                                                stderr=asyncio.subprocess.STDOUT)
-    o, _ = await proc.communicate()
-    if proc.returncode != 0 or not out.exists():
-        raise RuntimeError(f"minterpolate failed:\n{o.decode(errors='replace')[-800:]}")
+    # 2) PSD → puppet manifest (build_puppet uses See-Through's psd-tools)
+    log.info("decompose_character: building puppet manifest")
+    await run([st_py, str(REPO_ROOT / "scripts" / "build_puppet.py"),
+               str(out_dir), str(psd), puppet_id, name], cwd=SEE_THROUGH)
     _update_progress(job.id, 0.95)
-    asset_id = _register_asset(project_id, out, "interpolate",
-                               {"src_asset_id": params["asset_id"], "fps": fps,
-                                "method": "minterpolate"})
-    _update_result_assets(job.id, [asset_id])
+
+    manifest = PUPPETS_DIR / puppet_id / "manifest.json"
 
 
-async def _cutout(job: Job, params: dict) -> None:
-    """
-    高品質切り抜き: アセット画像 → 透過PNG(マッティング+デフリンジ+影抑制)。
-    tools/cutout-kit を同一venvで直接呼ぶ(CPU、数秒)。
-    """
-    import sys
-    kit = REPO_ROOT / "tools" / "cutout-kit"
-    if str(kit) not in sys.path:
-        sys.path.insert(0, str(kit))
-    from cutout import cut_image, crop_alpha  # noqa: E402
-    from PIL import Image
-
+async def _render_orbit3d(job: Job, params: dict) -> None:
+    """既存の model3d アセットからカメラワーク付き透過webmを生成する独立ジョブ。"""
     project_id = params["project_id"]
     with Session(engine) as session:
         asset = session.get(Asset, params["asset_id"])
         if not asset:
             raise ValueError(f"Asset {params['asset_id']} not found")
-        src = Path(asset.file_path)
+        glb_path = Path(asset.file_path)
     _update_progress(job.id, 0.1)
-
-    model = params.get("model", "isnet-anime")
-    im = await asyncio.to_thread(
-        cut_image, Image.open(src), model,
-        params.get("bg", "white"), float(params.get("feather", 1.0)))
-    if params.get("crop", True):
-        im = crop_alpha(im)
-    _update_progress(job.id, 0.9)
-
     dest_dir = GENERATED_DIR / str(project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
-    out = dest_dir / f"{src.stem}_cut_{job.id}.png"
-    im.save(out)
-    asset_id = _register_asset(project_id, out, "cutout",
-                               {"src_asset_id": params["asset_id"], "model": model,
-                                "bg": params.get("bg", "white")})
-    _update_result_assets(job.id, [asset_id])
-
-
-def _register_asset(project_id: int, file_path: Path, source: str, gen_params: dict) -> int:
-    """Register a generated file as an Asset in the DB. Returns asset_id."""
-    from app.services.media_info import probe
-    from app.services.thumbnail import generate_video_thumbnail, generate_image_thumbnail
-
-    info = probe(file_path)
-    slim = dict(gen_params or {})   # keyframes含む全パラメータ(再生成に使う)
-    asset = Asset(
-        project_id=project_id,
-        name=file_path.name,
-        asset_type="generated",
-        file_path=str(file_path),
-        duration_sec=info.duration_sec,
-        width=info.width,
-        height=info.height,
-        file_size_bytes=info.file_size_bytes,
-        gen_params_json=json.dumps(slim, ensure_ascii=False),
-    )
-
-    with Session(engine) as session:
-        session.add(asset)
-        session.commit()
-        session.refresh(asset)
-        asset_id = asset.id
-
-    # Generate thumbnail in background (sync but fast enough)
-    try:
-        if info.asset_type == "video":
-            generate_video_thumbnail(file_path, asset_id)
-        elif info.asset_type in ("image", "generated"):
-            generate_image_thumbnail(file_path, asset_id)
-    except Exception as e:
-        log.warning(f"Thumbnail generation failed for asset {asset_id}: {e}")
-
-    # 生成動画/音声にも軽量プレビュープロキシを用意(uploadと同じ扱い)。
-    # プレビューが原本(高ビットレート)を直接ストリーミングして遅くなるのを防ぐ。
-    if info.asset_type in ("video", "audio"):
-        try:
-            with Session(engine) as session:
-                pj = Job(
-                    project_id=project_id, job_type="create_proxy",
-                    params=json.dumps({"asset_id": asset_id, "project_id": project_id}),
-                )
-                session.add(pj)
-                session.commit()
-        except Exception as e:
-            log.warning(f"Proxy queue failed for asset {asset_id}: {e}")
-
-    return asset_id
-
-
-# ── generate_3d: 画像→3Dモデル(GLB) ──────────────────────────────────────────
-
-def _register_model3d(project_id: int, file_path: Path, gen_params: dict) -> int:
-    """GLBをmodel3dアセットとして登録(probeは3Dを解釈できないため専用処理)。"""
-    slim = {k: v for k, v in (gen_params or {}).items() if k != "keyframes"}
-    asset = Asset(
-        project_id=project_id,
-        name=file_path.name,
-        asset_type="model3d",
-        file_path=str(file_path),
-        file_size_bytes=file_path.stat().st_size,
-        gen_params_json=json.dumps(slim, ensure_ascii=False),
-    )
-    with Session(engine) as session:
-        session.add(asset)
-        session.commit()
-        session.refresh(asset)
-        return asset.id
+    webm = await _orbit_render(glb_path, dest_dir, params.get("orbit") or params)
+    if not webm:
+        raise RuntimeError("orbit render failed (render_orbit.mjs ログ参照)")
+    asset_ids = [_register_asset(project_id, webm, "generated", params)]
+    _update_result_assets(job.id, asset_ids)
 
 
 async def _generate_3d(job: Job, params: dict) -> None:
@@ -1889,7 +1689,7 @@ async def _generate_3d(job: Job, params: dict) -> None:
             workflow = build_moge_relief(
                 name,
                 resolution_level=int(params.get("resolution_level", 9)),
-                decimation=int(params.get("decimation", 2)),
+                decimation=int(params.get("decimation", 500000)),
                 discontinuity_threshold=float(params.get("discontinuity_threshold", 0.03)),
                 fov_x_degrees=float(params.get("fov_x_degrees", 60.0)))
         else:
@@ -1933,50 +1733,6 @@ async def _generate_3d(job: Job, params: dict) -> None:
     log.info(f"3D generation done: {len(asset_ids)} asset(s)")
 
 
-async def _orbit_render(glb_path: Path, dest_dir: Path, orbit: dict) -> Path | None:
-    """tools/3d-kit/render_orbit.mjs で GLB→透過webm(vp9+alpha)を焼く。"""
-    kit = REPO_ROOT / "tools" / "3d-kit"
-    out = dest_dir / f"{glb_path.stem}_{orbit.get('preset', 'orbit')}.webm"
-    cmd = ["node", str(kit / "render_orbit.mjs"),
-           "--glb", str(glb_path), "--out", str(out),
-           "--preset", str(orbit.get("preset", "orbit")),
-           "--seconds", str(orbit.get("seconds", 4)),
-           "--fps", str(orbit.get("fps", 30)),
-           "--width", str(orbit.get("width", 1280)),
-           "--height", str(orbit.get("height", 720)),
-           "--style", str(orbit.get("style", "standard"))]
-    if orbit.get("turns") is not None:
-        cmd += ["--turns", str(orbit["turns"])]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, cwd=str(kit),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-    stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
-    if proc.returncode != 0:
-        log.warning(f"orbit render failed: {stdout.decode()[-800:]}")
-        return None
-    return out if out.exists() else None
-
-
-async def _render_orbit3d(job: Job, params: dict) -> None:
-    """既存の model3d アセットからカメラワーク付き透過webmを生成する独立ジョブ。"""
-    project_id = params["project_id"]
-    with Session(engine) as session:
-        asset = session.get(Asset, params["asset_id"])
-        if not asset:
-            raise ValueError(f"Asset {params['asset_id']} not found")
-        glb_path = Path(asset.file_path)
-    _update_progress(job.id, 0.1)
-    dest_dir = GENERATED_DIR / str(project_id)
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    webm = await _orbit_render(glb_path, dest_dir, params.get("orbit") or params)
-    if not webm:
-        raise RuntimeError("orbit render failed (render_orbit.mjs ログ参照)")
-    asset_ids = [_register_asset(project_id, webm, "generated", params)]
-    _update_result_assets(job.id, asset_ids)
-
-
-# ── generate_video_3dcam: 3Dカメラワーク×Wan2.2 Fun Control ─────────────────
-
 async def _generate_video_3dcam(job: Job, params: dict) -> None:
     """
     GLB(model3d) + カメラ指定 → 深度レンダ(render_orbit.mjs --style depth)
@@ -2003,64 +1759,32 @@ async def _generate_video_3dcam(job: Job, params: dict) -> None:
                 raise ValueError(f"Asset {aid} not found")
             return Path(a.file_path)
 
+    glb_path = _asset_path(int(params["model_asset_id"]))
     ref_path = _asset_path(int(params["ref_image_asset_id"]))
     dest_dir = GENERATED_DIR / str(project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     # 1) 深度コントロール動画をレンダ
-    #    単体GLB(model_asset_id) or 複数配置シーン(scene.objects[{model_asset_id,pos,rot,scale}])
     _update_progress(job.id, 0.03)
     kit = REPO_ROOT / "tools" / "3d-kit"
     depth_mp4 = dest_dir / f"depthctl_{job.id}.mp4"
     cmd = ["node", str(kit / "render_orbit.mjs"),
-           "--out", str(depth_mp4),
+           "--glb", str(glb_path), "--out", str(depth_mp4),
            "--frames", str(length), "--fps", str(fps),
            "--width", str(width), "--height", str(height), "--style", "depth"]
-    scene = params.get("scene")
-    scene_file = None
     camera = params.get("camera") or {}
-    if scene and scene.get("objects"):
-        sc = {"objects": [], "camera": scene.get("camera") or
-              (camera if isinstance(camera, list) else None)}
-        for o in scene["objects"]:
-            sc["objects"].append({
-                "glb": str(_asset_path(int(o["model_asset_id"]))),
-                "pos": o.get("pos"), "rot": o.get("rot"), "scale": o.get("scale")})
-        scene_file = dest_dir / f"scene_{job.id}.json"
-        scene_file.write_text(json.dumps(sc, ensure_ascii=False))
-        cmd += ["--scene-json", f"@{scene_file}"]
-        if not sc["camera"]:
-            cmd += ["--preset", str(camera.get("preset", "arc_r")) if isinstance(camera, dict) else "arc_r"]
+    if isinstance(camera, list):
+        cmd += ["--camera-json", json.dumps(camera)]
     else:
-        cmd += ["--glb", str(_asset_path(int(params["model_asset_id"])))]
-        if isinstance(camera, list):
-            cmd += ["--camera-json", json.dumps(camera)]
-        else:
-            cmd += ["--preset", str(camera.get("preset", params.get("preset", "arc_r")))]
-            if camera.get("turns") is not None:
-                cmd += ["--turns", str(camera["turns"])]
+        cmd += ["--preset", str(camera.get("preset", params.get("preset", "arc_r")))]
+        if camera.get("turns") is not None:
+            cmd += ["--turns", str(camera["turns"])]
     proc = await asyncio.create_subprocess_exec(
         *cmd, cwd=str(kit),
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600)
     if proc.returncode != 0 or not depth_mp4.exists():
         raise RuntimeError(f"深度レンダ失敗: {stdout.decode()[-800:]}")
-    if scene_file:
-        scene_file.unlink(missing_ok=True)
-
-    # control_style=edge: 深度→エッジ抽出(白線/黒地)。線画寄りの構図制御が効く
-    if params.get("control_style") == "edge":
-        edge_mp4 = dest_dir / f"edgectl_{job.id}.mp4"
-        eproc = await asyncio.create_subprocess_exec(
-            "ffmpeg", "-y", "-v", "error", "-i", str(depth_mp4),
-            "-vf", "edgedetect=low=0.06:high=0.15",
-            "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(edge_mp4),
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-        eout, _ = await eproc.communicate()
-        if eproc.returncode != 0 or not edge_mp4.exists():
-            raise RuntimeError(f"エッジ抽出失敗: {eout.decode()[-400:]}")
-        depth_mp4.unlink(missing_ok=True)
-        depth_mp4 = edge_mp4
 
     # 2) アップロード → Fun Control 生成
     _update_progress(job.id, 0.15)
@@ -2106,3 +1830,92 @@ async def _generate_video_3dcam(job: Job, params: dict) -> None:
         fp.unlink(missing_ok=True)
     _update_result_assets(job.id, asset_ids)
     log.info(f"3dcam video done: {final.name} ({len(frames)} frames)")
+
+
+async def _cutout(job: Job, params: dict) -> None:
+    """
+    高品質切り抜き: アセット画像 → 透過PNG(マッティング+デフリンジ+影抑制)。
+    tools/cutout-kit を同一venvで直接呼ぶ(CPU、数秒)。
+    """
+    import sys
+    kit = REPO_ROOT / "tools" / "cutout-kit"
+    if str(kit) not in sys.path:
+        sys.path.insert(0, str(kit))
+    from cutout import cut_image, crop_alpha  # noqa: E402
+    from PIL import Image
+
+    project_id = params["project_id"]
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src = Path(asset.file_path)
+    _update_progress(job.id, 0.1)
+
+    model = params.get("model", "isnet-anime")
+    im = await asyncio.to_thread(
+        cut_image, Image.open(src), model,
+        params.get("bg", "white"), float(params.get("feather", 1.0)))
+    if params.get("crop", True):
+        im = crop_alpha(im)
+    _update_progress(job.id, 0.9)
+
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"{src.stem}_cut_{job.id}.png"
+    im.save(out)
+
+
+async def _analyze_video(job: Job, params: dict) -> None:
+    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+
+    ジョブ種別 "analyze_video" はこの関数が実装されるまで使えない。
+    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
+    """
+    raise RuntimeError(
+        "_analyze_video は2026-08-21の編集事故で失われ、未復元です。"
+        "docs/incident-2026-08-21.md を参照してください。")
+
+
+async def _vlm_review(job: Job, params: dict) -> None:
+    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+
+    ジョブ種別 "vlm_review" はこの関数が実装されるまで使えない。
+    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
+    """
+    raise RuntimeError(
+        "_vlm_review は2026-08-21の編集事故で失われ、未復元です。"
+        "docs/incident-2026-08-21.md を参照してください。")
+
+
+async def _puppet_clip(job: Job, params: dict) -> None:
+    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+
+    ジョブ種別 "puppet_clip" はこの関数が実装されるまで使えない。
+    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
+    """
+    raise RuntimeError(
+        "_puppet_clip は2026-08-21の編集事故で失われ、未復元です。"
+        "docs/incident-2026-08-21.md を参照してください。")
+
+
+async def _render_motion_graphics(job: Job, params: dict) -> None:
+    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+
+    ジョブ種別 "render_motion_graphics" はこの関数が実装されるまで使えない。
+    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
+    """
+    raise RuntimeError(
+        "_render_motion_graphics は2026-08-21の編集事故で失われ、未復元です。"
+        "docs/incident-2026-08-21.md を参照してください。")
+
+
+async def _interpolate(job: Job, params: dict) -> None:
+    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+
+    ジョブ種別 "interpolate" はこの関数が実装されるまで使えない。
+    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
+    """
+    raise RuntimeError(
+        "_interpolate は2026-08-21の編集事故で失われ、未復元です。"
+        "docs/incident-2026-08-21.md を参照してください。")

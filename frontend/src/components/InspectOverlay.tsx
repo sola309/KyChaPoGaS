@@ -97,7 +97,7 @@ export function InspectOverlay() {
         </div>
       )}
       <div id="inspect-hud"
-        className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] bg-sky-600 text-white text-xs px-4 py-2 rounded-full shadow-lg">
+        className="safe-bottom-mgn fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] bg-sky-600 text-white text-xs px-4 py-2 rounded-full shadow-lg">
         🎯 インスペクトモード: 要素をクリックで記録(AIと共有) / Escで終了
       </div>
     </>

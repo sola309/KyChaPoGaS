@@ -20,7 +20,7 @@ export function CollabToasts() {
   const toasts = useUIStore(s => s.toasts)
   if (toasts.length === 0) return null
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-1.5 pointer-events-none">
+    <div className="safe-bottom-mgn fixed bottom-4 right-4 z-50 flex flex-col gap-1.5 pointer-events-none">
       {toasts.slice(-5).map(t => <ToastItem key={t.id} {...t} />)}
     </div>
   )

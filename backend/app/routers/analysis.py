@@ -96,6 +96,52 @@ def get_analysis(asset_id: int, session: Session = Depends(get_session)):
     return [AnalysisResultRead.from_orm(r) for r in results]
 
 
+# ── 手動上書き ───────────────────────────────────────────────────────────────
+
+@router.put("/{asset_id}/override/{kind}", status_code=200)
+def put_override(asset_id: int, kind: str, body: dict,
+                 session: Session = Depends(get_session)):
+    """解析結果を人手で上書きする(現状は盛り上げ判定 buildups 用)。
+
+    自動判定は当てにならない場面がある — 実測で、allin1の境界に対して
+    自作の判定式を当てると5箇所すべて「平坦」になり使い物にならなかった。
+    音楽的な「ここは溜め」という判断は人が一番正確なので、手で置けるようにする。
+
+    解析ジョブを再実行しても消えないよう、`<kind>_override` という別種別で持つ。
+    読む側(UI)は override があればそちらを優先する。
+    """
+    if kind not in ("audio_structure",):
+        raise HTTPException(status_code=400, detail=f"上書き非対応: {kind}")
+    _get_asset_or_404(asset_id, session)
+    name = f"{kind}_override"
+    old = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.asset_id == asset_id)
+        .where(AnalysisResult.analysis_type == name)
+    ).first()
+    if old:
+        session.delete(old)
+    session.add(AnalysisResult(asset_id=asset_id, analysis_type=name,
+                               result_json=json.dumps(body, ensure_ascii=False)))
+    session.commit()
+    return {"ok": True, "analysis_type": name}
+
+
+@router.delete("/{asset_id}/override/{kind}", status_code=200)
+def delete_override(asset_id: int, kind: str, session: Session = Depends(get_session)):
+    """上書きを消して自動判定へ戻す"""
+    name = f"{kind}_override"
+    old = session.exec(
+        select(AnalysisResult)
+        .where(AnalysisResult.asset_id == asset_id)
+        .where(AnalysisResult.analysis_type == name)
+    ).first()
+    if old:
+        session.delete(old)
+        session.commit()
+    return {"ok": True}
+
+
 # ── LLM summary ──────────────────────────────────────────────────────────────
 
 @router.get("/project/{project_id}/beat-match")

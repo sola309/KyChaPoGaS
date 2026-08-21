@@ -37,9 +37,11 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
   const runningCount = jobs.filter(j => j.status === 'running' || j.status === 'pending').length
 
   useEffect(() => {
-    startSSE(projectId)
-    checkComfyUI()
-    return () => stopSSE()
+    // 再生優先の読み込み順: タイムライン(クリップ/音声/プロキシ)の初期化を先に走らせ、
+    // ジョブSSE(2秒ごとに数百KBの再送)はワンテンポ遅らせて開始する。
+    // リロード直後の「再生できるまで」を最短にするための順序づけ。
+    const t = window.setTimeout(() => { startSSE(projectId); checkComfyUI() }, 2500)
+    return () => { window.clearTimeout(t); stopSSE() }
   }, [projectId])
 
   return (

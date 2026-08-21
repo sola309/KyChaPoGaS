@@ -111,9 +111,30 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
   }, [assets, cut.s, cut.e])
 
   const shotsTrack = tracks.find(t => t.track_type === 'video' && t.name === 'Shots')
-  const currentClip = shotsTrack
-    ? clips.find(c => c.track_id === shotsTrack.id && c.start_frame === cut.s)
-    : undefined
+  // 採用先の自動解決。以前は Shots の「開始フレームが完全一致するクリップ」だけを見ていたため、
+  // Scenes など別レイヤーで作業していると対象が見つからず、Shots に新規クリップが作られて
+  // 「採用しても画が変わらない」状態になっていた。
+  // 映像トラック上でこのカットを覆っているクリップを探し、最前面(orderが小さい方)を優先する。
+  const currentClip = useMemo(() => {
+    const vids = new Map(tracks.filter(t => t.track_type === 'video').map(t => [t.id, t]))
+    // asset_id が null の「空枠」も採用先として有効。scenes-sync が全カットに
+    // 枠を敷く運用になったので、空枠を弾くと未着手カットへ採用できなくなる。
+    const covering = clips.filter(c => {
+      if (!vids.has(c.track_id)) return false
+      return c.start_frame <= cut.s && cut.s <= c.start_frame + c.duration_frames - 1
+    })
+    if (!covering.length) return undefined
+    const rank = (c: typeof covering[number]) => {
+      const tr = vids.get(c.track_id)!
+      // 開始一致 > 素材入り > トラック前面 の順で選ぶ
+      return [c.start_frame === cut.s ? 0 : 1, c.asset_id == null ? 1 : 0,
+              tr.order ?? 0] as [number, number, number]
+    }
+    return [...covering].sort((a, b) => {
+      const ra = rank(a), rb = rank(b)
+      return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2]
+    })[0]
+  }, [clips, tracks, cut.s])
   const cutLen = cut.e - cut.s + 1
   const isSpan = (t: Take) => t.spanFrames > cutLen
   // 採用の書き換え先。🗂を押したクリップがあればそれ一択(他のレイヤーには触らない)。
@@ -191,7 +212,9 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
           <span className="flex items-center gap-2">
             {/* 採用の書き換え先を明示(誤操作でも他レイヤーに波及しないことの見える化) */}
             <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
-              採用先: {sourceTrack ? `${sourceTrack.name} クリップ(f${sourceClip!.start_frame}・${sourceClip!.duration_frames}f)` : `Shots f${cut.s}`}
+              採用先: {targetClip
+                ? `${tracks.find(x => x.id === targetClip.track_id)?.name ?? '?'} クリップ(f${targetClip.start_frame}・${targetClip.duration_frames}f)`
+                : `Shots f${cut.s}(新規作成)`}
             </span>
             {/* カット位置を動かしたあとに、テイクの紐付けを現在のカット割りへ手動で寄せ直す。
                 自動実行にすると短いカットが隣り合う箇所で取り違えるため手動にしている。 */}
