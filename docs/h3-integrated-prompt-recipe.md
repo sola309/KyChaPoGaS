@@ -60,17 +60,36 @@
   時刻を正確に打ちたいカットは Y3L 方式(ショットを簡潔に、各点を深く)か編集で。
   熱量と精度は現状トレードオフ。
 
-## T1下見プリセット(2026-08-22)
+## T1下見プリセット(2026-08-22 v2)
 
 `params["quality"]="t1"` の1フラグで最速構成に展開される(job_runner._generate_video_i2v)。
 
-| | 通常(本番) | T1下見 |
+| | 通常(本番) | T1下見 v2 |
 |---|---|---|
-| 解像度 | 1344×768 | 640×368 |
+| 解像度 | 1344×768 | **960×544** (Ref2V Turboの学習解像度544p) |
 | steps | 25 | 4 (Turbo LoRA蒸留) |
+| LoRA | なし | **ref2v_turbo_4step_v0.1** (Ref2VA専用蒸留, 2026-08-13) |
 | easycache | off | on |
-| 実測(124f) | ≈31分 | **≈57秒 (33倍速)** |
+| 実測(124f) | ≈31分 | **171秒 (≈11倍速)** — v1(640×368,fl2v流用)は57〜75秒だったが規定外 |
+
+v1の反省(ユーザー指摘 2026-08-22): ①FL2V用LoRAをRef2VAに流用していた
+②640×368は学習ドメイン(544p)も公式規定(短辺768)も割っていた。
+LoRAはモード別に正しい方を使う: Ref2VA→`minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16`、
+FL2VA→`minimax_h3_fl2v_turbo_4step_v1.1_768p_comfyui_bf16`(768p学習)。
+配布元: [lightx2v/Minimax-h3-Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo)。
+**LoRAは更新が速い(v0.1→v1.1が2週間)ので、ベンチ前にHFの一覧を必ず再確認する。**
 
 用途は**プロンプトと構成の検証**。構図・配置・キャラ判別は読めるが質感は崩れる。
 ⚠ Turbo LoRAは重みが変わるため**同じseedでも本番では再現しない** — シード選抜には使えない。
-ワークフロー: T1で構成を固める(1分/回) → 決まったら quality を外して本番(31分/回)。
+ワークフロー: T1で構成を固める(≈1分/回) → 決まったら quality を外して本番(31分/回)。
+
+### さらに先の高速化候補(2026-08-22リサーチ、未導入)
+
+- **Turbo-SLA**: Turbo蒸留+Sparse-Linear Attention(85%スパース)で更に≈2.5×。
+  現状 **FL2V版のみ**([lightx2v/Minimax-h3-Turbo-SLA](https://huggingface.co/lightx2v/Minimax-h3-Turbo-SLA))。Ref2V版が出たら乗り換え候補。
+- **fp8/NVFP4量子化UNET**: GB10(Blackwell)はfp8/nvfp4ネイティブ。現行はpruned_int8_convrot。
+  候補: rzgar/minimax_h3_ref2va_fp8_e4m3fn、ModelsLab/MiniMax-H3-ref2va-NVFP4。要実測。
+- **LightX2V本体**([ModelTC/LightX2V](https://github.com/modeltc/lightx2v)): 推論フレームワーク自体の置換。量子化+蒸留合算で最大≈42×を謳う。ComfyUI離脱のコスト大。
+- sage-attention / easycache / 4step蒸留 / CFGなし は**導入済み**。
+- T1帯では**固定オーバーヘッド(参照エンコード+VAEデコード+ロード)が支配的** —
+  UNETをこれ以上速くしても効きは小さい。

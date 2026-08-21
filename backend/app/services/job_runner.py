@@ -789,17 +789,19 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
 
     # ── T1下見プリセット ──────────────────────────────────────────
     # params["quality"]="t1" の1フラグで最速構成に展開する。
-    # 実測(H3 Ref2VA, 124f): 通常 1344x768/step25/easycacheなし ≈ 31分 →
-    #   T1 640x368/step4/TurboLoRA0.75/easycache ≈ 57秒 (33倍速)。
+    # 解像度は Ref2V Turbo v0.1 の学習解像度に合わせて **544p** (960x544)。
+    #   旧値640x368は ①学習ドメイン(544p)外 ②公式規定(短辺768)から二重に外れており、
+    #   fl2v用LoRAの流用と併せてユーザー指摘(2026-08-22)で是正した。
+    #   960 = 544 × (1344/768) を32の倍数へ丸めた値(本番と同じ画角)。
     # 品質は下見用(構図・配置・キャラ判別は読める。質感とディテールは崩れる)。
     # TurboLoRAは重み自体が変わるため、同じseedでも本番構成では再現しない
     # (シード選抜には使えない — 使うのはプロンプトと構成の検証)。
     if str(params.get("quality", "")).lower() == "t1":
         params = dict(params)
-        params.update({"width": 640, "height": 368, "steps": 4,
+        params.update({"width": 960, "height": 544, "steps": 4,
                        "turbo_lora": 0.75, "easycache": True,
                        "ref_image_size": "match"})
-        log.info("T1下見プリセット適用: 640x368/step4/turbo0.75/easycache")
+        log.info("T1下見プリセット適用: 960x544/step4/turbo0.75(ref2v)/easycache")
 
     model_id = params.get("model", "wan2.2-flf2v")
     if model_id.startswith("wan2.2") or model_id.startswith("minimax-h3"):

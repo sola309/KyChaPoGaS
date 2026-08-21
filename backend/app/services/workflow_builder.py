@@ -1226,6 +1226,7 @@ def build_minimax_h3_video(
     seed: int = -1,
     steps: int = 20,
     easycache: bool = True,
+    turbo_lora: float | None = None,    # Turbo LoRA強度(FL2V用v1.1 768p)。指定時はサンプラーも切替
     preview_steps: int | None = None,   # 🎬予告編(Ref2VAと同じ仕組み。詳細はbuild_minimax_h3_ref_video参照)
 ) -> dict:
     s = _seed(seed)
@@ -1274,19 +1275,34 @@ def build_minimax_h3_video(
         wf["ks"]["inputs"]["sigmas"] = ["split", 0]
         wf["vdec"]["inputs"]["samples"] = ["ks", 1]
         wf["adec"]["inputs"]["samples"] = ["ks", 1]
+    if turbo_lora:
+        # Ref2VA側と同じ付け替え(LoRA挿入→EasyCacheの順を守る)
+        wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
+                           "inputs": {"lora_name": H3_TURBO_LORA_FL2V,
+                                      "strength_model": float(turbo_lora), "model": ["unet", 0]}}
+        for nid, node in wf.items():
+            if nid in ("unet", "turbolora"):
+                continue
+            m = node.get("inputs", {}).get("model")
+            if isinstance(m, list) and m[0] == "unet":
+                node["inputs"]["model"] = ["turbolora", 0]
+        wf["smp"]["inputs"]["sampler_name"] = H3_TURBO_SAMPLER
     if easycache:
-        _h3_apply_easycache(wf)
+        _h3_apply_easycache(wf, src="turbolora" if turbo_lora else "unet")
     return wf
 
 
 H3_REF_UNET = "minimax_h3_ref2va_pruned_int8_convrot.safetensors"
 
-# lightx2v蒸留のTurbo LoRA(Kijai再パック版 — プルーン版UNET向け)。
-# fl2v蒸留だがRef2VA経路へ転移することを実測で確認済み(構図・キャラ・ポーズは一致)。
-# 実測: 4step+LoRA=305秒 vs 通常8step=435秒(約30%短縮)。固定オーバーヘッド約175秒が下限。
-# 代償: ①瓦礫等のテクスチャが平坦化する ②音声ブランチが崩壊する(RMS -20dB→-52dB、実質無音)
+# lightx2v蒸留のTurbo LoRA(HF: lightx2v/Minimax-h3-Turbo)。**モード別に正しい方を使う**。
+# 経緯: 当初はfl2v v0.1(rank21縮約版)しか無くRef2VAへ流用していたが、公式から
+#   ・fl2v turbo v1.1 768p (2026-08-11 v1.0→更新, 1344×768で学習) … FL2VA用
+#   ・ref2v turbo v0.1 (2026-08-13, 544p混在ARで学習) … Ref2VA用 ← 本命
+# が出ており流用は誤り(ユーザー指摘 2026-08-22)。
+# 代償(v0.1流用時の実測): ①テクスチャ平坦化 ②音声ブランチ崩壊(実質無音)。
 # 本アプリは生成音声を使わないため②は無害。①があるのでT1下見向け。
-H3_TURBO_LORA = "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors"
+H3_TURBO_LORA_REF2V = "minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors"
+H3_TURBO_LORA_FL2V = "minimax_h3_fl2v_turbo_4step_v1.1_768p_comfyui_bf16.safetensors"
 H3_TURBO_SAMPLER = "sa_solver"   # er_sde/sa_solverを実測比較し、錆色と暖色の保持が良い方を採用
 
 
@@ -1384,7 +1400,7 @@ def build_minimax_h3_ref_video(
         # UNETを直接参照している全ノード(guider/sched)をLoRA経由に付け替える。
         # EasyCache挿入より先に行うこと(挿入後はguiderのmodelがEasyCache出力を指すため)。
         wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
-                           "inputs": {"lora_name": H3_TURBO_LORA,
+                           "inputs": {"lora_name": H3_TURBO_LORA_REF2V,
                                       "strength_model": float(turbo_lora), "model": ["unet", 0]}}
         for nid, node in wf.items():
             if nid in ("unet", "turbolora"):
