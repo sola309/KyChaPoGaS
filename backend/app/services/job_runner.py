@@ -787,6 +787,20 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
             "ComfyUI が起動していません。scripts/start.sh で起動してください。"
         )
 
+    # ── T1下見プリセット ──────────────────────────────────────────
+    # params["quality"]="t1" の1フラグで最速構成に展開する。
+    # 実測(H3 Ref2VA, 124f): 通常 1344x768/step25/easycacheなし ≈ 31分 →
+    #   T1 640x368/step4/TurboLoRA0.75/easycache ≈ 57秒 (33倍速)。
+    # 品質は下見用(構図・配置・キャラ判別は読める。質感とディテールは崩れる)。
+    # TurboLoRAは重み自体が変わるため、同じseedでも本番構成では再現しない
+    # (シード選抜には使えない — 使うのはプロンプトと構成の検証)。
+    if str(params.get("quality", "")).lower() == "t1":
+        params = dict(params)
+        params.update({"width": 640, "height": 368, "steps": 4,
+                       "turbo_lora": 0.75, "easycache": True,
+                       "ref_image_size": "match"})
+        log.info("T1下見プリセット適用: 640x368/step4/turbo0.75/easycache")
+
     model_id = params.get("model", "wan2.2-flf2v")
     if model_id.startswith("wan2.2") or model_id.startswith("minimax-h3"):
         await _generate_video_wan22(job, params)
