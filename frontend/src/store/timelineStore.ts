@@ -36,6 +36,7 @@ interface TimelineState {
   syncFromServer: (projectId: number) => Promise<void>
   addTrack: (projectId: number, type: 'video' | 'audio' | 'reference', name: string) => Promise<void>
   refSel: number[]                                  // 選択中のRefクリップ(選択順)
+  designCut: number | null                          // 🔗設計リンクレーンで注目中のカット番号(nullなら再生位置のカット)
   toggleRefSel: (clipId: number) => void
   clearRefSel: () => void
   setTrackHidden: (trackId: number, hidden: boolean) => Promise<void>
@@ -58,6 +59,7 @@ interface TimelineState {
   undo: () => Promise<void>
   redo: () => Promise<void>
   setCurrentFrame: (frame: number) => void
+  setDesignCut: (n: number | null) => void
   setZoom: (pixelsPerFrame: number) => void
   setSelectedClipId: (id: number | null) => void
   setEditingClipId: (id: number | null) => void
@@ -136,6 +138,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     },
 
     refSel: [],
+    designCut: null,
     toggleRefSel: (clipId) => set(s => ({
       refSel: s.refSel.includes(clipId)
         ? s.refSel.filter(id => id !== clipId)
@@ -458,6 +461,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     },
 
     setCurrentFrame: (frame) => set({ currentFrame: Math.max(0, frame) }),
+    setDesignCut: (n) => set({ designCut: n }),
     setZoom: (ppf) => set({ pixelsPerFrame: Math.max(0.5, Math.min(10, ppf)) }),
     setSelectedClipId: (id) => set({ selectedClipId: id }),
     setEditingClipId: (id) => set({ editingClipId: id }),

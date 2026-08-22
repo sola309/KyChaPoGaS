@@ -4,6 +4,7 @@ import type { Asset, Clip } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoints } from './SpeedCurveEditor'
+import { RemapEditor } from './RemapEditor'
 
 /**
  * 🎛 ショット調整ポップアップ — 両隣が埋まったShotsクリップを、タイムラインを
@@ -30,6 +31,7 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   const [assetIn, setAssetIn] = useState(clip.asset_in_frame)
   const [speed, setSpeed] = useState(clip.speed ?? 1)
   const [showCurve, setShowCurve] = useState(false)
+  const [remapOpen, setRemapOpen] = useState(false)   // ⏱時間リマップへ切替(同じ窓から行き来)
   const [splitAt, setSplitAt] = useState(Math.floor(clip.duration_frames / 2))
   const [playing, setPlaying] = useState(false)          // 停止=フレーム単位スクラブ / 再生=窓ループ
   const [scrubSrc, setScrubSrc] = useState(clip.asset_in_frame)   // 現在位置(ソースフレーム)
@@ -161,6 +163,11 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   const inputCls = 'bg-zinc-800 text-xs text-zinc-100 rounded px-2 py-1 outline-none border border-zinc-700 focus:border-purple-500'
   const chipCls = (on: boolean) => `text-[10px] px-2 py-1 rounded ${on ? 'bg-purple-800 text-purple-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`
 
+  // ⏱リマップ表示中は本体を隠してRemapEditorに全面を譲る(閉じたらここへ戻る)
+  if (remapOpen) {
+    return <RemapEditor clip={clip} asset={asset} fps={fps} onClose={() => setRemapOpen(false)} />
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-2 sm:p-6" onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
@@ -250,6 +257,11 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
                  onChange={e => applySpeed(Number(e.target.value))} className={inputCls + ' w-20'} />
           <button onClick={() => setShowCurve(v => !v)} className={chipCls(showCurve || (clip.speed_ease ?? 'linear') !== 'linear')}>
             ∿ 加減速カーブ
+          </button>
+          <button onClick={() => setRemapOpen(true)}
+                  className={chipCls((clip.remap_json ?? '') !== '')}
+                  title="⏱時間リマップ — キーを打ってシーンチェンジ位置や打点タイミングをフレーム単位で補正">
+            ⏱ 時間リマップ{(clip.remap_json ?? '') !== '' ? '(設定済)' : ''}
           </button>
           <span className="text-[10px] text-zinc-600">尺({(clip.duration_frames / fps).toFixed(2)}s)は固定</span>
         </div>

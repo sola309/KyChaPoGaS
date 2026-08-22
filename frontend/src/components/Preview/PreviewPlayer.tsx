@@ -172,6 +172,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // (前ぼかし→黒締め→弱ビネット→グレイン)をCSSで模す。完全一致は書き出しのみだが、
   // 「グレード無しの絵で合否判定してしまう」ズレを消すため既定ON。
   const [gradeOn, setGradeOn] = useState(() => localStorage.getItem('kychapogas:grade') !== 'off')
+  // 🎤歌詞オーバーレイ。設計の確認時に使い、撮影確認のときは切る
+  const [showLyrics, setShowLyrics] = useState(() => localStorage.getItem('kychapogas:lyrics') === 'on')
   useEffect(() => { localStorage.setItem('kychapogas:grade', gradeOn ? 'film' : 'off') }, [gradeOn])
   const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
   // 🎞プレビズ: ベース映像の代わりに、カットごとの previz 設定(移動/フラッシュ/暗転)を
@@ -192,15 +194,21 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const projW = activeProject?.width  ?? 1280
   const projH = activeProject?.height ?? 720
 
-  // 現在再生位置のカット番号(CutLaneと同じペアリングから導出 — 表示の唯一のソース)
+  // 現在再生位置のカット番号(CutLaneと同じペアリングから導出 — 表示の唯一のソース)。
+  // 歌詞もここで一緒に拾う(ピンのattrs_jsonが唯一の正。字幕は別データを持たない)。
   const currentCut = (() => {
     const imgTrack = tracks.find(t => t.track_type === 'reference' && t.name === 'Image' && !t.hidden)
     if (!imgTrack) return null
     const pins = clips.filter(c => c.track_id === imgTrack.id && c.asset_id != null)
-      .map(c => c.start_frame).sort((a, b) => a - b)
+      .sort((a, b) => a.start_frame - b.start_frame)
     for (let i = 0; i + 1 < pins.length; i += 2) {
-      if (pins[i] <= currentFrame && currentFrame <= pins[i + 1]) {
-        return { n: i / 2 + 1, s: pins[i], e: pins[i + 1] }
+      if (pins[i].start_frame <= currentFrame && currentFrame <= pins[i + 1].start_frame) {
+        let lyrics = ''
+        try {
+          const a = pins[i].attrs_json ? JSON.parse(pins[i].attrs_json) : {}
+          lyrics = String(a?.scene?.board?.lyrics ?? '')
+        } catch { /* 壊れたattrsは空扱い */ }
+        return { n: i / 2 + 1, s: pins[i].start_frame, e: pins[i + 1].start_frame, lyrics }
       }
     }
     return null
@@ -576,15 +584,22 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           return t?.track_type === 'audio' && !t.hidden && c.asset_id != null
         })
         .sort((a, b) => pri(a) - pri(b) || tOrder(a) - tOrder(b) || a.track_id - b.track_id)
-      // 全体デコード型は1本ずつ順番に(帯域を集中→上位トラックから最速で完成させる)
-      let fullSlotFree = ![...audioBufCacheRef.current.values()].some(e => !e.buf)
+      // デコード中の本数を種別ごとに数える。
+      // プロキシ(m4a 数MB)は軽いので**並列で取る** — 本作は音源4本(原音/歌唱/伴奏/クリック)
+      // あり、1本ずつ直列にすると400msのポーリング間隔ぶんの空白が毎回入って
+      // 「音の読み込み開始が遅い」体感になっていた(実測: 原本67MBに対しプロキシ3.1MB)。
+      // 一方、原本の全体デコード(数十MB)は帯域を食うので従来どおり1本に絞る。
+      const PROXY_PARALLEL = 4
+      const inflight = [...audioBufCacheRef.current.entries()].filter(([, e]) => !e.buf)
+      let proxyInflight = inflight.filter(([k]) => hasAudioProxy(k)).length
+      let rawFullInflight = inflight.length - proxyInflight
       for (const c of audible) {
         if (rawInflightRef.current >= RAW_INFLIGHT_MAX) return
         const aid = c.asset_id!
         if (hasAudioProxy(aid)) {
-          if (!audioBufCacheRef.current.has(aid) && fullSlotFree) {
+          if (!audioBufCacheRef.current.has(aid) && proxyInflight < PROXY_PARALLEL) {
             loadAudioBuffer(aid, true)
-            fullSlotFree = false
+            proxyInflight++
           }
           continue
         }
@@ -597,8 +612,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         }
         const meta = wavMetaRef.current.get(aid)
         if (!meta) {
-          // wav以外は全体デコードを先行して温めておく
-          if (pri(c) === 0) loadAudioBuffer(aid)
+          // wav以外は全体デコードを先行して温めておく(重いので1本ずつ)
+          if (pri(c) === 0 && rawFullInflight === 0 && !audioBufCacheRef.current.has(aid)) {
+            loadAudioBuffer(aid)
+            rawFullInflight++
+          }
           continue
         }
         const active = pri(c) === 0
@@ -618,7 +636,16 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     }
     const iv = setInterval(tick, 400)
     tick()
-    return () => clearInterval(iv)
+    // 初回tickはマウント直後に走るが、その時点ではまだclips/tracksがAPIから
+    // 届いておらず audible が空 → 次の400msまで何も始まらない。素材が揃うまでは
+    // 50msで様子を見て、揃った瞬間に読み込みを開始する(音の出だしの待ち時間対策)。
+    const fast = setInterval(() => {
+      const { clips: cs, tracks: ts } = useTimelineStore.getState()
+      const ready = cs.some(c => c.asset_id != null
+        && ts.find(t => t.id === c.track_id)?.track_type === 'audio')
+      if (ready) { clearInterval(fast); tick() }
+    }, 50)
+    return () => { clearInterval(iv); clearInterval(fast) }
   }, [])
 
   useEffect(() => {
@@ -1575,6 +1602,15 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             )}
           </div>
         )}
+        {/* 🎤歌詞オーバーレイ: 下辺に字幕位置で重ねる(絵を隠さない)。🎤トグルで消せる */}
+        {showLyrics && currentCut?.lyrics && (
+          <div className="absolute inset-x-0 bottom-8 flex justify-center px-6 pointer-events-none">
+            <span className="text-center text-[clamp(14px,2.4vw,30px)] leading-snug text-sky-100
+                             [text-shadow:0_2px_6px_rgba(0,0,0,0.95),0_0_18px_rgba(0,0,0,0.8)]">
+              {currentCut.lyrics}
+            </span>
+          </div>
+        )}
         {/* 現在カットバッジ(CutLaneと同一採番) */}
         {currentCut && (
           <span className="absolute bottom-2 left-2 text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-amber-300 pointer-events-none font-mono">
@@ -1671,6 +1707,14 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           title="撮影(共通グレード): 書き出し時の統一処理(黒締め/ビネット/グレイン)をプレビューでも近似表示。OFFは素の絵"
         >🎛 {gradeOn ? '撮影' : '素'}</button>
+
+        <button
+          onClick={() => setShowLyrics(v => { localStorage.setItem('kychapogas:lyrics', v ? 'off' : 'on'); return !v })}
+          className={`text-[10px] px-2 py-0.5 rounded ${showLyrics
+            ? 'bg-sky-800 hover:bg-sky-700 text-sky-100'
+            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+          title="歌詞オーバーレイ: 再生位置のカットの歌詞を字幕位置に重ねる(ピンのattrs_jsonが唯一の正)。撮影確認時は切る"
+        >🎤 {showLyrics ? '歌詞' : '歌詞'}</button>
 
         <button
           onClick={cycleGuide}

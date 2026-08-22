@@ -377,8 +377,10 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         </span>
       </div>
 
-      {/* ⏱リマップ(Scenesのみ): マルチカット生成のシーンチェンジ位置を補正 */}
-      {selected && trackName === 'Scenes' && (
+      {/* ⏱リマップ: マルチカット生成のシーンチェンジ位置を補正。
+          当初Scenesのみだったが、Sequences(C18-19統合等)にも生成物が載る運用に
+          なったため映像3レイヤーすべてに出す(素材が動画のときだけ)。 */}
+      {selected && ['Shots', 'Scenes', 'Sequences'].includes(trackName ?? '') && asset?.duration_sec != null && (
         <button
           onClick={e => { e.stopPropagation(); setRemapOpen(true) }}
           onPointerDown={e => e.stopPropagation()}

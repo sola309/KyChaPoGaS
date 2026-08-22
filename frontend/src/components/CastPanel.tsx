@@ -13,7 +13,7 @@ import { api, assetsApi } from '../api/client'
  */
 
 interface CastRef { asset: number; label?: string; view?: string; use?: 'primary' | 'alt' | 'view'
-                    source?: 'official' | 'ai' | 'derived'; notes?: string; caution?: string }
+                    source?: 'official' | 'approved' | 'derived' | 'ai'; notes?: string; caution?: string }
 interface Outfit { label?: string; description_en?: string; refs?: CastRef[] }
 interface CastEntry { key: string; name: string; reading?: string; role?: string; note?: string; outfits: Record<string, Outfit> }
 interface Bible { cast?: CastEntry[]; style_rules?: string[]; usage_guide?: string[]; note?: string }
@@ -31,10 +31,15 @@ const USE_STYLE: Record<string, { label: string; cls: string; title: string }> =
 }
 // 出自バッジ。キャラクターシートのAI生成は禁止(原図トリミングは可)なので、
 // 公式素材とAI生成物がひと目で区別できるようにする。
-const SRC_STYLE: Record<string, { label: string; cls: string }> = {
-  official: { label: '公式',    cls: 'bg-indigo-950 text-indigo-300 border-indigo-700' },
-  ai:       { label: 'AI生成',  cls: 'bg-rose-950 text-rose-300 border-rose-700' },
-  derived:  { label: '原図加工', cls: 'bg-teal-950 text-teal-300 border-teal-700' },
+const SRC_STYLE: Record<string, { label: string; cls: string; title: string }> = {
+  official: { label: '公式',    cls: 'bg-indigo-950 text-indigo-300 border-indigo-700',
+              title: '公式素材のアップロード' },
+  approved: { label: '承認済',  cls: 'bg-violet-950 text-violet-300 border-violet-700',
+              title: 'AI生成だがユーザー確認済み。正典として扱ってよい' },
+  derived:  { label: '原図加工', cls: 'bg-teal-950 text-teal-300 border-teal-700',
+              title: '原図のトリミング/合成' },
+  ai:       { label: 'AI・未確認', cls: 'bg-rose-950 text-rose-300 border-rose-700',
+              title: 'AI生成でユーザー未確認。正典として使う前に承認を得る' },
 }
 // 名簿JSONは手でも書き換えるので、未知の use 値が来ても落ちないようにする。
 // (実際に use:"deprecated" を書いた結果、USE_STYLE[...] が undefined になり
@@ -208,7 +213,7 @@ export function CastPanel({ projectId, onClose }: { projectId: number; onClose: 
                               </span>
                               {r.source && SRC_STYLE[r.source] && (
                                 <span className={`text-[9px] px-1 rounded border ${SRC_STYLE[r.source].cls}`}
-                                      title={r.source === 'ai' ? 'AI生成。キャラシートには使わない' : undefined}>
+                                      title={SRC_STYLE[r.source].title}>
                                   {SRC_STYLE[r.source].label}
                                 </span>
                               )}
