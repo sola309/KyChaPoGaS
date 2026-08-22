@@ -42,6 +42,8 @@ def _resolve_seed(params: dict) -> int:
 
 GENERATED_DIR = Path(__file__).parent.parent.parent / "data" / "generated"
 PROXIES_DIR   = Path(__file__).parent.parent.parent / "data" / "proxies"
+# 2026-08-21の復元時に欠落していた定数(cutout/3d-kit/puppetが参照)。backend/ の1つ上=リポジトリ根
+REPO_ROOT     = Path(__file__).parent.parent.parent.parent
 
 
 # レーン並列: 重いGPUジョブ(動画/音楽/最終レンダー/分解)と軽いジョブ(画像/解析/プロキシ)を

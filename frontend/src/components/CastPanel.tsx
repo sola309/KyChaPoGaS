@@ -12,16 +12,36 @@ import { api, assetsApi } from '../api/client'
  * refs[].use: primary=生成の第一候補 / alt=構図次第の代替 / view=閲覧専用
  */
 
-interface CastRef { asset: number; label?: string; view?: string; use?: 'primary' | 'alt' | 'view'; notes?: string; caution?: string }
+interface CastRef { asset: number; label?: string; view?: string; use?: 'primary' | 'alt' | 'view'
+                    source?: 'official' | 'ai' | 'derived'; notes?: string; caution?: string }
 interface Outfit { label?: string; description_en?: string; refs?: CastRef[] }
 interface CastEntry { key: string; name: string; reading?: string; role?: string; note?: string; outfits: Record<string, Outfit> }
 interface Bible { cast?: CastEntry[]; style_rules?: string[]; usage_guide?: string[]; note?: string }
 
-const USE_STYLE: Record<string, { label: string; cls: string }> = {
-  primary: { label: '生成◎', cls: 'bg-emerald-900/80 text-emerald-200 border-emerald-600' },
-  alt:     { label: '代替',   cls: 'bg-sky-900/80 text-sky-200 border-sky-700' },
-  view:    { label: '閲覧',   cls: 'bg-zinc-800 text-zinc-400 border-zinc-600' },
+// use は「その画像をどう使うか」の優先度であって、画像の作られ方ではない。
+// 旧ラベル「生成◎」は "AIで生成した画像" と読めてしまい実際に誤解を招いた
+// (2026-08-22ユーザー指摘: 公式アップロード画像に生成と付いている)。
+const USE_STYLE: Record<string, { label: string; cls: string; title: string }> = {
+  primary: { label: '参照◎', cls: 'bg-emerald-900/80 text-emerald-200 border-emerald-600',
+             title: '生成時にまず渡す参照' },
+  alt:     { label: '参照○', cls: 'bg-sky-900/80 text-sky-200 border-sky-700',
+             title: '構図次第で使う代替の参照' },
+  view:    { label: '閲覧のみ', cls: 'bg-zinc-800 text-zinc-400 border-zinc-600',
+             title: '確認用。生成には渡さない' },
 }
+// 出自バッジ。キャラクターシートのAI生成は禁止(原図トリミングは可)なので、
+// 公式素材とAI生成物がひと目で区別できるようにする。
+const SRC_STYLE: Record<string, { label: string; cls: string }> = {
+  official: { label: '公式',    cls: 'bg-indigo-950 text-indigo-300 border-indigo-700' },
+  ai:       { label: 'AI生成',  cls: 'bg-rose-950 text-rose-300 border-rose-700' },
+  derived:  { label: '原図加工', cls: 'bg-teal-950 text-teal-300 border-teal-700' },
+}
+// 名簿JSONは手でも書き換えるので、未知の use 値が来ても落ちないようにする。
+// (実際に use:"deprecated" を書いた結果、USE_STYLE[...] が undefined になり
+//  .cls の参照でパネル全体がクラッシュした — 2026-08-22)
+const useStyle = (u?: string) =>
+  USE_STYLE[u ?? 'alt'] ?? { label: u ?? 'alt', title: u ?? '',
+                             cls: 'bg-amber-950 text-amber-300 border-amber-700' }
 
 export function CastPanel({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const [scope, setScope] = useState<'global' | 'project'>('global')
@@ -181,9 +201,18 @@ export function CastPanel({ projectId, onClose }: { projectId: number; onClose: 
                             <img src={assetsApi.thumbnailUrl(r.asset)} alt="" className="w-full h-28 object-contain" />
                           </button>
                           <div className="px-1.5 py-1 flex flex-col gap-0.5">
-                            <span className={`self-start text-[9px] px-1 rounded border ${USE_STYLE[r.use ?? 'alt'].cls}`}>
-                              {USE_STYLE[r.use ?? 'alt'].label}{r.caution && ' ⚠'}
-                            </span>
+                            <div className="flex gap-0.5 flex-wrap">
+                              <span className={`text-[9px] px-1 rounded border ${useStyle(r.use).cls}`}
+                                    title={useStyle(r.use).title}>
+                                {useStyle(r.use).label}{r.caution && ' ⚠'}
+                              </span>
+                              {r.source && SRC_STYLE[r.source] && (
+                                <span className={`text-[9px] px-1 rounded border ${SRC_STYLE[r.source].cls}`}
+                                      title={r.source === 'ai' ? 'AI生成。キャラシートには使わない' : undefined}>
+                                  {SRC_STYLE[r.source].label}
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[9px] text-zinc-400 truncate" title={`#${r.asset} ${r.label ?? ''} ${r.view ?? ''}`}>
                               {r.label ?? `#${r.asset}`}{r.view ? `・${r.view}` : ''}
                             </span>
