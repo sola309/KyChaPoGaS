@@ -15,6 +15,7 @@ import { CutLane } from './CutLane'
 import { SceneLane, deriveCutsWithScene } from './SceneLane'
 import { BoardSheet } from './BoardSheet'
 import { StoryScroll } from './StoryScroll'
+import { DesignMap } from './DesignMap'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
@@ -74,6 +75,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   }, [pixelsPerFrame])
   const containerRef   = useRef<HTMLDivElement>(null)
     const [boardSheetOpen, setBoardSheetOpen] = useState(false)   // 🎬 コンテ表
+  const [designMapOpen, setDesignMapOpen] = useState(false)     // 🗺 設計マップ
   const [storyOpen, setStoryOpen] = useState(false)             // 📜 ストーリー
 const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [snapEnabled, setSnapEnabled] = useState(true)
@@ -518,6 +520,11 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           title="🎬 コンテ表（全カットの一覧 — 絵コンテ静止画・歌詞・意図・尺。検討用）"
           className="text-[11px] px-2 py-0.5 rounded bg-cyan-900 hover:bg-cyan-800 text-cyan-200"
         >🎬 コンテ表</button>
+        <button
+          onClick={() => setDesignMapOpen(true)}
+          title="🗺 設計マップ（全カットの設計・歌詞・⚠注意点・カット間リンクを1枚で。ピンのattrs_jsonが唯一の正）"
+          className="text-[11px] px-2 py-0.5 rounded bg-amber-900 hover:bg-amber-800 text-amber-200"
+        >🗺 設計マップ</button>
         <button
           onClick={() => setStoryOpen(true)}
           title="📜 ストーリー（縦スクロールの絵コンテ台本 — Claudeの演出意図・コメント対話）"
@@ -1076,6 +1083,10 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           {storyOpen && (
             <StoryScroll tracks={tracks} clips={clips} assets={assets} fps={fps}
                          onClose={() => setStoryOpen(false)} />
+          )}
+          {designMapOpen && (
+            <DesignMap tracks={tracks} clips={clips} assets={assets} fps={fps}
+                       onClose={() => setDesignMapOpen(false)} />
           )}
           {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
           <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
