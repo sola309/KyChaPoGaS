@@ -89,7 +89,11 @@ FL2VA→`minimax_h3_fl2v_turbo_4step_v1.1_768p_comfyui_bf16`(768p学習)。
   現状 **FL2V版のみ**([lightx2v/Minimax-h3-Turbo-SLA](https://huggingface.co/lightx2v/Minimax-h3-Turbo-SLA))。Ref2V版が出たら乗り換え候補。
 - **fp8/NVFP4量子化UNET**: GB10(Blackwell)はfp8/nvfp4ネイティブ。現行はpruned_int8_convrot。
   候補: rzgar/minimax_h3_ref2va_fp8_e4m3fn、ModelsLab/MiniMax-H3-ref2va-NVFP4。要実測。
-- **LightX2V本体**([ModelTC/LightX2V](https://github.com/modeltc/lightx2v)): 推論フレームワーク自体の置換。量子化+蒸留合算で最大≈42×を謳う。ComfyUI離脱のコスト大。
+- **LightX2V本体**([ModelTC/LightX2V](https://github.com/modeltc/lightx2v)): 量子化+蒸留合算で最大≈42×を謳う。
+  再調査(2026-08-22): 公式ComfyUI統合 [ComfyUI-Lightx2vWrapper](https://github.com/ModelTC/ComfyUI-Lightx2vWrapper) は**存在する**が
+  対応はWan2.1/Hunyuan T2V・I2Vのみで最終push 2026-06-09(=H3登場前)。**H3 Ref2AVは本体フレームワーク側のみ対応**。
+  つまりH3で使うなら現状は別エンジン併走になる。42×は蒸留込みの合算で、蒸留はTurbo LoRAとして導入済み —
+  未取り込み分は量子化+カーネル(≈1.4×+fp8)程度。WrapperがH3対応したら再評価。
 - sage-attention / easycache / 4step蒸留 / CFGなし は**導入済み**。
 - T1帯では**固定オーバーヘッド(参照エンコード+VAEデコード+ロード)が支配的** —
   UNETをこれ以上速くしても効きは小さい。
