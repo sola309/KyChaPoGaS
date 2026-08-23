@@ -1,0 +1,587 @@
+{
+ "U01": {
+  "title": "C1 半月",
+  "meta": "I2VA / 生成141f / 実尺125f=5.21s / 打点ゼロ",
+  "mode": "I2VA",
+  "assets": [
+   2948
+  ],
+  "materials": [
+   "M-1"
+  ],
+  "dd_words": 99,
+  "file": "docs/anipafe2026-prompts/01-intro.md"
+ },
+ "U02": {
+  "title": "C2 オーブと糸",
+  "meta": "Ref2VA / 生成141f / 実尺139f=5.79s / キック1発",
+  "mode": "Ref2VA",
+  "assets": [
+   2529,
+   3053
+  ],
+  "materials": [],
+  "dd_words": 177,
+  "file": "docs/anipafe2026-prompts/01-intro.md"
+ },
+ "U03": {
+  "title": "C3 タイトル螺旋",
+  "meta": "I2VA / 生成226f / 実尺220f=9.17s / ス17キ28シ24",
+  "mode": "I2VA",
+  "assets": [
+   2997
+  ],
+  "materials": [
+   "M-4"
+  ],
+  "dd_words": 108,
+  "file": "docs/anipafe2026-prompts/01-intro.md"
+ },
+ "U04": {
+  "title": "C4 救済の手",
+  "meta": "I2VA / 生成124f / 実尺111f=4.62s / 打点ゼロ",
+  "mode": "I2VA",
+  "assets": [
+   2956
+  ],
+  "materials": [
+   "M-8"
+  ],
+  "dd_words": 121,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U05": {
+  "title": "C5+C6 最後の笑顔 → ガラス砕け",
+  "meta": "Ref2VA / 生成175f / 実尺166f / C6頭=4.62s地点のキック",
+  "mode": "Ref2VA",
+  "assets": [
+   2942,
+   2955
+  ],
+  "materials": [
+   "M-7"
+  ],
+  "dd_words": 210,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U06": {
+  "title": "C7 約束の水面",
+  "meta": "I2VA / 生成175f / 実尺166f=6.92s / 打点3・盛上",
+  "mode": "I2VA",
+  "assets": [
+   2944
+  ],
+  "materials": [],
+  "dd_words": 127,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U07": {
+  "title": "C8 持ち去られる色",
+  "meta": "Ref2VA / 生成124f / 実尺112f=4.67s / ス9キ14・盛上",
+  "mode": "Ref2VA",
+  "assets": [
+   949
+  ],
+  "materials": [],
+  "dd_words": 185,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U08": {
+  "title": "C9 弓ほむら戦闘",
+  "meta": "Ref2VA / 生成124f / 実尺111f=4.62s / ス11・直球",
+  "mode": "Ref2VA",
+  "assets": [
+   949,
+   2871,
+   2946
+  ],
+  "materials": [],
+  "dd_words": 152,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U09": {
+  "title": "C10 濁るソウルジェム",
+  "meta": "I2VA / 生成124f / 実尺110f=4.58s / ス10キ16 / 人物なし",
+  "mode": "I2VA",
+  "assets": [
+   3056
+  ],
+  "materials": [
+   "M-9"
+  ],
+  "dd_words": 136,
+  "file": "docs/anipafe2026-prompts/02-act1a.md"
+ },
+ "U10": {
+  "title": "C11 約束が死んだ",
+  "meta": "I2VA / 生成124f / 実尺118f=4.92s / ス11キ12",
+  "mode": "I2VA",
+  "assets": [
+   2958
+  ],
+  "materials": [
+   "M-10"
+  ],
+  "dd_words": 148,
+  "file": "docs/anipafe2026-prompts/03-act1b.md"
+ },
+ "U11": {
+  "title": "C12 拘束されたジェム",
+  "meta": "I2VA / 生成124f / 実尺104f=4.33s / 人物なし",
+  "mode": "I2VA",
+  "assets": [
+   3063
+  ],
+  "materials": [
+   "M-11"
+  ],
+  "dd_words": 169,
+  "file": "docs/anipafe2026-prompts/03-act1b.md"
+ },
+ "U12": {
+  "title": "C13 円環の顕現",
+  "meta": "Ref2VA / 生成124f / 実尺110f=4.58s / ス8キ9・直球",
+  "mode": "Ref2VA",
+  "assets": [
+   2029
+  ],
+  "materials": [],
+  "dd_words": 170,
+  "file": "docs/anipafe2026-prompts/03-act1b.md"
+ },
+ "U13": {
+  "title": "C14 「綺麗な場所へ行こう」",
+  "meta": "Ref2VA / 生成124f / 実尺111f=4.62s / リップシンクA",
+  "mode": "Ref2VA",
+  "assets": [
+   2029,
+   3020
+  ],
+  "materials": [
+   "M-5"
+  ],
+  "dd_words": 147,
+  "file": "docs/anipafe2026-prompts/03-act1b.md"
+ },
+ "U14": {
+  "title": "C15+C16 「どこにもない」→ 器の形成",
+  "meta": "Ref2VA / 生成124f / 実尺112f / C16頭=2.33s",
+  "mode": "Ref2VA",
+  "assets": [
+   949,
+   2791,
+   2952
+  ],
+  "materials": [
+   "M-6"
+  ],
+  "dd_words": 249,
+  "file": "docs/anipafe2026-prompts/03-act1b.md"
+ },
+ "U15": {
+  "title": "C17 丘のバレエ",
+  "meta": "Ref2VA / 生成124f / 実尺56f=2.33s / ス3キ6シ4・盛上",
+  "mode": "Ref2VA",
+  "assets": [
+   2627
+  ],
+  "materials": [
+   "M-12"
+  ],
+  "dd_words": 176,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U16": {
+  "title": "C18+C19 罪の誕生 → 5人の対峙",
+  "meta": "Ref2VA / 生成226f / 実尺221f / C19頭=4.29s",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2605,
+   2627,
+   2781,
+   2782,
+   2783,
+   2788,
+   2872,
+   2892
+  ],
+  "materials": [],
+  "dd_words": 354,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U17": {
+  "title": "C20+C21+C22 亀裂三連",
+  "meta": "Ref2VA / 生成175f / 実尺166f / 境界=2.33s, 4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2627,
+   3028,
+   3060,
+   3067
+  ],
+  "materials": [
+   "M-13",
+   "M-14",
+   "M-15"
+  ],
+  "dd_words": 312,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U18": {
+  "title": "C23+C24 深まる Distance point",
+  "meta": "Ref2VA / 生成175f / 実尺167f / C24頭=4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   947,
+   953,
+   957,
+   2627,
+   2869
+  ],
+  "materials": [],
+  "dd_words": 239,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U19": {
+  "title": "C25+C26 隠す → 中身",
+  "meta": "Ref2VA / 生成226f / 実尺221f / C26頭=4.58s",
+  "mode": "Ref2VA",
+  "assets": [
+   2627,
+   2968,
+   3069
+  ],
+  "materials": [
+   "M-16",
+   "M-17"
+  ],
+  "dd_words": 277,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U20": {
+  "title": "C27+C28+C29 日常三連",
+  "meta": "Ref2VA / 生成175f / 実尺166f / 境界=2.29s, 4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   954,
+   955,
+   956,
+   2911,
+   3042,
+   3044,
+   3048
+  ],
+  "materials": [],
+  "dd_words": 257,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U21": {
+  "title": "C30 魔獣の異変",
+  "meta": "Ref2VA / 生成124f / 実尺62f=2.58s / 人物なし",
+  "mode": "Ref2VA",
+  "assets": [
+   2946,
+   2947,
+   3045
+  ],
+  "materials": [],
+  "dd_words": 229,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U22": {
+  "title": "C31+C32 裁き",
+  "meta": "Ref2VA / 生成226f / 実尺215f / C32頭=4.33s",
+  "mode": "Ref2VA",
+  "assets": [
+   947,
+   957,
+   2627
+  ],
+  "materials": [],
+  "dd_words": 265,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U23": {
+  "title": "C33+C34 囁き → Fake eyes",
+  "meta": "Ref2VA / 生成226f / 実尺222f / C34頭=4.58s",
+  "mode": "Ref2VA",
+  "assets": [
+   951,
+   2627,
+   3014
+  ],
+  "materials": [
+   "M-19"
+  ],
+  "dd_words": 256,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U24": {
+  "title": "C35 進行する亀裂",
+  "meta": "I2VA / 生成124f / 実尺82f=3.42s / 打点1・人物なし",
+  "mode": "I2VA",
+  "assets": [
+   3002
+  ],
+  "materials": [
+   "M-2"
+  ],
+  "dd_words": 109,
+  "file": "docs/anipafe2026-prompts/05-act2b.md"
+ },
+ "U25": {
+  "title": "C36+C37+C38 職務 → 見送り → 取り残される印",
+  "meta": "Ref2VA / 生成260f / 実尺250f / 境界=3.46s, 6.92s",
+  "mode": "Ref2VA",
+  "assets": [
+   947,
+   957,
+   2946
+  ],
+  "materials": [],
+  "dd_words": 281,
+  "file": "docs/anipafe2026-prompts/06-interlude.md"
+ },
+ "U26": {
+  "title": "C39+C40+C41 転調・侵攻・全力の空転",
+  "meta": "Ref2VA / 生成260f / 実尺249f / 境界=3.46s, 6.92s",
+  "mode": "Ref2VA",
+  "assets": [
+   947,
+   957,
+   2605,
+   2946,
+   3038
+  ],
+  "materials": [],
+  "dd_words": 298,
+  "file": "docs/anipafe2026-prompts/06-interlude.md"
+ },
+ "U27": {
+  "title": "C42 まどかを見送る",
+  "meta": "Ref2VA / 生成175f / 実尺159f=6.62s / 長い減衰",
+  "mode": "Ref2VA",
+  "assets": [
+   936,
+   947,
+   957
+  ],
+  "materials": [],
+  "dd_words": 186,
+  "file": "docs/anipafe2026-prompts/06-interlude.md"
+ },
+ "U28": {
+  "title": "C43+C44 反射の語りかけ → 糸の手元",
+  "meta": "Ref2VA / 生成226f / 実尺221f / C44頭=4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   2627,
+   2972,
+   3053
+  ],
+  "materials": [
+   "M-20",
+   "M-21"
+  ],
+  "dd_words": 293,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U29": {
+  "title": "C45 「We know the hell…」",
+  "meta": "Ref2VA / 生成124f / 実尺110f=4.58s / リップシンクA'",
+  "mode": "Ref2VA",
+  "assets": [
+   2627
+  ],
+  "materials": [],
+  "dd_words": 188,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U30": {
+  "title": "C46 「Does not go to your past」",
+  "meta": "Ref2VA / 生成175f / 実尺167f=6.96s / 盛上・ドラム再開",
+  "mode": "Ref2VA",
+  "assets": [
+   936
+  ],
+  "materials": [],
+  "dd_words": 205,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U31": {
+  "title": "C47 物量",
+  "meta": "Ref2VA / 生成124f / 実尺110f=4.58s / 人物なし",
+  "mode": "Ref2VA",
+  "assets": [
+   2605,
+   2627
+  ],
+  "materials": [],
+  "dd_words": 244,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U32": {
+  "title": "C48 個",
+  "meta": "Ref2VA / 生成124f / 実尺111f=4.62s / 9枚上限",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2781,
+   2782,
+   2783,
+   2788,
+   2871,
+   2892
+  ],
+  "materials": [],
+  "dd_words": 190,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U33": {
+  "title": "C49+C50+C51 交互切り前半",
+  "meta": "Ref2VA / 生成124f / 実尺111f / 境界=1.17s, 2.33s",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2871,
+   2976,
+   3002
+  ],
+  "materials": [
+   "M-2",
+   "M-22"
+  ],
+  "dd_words": 211,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U34": {
+  "title": "C52+C53 引き絞り → 敵としての鏡像",
+  "meta": "Ref2VA / 生成124f / 実尺111f / C53頭=2.29s",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2627,
+   2869,
+   2871
+  ],
+  "materials": [],
+  "dd_words": 285,
+  "file": "docs/anipafe2026-prompts/07-act3a.md"
+ },
+ "U35": {
+  "title": "C54+C55 引き裂き → ワルプルギスの廻天",
+  "meta": "Ref2VA / 生成226f / 実尺221f / C55頭=4.58s",
+  "mode": "Ref2VA",
+  "assets": [
+   2627,
+   2786,
+   2945,
+   3018
+  ],
+  "materials": [
+   "M-3"
+  ],
+  "dd_words": 310,
+  "file": "docs/anipafe2026-prompts/08-act3b.md"
+ },
+ "U36": {
+  "title": "C56+C57 涙の対",
+  "meta": "Ref2VA / 生成124f / 実尺111f / C57頭=2.29s",
+  "mode": "Ref2VA",
+  "assets": [
+   936,
+   2943,
+   2981
+  ],
+  "materials": [
+   "M-24"
+  ],
+  "dd_words": 248,
+  "file": "docs/anipafe2026-prompts/08-act3b.md"
+ },
+ "U37": {
+  "title": "C58+C59 去る → 糸が切れる",
+  "meta": "Ref2VA / 生成124f / 実尺111f / C59頭=2.29s",
+  "mode": "Ref2VA",
+  "assets": [
+   2529,
+   2786,
+   2943
+  ],
+  "materials": [],
+  "dd_words": 263,
+  "file": "docs/anipafe2026-prompts/08-act3b.md"
+ },
+ "U38": {
+  "title": "C60 宇宙が一巡する",
+  "meta": "Ref2VA / 生成226f / 実尺221f=9.21s / ス15キ33シ30",
+  "mode": "Ref2VA",
+  "assets": [
+   2786,
+   2982,
+   2997
+  ],
+  "materials": [
+   "M-25",
+   "M-4"
+  ],
+  "dd_words": 236,
+  "file": "docs/anipafe2026-prompts/09-finale.md"
+ },
+ "U39": {
+  "title": "C61+C62+C63 走馬灯",
+  "meta": "Ref2VA / 生成175f / 実尺167f / 境界=2.33s, 4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   936,
+   953,
+   2605,
+   2627
+  ],
+  "materials": [],
+  "dd_words": 303,
+  "file": "docs/anipafe2026-prompts/09-finale.md"
+ },
+ "U40": {
+  "title": "C64 着地",
+  "meta": "Ref2VA / 生成124f / 実尺110f=4.58s / 密度急落",
+  "mode": "Ref2VA",
+  "assets": [
+   2943
+  ],
+  "materials": [],
+  "dd_words": 226,
+  "file": "docs/anipafe2026-prompts/09-finale.md"
+ },
+ "U41": {
+  "title": "C65+C66 赤い目 → 契約",
+  "meta": "Ref2VA / 生成192f / 実尺188f / C66頭=4.62s",
+  "mode": "Ref2VA",
+  "assets": [
+   951,
+   2943,
+   3014
+  ],
+  "materials": [
+   "M-19"
+  ],
+  "dd_words": 245,
+  "file": "docs/anipafe2026-prompts/09-finale.md"
+ },
+ "U42": {
+  "title": "C67 回帰",
+  "meta": "I2VA / 生成243f / 実尺230f=9.58s / 打点ゼロ・人物なし",
+  "mode": "I2VA",
+  "assets": [
+   3018
+  ],
+  "materials": [
+   "M-3"
+  ],
+  "dd_words": 236,
+  "file": "docs/anipafe2026-prompts/09-finale.md"
+ }
+}
