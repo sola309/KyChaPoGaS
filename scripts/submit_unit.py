@@ -34,7 +34,9 @@ ADDENDUM = {
                "to a hand, never to a body."),
     "GEM_ID": (" Keep its gold mount, laurel band, front medallion, stepped foot and finial exactly; do "
                "not redesign them and do not add wings, horns or extra jewels."),
-    "QB_ID": " It holds no expression of any kind; its face never changes.",
+    "QB_ID": (" Its mouth NEVER OPENS and never moves - it speaks only by telepathy, so it never speaks "
+              "aloud, never mouths words and never forms syllables. Its face holds no expression of any "
+              "kind and does not change. Do not animate its mouth under any circumstances."),
 }
 
 STYLE_BASE = ("STYLE: 2D Japanese cel animation, hard-edge cel shading, 1-2 shadow layers, flat anime "

@@ -182,7 +182,7 @@ And across that broken surface, LARGE and close, a REFLECTION appears - only the
 lips, chin, jaw-line and a little pale throat, frontal, spanning the middle of the frame at several times
 the scale of the figures behind it, broken into misaligned segments by the fractures crossing it. Nothing
 above the upper lip is reflected - no eyes, no nose bridge, no forehead, no hair, no wings, no body. That
-mouth SPEAKS a short phrase, three or four syllables, flat and final, the lips parting only as far as each
+mouth SPEAKS a short phrase in Japanese, three or four syllables, flat and final, the lips parting only as far as each
 syllable requires. It is the only voice in the shot and it belongs to no visible person. Dying rose light
 and rising magenta fight in the same frame.
 
@@ -196,7 +196,7 @@ facet closes, its glow steadies - quiet, complete, alone in the dark. The pictur
 finished thing. {{S:CITY}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: Shot 1 - one enormous pane of glass breaking, close and dry, then the tick of
-fractures spreading; a young woman's voice speaking one short cold phrase, intimate and unplaced; the
+fractures spreading; a young woman's voice speaking one short cold phrase in JAPANESE, intimate and unplaced; the
 goddess makes no sound as she comes apart. Shot 2 - feathers whispering inward, soft heavy clicks as
 parts seat themselves, a thin violet hum steadying at the end.
 

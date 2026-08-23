@@ -110,7 +110,7 @@ text.
 detailed_description: [Shot 1] 2D Japanese cel animation. {{FRAME_B}} - the pink schoolgirl,
 centred against deep darkness, the identical formal portrait framing in which the black-haired
 girl once spat her three-syllable refusal. This refusal is the opposite of that one: LONG.
-Static Shot throughout. She speaks - phrase after phrase, Japanese, gentle and unyielding -
+Static Shot throughout. She speaks - phrase after phrase, ENGLISH, gentle and unyielding -
 and her eyes shine wet from the first second, the tears standing and never falling. Her voice
 does not break; her hands, just visible at the frame's lower edge, are pressed together to
 keep from shaking. On her FIRST syllable, one deep drum lands - and behind her, the darkness
@@ -122,7 +122,7 @@ the rising world, phrase by phrase, to the end of the shot. Her final phrase clo
 press; the tears still do not fall. The picture holds her stillness against the storm now
 fully awake behind her. {{S:A3}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
-overall_soundscape: her voice - young, wet-edged, steady - carrying phrase after phrase over
+overall_soundscape: her voice - young, wet-edged, steady - carrying phrase after phrase of ENGLISH over
 a waking storm: drum-deep impacts, rising wind, feathers streaming; her voice always in
 front.
 
