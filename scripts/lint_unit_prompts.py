@@ -6,8 +6,10 @@
 出力: docs/anipafe2026-prompts/requirements.json (単位→参照アセット/素材タグ)
 """
 import json, re, glob, sys, urllib.request
+DIR=sys.argv[1] if len(sys.argv)>1 else "docs/anipafe2026-prompts"
 
 KNOWN_PH={"HOMU_ID","UM_ID","ORB_ID","GEM_ID","QB_ID","EMBLEM_ID","MAJUU_ID","WALP_ID","DOLLS_ID",
+ "TH:PRO","TH:MEM","TH:CITY","TH:GOLD","TH:DAY","TH:STORM","TH:A3","TH:WATER","BEATLAW","ST2","DP",
  "S:PRO","S:MEM","S:CITY","S:DAY","S:STORM","S:A3","S:WATER","FOCUS","STYLE","LENS","DEPTH",
  "HALF_MOON","SOURCELESS_SHADOW","FRAME_A","FRAME_B","WATER_BASE","SEEOFF","REACH_HAND"}
 QUALITY=re.compile(r"\b(cinematic|masterpiece|stunning|4k|8k|best quality|photoreal)\b",re.I)
@@ -15,7 +17,7 @@ BAD_NEG=re.compile(r"\bno (background music|music plays)\b",re.I)
 
 def main():
     ok=True; req={}
-    files=sorted(glob.glob("docs/anipafe2026-prompts/0[1-9]*.md"))
+    files=sorted(glob.glob(f"{DIR}/0[1-9]*.md"))
     units=0
     for f in files:
         t=open(f).read()
@@ -50,7 +52,7 @@ def main():
             except Exception: missing.append((uid,a)); ok=False
     for uid,a in missing: print(f"✗ {uid}: アセット#{a}が存在しない")
     # 承認済み素材の最新版をプロンプトが参照しているか(取りこぼしの再発防止)
-    appr = "docs/anipafe2026-materials-approved.json"
+    appr = f"{DIR}/materials-approved.json"
     try:
         latest = json.load(open(appr))
     except FileNotFoundError:
@@ -62,7 +64,7 @@ def main():
             print(f"✗ {unit}: {mid} の承認版 #{a} を参照していない "
                   f"(現在 {req.get(unit,{}).get('assets')})")
             ok = False
-    json.dump(req,open("docs/anipafe2026-prompts/requirements.json","w"),ensure_ascii=False,indent=1)
+    json.dump(req,open(f"{DIR}/requirements.json","w"),ensure_ascii=False,indent=1)
     n_ref=sum(1 for r in req.values() if r['mode']=='Ref2VA')
     print(f"\n{units}単位 (Ref2VA {n_ref} / I2VA {units-n_ref}) → requirements.json")
     print("lint:", "PASS" if ok else "FAIL")

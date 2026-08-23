@@ -15,6 +15,7 @@ API = "http://localhost:8002/api"
 PROJECT = 31
 ROOT = Path(__file__).resolve().parent.parent
 PDIR = ROOT / "docs/anipafe2026-prompts"
+PDIR_V2 = ROOT / "docs/anipafe2026-prompts-v2"
 
 # ── 名簿から展開するキャラ定義 ────────────────────────────────
 BIBLE_KEY = {
@@ -103,6 +104,37 @@ FRAG = {
 }
 FRAG["FRAME_B"] = FRAG["FRAME_A"]
 
+# ── v2: 様式テーゼ(冒頭1行・幕内逐語共有)と短縮ブロック ──────────
+TH = {
+"TH:PRO": ("STYLE THESIS: a funeral-quiet cosmic prologue in near-black and deep violet - one cold "
+  "glow from high above, hard blacks over half the frame, and only the single brightest element "
+  "allowed to bloom."),
+"TH:MEM": ("STYLE THESIS: a remembered film - cel colours pulled to cold blue-grey inside a heavy "
+  "vignette, one soft key, quiet highlights, every image framed like something being looked back on."),
+"TH:CITY": ("STYLE THESIS: an editorial night noir in near-black, violet and porcelain white - one "
+  "cold violet key raking from the left, hard graphic shadows, black holding half the frame."),
+"TH:GOLD": ("STYLE THESIS: an editorial storm noir where a GOLDEN tempest replaces the violet key - "
+  "hard rims of gold, dark broken ground, black holding half the frame."),
+"TH:DAY": ("STYLE THESIS: one warm ordinary afternoon in full saturation - soft daylight, open "
+  "blacks, kind edges; the only warm passage in the film."),
+"TH:STORM": ("STYLE THESIS: storm-blue war reportage - directionless grey light broken by "
+  "single-frame lightning, rain-haze between planes, soul-gem colours the only saturation."),
+"TH:A3": ("STYLE THESIS: a duel of violet and blood-red - cold violet key from the left, red allowed "
+  "only on edges and threads, black holding half the frame."),
+"TH:WATER": ("STYLE THESIS: a white-on-white water world - one bright still surface to every edge, "
+  "figures as delicate dark shapes, low contrast, soft edges."),
+}
+V2 = {
+"BEATLAW": ("Every hard cut lands exactly on a snare. Each kick lands as one physical impact of a "
+  "visible body or object. Each cymbal bursts as light or particles from a visible source. Never "
+  "drift."),
+"DP": ("DEPTH: five to eight planes at different speeds - the nearest may sweep the whole frame, "
+  "the farthest barely moves; never move every layer with the camera."),
+"ST2": ("STYLE: 2D Japanese cel animation, hard-edge cel shading, editorial motion-graphic "
+  "compositing. Do not output any letters, numbers, logos or pseudo-writing, nor any reference "
+  "sheet's frame or panels."),
+}
+
 
 def load_bible():
     return json.load(open(ROOT / "backend/data/bible/0.json"))
@@ -117,6 +149,7 @@ def build_dict():
         out[tag] = desc + ADDENDUM.get(tag, "")
     for k, v in S.items():
         out["S:" + k] = v
+    out.update(TH); out.update(V2)
     out.update({"STYLE": STYLE_BASE, "LENS": LENS, "DEPTH": DEPTH, "FOCUS": FOCUS})
     return out
 
@@ -143,7 +176,9 @@ def parse_units():
 def expand(code, uid, D):
     # U03 のみ NO-TEXT を外す(C3のロゴが唯一の文字使用箇所)
     style = STYLE_BASE if uid == "U03" else STYLE_BASE + NO_TEXT
-    D = dict(D, STYLE=style)
+    st2 = V2["ST2"].replace("Do not output any letters, numbers, logos or pseudo-writing, nor any",
+                            "Do not output any") if uid == "U03" else V2["ST2"]
+    D = dict(D, STYLE=style, ST2=st2)
     missing = [p for p in set(re.findall(r"\{\{([^}]+)\}\}", code)) if p not in D]
     if missing:
         sys.exit(f"✗ {uid}: 未定義プレースホルダ {missing}")
@@ -176,7 +211,11 @@ def main():
     ap.add_argument("units", nargs="+")
     ap.add_argument("--t1", action="store_true", help="T1検証(960x544/step4/turbo)")
     ap.add_argument("--dry", action="store_true", help="展開結果を表示するだけ")
+    ap.add_argument("--v2", action="store_true", help="v2ディレクトリを使う")
     a = ap.parse_args()
+    global PDIR
+    if a.v2:
+        PDIR = PDIR_V2
     D, units = build_dict(), parse_units()
     jobs = {}
     for uid in a.units:
