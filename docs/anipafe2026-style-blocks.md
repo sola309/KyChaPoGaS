@@ -12,6 +12,18 @@ Do not output any reference sheet's frame, panels, swatches or layout elements.
 LENS: the near plane is softly out of focus, the subject is sharp, the far plane is soft.
 ```
 
+## FOCUS（全カット共通・2026-08-23 追加）
+
+AIは指示しなければ画面の隅々まで均等に描き込む。それは「安っぽさ」に直結する。
+**見せたいもの以外は描かない**を明示的に書く。
+
+```
+FOCUS: only the subject carries detail. The ground, the walls and the background are simplified
+to large flat masses with almost no texture, pattern or small objects, and they fall away into
+near-black within a short distance of the subject. Light falls only where the eye must go;
+everywhere else is allowed to be empty. Fewer things, further apart, most of them dark.
+```
+
 ## 序 C1-C3 / 終 C67 (黒・深紫・金)
 ```
 LIGHT: near-black space. The only light is a cold violet glow from high above, falling steeply,
