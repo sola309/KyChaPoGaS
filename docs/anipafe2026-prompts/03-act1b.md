@@ -28,7 +28,7 @@ non_diegetic_music: N/A
 ---
 ## U11 — C12 拘束されたジェム (I2VA / 生成124f / 実尺104f=4.33s / 人物なし)
 
-参照: keyframe #3063 (M-11拘束ジェム・first frame)。C43(理の交代)と同じ構図に置く
+参照: keyframe #3087 (M-11拘束ジェム・first frame)。C43(理の交代)と同じ構図に置く
 
 ```
 Create a video from this image. Static Shot throughout.

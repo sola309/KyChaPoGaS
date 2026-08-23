@@ -49,6 +49,19 @@ def main():
             try: urllib.request.urlopen(f"http://localhost:8002/api/assets/{a}",timeout=5)
             except Exception: missing.append((uid,a)); ok=False
     for uid,a in missing: print(f"✗ {uid}: アセット#{a}が存在しない")
+    # 承認済み素材の最新版をプロンプトが参照しているか(取りこぼしの再発防止)
+    appr = "docs/anipafe2026-materials-approved.json"
+    try:
+        latest = json.load(open(appr))
+    except FileNotFoundError:
+        latest = {}
+    used = {a for r in req.values() for a in r["assets"]}
+    for mid, info in latest.items():
+        a, unit = info["asset"], info["unit"]
+        if a not in req.get(unit, {}).get("assets", []):
+            print(f"✗ {unit}: {mid} の承認版 #{a} を参照していない "
+                  f"(現在 {req.get(unit,{}).get('assets')})")
+            ok = False
     json.dump(req,open("docs/anipafe2026-prompts/requirements.json","w"),ensure_ascii=False,indent=1)
     n_ref=sum(1 for r in req.values() if r['mode']=='Ref2VA')
     print(f"\n{units}単位 (Ref2VA {n_ref} / I2VA {units-n_ref}) → requirements.json")

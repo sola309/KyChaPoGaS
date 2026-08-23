@@ -3,7 +3,7 @@
 ---
 ## U15 — C17 丘のバレエ (Ref2VA / 生成124f / 実尺56f=2.33s / ス3キ6シ4・盛上)
 
-参照: <Picture 1> M-12確定版(storyboard anchor・オーブ縮小合成後) / <Picture 2> #2627 (subject definition only)
+参照: <Picture 1> #3102 M-12(storyboard anchor) / <Picture 2> #2627 (subject definition only)
 ⚠オーブは**旋回**(ユーザー指示=モーション要求)。末尾で月の縁が発光→C18の指の間の光へマッチカット
 
 ```
@@ -229,14 +229,14 @@ non_diegetic_music: N/A
 ---
 ## U17 — C20+C21+C22 亀裂三連 (Ref2VA / 生成175f / 実尺166f / 境界=2.33s, 4.62s)
 
-参照: <Picture 1> #3067 M-13座り(anchor Shot1) / <Picture 2> #3060 M-14走りPOV(anchor Shot2) /
+参照: <Picture 1> #3111 M-13横たわり(anchor Shot1) / <Picture 2> #3060 M-14走りPOV(anchor Shot2) /
 <Picture 3> #3028 M-15裂かれるまどか(anchor Shot3) / <Picture 4> #2627 (identity) / <Picture 5> #953 (identity)
 ⚠Shot1: 音最密・画は完全静止(N4)。Shot2: 影が逆に流れる。Shot3: 直球の支点
 
 ```
-subject_definitions: <Picture 1> (reference role: storyboard anchor of Shot 1 - the winged
-woman seated composed in a pool of violet light, a small vessel in her open hand, a vast
-sourceless shadow crossing the lit ground). <Picture 2> (reference role: storyboard anchor of
+subject_definitions: <Picture 1> (reference role: storyboard anchor of Shot 1 - the winged woman
+lying on her back at the centre of her own spread wings, a small vessel cupped in one hand on her
+chest, a vast sourceless shadow crossing the lit ground). <Picture 2> (reference role: storyboard anchor of
 Shot 2 - the low POV: the pink girl running away small in a shaft of light, one black-sheathed
 hand reaching in the near foreground). <Picture 3> (reference role: storyboard anchor of Shot 3
 - the pink girl standing whole while the air before her breaks into glass shards, each shard
@@ -252,11 +252,11 @@ retention_analysis: <Pictures 1-3> fully_preserved as the three compositions. <P
 <Picture 5> fully_preserved as identities throughout.
 
 detailed_description: [Shot 1] 2D Japanese cel animation. The anchor scene exactly: the winged
-woman seated with her back straight in the narrow pool of cold violet light, the small vessel
-resting in her open hand, everything beyond the pool pure black. She is COMPLETELY STILL - the
+woman lying on her back at the centre of her own spread wings in the narrow pool of cold violet
+light, the small vessel cupped in one hand on her chest, everything beyond the pool pure black. She is COMPLETELY STILL - the
 drums are dense here and she answers none of them; the only motion in 2.3 seconds is
 {{SOURCELESS_SHADOW}} the lit ground, its long straight edge passing beside her without
-touching her. She does not look up. Stillness against dense sound is the point.
+touching her. Her eyes are open, looking straight up past the camera at nothing; she never turns her head. Stillness against dense sound is the point.
 [Shot 2] At 00:02.330, hard cut to the low POV of the second anchor: the pink girl runs AWAY
 down the dark corridor of light, small, twin tails streaming, and in the near foreground the
 black-sheathed hand reaches after her, open and slack - {{REACH_HAND}}. Each kick is one

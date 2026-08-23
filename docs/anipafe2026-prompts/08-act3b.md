@@ -3,14 +3,14 @@
 ---
 ## U35 — C54+C55 引き裂き → ワルプルギスの廻天 (Ref2VA / 生成226f / 実尺221f / C55頭=4.58s)
 
-参照: <Picture 1> #3018 M-3剥がれ(anchor: 月がめくれ石が現れる) / <Picture 2> #2945 紋章石 /
+参照: <Picture 1> #3097 M-3(anchor: 左が月/右が岩の同一物体) / <Picture 2> #2945 紋章石 /
 <Picture 3> #2627 (identity) / <Picture 4> #2786 ワルプルギスTV版設定(Shot2の姿)
 ⚠全編の規則を破る唯一の場所(半月と紋章石が同じ画に)。引き金はまどかの矢。C55はTV版の姿=「あれが生まれた」
 
 ```
-subject_definitions: <Picture 1> (reference role: storyboard anchor of the sky event - the
-moon's pale surface peeling away from its straight edge, the carved boulder revealed
-beneath). <Picture 2> (reference role: subject definition of the boulder): {{EMBLEM_ID}}.
+subject_definitions: <Picture 1> (reference role: storyboard anchor of the sky event - a single disc
+whose LEFT half is a pale moon ending in a perfectly straight vertical edge and whose RIGHT
+half is carved rock bearing the winged ring emblem: one object cut down the middle). <Picture 2> (reference role: subject definition of the boulder): {{EMBLEM_ID}}.
 <Picture 3> (reference role: subject definition only): {{HOMU_ID}}. <Picture 4> (reference
 role: subject definition of what is born in Shot 2 - the enormous witch: {{WALP_ID}} - an upside-down gowned figure atop interlocking iron gears, lace and cold flame). Never
 merge the characters.

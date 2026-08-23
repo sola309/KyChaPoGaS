@@ -163,19 +163,21 @@ non_diegetic_music: N/A
 ---
 ## U09 — C10 濁るソウルジェム (I2VA / 生成124f / 実尺110f=4.58s / ス10キ16 / 人物なし)
 
-参照: keyframe #3056 (M-9濁りジェム・first frame)。C38(濁らない)との対
+参照: keyframe #3099 (M-9濁りジェム・first frame)。C38(濁らない)との対
 
 ```
 Create a video from this image. Static Shot throughout. Slow Push In, small amplitude.
 
 detailed_description: [Shot 1] 2D Japanese cel animation. The picture is the given frame: the
-egg-shaped soul gem in its antique-gold mount, alone in darkness, its violet dome clouded from
-below by a heavy black murk, only a narrow band of clear violet surviving at the top. Through
-the shot the murk RISES: with each kick it surges a little higher in one slow pulse, and with
-each snare a fine hairline crack ticks outward through the clouded part with a faint click.
-The clear violet band thins and thins. The gold mount stays dull and unlit. By the end only a
-sliver of violet light remains at the very top of the dome, trembling; the murk below has gone
-fully black. The picture holds on that last sliver - it does not go out. {{S:MEM}} {{FOCUS}}
+egg-shaped soul gem in its antique-gold mount, standing on a dim surface in a receding dark
+space, its WHOLE violet dome filled with a dark churning murk, only a thin bright violet halo
+surviving where light grazes the shell. Through the shot the murk THICKENS THROUGHOUT: with each
+kick one slow billow turns over inside the whole volume and the dome darkens a step everywhere
+at once - not from the bottom upward, but through its entire body - and with each snare a fine
+hairline crack ticks outward through it with a faint click. The halo at the shell narrows and
+narrows. The gold mount stays dull and unlit. By the end only a trembling thread of violet
+survives at the very edge of the shell; the body of the jewel has gone fully black. The picture
+holds on that last thread - it does not go out. {{S:MEM}} {{FOCUS}}
 {{STYLE}}
 
 overall_soundscape: a low interior pressure like deep water; each surge of murk is a muffled

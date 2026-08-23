@@ -9,7 +9,7 @@
   "materials": [
    "M-1"
   ],
-  "dd_words": 99,
+  "dd_words": 206,
   "file": "docs/anipafe2026-prompts/01-intro.md"
  },
  "U02": {
@@ -18,10 +18,11 @@
   "mode": "Ref2VA",
   "assets": [
    2529,
+   2791,
    3053
   ],
   "materials": [],
-  "dd_words": 177,
+  "dd_words": 218,
   "file": "docs/anipafe2026-prompts/01-intro.md"
  },
  "U03": {
@@ -38,7 +39,7 @@
    2997
   ],
   "materials": [],
-  "dd_words": 295,
+  "dd_words": 359,
   "file": "docs/anipafe2026-prompts/01-intro.md"
  },
  "U04": {
@@ -108,12 +109,12 @@
   "meta": "I2VA / 生成124f / 実尺110f=4.58s / ス10キ16 / 人物なし",
   "mode": "I2VA",
   "assets": [
-   3056
+   3099
   ],
   "materials": [
    "M-9"
   ],
-  "dd_words": 136,
+  "dd_words": 165,
   "file": "docs/anipafe2026-prompts/02-act1a.md"
  },
  "U10": {
@@ -134,7 +135,7 @@
   "meta": "I2VA / 生成124f / 実尺104f=4.33s / 人物なし",
   "mode": "I2VA",
   "assets": [
-   3063
+   3087
   ],
   "materials": [
    "M-11"
@@ -190,7 +191,8 @@
   "meta": "Ref2VA / 生成124f / 実尺56f=2.33s / ス3キ6シ4・盛上",
   "mode": "Ref2VA",
   "assets": [
-   2627
+   2627,
+   3102
   ],
   "materials": [
    "M-12"
@@ -256,14 +258,14 @@
    2627,
    3028,
    3060,
-   3067
+   3111
   ],
   "materials": [
    "M-13",
    "M-14",
    "M-15"
   ],
-  "dd_words": 312,
+  "dd_words": 333,
   "file": "docs/anipafe2026-prompts/04-act2a.md"
  },
  "U18": {
@@ -516,7 +518,7 @@
    2627,
    2786,
    2945,
-   3018
+   3097
   ],
   "materials": [
    "M-3"
