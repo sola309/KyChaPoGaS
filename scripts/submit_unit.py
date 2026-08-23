@@ -126,7 +126,11 @@ def parse_units():
         for m in re.finditer(r"## (U\d+[ab]?) — ([^\n]+)\n(.*?)(?=\n---\n## U|\Z)", t, re.S):
             uid, head, body = m.group(1), m.group(2), m.group(3)
             code = re.search(r"```\n(.*?)\n```", body, re.S).group(1)
-            refs = [int(x) for x in re.findall(r"#(\d{3,4})", body.split("```")[0])]
+            # 参照は「参照:」行から⚠または空行までのブロックだけを読む。
+            # 注記中の除外指示(例: 「#2936は使わない」)を拾わないため。
+            notes = body.split("```")[0]
+            mref = re.search(r"^参照[^:\n]*:(.*?)(?=^⚠|^\s*$)", notes, re.S | re.M)
+            refs = [int(x) for x in re.findall(r"#(\d{3,4})", mref.group(1) if mref else "")]
             gen = re.search(r"生成(\d+)f", head)
             units[uid] = {"head": head, "code": code, "refs": refs,
                           "frames": int(gen.group(1)) if gen else 124,
