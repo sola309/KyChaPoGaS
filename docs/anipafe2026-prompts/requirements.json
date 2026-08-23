@@ -154,32 +154,35 @@
   "file": "docs/anipafe2026-prompts/03-act1b.md"
  },
  "U13": {
-  "title": "C14 「綺麗な場所へ行こう」",
-  "meta": "Ref2VA / 生成124f / 実尺111f=4.62s / リップシンクA",
+  "title": "C14 迎えに来るまどか",
+  "meta": "Ref2VA / 生成124f / 実尺111f=4.62s / ス8キ16",
   "mode": "Ref2VA",
   "assets": [
    2029,
-   3020
+   2055,
+   3124
   ],
   "materials": [
    "M-5"
   ],
-  "dd_words": 147,
+  "dd_words": 362,
   "file": "docs/anipafe2026-prompts/03-act1b.md"
  },
  "U14": {
-  "title": "C15+C16 「どこにもない」→ 器の形成",
+  "title": "C15+C16 裂かれるまどか → 器の形成",
   "meta": "Ref2VA / 生成124f / 実尺112f / C16頭=2.33s",
   "mode": "Ref2VA",
   "assets": [
-   949,
+   936,
+   2029,
+   2627,
    2791,
-   2952
+   3131
   ],
   "materials": [
    "M-6"
   ],
-  "dd_words": 249,
+  "dd_words": 499,
   "file": "docs/anipafe2026-prompts/03-act1b.md"
  },
  "U15": {
