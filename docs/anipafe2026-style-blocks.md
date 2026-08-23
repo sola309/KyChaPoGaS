@@ -10,7 +10,15 @@ STYLE: 2D Japanese cel animation, hard-edge cel shading, 1-2 shadow layers, flat
 Do not output any letters, numbers, logos, captions or pseudo-writing.
 Do not output any reference sheet's frame, panels, swatches or layout elements.
 LENS: the near plane is softly out of focus, the subject is sharp, the far plane is soft.
+DEPTH: build the picture from five to eight separate depth planes, and move them at different
+speeds - the nearest plane travels fastest and may briefly cover the whole frame as it passes,
+the middle planes travel at moderate speed, the farthest plane barely moves at all. Never move
+every layer with the camera; some layers lag a little behind it. Depth is carried by these speed
+differences, not only by blur.
 ```
+
+※ `{{DEPTH}}` は `{{LENS}}` の直後に置く。速度差(視差)を書かないと奥行きがボケだけになる
+(参考008の指摘。本作の欠落だった)。
 
 ## FOCUS（全カット共通・2026-08-23 追加）
 

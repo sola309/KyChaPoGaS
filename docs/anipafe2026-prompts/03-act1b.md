@@ -17,7 +17,7 @@ and stray black barbs detach and drift onto the white water, where they lie with
 The girl herself never moves; her hand still lies open toward the empty place beside her, and
 the gap her hand reaches across now reaches nothing. Ripples cross the emptiness once, slowly.
 By the end the wing is fully solid and the white water around her is flecked with black. The
-picture holds. {{S:WATER}} {{LENS}} {{STYLE}}
+picture holds. {{S:WATER}} {{LENS}} {{DEPTH}} {{STYLE}}
 
 overall_soundscape: the same quiet water as the promise - but emptier: laps, a single drop, and
 the papery whisper of feathers settling on water.
@@ -130,7 +130,7 @@ and opens again in a fraction of a second - a single eyelid blink from inside th
 else changes across it; when the frame returns she is nearer than before.
 
 The shot ends with her open palm almost filling the lower half of the frame, a hand's breadth from the
-lens, still open, still not touching. {{S:MEM}} {{LENS}} {{FOCUS}} {{STYLE}}
+lens, still open, still not touching. {{S:MEM}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: a wide airless hush; a young woman's voice, warm and quiet, speaking a short Japanese
 sentence that grows closer and clearer as she nears; the faint chime of drifting motes; one soft wet

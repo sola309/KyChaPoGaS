@@ -33,8 +33,9 @@ spool, a shattered pane un-breaking, petals rising from grey ground into a girl-
 light - each glimpse visible for half a breath, doubled like everything else, then wiped by
 the next tooth crossing the gap. The rhythm accelerates through the shot; by the seventh
 second the gaps strobe, the backward spiral blurs to rings, the doubled fields drift further
-apart as if the two sights were separating - and at the end everything converges toward a
-single white gap growing to fill the frame. Cut at whiteout. {{S:PRO}}(fragments of
+apart as if the two sights were separating - and at the end the camera drives TOWARD one single gap between two
+gear teeth, and that gap grows until its white fills the entire screen - the camera passing
+through the gear and out of the witch entirely. Cut at whiteout. {{S:PRO}}(fragments of
 remembered scenes keep their own colours inside the darkness) {{STYLE}}
 
 overall_soundscape: immense iron knocks in accelerating rhythm; the reversed whisper of a
@@ -166,7 +167,7 @@ her lips move on a few resolute syllables the frame does not carry - and then sh
 HER HAND toward the creature, palm open, the reach crossing most of the space between
 them. The creature does not move at all. The frame holds on the outstretched hand and the
 motionless white shape - and ends there, before anything touches, before anything is
-granted. What is agreed is not shown. {{S:PRO}} {{LENS}} {{FOCUS}} {{STYLE}}
+granted. What is agreed is not shown. {{S:PRO}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: absolute silence in Shot 1. In Shot 2, ground wind and her few spoken
 syllables, small and steady; the creature makes no sound whatsoever; the frame ends in
@@ -197,7 +198,11 @@ shadow's edge visibly belongs to the boulder above - source and shadow finally i
 sky. Third: from the right edge of the frame, ONE thin pink thread drifts in, slow as a
 spider's silk on wind, and touches the boulder - and clings, and a second thread follows
 it, beginning, unhurried, to wind. The picture ends with the two threads settling their
-first loose loop around the stone: the next turning already begun. Motion decays to
+first loose loop around the stone: the next turning already begun. THE FINAL COMPOSITION MUST
+VISUALLY RESEMBLE THE OPENING SHOT OF THE FILM - the same wide night sky, the same clouds along
+the same lower edge, the same object hanging at the same height and the same place in frame, the
+camera in the same position. What began there returns here, changed only in what the object
+turned out to be. Motion decays to
 stillness on the half-wound stone. {{S:PRO}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: near-total silence throughout; flakes whispering away; the thin cold

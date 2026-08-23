@@ -313,9 +313,11 @@ straight-edged moon, a hairline crack of light, a reaching hand's after-image - 
 crossing the space they do not cross. Far below at the frame's edge, TWO SMALL FIGURES stand
 together and watch, distant and still, faces unreadable at this range; they belong to the
 watching, not the meeting.
-[Shot 2] At 00:04.620, hard cut to the anchor composition ENTIRE: the winged woman below
-reaching up, the inverted pink girl above reaching down, golden light bursting between their
-almost-touching fingertips - the whole geometry of the film in one picture. The drums are
+[Shot 2] At 00:04.620, hard cut - and the camera PULLS OUT fast and far, revealing that
+everything just seen was only one corner of a much larger picture: the anchor composition
+ENTIRE. The winged woman below reaching up, the inverted pink girl above reaching down, golden
+light bursting between their almost-touching fingertips - the whole geometry of the film in one
+picture, and the fragments of Shot 1 were pieces of it all along. The drums are
 dense here and the picture DOES NOT MOVE: a static shot held through every hit, only the
 golden burst between their fingers breathing with the cymbals, brighter and dimmer, never
 bridging the gap. Hold the composition to the end; the distance is the picture. {{S:CITY}}

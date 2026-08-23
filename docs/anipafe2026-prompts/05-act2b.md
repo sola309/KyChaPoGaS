@@ -38,7 +38,7 @@ peace. Through the shot the camera pushes in with extreme slowness; the hair ins
 once, halfway through, the sleeping face seems almost to stir - a tremor of the closed lids -
 and does not wake. One thin violet reflection slides across the glass. The picture holds on
 the sleeping face, and on the fact that she is a person, kept inside a thing. {{S:CITY}}
-{{LENS}} {{FOCUS}} {{STYLE}}
+{{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: Shot 1 - cloth and feathers shifting, a held breath, approaching footsteps
 soft and far. Shot 2 - a deep glassy interior hush, one slow heartbeat-like pulse.
@@ -165,7 +165,7 @@ judgement resumed. Neither turns away; they hold the distant woman in their eyes
 mercy and without hatred, the way one holds a fact. And in the far depth of the frame the
 winged woman walks on, never turning, never feeling their eyes - her solitude perfectly
 intact. The picture holds on the two unmoving gazes and the small figure that does not know
-it is being judged. {{S:CITY}} {{LENS}} {{FOCUS}} {{STYLE}}
+it is being judged. {{S:CITY}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: high night wind on a ledge; cloth; the faint far footsteps of the walking
 woman; the tiny click of glasses removed and returned. No voices at all.
@@ -207,7 +207,7 @@ hold stars. The eye does not blink and holds no expression whatsoever - it is a 
 face. Through the shot the reflection of the boulder drifts very slowly across the highlight,
 and once, a hairline crack of light ticks across the reflected stone - the eye observing the
 crack it has been waiting for. Nothing else exists. The picture holds on the expressionless
-red eye and its patient reflection. {{S:CITY}} {{LENS}} {{FOCUS}} {{STYLE}}
+red eye and its patient reflection. {{S:CITY}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: Shot 1 - a small, gentle, uninflected voice speaking short phrases in
 Japanese, close and intimate though its owner is absent; the woman's breath. Shot 2 - near

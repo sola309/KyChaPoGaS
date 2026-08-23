@@ -123,7 +123,7 @@ almost still except for her small receding figure. Then, at the far edge of hear
 she STOPS - and turns her head back over her shoulder, once, toward the two watchers (or past
 them; the frame does not decide). She does not wave and they do not wave. A breath. She turns
 away again and walks on, and the picture holds on the watchers and the empty widening street,
-every sound gone. {{S:STORM}} {{LENS}} {{FOCUS}} {{STYLE}}
+every sound gone. {{S:STORM}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: aftermath quiet - cubes hissing faintly as they fade, wind falling away;
 her far footsteps, which stop once, resume, and thin into silence. By the end, nothing.

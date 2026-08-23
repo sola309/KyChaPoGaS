@@ -88,7 +88,7 @@ her at a slightly wrong angle. Through the shot the real girl is almost motionle
 her hands slowly closing at her sides - while her broken reflection MOVES WRONGLY: the
 shards drifting a hair further out of register with each cymbal, one shard showing her face
 turned away though her real face looks down. She looks at her own wrong reflection and does
-not look away. Hold the two of them - the whole girl and her pieces. {{S:WATER}} {{LENS}}
+not look away. Hold the two of them - the whole girl and her pieces. {{S:WATER}} {{LENS}} {{DEPTH}}
 {{FOCUS}} {{STYLE}}
 
 overall_soundscape: white silence; drop, ripple, drop - evenly, softly; in Shot 2 a faint

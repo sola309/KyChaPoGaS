@@ -51,7 +51,7 @@
   "materials": [
    "M-8"
   ],
-  "dd_words": 121,
+  "dd_words": 122,
   "file": "docs/anipafe2026-prompts/02-act1a.md"
  },
  "U05": {
@@ -65,7 +65,7 @@
   "materials": [
    "M-7"
   ],
-  "dd_words": 210,
+  "dd_words": 245,
   "file": "docs/anipafe2026-prompts/02-act1a.md"
  },
  "U06": {
@@ -76,7 +76,7 @@
    2944
   ],
   "materials": [],
-  "dd_words": 127,
+  "dd_words": 128,
   "file": "docs/anipafe2026-prompts/02-act1a.md"
  },
  "U07": {
@@ -87,7 +87,7 @@
    949
   ],
   "materials": [],
-  "dd_words": 185,
+  "dd_words": 186,
   "file": "docs/anipafe2026-prompts/02-act1a.md"
  },
  "U08": {
@@ -126,7 +126,7 @@
   "materials": [
    "M-10"
   ],
-  "dd_words": 148,
+  "dd_words": 149,
   "file": "docs/anipafe2026-prompts/03-act1b.md"
  },
  "U11": {
@@ -165,7 +165,7 @@
   "materials": [
    "M-5"
   ],
-  "dd_words": 362,
+  "dd_words": 363,
   "file": "docs/anipafe2026-prompts/03-act1b.md"
  },
  "U14": {
@@ -278,7 +278,7 @@
    2869
   ],
   "materials": [],
-  "dd_words": 239,
+  "dd_words": 273,
   "file": "docs/anipafe2026-prompts/04-act2a.md"
  },
  "U19": {
@@ -294,7 +294,7 @@
    "M-16",
    "M-17"
   ],
-  "dd_words": 277,
+  "dd_words": 278,
   "file": "docs/anipafe2026-prompts/05-act2b.md"
  },
  "U20": {
@@ -338,7 +338,7 @@
    2627
   ],
   "materials": [],
-  "dd_words": 265,
+  "dd_words": 266,
   "file": "docs/anipafe2026-prompts/05-act2b.md"
  },
  "U23": {
@@ -353,7 +353,7 @@
   "materials": [
    "M-19"
   ],
-  "dd_words": 256,
+  "dd_words": 257,
   "file": "docs/anipafe2026-prompts/05-act2b.md"
  },
  "U24": {
@@ -407,7 +407,7 @@
    957
   ],
   "materials": [],
-  "dd_words": 186,
+  "dd_words": 187,
   "file": "docs/anipafe2026-prompts/06-interlude.md"
  },
  "U28": {
@@ -423,7 +423,7 @@
    "M-20",
    "M-21"
   ],
-  "dd_words": 293,
+  "dd_words": 294,
   "file": "docs/anipafe2026-prompts/07-act3a.md"
  },
  "U29": {
@@ -434,7 +434,7 @@
    2627
   ],
   "materials": [],
-  "dd_words": 188,
+  "dd_words": 243,
   "file": "docs/anipafe2026-prompts/07-act3a.md"
  },
  "U30": {
@@ -445,7 +445,7 @@
    936
   ],
   "materials": [],
-  "dd_words": 205,
+  "dd_words": 206,
   "file": "docs/anipafe2026-prompts/07-act3a.md"
  },
  "U31": {
@@ -536,7 +536,7 @@
   "materials": [
    "M-24"
   ],
-  "dd_words": 248,
+  "dd_words": 249,
   "file": "docs/anipafe2026-prompts/08-act3b.md"
  },
  "U37": {
@@ -565,7 +565,7 @@
    "M-25",
    "M-4"
   ],
-  "dd_words": 236,
+  "dd_words": 259,
   "file": "docs/anipafe2026-prompts/09-finale.md"
  },
  "U39": {
@@ -605,7 +605,7 @@
   "materials": [
    "M-19"
   ],
-  "dd_words": 245,
+  "dd_words": 246,
   "file": "docs/anipafe2026-prompts/09-finale.md"
  },
  "U42": {
@@ -618,7 +618,7 @@
   "materials": [
    "M-3"
   ],
-  "dd_words": 236,
+  "dd_words": 297,
   "file": "docs/anipafe2026-prompts/09-finale.md"
  }
 }

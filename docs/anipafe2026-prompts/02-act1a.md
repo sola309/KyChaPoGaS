@@ -15,7 +15,7 @@ through the whole shot, steady and unhesitating, and the reflection in the water
 it - hand and reflection close the distance together. In the final second, a second hand - pale,
 bare, trembling slightly - enters from the lower edge and rises toward the offered one; the shot
 ends at the moment before they touch, fingertips a breath apart. The touch itself is never
-shown. After that the picture holds. {{S:MEM}} {{LENS}} {{FOCUS}} {{STYLE}}
+shown. After that the picture holds. {{S:MEM}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: still water, a single soft drip, the faint rustle of a sleeve; hushed and
 close, as inside a memory.
@@ -49,13 +49,15 @@ mid-stride; she turns her head back over her shoulder and smiles - gently, witho
 the near foreground the dark gloved hand reaches toward her, large and softly out of focus.
 Between hand and girl one faint cold sheen betrays an invisible, unbroken pane. Her hair and
 ribbons move in slow wind; nothing else moves. The smile is held.
-[Shot 2] At 00:04.620, ONE deep isolated impact - and the invisible pane SHATTERS all at once
-across the entire frame, the crack pattern blooming instantly and the fragments separating,
+[Shot 2] At 00:04.620, ONE deep isolated impact - and the camera rushes INTO one point of the
+invisible pane until that point's cold sheen fills the whole screen white for a single frame,
+and it emerges on the other side of the glass, where the pane SHATTERS all at once across the
+entire frame, the crack pattern blooming instantly and the fragments separating,
 white sky showing through the gaps between them. The girl and the hand are no longer there;
 only the pale city remains behind the hanging fragments. Across the white gaps and the broken
 pieces falls one vast shadow from something outside the frame above, slow and enormous; nothing
 that could cast it is ever visible. The fragments drift, the shadow deepens, and the picture
-holds in a quiet dread. {{S:MEM}} {{LENS}} {{FOCUS}} {{STYLE}}
+holds in a quiet dread. {{S:MEM}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: Shot 1 is hushed - wind, cloth, distant city stillness. The shatter is one
 huge glass break, close and dry, followed by falling glass chimes fading into a low sub-bass
@@ -79,7 +81,7 @@ no fill, as light as a pencil ghost. The wing must stay faint for the entire sho
 minimal and slow: hair drifts on the water, ripples widen from beneath their hands, the pale
 reflections breathe. Their mouths never move; no words are shown. The gap between their almost-
 touching hands stays exactly as it is - the camera creeps toward it so slowly the motion is
-felt only at the end. The picture holds on that gap. {{S:WATER}} {{LENS}} {{STYLE}}
+felt only at the end. The picture holds on that gap. {{S:WATER}} {{LENS}} {{DEPTH}} {{STYLE}}
 
 overall_soundscape: water at rest - tiny laps, a single distant drop, cloth shifting; vast
 quiet.
@@ -114,7 +116,7 @@ the streams simply leave. In the lower third, small against the field, stands th
 girl, head tipped back, watching it go; her own shadow stretches long and thin. She does not
 reach up. The colour drains from around her until she and her shadow are the darkest things in
 a bleached world, and the last petals dwindle to sparks. The picture then holds on the emptied
-field. {{S:MEM}} {{LENS}} {{FOCUS}} {{STYLE}}
+field. {{S:MEM}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: a rising airy rush, layered - petals tearing free with each hit, wind
 pulling upward; beneath it, silence around the girl.

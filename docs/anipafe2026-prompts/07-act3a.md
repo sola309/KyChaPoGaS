@@ -39,7 +39,7 @@ half-curled, neither fighting nor resting. Red thread-lines slide slowly across 
 as unseen forces take up slack from outside the frame. For four seconds there are only hands,
 thread, and the small dry creak of tightening. Then, in the final half second, the camera
 Tilts Up fast - and her face surfaces into the bottom of the frame, lips just parting to
-answer - and the picture cuts to black on her first syllable. {{S:A3}} {{LENS}} {{FOCUS}}
+answer - and the picture cuts to black on her first syllable. {{S:A3}} {{LENS}} {{DEPTH}} {{FOCUS}}
 {{STYLE}}
 
 overall_soundscape: Shot 1 - true silence; not even wind; the faint interior sound of an eye
@@ -73,10 +73,14 @@ MANY: five, six, more overlapping shadow-silhouettes fanning out behind her at d
 angles, none agreeing with a single light source. She speaks one slow, grave sentence -
 English, deliberate, almost tender - and AS her lips move, every shadow moves its head and
 shoulders in time with her words, a fraction offset, so the one voice is visibly carried by
-many bodies. Between phrases she is still - and the shadows settle a half-beat late. Her eyes
+many bodies. Between phrases she is still - and the shadows settle a half-beat late. Once, mid-sentence, the
+camera drifts slowly SIDEWAYS AND BETWEEN her and the nearest of those shadow-selves, passing
+through the gap between the two layers so that for a moment the translucent duplicate is nearer
+to the lens than she is, and the parallax between them is unmistakable: they occupy different
+depths and always have. Her eyes
 hold the camera the entire time, level and unblinking; the single red ribbon at the back of
 her head is the only red in the frame. The sentence ends; her mouth closes; the shadows go
-still last. The picture holds on one woman and her crowd of selves. {{S:A3}} {{LENS}}
+still last. The picture holds on one woman and her crowd of selves. {{S:A3}} {{LENS}} {{DEPTH}}
 {{FOCUS}} {{STYLE}}
 
 overall_soundscape: a low young woman's voice speaking one measured English sentence, close;
@@ -116,7 +120,7 @@ subsequent drum hit the background motion grows - streaks quickening, a distant 
 gathering - but SHE never accelerates: her refusal continues at its own tender pace against
 the rising world, phrase by phrase, to the end of the shot. Her final phrase closes; her lips
 press; the tears still do not fall. The picture holds her stillness against the storm now
-fully awake behind her. {{S:A3}} {{LENS}} {{FOCUS}} {{STYLE}}
+fully awake behind her. {{S:A3}} {{LENS}} {{DEPTH}} {{FOCUS}} {{STYLE}}
 
 overall_soundscape: her voice - young, wet-edged, steady - carrying phrase after phrase over
 a waking storm: drum-deep impacts, rising wind, feathers streaming; her voice always in
