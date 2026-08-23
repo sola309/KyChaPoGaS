@@ -8,7 +8,7 @@
 import json, re, glob, sys, urllib.request
 
 KNOWN_PH={"HOMU_ID","UM_ID","ORB_ID","GEM_ID","QB_ID","EMBLEM_ID","MAJUU_ID","WALP_ID","DOLLS_ID",
- "S:PRO","S:MEM","S:CITY","S:DAY","S:STORM","S:A3","S:WATER","FOCUS","STYLE","LENS",
+ "S:PRO","S:MEM","S:CITY","S:DAY","S:STORM","S:A3","S:WATER","FOCUS","STYLE","LENS","DEPTH",
  "HALF_MOON","SOURCELESS_SHADOW","FRAME_A","FRAME_B","WATER_BASE","SEEOFF","REACH_HAND"}
 QUALITY=re.compile(r"\b(cinematic|masterpiece|stunning|4k|8k|best quality|photoreal)\b",re.I)
 BAD_NEG=re.compile(r"\bno (background music|music plays)\b",re.I)

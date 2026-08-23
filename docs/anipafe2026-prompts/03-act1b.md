@@ -111,19 +111,16 @@ up and NEVER MOVES from that position for the whole shot: the lowest edge of the
 the dark blurred silhouette of broken stonework and a few strands of long black hair lying across the
 lens, both far out of focus. This is a person's own field of vision, flat on her back.
 
-At the start the goddess is FAR AWAY and SMALL, high in a dead black sky, and the frame is almost
-entirely black; only a faint rose glow marks where she is. Over the shot she DESCENDS steadily toward the
-camera and grows: each kick lands as one pulse of that descent, bringing her a step nearer and her light
-a step stronger; each snare is one syllable of what she is saying. She is speaking a short gentle
-invitation, her lips parting only as far as one syllable requires - never a wide open mouth - and the
-corners of her mouth lifting a little between phrases. Her eyes stay above the top edge of the frame
-throughout and are never seen; her nose, mouth, chin and body fill the picture as she nears.
+At the start the goddess is FAR AWAY and SMALL, high in a dead black sky; the frame is almost entirely
+black and only a faint rose glow marks where she is. Over the shot she DESCENDS steadily and grows: each
+kick is one pulse of that descent, bringing her nearer and her light stronger; each snare is one syllable
+of what she says. She is speaking a short gentle invitation, her lips parting only as far as one syllable
+requires and their corners lifting a little between phrases. Her eyes stay above the top edge of the frame
+throughout and are never seen. Both her arms reach DOWN toward the camera the whole time, palms open.
 
-As she approaches, HER LIGHT REACHES FURTHER: at first only her own body glows; then the drifting motes
-around her ignite; then, in the second half, the downward light finally touches the foreground - the
-upper faces of the broken stone and the black strands of hair begin to catch a warm rose edge, and the
-black in the frame retreats. Both her arms reach DOWN toward the camera the whole time, palms open,
-offered.
+As she nears, HER LIGHT REACHES FURTHER: first only her body glows; then the drifting motes ignite; then
+the downward light finally touches the foreground, and the upper faces of the broken stone and the black
+strands of hair catch a warm rose edge as the black retreats.
 
 Once, near the middle of the shot, THE PICTURE BLINKS: darkness closes over the frame from top and bottom
 and opens again in a fraction of a second - a single eyelid blink from inside the watching eye. Nothing
@@ -169,27 +166,25 @@ reduced, and it is being formed rather than complete.
 
 detailed_description: [Shot 1] 2D Japanese cel animation. The camera has NOT MOVED: the same upward
 viewpoint, the same out-of-focus rubble and black hair across the lowest edge, the same offered hand
-close above. Then, in one instant, a PERFECTLY STRAIGHT VERTICAL SEAM of white light opens down the
-descending goddess from the top of the frame through her body, and along it she comes apart into TWO
-SEPARATE FIGURES: on the left of the seam the goddess in her white gown, her edges dissolving into
-drifting motes, one white-gloved hand still open and reaching; on the right of the seam a small
-pink-haired schoolgirl in a white and red uniform, limp, falling away backwards, her hand loose and no
-longer reaching. Between them is a band of empty black sky that WIDENS through the shot. Keep the
-schoolgirl's red bow and short twin tails distinct from the goddess's white ribbons; never merge them.
+close above. Then, in one instant, a PERFECTLY STRAIGHT VERTICAL SEAM of white light opens down through the
+descending goddess, and along it she comes apart into TWO SEPARATE FIGURES: left of the seam the goddess
+in her white gown, edges dissolving into motes, one white-gloved hand still open and reaching; right of
+it a small pink-haired schoolgirl in a white and red uniform, limp, falling away backwards, her hand
+loose. Between them a band of empty black sky WIDENS through the shot. Keep the schoolgirl's red bow and
+short twin tails distinct from the goddess's white ribbons; never merge them.
 
 At the same instant the WHOLE PICTURE SHATTERS like a pane of glass across the viewer's own eye: fracture
 lines run over sky, figures and foreground alike, their edges burning thin and hard, and a cold magenta
-glow rises from behind the glass and fills every crack. Each snare cracks one new fracture across the
-frame; each kick widens the black band between the two halves.
+glow rises from behind the glass into every crack. Each snare cracks one new fracture; each kick widens
+the black band between the halves.
 
 And across that broken surface, LARGE and close, a REFLECTION appears - only the lower part of a face:
 lips, chin, jaw-line and a little pale throat, frontal, spanning the middle of the frame at several times
-the scale of the figures behind it, broken into slightly misaligned segments by the fractures crossing
-it. Nothing above the upper lip is reflected: no eyes, no nose bridge, no forehead, no hair, no wings, no
-body - only the mouth region. That mouth SPEAKS: a short phrase, three or four syllables, flat and final,
-the lips parting only as far as each syllable requires - never a wide open mouth. It is the only voice in
-the shot, and it belongs to no visible person. The goddess's dying rose light and the rising magenta of
-the cracks fight in the same frame.
+the scale of the figures behind it, broken into misaligned segments by the fractures crossing it. Nothing
+above the upper lip is reflected - no eyes, no nose bridge, no forehead, no hair, no wings, no body. That
+mouth SPEAKS a short phrase, three or four syllables, flat and final, the lips parting only as far as each
+syllable requires. It is the only voice in the shot and it belongs to no visible person. Dying rose light
+and rising magenta fight in the same frame.
 
 [Shot 2] At 00:02.330, hard cut to empty darkness - the viewpoint is gone; nobody is in the frame for the
 rest of the video. In the void, black feathers are falling INWARD toward one point, and each feather that
