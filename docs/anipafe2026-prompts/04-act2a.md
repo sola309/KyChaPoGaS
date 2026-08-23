@@ -100,6 +100,133 @@ non_diegetic_music: N/A
 ```
 
 ---
+## U16a — C18 単独 罪の誕生 (Ref2VA / 生成124f / 実尺103f=4.29s / ス7キ13シ9)
+
+**U16の分割パターン①。** 参照3枚(検証済みjob3592と同構成)。
+⚠U16(統合)と**排他**。分割を採る場合はU16aとU16bを両方使い、U16は使わない。
+利点: 参照が3枚に減り追従が上がる / 人形の顔と武器の混線リスクが消える。
+欠点: C18→C19の転換をH3内で作れず、編集のハードカットになる。
+
+参照: <Picture 1> #2627 悪魔ほむら(identity) / <Picture 2> #2605 クララドールズ(design) /
+<Picture 3> #2872 黄金嵐(world)
+
+```
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame)
+defines the winged woman: {{HOMU_ID}}. <Picture 2> (reference role: design of the small dolls
+only; their faces are never shown close): {{DOLLS_ID}}. <Picture 3> (reference role: the world -
+golden storm sky and dark broken ground; weak style reference, not a composition anchor).
+
+summary: A back-lit hand opens; the light between its fingers becomes a woman-shaped window in
+which feathers turn into dolls, and the window breaks and spills them out.
+
+retention_analysis: <Picture 1> fully_preserved - her identity, gown, wings and ornaments are
+exact. <Picture 2> partially_preserved - the dolls keep their design but their faces are never
+shown at close range. <Picture 3> weak_reference.
+
+detailed_description: [Shot 1] 2D Japanese cel animation under a golden storm sky, one
+continuous shot. A hand fills the lower frame, back-lit, seen as a dark shape against the
+storm - hers, sheathed in glossy black to the fingertips. It OPENS, slowly, and light bursts
+out between the spreading fingers.
+
+The light widens as it climbs, and as it clears the hand it takes a shape: HER OWN SILHOUETTE,
+a tall woman-shaped window of golden storm standing in the dark air, wings and long hair read
+only as the window's outline. INSIDE that window the storm is not storm but a falling of black
+feathers, and every feather that reaches the window's lower edge CEASES TO BE A FEATHER - the
+barbs stiffening into a small braided head, a caged crown, two folded arms - and stands there
+as a doll. Feather becomes doll on contact; the change is a transformation of one material into
+another, never a puff of light.
+
+Each snare births one doll inside the window; each cymbal bursts a feather into embers on the
+way down; each kick shudders the window's outline. As the dolls accumulate, the window's edges
+grow ragged and thin.
+
+Then the window CRACKS - a spider of fracture lines running across the woman-shaped light -
+and BREAKS, and the dolls spill out through the break into the real air as solid bodies,
+tumbling forward past the camera. In the near foreground they pass only as back-lit shapes and
+fragments: a sleeve, a caged head in silhouette, a small hand crossing the lens out of focus.
+Doll faces are legible only far away, small, in the depth of the storm.
+
+Behind the broken window the real woman is revealed standing - and she is THINNER than her own
+silhouette was: feathers still streaming off her wings and skirt, carried away into the dark,
+each departure leaving her a little less. She does not look at what she has made. The picture
+holds on her, shedding. {{S:CITY}}(the violet key becomes the golden storm light) {{FOCUS}}
+{{STYLE}}
+
+overall_soundscape: the dry tearing of feathers; small wooden joints creaking as each doll
+finishes; embers hissing; then one long glass-crack as the window breaks and the loose clatter
+of bodies spilling through; behind it all, storm wind.
+
+non_diegetic_music: N/A
+```
+
+---
+## U16b — C19 単独 5人の対峙 (Ref2VA / 生成124f / 実尺118f=4.92s / ス8キ13シ14)
+
+**U16の分割パターン②。** 参照7枚。U16aと対で使う。
+⚠武器の混線対策(なぎさが弓を持った実害)を最優先で書いている。
+
+参照: <Picture 1> #2892 4人プレート / <Picture 2> #2781 さやか剣 / <Picture 3> #2782 杏子槍 /
+<Picture 4> #2788 マミ銃 / <Picture 5> #2783 なぎさ / <Picture 6> #953 まどか / <Picture 7> #2872 黄金嵐
+
+```
+subject_definitions: <Picture 1> (reference role: faces, outfits and relative heights of the
+four girls only; never output the sheet's frame, panels or layout). <Picture 2> (reference role:
+defines ONE weapon - the sword, belonging to the BLUE-haired girl and to no one else).
+<Picture 3> (reference role: defines ONE weapon - the segmented chain-spear, belonging to the
+RED-haired girl and to no one else). <Picture 4> (reference role: defines ONE weapon - the
+muskets, belonging to the GOLDEN-haired girl and to no one else). <Picture 5> (reference role:
+subject definition of the smallest girl - her 廻天 magical-girl design; she carries no bow and no
+sword). <Picture 6> (reference role: subject definition of the pink girl, for the closing
+close-up only). <Picture 7> (reference role: the world - golden storm; weak style reference).
+Never merge the characters. Never exchange their hair, eyes, clothing, accessories, weapons or
+facial features. Each weapon belongs to exactly one girl.
+
+summary: One unbroken forward advance passes four armed girls who resolve out of the storm by
+depth, each one's weapon wiping the frame onward, ending inverted on the pink girl's face.
+
+retention_analysis: <Picture 1> fully_preserved as the four identities. <Pictures 2-4>
+attribute_transfer - each design is transferred onto its own owner's weapon and onto no other.
+<Picture 5> and <Picture 6> fully_preserved. <Picture 7> weak_reference.
+
+detailed_description: [Shot 1] 2D Japanese cel animation under a golden storm sky. ONE
+continuous forward advance, ground level: the camera pushes ahead through standing figures who
+resolve out of the storm one after another BY DEPTH - the shot never cuts and the girls are
+never replaced by an edit, only reached.
+
+First the BLUE-haired girl steps into range mid-iai; her sword's drawn arc TEARS the picture
+along a clean diagonal, and through that tear the advance continues into the next depth.
+
+Then the RED-haired girl, planted wide; her spear SPLITS along its length into chained segments
+and cracks sideways like a whip, the chain streaking past the lens close and out of focus and
+carrying the frame onward.
+
+Then the GOLDEN-haired girl, one hand raised; a rank of muskets materialises in a vertical line
+beside her, and their barrels wipe across the frame like a passing fence, each barrel a stripe
+of gold.
+
+Then the SMALLEST girl, small and solemn; a swarm of round bubbles drifts across the lens, and
+inside every bubble the whole world hangs UPSIDE DOWN - the storm, the ground, the girls behind.
+She holds no bow.
+
+Each snare lands as one girl's motion beginning; each kick is an impact - a heel planting, a
+spear butt striking, muskets settling; each cymbal is light bursting off a blade or a bubble
+breaking. The advance never pauses and the camera never cuts: every transition is a weapon's
+own movement wiping the previous depth away.
+
+The last bubbles clear - and the frame arrives INVERTED on the pink girl's face, upside down,
+close. She is back-lit, her outline dissolving into the storm's gold, her expression fleeting
+and sad, hair drifting upward around her because the world is the wrong way up. Hold that
+inverted close-up to the end; the picture finishes on her eyes. {{S:CITY}}(the violet key
+becomes the golden storm light) {{FOCUS}} {{STYLE}}
+
+overall_soundscape: one clean sword ring; a chain running out and cracking; a hundred musket
+stocks landing as one; bubbles bursting wetly; the wind of a continuous advance throughout. No
+voices, and no bowstring - nothing is fired in this shot.
+
+non_diegetic_music: N/A
+```
+
+---
 ## U17 — C20+C21+C22 亀裂三連 (Ref2VA / 生成175f / 実尺166f / 境界=2.33s, 4.62s)
 
 参照: <Picture 1> #3067 M-13座り(anchor Shot1) / <Picture 2> #3060 M-14走りPOV(anchor Shot2) /

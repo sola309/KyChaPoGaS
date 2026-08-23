@@ -36,6 +36,11 @@
 | `{{SEEOFF}}` | "the two of them stand side by side in the lower left of the frame, seen from behind at a distance, perfectly still, watching something bright leave the upper right; neither raises a hand" | U25 U27 (C37/C42反復) |
 | `{{REACH_HAND}}` | "a hand reaches into the frame, open, yearning, and stops short - the distance between fingertips and what they reach for stays visible" | U02 U16 U17 |
 
+### 文字の例外
+`{{STYLE}}` は NO-TEXT を含むが、**U03 だけは例外**(ユーザー方針: C3のロゴ6点のみ文字可)。
+展開時に U03 の `{{STYLE}}` からは NO-TEXT 行を外す。ロゴは**参照からの図形複製**であり、
+モデルに綴りを書かせてはならない(生成させると崩れる)。
+
 ## 全単位共通の規則
 
 1. **プロンプトはカット実尺で時間を割る**(憲法37)。生成尺の残りは

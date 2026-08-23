@@ -19,7 +19,7 @@ def main():
     units=0
     for f in files:
         t=open(f).read()
-        for m in re.finditer(r"## (U\d+) — ([^\(]+)\(([^\)]+)\)(.*?)(?=\n---\n## U|\Z)",t,re.S):
+        for m in re.finditer(r"## (U\d+[ab]?) — ([^\(]+)\(([^\)]+)\)(.*?)(?=\n---\n## U|\Z)",t,re.S):
             uid,title,meta,body=m.group(1),m.group(2).strip(),m.group(3),m.group(4)
             units+=1
             code=re.search(r"```\n(.*?)\n```",body,re.S)

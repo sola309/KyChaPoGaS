@@ -25,16 +25,20 @@
   "file": "docs/anipafe2026-prompts/01-intro.md"
  },
  "U03": {
-  "title": "C3 タイトル螺旋",
-  "meta": "I2VA / 生成226f / 実尺220f=9.17s / ス17キ28シ24",
-  "mode": "I2VA",
+  "title": "C3 タイトル螺旋とロゴ",
+  "meta": "Ref2VA / 生成226f / 実尺220f=9.17s / ス17キ28シ24",
+  "mode": "Ref2VA",
   "assets": [
+   2932,
+   2933,
+   2934,
+   2935,
+   2936,
+   2937,
    2997
   ],
-  "materials": [
-   "M-4"
-  ],
-  "dd_words": 108,
+  "materials": [],
+  "dd_words": 295,
   "file": "docs/anipafe2026-prompts/01-intro.md"
  },
  "U04": {
@@ -208,6 +212,36 @@
   ],
   "materials": [],
   "dd_words": 354,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U16a": {
+  "title": "C18 単独 罪の誕生",
+  "meta": "Ref2VA / 生成124f / 実尺103f=4.29s / ス7キ13シ9",
+  "mode": "Ref2VA",
+  "assets": [
+   2605,
+   2627,
+   2872
+  ],
+  "materials": [],
+  "dd_words": 341,
+  "file": "docs/anipafe2026-prompts/04-act2a.md"
+ },
+ "U16b": {
+  "title": "C19 単独 5人の対峙",
+  "meta": "Ref2VA / 生成124f / 実尺118f=4.92s / ス8キ13シ14",
+  "mode": "Ref2VA",
+  "assets": [
+   953,
+   2781,
+   2782,
+   2783,
+   2788,
+   2872,
+   2892
+  ],
+  "materials": [],
+  "dd_words": 316,
   "file": "docs/anipafe2026-prompts/04-act2a.md"
  },
  "U17": {

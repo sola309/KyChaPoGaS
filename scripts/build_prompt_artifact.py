@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""42単位プロンプト集をレビュー用の1枚HTMLに組む。
+"""生成単位プロンプト集をレビュー用の1枚HTMLに組む。
 
 読み: docs/anipafe2026-prompts/*.md + requirements.json
 出力: 引数のパス
@@ -22,9 +22,11 @@ ACTS = [
 ]
 # 判断を仰ぐ単位
 FLAGGED = {
-    "U03": "ロゴ6点を生成から外し編集オーバーレイへ回した",
-    "U16": "参照9枚の上限構成。本番前にT1でA/B推奨",
-    "U25": "C38はジェムの公式情報が皆無のため代案で執筆",
+    "U03": "本作で唯一、文字が出る単位。ロゴは参照からの図形複製で、綴りは生成させない",
+    "U16": "統合パターン。参照9枚の上限構成 — U16a/U16bの分割と排他。T1でA/B推奨",
+    "U16a": "分割パターン①(C18単独・参照3枚)。U16と排他",
+    "U16b": "分割パターン②(C19単独・参照7枚)。U16と排他",
+    "U25": "C38はジェムの公式情報が皆無のため代案で執筆(承認済)",
 }
 
 FIELDS = ("subject_definitions", "summary", "retention_analysis",
@@ -49,7 +51,7 @@ def main():
     units = {}
     for f in sorted(glob.glob("docs/anipafe2026-prompts/0[1-9]*.md")):
         t = open(f).read()
-        for m in re.finditer(r"## (U\d+) — ([^\n]+)\n(.*?)(?=\n---\n## U|\Z)", t, re.S):
+        for m in re.finditer(r"## (U\d+[ab]?) — ([^\n]+)\n(.*?)(?=\n---\n## U|\Z)", t, re.S):
             uid, head, body = m.group(1), m.group(2), m.group(3)
             code = re.search(r"```\n(.*?)\n```", body, re.S).group(1)
             notes = body.split("```")[0].strip()
@@ -57,6 +59,7 @@ def main():
                           "act": f.split("/")[-1][:2], **req[uid]}
 
     n_ref = sum(1 for u in units.values() if u["mode"] == "Ref2VA")
+    n_units = len([k for k in units if k not in ("U16a", "U16b")])
     assets = sorted({a for u in units.values() for a in u["assets"]})
 
     nav, cards = [], []
@@ -234,12 +237,12 @@ pre.prompt{{background:var(--code-bg); border:1px solid var(--line); border-radi
   （フィールド名・<code>[Shot N]</code>・<code>{{{{タグ}}}}</code>・参照ラベル）は公式が
   「正確な文字列で」と規定する部分なので、本文と色で分けて表示しています。</p>
   <ul class="stats">
-    <li><b>42</b><span>生成単位</span></li>
+    <li><b>{n_units}</b><span>生成単位</span></li>
     <li><b>{n_ref}</b><span>Ref2VA</span></li>
     <li><b>{len(units)-n_ref}</b><span>I2VA</span></li>
     <li><b>{len(assets)}</b><span>参照アセット</span></li>
     <li><b>92<small style="font-size:13px">%</small></b><span>フレーム使用率</span></li>
-    <li><b>3</b><span>要確認</span></li>
+    <li><b>2</b><span>分割案</span></li>
   </ul>
   <div class="legend">
     <span><b class="fld" style="color:var(--ink)">フィールド名</b></span>

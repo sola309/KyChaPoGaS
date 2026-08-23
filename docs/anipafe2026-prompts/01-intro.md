@@ -62,27 +62,58 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U03 — C3 タイトル螺旋 (I2VA / 生成226f / 実尺220f=9.17s / ス17キ28シ24)
+## U03 — C3 タイトル螺旋とロゴ (Ref2VA / 生成226f / 実尺220f=9.17s / ス17キ28シ24)
 
-参照: keyframe #2997 (M-4螺旋・first frame)
-⚠ **ロゴ6点は生成に入れない** — 2スネアに1枚の切替は編集精度の仕事(公式:「細かい同期は編集で取る」)。
-生成は背景の螺旋のみ。ロゴはMGエンジンでオーバーレイし、datamosh風の上書き消去も編集側で行う。
-これにより本単位から文字出力のリスクが消える。対比: C60(同じ螺旋・逆方向)
+参照(7枚): <Picture 1> #2936 TV版 / <Picture 2> #2937 前編 / <Picture 3> #2932 後編 /
+<Picture 4> #2933 叛逆(紫) / <Picture 5> #2934 帰巡(金) / <Picture 6> #2935 廻天 / <Picture 7> #2997 螺旋
+⚠ **本作で唯一、文字が出る単位**(他41単位は完全に文字禁止)。ロゴは生成に含める ──
+狙いは正しいロゴの提示ではなく、**AI表現の中に埋め込むこと**。上書きされて消える様(datamosh)
+そのものが「上書き」という主題の実演。⚠ロゴは**参照から複製する図形**であり、モデルに文字を
+書かせない(綴りを生成させると崩れる)。⚠色の変遷=物語の転落。対比: C60(同じ螺旋・逆方向)
 
 ```
-Create a video from this image. Slow Zoom In throughout, small amplitude.
+subject_definitions: <Picture 1> through <Picture 6> (reference role: each defines ONE graphic
+title mark to be REPRODUCED AS AN IMAGE, copied from the reference exactly as a shape - never
+re-lettered, never re-spelled, never re-typeset; treat each one as a flat graphic object, not as
+text to compose). Their order of appearance is <Picture 1>, <Picture 2>, <Picture 3>, <Picture
+4>, <Picture 5>, <Picture 6>. <Picture 7> (reference role: defines the background - a spiral
+vortex of stars winding inward; weak style reference for the space behind everything).
 
-detailed_description: [Shot 1] 2D Japanese cel animation, deep space. The picture is the given
-frame: a spiral vortex of stars and thin gold star-trails curving into a deep violet centre.
-The whole field rotates slowly around that centre, the arms winding INWARD - the spiral is
-falling toward its own middle. For the first seven seconds the rotation is stately and constant.
-In the final two seconds the rotation accelerates sharply and the star-trails stretch into long
-lines, everything rushing toward the centre as if being wound onto an unseen spool, and the
-centre brightens toward white. The frame ends just before the centre swallows the field.
-{{S:PRO}} {{STYLE}}
+summary: Six title marks appear one after another at the centre of an inward-winding star
+spiral, each one overwriting and corrupting the one before it, until the last remains and the
+spiral accelerates into whiteout.
 
-overall_soundscape: a vast low rumble of slow rotation, far away; in the final two seconds a
-rising wind of accelerating star-trails.
+retention_analysis: <Picture 1> through <Picture 6> fully_preserved - each mark keeps its exact
+letterforms, proportions and colours as copied artwork; none of them is redrawn or altered in
+shape. <Picture 7> weak_reference - the spiral background follows its style, not its framing.
+
+detailed_description: [Shot 1] 2D Japanese cel animation over deep space. Behind everything, the
+star spiral turns slowly, its gold trails winding INWARD toward a deep violet centre. Held flat
+against that turning field, at the centre of frame, ONE graphic title mark at a time - copied
+exactly from its reference, sharp and complete, never re-lettered.
+
+Six marks pass in order, and each ARRIVES BY DESTROYING THE ONE BEFORE IT. The overwrite is a
+digital corruption, not a dissolve: the previous mark's pixels smear sideways in horizontal
+bands, its blocks tearing and repeating and sliding off their own baseline, colour channels
+separating into thin red-cyan ghosts, while the incoming mark pushes up through that wreckage
+from underneath and snaps into focus clean. Each snare triggers one of these overwrites; each
+kick shoves a band of the corrupting image sideways; the cymbals hiss as chroma ghosts scatter.
+The corruption of the outgoing mark and the arrival of the incoming one are the SAME event -
+nothing fades, everything is overwritten.
+
+Their colours carry the descent: the first marks arrive in clean pink and white; the fourth in
+violet; the fifth in gold; the last is the darkest of them. The spiral behind them tightens with
+each overwrite, drawing its trails a little further inward, and the frame's black grows.
+
+After the sixth mark has taken its place, it holds alone for a breath, unmoving and undamaged.
+Then the whole field ACCELERATES: the spiral's rotation runs away, the star trails stretch into
+long straight lines rushing toward the centre, and the last mark itself begins to smear
+inward - its bands drawn into the vortex like everything else - as the centre brightens toward
+white. The frame ends an instant before the white takes the field. {{S:PRO}} {{STYLE}}
+
+overall_soundscape: a vast low rumble of slow rotation; each overwrite is a short burst of
+digital tearing - tape shredding, data stutter, a dry snap as the new mark lands; in the last
+two seconds a rising wind of accelerating star-trails swallowing all of it.
 
 non_diegetic_music: N/A
 ```
