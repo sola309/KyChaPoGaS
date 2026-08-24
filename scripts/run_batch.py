@@ -41,7 +41,9 @@ def units_of(v3):
     m = importlib.util.module_from_spec(spec)
     sys.argv = ["x"]
     spec.loader.exec_module(m)
-    m.PDIR = m.PDIR_V3 if v3 else m.PDIR_V2
+    if v3:
+        return sorted(m.parse_units_v3())
+    m.PDIR = m.PDIR_V2
     return sorted(m.parse_units())
 
 
