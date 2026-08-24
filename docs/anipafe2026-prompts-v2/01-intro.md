@@ -18,6 +18,7 @@ fraction across the whole shot. One huge soft-edged shadow crosses the moon's fa
 from the round side. It exits at the straight edge. The crossing takes five full seconds.
 Nothing in the sky casts it. The thin white light on the straight edge never flickers. After
 the shadow passes, everything holds.
+SILENT UNIT: there are no drums in this cut. Nothing in the picture is driven by a beat; motion is continuous and unaccented.
 LAW: THE ONLY MOVING THINGS ARE THE SHADOW, THE CLOUDS AND THE CAMERA. Nothing else changes.
 {{ST2}}
 
@@ -97,6 +98,7 @@ the palette. The spiral tightens. The black grows.
 [Shot 4] At 00:07.160, the LAST and darkest mark overwrites the third. Then the spiral runs
 away: star trails stretch to straight lines, the mark itself smears into bands and is dragged
 inward, the centre brightens to white. End one frame before whiteout.
+BEAT LAW: {{BEATLAW}} Each snare triggers one overwrite; each kick shoves a band sideways; each cymbal scatters chroma ghosts.
 OVERWRITE LAW: A NEW MARK ALWAYS ARRIVES BY DESTROYING THE OLD ONE. Nothing fades. Nothing
 dissolves. Destruction and arrival are the same event, and it always lands on a snare.
 {{DP}} STYLE: 2D Japanese cel animation, hard-edge cel shading, editorial motion-graphic

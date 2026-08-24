@@ -24,6 +24,7 @@ right. Palm open. Fingers gently spread. Dark still water below reflects it. The
 slowly through the whole shot. It never hesitates. Its reflection rises to meet it. In the
 final second a second hand enters from the lower edge. Bare. Pale. Trembling. It rises toward
 the offered one. The frame ends with the fingertips a breath apart. The touch is never shown.
+SILENT UNIT: there are no drums in this cut. Nothing in the picture is driven by a beat; motion is continuous and unaccented.
 LAW: THIS IS THE ONLY HAND IN THE FILM THAT ARRIVES. Both hands keep moving toward each other
 until the last frame.
 {{DP}} {{ST2}}
@@ -76,64 +77,74 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U06 — C7 約束の水面 (Ref2VA / 生成175f / 実尺6.96s / 4ショット / ス2キ2 / 盛上5.79-6.96s)
+## U06 — C7 約束の水面 (Ref2VA / 生成175f / 実尺6.96s / 3ショット / キ2.322,6.932 ス2.322,3.472 / 盛上5.79-6.96)
 
-参照(理想): <Picture 1> #3235 まどかの顔アップ(涙) / <Picture 2> #3234 眼鏡ほむらが横たわる /
-<Picture 3> #3236 寄り・向かい合って手を伸ばす / <Picture 4> #2944 引き・二人 (⚠翼は本文が支配) /
-<Picture 5> #3233 眼鏡ほむらの目の極アップ
-⚠**この場面のほむらは眼鏡ほむら**(赤縁眼鏡・三つ編み)。悪魔ほむら/弓ほむらと混同しない。
-⚠翼の段階: ③=無い → ④=**輪郭線として現れる** → C11で黒く塗り潰される。ここで濃くしない。
-MG: **水の波紋がワイプ**(手の間から広がる環が次の画へ開く)。寄り→引きへ層が降りる
+参照(理想): <Picture 1> #3236 寄り・倒れた二人 / <Picture 2> #3235 まどか顔アップ(涙) /
+<Picture 3> #3233 眼鏡の目の極アップ / <Picture 4> #2944 引き・二人 (⚠翼は本文が支配) /
+<Picture 5> #3234 眼鏡ほむら(identity)
+⚠**3ショット構成**(前版は4ショットで②④が1.2秒しかなく、伏線が実行されなかった)。
+③に3.49秒を与え、レンズ→翼のワイプ→引き→羽根→影を入れる。
+MG: **線画グリッチ**(描かれた/まだ描かれていないが拍で明滅) / **翼の線がレンズ至近を横切るワイプ** /
+**羽根=唯一の実体** / **光源のない影**
 
 ```
-subject_definitions: <Picture 1> (reference role: subject definition and framing of Shot 1 -
-the pink-haired girl's face in close-up, eyes closed, one tear crossing her cheek). <Picture
-2> (reference role: subject definition and framing of Shot 2 - the black-haired girl lying on
-the water, BRAIDED hair, RED-RIMMED GLASSES; she is the earliest-loop version and wears her
-glasses in every shot of this video). <Picture 3> (reference role: the close view of the two
-of them reaching toward each other across the water). <Picture 4> (reference role: the wide
-view of both girls lying on the white water; ignore its wing - the wing's state is governed
-by the text below). <Picture 5> (reference role: weak reference for the texture of an eye at
-extreme range). Never merge the two girls; never remove the glasses.
+subject_definitions: <Picture 1> (reference role: framing of Shot 1 - two schoolgirls fallen
+head to head, hands reaching). <Picture 2> (reference role: framing of Shot 2 - the pink-haired
+girl's face, eyes closed, one tear). <Picture 3> (reference role: framing of Shot 3's opening -
+a violet eye behind a RED-RIMMED lens at extreme range). <Picture 4> (reference role: the wide
+view of both girls on white water; ignore its wing). <Picture 5> (reference role: subject
+definition - BRAIDED hair, RED-RIMMED GLASSES, earliest loop). Never merge the two girls.
 
-summary: A tear, an eye, two hands almost touching, and finally the whole white water with
-both girls upon it - where a single feathered wing draws itself in outline behind the
-bespectacled one.
+summary: Two fallen girls resolve out of black on a world that keeps flickering between drawn
+and undrawn; a tear falls; and inside a lens the wing is drawn by the ripple, sweeps the frame
+away, and sheds one solid feather while a sourceless shadow crosses.
 
-retention_analysis: <Pictures 1-2> fully_preserved as identities and framings. <Picture 3>
-fully_preserved as the close reaching. <Picture 4> partially_preserved - its composition is
-kept, its wing is not. <Picture 5> weak_reference.
+retention_analysis: <Pictures 1-3> fully_preserved as framings. <Picture 4>
+partially_preserved. <Picture 5> fully_preserved as identity.
 
 detailed_description: {{TH:WATER}}
-[Shot 1] Extreme close on the pink-haired girl's face. She lies on white water. Her eyes are
-closed. One tear crosses her cheek and falls. It strikes the water beside her head. A ring
-opens from the point of impact. The ring widens across the frame.
-[Shot 2] At 00:02.322, the widening ring becomes the frame's edge and opens onto the
-black-haired girl. Close on her face, lying on the same white water. Braided hair. Red-rimmed
-glasses. Her violet eyes are open and steady. A second ring crosses her lens as a bright
-line. She does not blink.
-[Shot 3] At 00:03.472, pull back to the two of them at close range, head to head, both hands
-reaching across the water toward each other. THE HANDS DO NOT TOUCH. The gap between the
-fingertips stays visible and stays constant. Ripples from both earlier rings meet between
-their hands and cancel. Their mouths never move. No words are shown.
-[Shot 4] At 00:05.790, pull back further to the full white water, both girls small upon it,
-the gap between their hands still open. AND NOW THE WING ARRIVES: behind the bespectacled
-girl a single great feathered wing DRAWS ITSELF onto the water, feather by feather, from the
-shoulder outward - and it draws as OUTLINE ONLY. Thin grey contour lines. No fill. No shadow.
-No weight. It is a pencil ghost of a wing, not a wing. FROM 00:05.790 THE DRAWING NEVER
-PAUSES: line follows line, faster and further, to the last frame. The frame ends with the
-outline still extending past the edge.
-WING LAW: THE WING IS CONTOUR LINES AND NOTHING ELSE. It is never filled, never shaded, never
-solid, and it never darkens in this video. It only gets longer.
-RIPPLE LAW: EVERY CUT IS A RING OF WATER OPENING. A ring is born where something touches the
-surface, it widens, and when it fills the frame the next shot is inside it.
-BEAT LAW: {{BEATLAW}} The two snares are the two ring-cuts; the two kicks are the tear
-landing and the wing's first feather.
+[Shot 1] TOTAL BLACK. White bleeds in from the centre and the picture resolves: two schoolgirls
+FALLEN head to head on white water, close range. Not posed - dropped where they stopped. Both
+hands reach and DO NOT TOUCH; the gap sits dead centre. Under the pink-haired girl the water is
+pressed down into a shallow bowl, a clear rim standing around her.
+AND THE WORLD IS NOT FINISHED: on every kick the picture FLICKERS for one frame between two
+states - fully painted, and bare contour lines on white with the fills missing. Uniforms lose
+their colour and come back. The water's caustics drop to outline and return. The girls
+themselves never flicker.
+[Shot 2] At 00:02.322, hard cut: extreme close on the pink-haired girl's face. Eyes closed. A
+tear swells, crosses her cheek, strikes the water. A ring opens and travels outward. One event,
+nothing else.
+[Shot 3] At 00:03.472, the travelling ring becomes a LENS RIM. The black-haired girl's
+red-rimmed glasses at extreme range, violet eye open behind them. Inside the lens the whole
+wide scene waits, reflected and curved, the gap still dead centre at the same size. The ring
+crosses the reflection - AND WHERE IT PASSES BEHIND HER, IT LEAVES A LINE. Contour after
+contour, a great feathered wing is DRAWN by the ripple's own edge, outline only, no fill.
+Then the drawn wing SWEEPS: its outermost contour lines rush across the lens at very close
+range, thick and out of focus, wiping the entire frame from one side - and behind that wipe we
+are outside the lens, on the real wide: the full white surface, both girls small, the gap
+unchanged, the wing still drawing itself longer behind her.
+ONE FEATHER TEARS LOOSE from the outline - a single closed shape detaching from the line-work -
+and falls, and touches the surface, and lies there: THE ONLY SOLID FULLY PAINTED OBJECT IN THE
+PICTURE. Around it the flicker continues. And ONE HUGE SOFT-EDGED SHADOW, cast by nothing
+anywhere, crosses both girls slowly. At 00:06.932 the last contour lands on the final impact
+and everything stops at once. Hold on the drawn wing, the one solid feather, the crossing
+shadow.
+UNPAINTED LAW: THIS WORLD IS A DRAWING THAT HAS NOT BEEN COLOURED YET, AND IT KEEPS SLIPPING
+BACK TO THE LINE STAGE. Each kick drops it to contours for one frame. The two girls and the one
+fallen feather are the only things that never flicker.
+RIPPLE-DRAWS-WING LAW: THE WING IS NOT SUMMONED - IT IS DRAWN, AND THE PEN IS THE TEAR'S
+RIPPLE. Line exists only where the ring has already passed; the wing can never be longer than
+the ring has travelled.
+WIPE LAW: THE ONLY WIPE IS THE WING'S OWN OUTER CONTOUR LINES CROSSING THE LENS AT CLOSE RANGE.
+No dissolve, no fade; the drawing itself moves across and the next view is behind it.
+BEAT LAW: {{BEATLAW}} The kick at 00:02.322 cuts to her face; the snare at 00:03.472 turns the
+ring into the lens; every kick flickers the world to line stage; the kick at 00:06.932 is the
+last contour.
 {{DP}} {{ST2}}
 
-overall_soundscape: water at rest - tiny laps, one clear drop striking, rings spreading;
-cloth on wet ground; two breaths, close; no voices. In the last second, the faint dry hiss of
-lines being drawn on water.
+overall_soundscape: silence, then water settling; one clear drop and its ring; a glassy tone at
+the lens; the dry hiss of a pen on wet paper; one soft feather-fall; two close breaths. The
+flicker makes a faint dry tick. No voices. The shadow makes no sound.
 
 non_diegetic_music: N/A
 ```

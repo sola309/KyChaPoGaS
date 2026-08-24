@@ -9,7 +9,7 @@
   "materials": [
    "M-1"
   ],
-  "dd_words": 141,
+  "dd_words": 164,
   "file": "docs/anipafe2026-prompts-v2/01-intro.md"
  },
  "U02": {
@@ -37,7 +37,7 @@
    2997
   ],
   "materials": [],
-  "dd_words": 211,
+  "dd_words": 230,
   "file": "docs/anipafe2026-prompts-v2/01-intro.md"
  },
  "U04": {
@@ -50,7 +50,7 @@
   "materials": [
    "M-8"
   ],
-  "dd_words": 104,
+  "dd_words": 127,
   "file": "docs/anipafe2026-prompts-v2/02-act1a.md"
  },
  "U05": {
@@ -69,7 +69,7 @@
  },
  "U06": {
   "title": "C7 約束の水面",
-  "meta": "Ref2VA / 生成175f / 実尺6.96s / 4ショット / ス2キ2 / 盛上5.79-6.96s",
+  "meta": "Ref2VA / 生成175f / 実尺6.96s / 3ショット / キ2.322,6.932 ス2.322,3.472 / 盛上5.79-6.96",
   "mode": "Ref2VA",
   "assets": [
    2944,
@@ -79,7 +79,7 @@
    3236
   ],
   "materials": [],
-  "dd_words": 350,
+  "dd_words": 525,
   "file": "docs/anipafe2026-prompts-v2/02-act1a.md"
  },
  "U07": {
@@ -286,7 +286,7 @@
    3048
   ],
   "materials": [],
-  "dd_words": 190,
+  "dd_words": 222,
   "file": "docs/anipafe2026-prompts-v2/05-act2b.md"
  },
  "U21": {
@@ -339,7 +339,7 @@
   "materials": [
    "M-2"
   ],
-  "dd_words": 89,
+  "dd_words": 112,
   "file": "docs/anipafe2026-prompts-v2/05-act2b.md"
  },
  "U25": {
@@ -404,7 +404,7 @@
    2627
   ],
   "materials": [],
-  "dd_words": 186,
+  "dd_words": 209,
   "file": "docs/anipafe2026-prompts-v2/07-act3a.md"
  },
  "U30": {
@@ -563,7 +563,7 @@
    2943
   ],
   "materials": [],
-  "dd_words": 217,
+  "dd_words": 240,
   "file": "docs/anipafe2026-prompts-v2/09-finale.md"
  },
  "U42": {
@@ -576,7 +576,7 @@
   "materials": [
    "M-3"
   ],
-  "dd_words": 214,
+  "dd_words": 237,
   "file": "docs/anipafe2026-prompts-v2/09-finale.md"
  }
 }

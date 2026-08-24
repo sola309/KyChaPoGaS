@@ -73,6 +73,7 @@ red ribbon is the only red.
 BETWEEN her and the nearest shadow-self. For a moment the translucent duplicate is nearer
 the lens than she is. Different depths. They always were. The camera settles; her sentence
 ends; the shadows go still one by one, last of all. Hold one woman and her crowd.
+SILENT UNIT: there are no drums in this cut. Nothing in the picture is driven by a beat; motion is continuous and unaccented.
 SHADOW LAW: THE SHADOWS REPEAT EVERYTHING SHE DOES, A HALF-BEAT LATE, INCLUDING SPEECH. No
 light source ever explains them. They outnumber her and they never lead.
 {{DP}} {{ST2}}

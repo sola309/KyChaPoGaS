@@ -49,6 +49,18 @@ def list_jobs(project_id: int, session: Session = Depends(get_session)):
 
 @router.post("/", response_model=JobRead, status_code=201)
 def create_job(data: JobCreate, session: Session = Depends(get_session)):
+    # 最終関門: H3プロンプトの構造検証。スクリプトを迂回してここへ直接POSTしても走る。
+    # params に skip_validation=true を明示したときだけ通す(明示はparamsに残る)。
+    if data.job_type == "generate_video_i2v":
+        from app.services.prompt_gate import validate_video_prompt
+        problems = validate_video_prompt(data.project_id, data.params or {})
+        if problems:
+            raise HTTPException(status_code=422, detail={
+                "error": "プロンプトが規約を満たしていません",
+                "problems": problems,
+                "hint": "docs/anipafe2026-prompt-constitution.md を参照。"
+                        "意図的に通す場合は params.skip_validation=true を明示",
+            })
     job = Job(
         project_id=data.project_id,
         job_type=data.job_type,

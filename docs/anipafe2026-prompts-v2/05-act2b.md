@@ -73,6 +73,7 @@ Far beyond them, small at the end of the street, a tall dark figure with very lo
 hair stands by a building's glass, doubled by her own reflection. NO ONE looks at her. No
 one's eyes ever find her. The girls pass on laughing. She remains at the edge as the shot
 ends.
+BEAT LAW: {{BEATLAW}} Each snare is one cut between the three moments; each kick lands as a footfall or a hand meeting something; the beats stay gentle and never break the warmth.
 LAW: THE DARK FIGURE IS PRESENT AND UNACKNOWLEDGED. Nobody's gaze ever touches her; the
 light stays warm to the last frame.
 {{DP}} {{ST2}}
@@ -229,6 +230,7 @@ inward from that edge, glowing faintly. Clouds hold. Sky holds. Nothing moves fo
 half seconds. Then, on the single snare, the crack FORKS one finger's width further with one
 mineral click. The glow follows into the new length. Then stillness again. One huge
 soft-edged shadow lies across the lower clouds, motionless. Hold.
+BEAT LAW: {{BEATLAW}} This cut has exactly one snare and the crack advances on it; nothing else in the picture answers a beat.
 LAW: THE CRACK ADVANCES EXACTLY ONCE, ON THE ONLY SNARE. Before and after: total stillness.
 {{ST2}}
 

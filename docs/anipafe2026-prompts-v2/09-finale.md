@@ -163,6 +163,7 @@ not carry.
 [Shot 3] At 00:06.620, close on the space between them: she EXTENDS HER HAND, palm open. The
 reach crosses most of the frame. The creature does not move at all. End on the outstretched
 hand and the motionless white shape - before anything touches, before anything is granted.
+SILENT UNIT: there are no drums in this cut. Nothing in the picture is driven by a beat; motion is continuous and unaccented.
 STILLNESS LAW: THE CREATURE NEVER MOVES - not its mouth, not its face, not its tail. All
 motion in this unit belongs to the girl. What is agreed is never shown.
 {{ST2}}
@@ -195,6 +196,7 @@ thread drifts in, slow as spider silk. It touches the stone. It clings. A second
 follows and begins, unhurried, to wind. The picture ends with the first loose loop settling
 around the stone: the next turning already begun. THE FINAL COMPOSITION VISUALLY MATCHES THE
 FILM'S OPENING SHOT - same sky, same clouds, same height, same place in frame.
+SILENT UNIT: there are no drums in this cut. Nothing in the picture is driven by a beat; motion is continuous and unaccented.
 LOOP LAW: THE THREE MOVEMENTS HAPPEN IN ORDER AND NOTHING OVERLAPS THEM. Each is quieter
 than the one before. Nothing accelerates.
 {{ST2}}
