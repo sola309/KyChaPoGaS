@@ -1,0 +1,26 @@
+subject_definitions: <Picture 1> (reference role: spatial-relationship definition only, not a target frame and not a storyboard anchor) defines the two subjects lying parallel on the white water, facing one another with reaching hands. <Picture 2> (reference role: identity definition only, not a target frame and not a storyboard anchor) defines <Subject 1>. <Picture 3> (reference role: identity-detail definition only, not a target frame and not a storyboard anchor) defines the eye and eyewear of <Subject 2>. <Picture 4> (reference role: protected source artwork for the white-water setting, fingertip relationship and faint wing-contour language only, not a target frame and not a storyboard anchor) defines the promise-scene geometry without fixing the camera. <Picture 5> (reference role: identity and costume definition only, not a target frame and not a storyboard anchor) defines <Subject 2>. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features.
+
+summary: Two girls remain separated by a fingertip gap on white water. A barely visible wing behind <Subject 2> becomes a hard-edged mask through which a black wave passes, then returns to an empty outline before the cut ends.
+
+retention_analysis: <Picture 1> partially_preserved for relative body placement and opposing orientation. <Picture 2> fully_preserved for <Subject 1>'s identity. <Picture 3> fully_preserved for the visible identity details of <Subject 2>. <Picture 4> partially_preserved for the water, fingertip gap and thin wing-contour design; motion-graphic layers and camera scale remain governed by the text. <Picture 5> fully_preserved for <Subject 2>'s identity and costume.
+
+detailed_description: {{TH:WATER}}
+2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
+STAGE: An endless flat white water surface is viewed from directly above. <Subject 1> and <Subject 2> lie on their sides, parallel and facing each other. Their reaching fingertips stop short at the centre. Their bodies remain physically separate. Their lips retain one natural closed shape. A faint partial wing contour already lies behind <Subject 2>, almost lost against the water.
+
+[Shot 1] Static Shot. Hold the wide promise tableau. White negative space dominates. Only two quiet breaths, slight cloth settling and a slow drift beneath the water indicate time. The fingertip gap stays centred. The wing remains a few thin pale-grey lines without weight.
+
+[Shot 2] At 00:02.322, hard cut on the simultaneous kick and snare to the same overhead axis and scale. One feather-shaped contour closes behind <Subject 2>. Its hard rim catches a narrow white highlight and locks. The enclosed area becomes a window into a deeper background plane. A dense black wave travels left to right only inside that closed shape. The white surface outside the rim stays white. Both subjects occupy the foreground layer above the window, fully readable and unaffected by its darkness.
+
+[Shot 3] At 00:03.472, hard cut on the snare. Pull Out, large amplitude, slow speed. A second feather contour draws itself, closes, settles and locks beside the first. The same black wave appears farther downstream inside this second window, while the first window returns to plain white. At 4.80 seconds both wing windows narrow into empty contour lines. At 5.20 seconds the high overhead composition reveals the two small bodies and their unchanged physical gap. From 00:05.790 to 00:06.957, the rate of line drawing increases continuously. Thin feather contours extend outward one after another. Each briefly masks the passing black wave, then a porcelain-white sheet slides across the mask plane and wipes that darkness away. A faint rounded shadow with no visible caster crosses in the opposite direction. At 00:06.932, the kick lands the last feather line. The completed wing remains outline only: pale, thin, hollow and almost invisible. The camera decelerates and holds.
+
+Z-ORDER LAW: foreground water sheen; subject plane; wing-rim plane behind the subjects; masked black-wave plane beneath the rim; empty white far plane. Darkness stays inside each closed feather window.
+WINDOW LAW: each contour draws itself, closes, reveals the black wave, receives the white wipe, then locks as an empty line.
+WING LAW: the wing’s own material is only thin pale contour lines. Its final state contains white water and carries neither solid fill nor shadow.
+GAP LAW: the fingertips preserve the same physical separation for the entire cut.
+BEAT LAW: {{BEATLAW}} The simultaneous kick and snare at 00:02.322 open the first mask. The snare at 00:03.472 opens the second mask and starts the pull-out. The kick at 00:06.932 lands the final contour.
+{{DP}} {{ST2}}
+
+overall_soundscape: Still water under cloth and hair; two quiet nasal breaths; a dry wet-paper scratch from each drawn contour; one low wave moving beneath a sealed surface; a short glass-like click when each rim locks; a smooth paper-sheet shear for the white wipe. Human sound consists solely of breathing. The source-less shadow carries silence.
+
+non_diegetic_music: N/A
