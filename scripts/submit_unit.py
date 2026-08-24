@@ -16,6 +16,7 @@ PROJECT = 31
 ROOT = Path(__file__).resolve().parent.parent
 PDIR = ROOT / "docs/anipafe2026-prompts"
 PDIR_V2 = ROOT / "docs/anipafe2026-prompts-v2"
+PDIR_V3 = ROOT / "docs/anipafe2026-prompts-v3"
 
 # ── 名簿から展開するキャラ定義 ────────────────────────────────
 BIBLE_KEY = {
@@ -154,6 +155,25 @@ def build_dict():
     return out
 
 
+def parse_units_v3():
+    """v3は <unit>.txt が本文そのもの。尺・モード・参照はv2の見出しから引き継ぐ。"""
+    base = {}
+    global PDIR
+    keep = PDIR
+    PDIR = PDIR_V2
+    try:
+        base = parse_units()
+    finally:
+        PDIR = keep
+    out = {}
+    for f in sorted(PDIR_V3.glob("U*.txt")):
+        uid = f.stem
+        if uid not in base:
+            continue
+        out[uid] = dict(base[uid], code=f.read_text())
+    return out
+
+
 def parse_units():
     units = {}
     for f in sorted(glob.glob(str(PDIR / "0[1-9]*.md"))):
@@ -235,11 +255,15 @@ def main():
     ap.add_argument("--t1", action="store_true", help="T1検証(960x544/step4/turbo)")
     ap.add_argument("--dry", action="store_true", help="展開結果を表示するだけ")
     ap.add_argument("--v2", action="store_true", help="v2ディレクトリを使う")
+    ap.add_argument("--v3", action="store_true", help="v3(Codex執筆)を使う")
     a = ap.parse_args()
     global PDIR
     if a.v2:
         PDIR = PDIR_V2
-    D, units = build_dict(), parse_units()
+    if a.v3:
+        PDIR = PDIR_V3
+    D = build_dict()
+    units = parse_units_v3() if a.v3 else parse_units()
     jobs = {}
     for uid in a.units:
         if uid not in units:
