@@ -418,7 +418,7 @@ async def _render_final(job: Job, params: dict) -> None:
 
     def progress_cb(p): _update_progress(job.id, p)
 
-    await render_timeline(
+    out = await render_timeline(
         job_id=job.id, project_id=project_id,
         tracks=tracks_d, clips=clips_d, assets=assets_d,
         fps=fps, width=width, height=height,
@@ -426,6 +426,21 @@ async def _render_final(job: Job, params: dict) -> None:
         encoder=params.get("encoder"),
         grade=params.get("grade"),   # None=設定既定(film) / "off"で無効化
     )
+    # 本番書き出しは crf16 の高ビットレートなので、リモート(Tailscale越しの
+    # Windows/Mac)から開くと重い。確認用の軽量版を必ず併せて作る。
+    # 960px / crf30 / faststart で本編の1/100前後になる。
+    try:
+        if out and Path(out).exists():
+            review = Path(out).with_name(f"{job.id}_review.mp4")
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-v", "error", "-y", "-i", str(out),
+                "-vf", "scale=960:-2", "-c:v", "libx264", "-preset", "veryfast",
+                "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+                "-c:a", "aac", "-b:a", "96k", str(review))
+            await proc.wait()
+            log.info("レビュー版を生成: %s", review.name)
+    except Exception as e:
+        log.warning("レビュー版の生成に失敗(本番書き出しは成功している): %s", e)
 
 
 # ── precompose: flatten the timeline into a single reusable asset ─────────────

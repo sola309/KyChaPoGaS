@@ -58,6 +58,7 @@ export function RenderDialog({ onClose }: Props) {
   // 📥 書き出し履歴 — 実在するファイルだけをAPIから取る。
   // レンダリングが完了したら自動で並び直すよう、完了本数の変化を見て取り直す。
   const [renders, setRenders] = useState<RenderFile[]>([])
+  const [playing, setPlaying] = useState<number | null>(null)   // ▶ 展開中の書き出し
   const doneCount = jobs.filter(j => j.job_type === 'render_final' && j.status === 'completed').length
   const projectId = activeProject.id
   const loadRenders = useCallback(() => {
@@ -162,23 +163,42 @@ export function RenderDialog({ onClose }: Props) {
           {renders.length === 0 ? (
             <p className="text-[10px] text-zinc-600">まだ書き出したファイルはありません。</p>
           ) : (
-            <div className="flex flex-col gap-1 max-h-44 overflow-y-auto pr-0.5">
+            <div className="flex flex-col gap-1 max-h-[52vh] overflow-y-auto pr-0.5">
               {renders.map(r => (
-                <div key={r.job_id}
-                     className="flex items-center gap-2 rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] text-zinc-200 truncate">{r.filename}</div>
-                    <div className="text-[9px] text-zinc-500">
-                      {fmtWhen(r.created_at)}　{r.width}×{r.height}
-                      {r.fps ? `@${r.fps}` : ''}　{r.preset}　{fmtSize(r.size_bytes)}
+                <div key={r.job_id} className="rounded border border-zinc-700 bg-zinc-950">
+                  <div className="flex items-center gap-2 px-2 py-1.5">
+                    <button onClick={() => setPlaying(playing === r.job_id ? null : r.job_id)}
+                            className="text-[13px] w-5 text-zinc-400 hover:text-white flex-shrink-0"
+                            title="この書き出しをここで再生(軽量版・リモートでも軽い)">
+                      {playing === r.job_id ? '▾' : '▶'}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] text-zinc-200 truncate">{r.filename}</div>
+                      <div className="text-[9px] text-zinc-500">
+                        {fmtWhen(r.created_at)}　{r.width}×{r.height}
+                        {r.fps ? `@${r.fps}` : ''}　{r.preset}　{fmtSize(r.size_bytes)}
+                        {r.review_size_bytes
+                          ? `　+レビュー ${fmtSize(r.review_size_bytes)}`
+                          : '　(レビュー版なし)'}
+                      </div>
                     </div>
+                    {r.review_url && (
+                      <a href={jobsApi.downloadUrl(r.job_id, 'review')}
+                         download={`render_${r.job_id}_review.mp4`}
+                         className="text-[10px] px-2 py-1 rounded bg-sky-800 hover:bg-sky-700 text-white flex-shrink-0"
+                         title="軽量版を保存(960px・本番の約1/100・リモート確認用)">⬇ 軽</a>
+                    )}
+                    <a href={jobsApi.downloadUrl(r.job_id)} download={r.filename}
+                       className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white flex-shrink-0"
+                       title="本番ファイルを保存(高ビットレート・大きい)">⬇ 本番</a>
+                    <button onClick={() => void removeRender(r.job_id)}
+                            className="text-zinc-600 hover:text-red-400 text-xs px-0.5 flex-shrink-0"
+                            title="書き出しファイルを削除">✕</button>
                   </div>
-                  <a href={jobsApi.downloadUrl(r.job_id)} download={r.filename}
-                     className="text-[10px] px-2 py-1 rounded bg-purple-700 hover:bg-purple-600 text-white flex-shrink-0"
-                     title="このファイルをダウンロード">⬇ 保存</a>
-                  <button onClick={() => void removeRender(r.job_id)}
-                          className="text-zinc-600 hover:text-red-400 text-xs px-0.5 flex-shrink-0"
-                          title="書き出しファイルを削除">✕</button>
+                  {playing === r.job_id && (
+                    <video src={jobsApi.streamUrl(r.job_id)} controls autoPlay
+                           className="w-full rounded-b bg-black" preload="metadata" />
+                  )}
                 </div>
               ))}
             </div>

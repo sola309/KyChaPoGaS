@@ -82,10 +82,15 @@ def list_renders(project_id: int, session: Session = Depends(get_session)):
             params = json.loads(j.params)
         except Exception:
             params = {}
+        review = path.with_name(f"{j.id}_review.mp4")
         rows.append({
             "job_id": j.id,
             "filename": f"render_{j.id}.mp4",
             "size_bytes": path.stat().st_size,
+            # レビュー版(960px/crf30/faststart)。ネットワーク越しの確認用に本編の1/100前後。
+            "review_size_bytes": review.stat().st_size if review.exists() else None,
+            "review_url": f"/api/jobs/{j.id}/download?variant=review" if review.exists() else None,
+            "stream_url": f"/api/jobs/{j.id}/stream?variant={'review' if review.exists() else 'full'}",
             "created_at": (j.completed_at or j.created_at).isoformat(),
             "width": params.get("width"),
             "height": params.get("height"),
@@ -144,23 +149,41 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     return _to_read(job)
 
 
-@router.get("/{job_id}/download")
-def download_job_output(job_id: int, session: Session = Depends(get_session)):
+def _render_file(job_id: int, session: Session, variant: str):
+    """書き出しファイルの実体を引く。variant='review' は軽量版(無ければ本番へ落ちる)。"""
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     if job.status != "completed":
         raise HTTPException(status_code=409, detail="Job not completed yet")
     params = json.loads(job.params)
-    project_id = params.get("project_id")
+    project_id = params.get("project_id") or job.project_id
     if not project_id:
         raise HTTPException(status_code=400, detail="No project_id in job params")
     path = export_path(project_id, job_id)
+    if variant == "review":
+        review = path.with_name(f"{job_id}_review.mp4")
+        if review.exists():
+            return review, f"render_{job_id}_review.mp4"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Output file not found")
-    filename = f"render_{job_id}.mp4"
+    return path, f"render_{job_id}.mp4"
+
+
+@router.get("/{job_id}/download")
+def download_job_output(job_id: int, variant: str = "full",
+                        session: Session = Depends(get_session)):
+    path, filename = _render_file(job_id, session, variant)
     return FileResponse(path, media_type="video/mp4",
                         headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@router.get("/{job_id}/stream")
+def stream_job_output(job_id: int, variant: str = "review",
+                      session: Session = Depends(get_session)):
+    """パネル内プレビュー用。Content-Disposition を付けず inline で返す。"""
+    path, _ = _render_file(job_id, session, variant)
+    return FileResponse(path, media_type="video/mp4")
 
 
 @router.delete("/{job_id}", status_code=204)

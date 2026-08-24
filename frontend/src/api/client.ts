@@ -264,6 +264,11 @@ export interface RenderFile {
   fps?: number
   preset: string
   download_url: string
+  /** 軽量なレビュー版(960px/crf30)。本番の1/100前後。無ければ null */
+  review_size_bytes?: number | null
+  review_url?: string | null
+  /** パネル内プレビュー用(inline配信)。レビュー版があればそちら */
+  stream_url?: string
 }
 
 export interface NightBatchState {
@@ -283,7 +288,10 @@ export const jobsApi = {
     api.post<Job>('/jobs/', { project_id: projectId, job_type: jobType, params }).then(r => r.data),
   cancel:      (id: number) => api.post<Job>(`/jobs/${id}/cancel`).then(r => r.data),
   delete:      (id: number) => api.delete(`/jobs/${id}`),
-  downloadUrl: (id: number) => `/api/jobs/${id}/download`,
+  downloadUrl: (id: number, variant: 'full' | 'review' = 'full') =>
+    `/api/jobs/${id}/download${variant === 'review' ? '?variant=review' : ''}`,
+  streamUrl:   (id: number, variant: 'full' | 'review' = 'review') =>
+    `/api/jobs/${id}/stream?variant=${variant}`,
   listRenders: (projectId: number) =>
     api.get<RenderFile[]>('/jobs/renders', { params: { project_id: projectId } }).then(r => r.data),
   deleteRender: (id: number) => api.delete(`/jobs/renders/${id}`),
