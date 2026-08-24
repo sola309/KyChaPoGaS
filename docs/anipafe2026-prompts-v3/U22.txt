@@ -1,0 +1,30 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, Selma Therese. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, Choka. <Picture 3> contributes only the two watchers’ identity separation and relative scale; its framing and layout do not control the target video. <Subject 3> is Devil Homura: {{HOMU_ID}}. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features.
+
+summary: Selma and Choka recognize the frightened, abandoned child concealed by Devil Homura’s imposing form. Their brief understanding changes neither their verdict nor the distance between them; Homura continues away without becoming aware of their gaze.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>’s identity and costume. <Picture 2> fully_preserved for <Subject 2>’s identity, costume and gold-rimmed glasses. <Picture 3> partially_preserved for the two watchers’ relative height and clearly separate identities only. The target supplies a new ledge, viewpoint, lighting, posture and distant staging. <Subject 3> remains visually subordinate and distant throughout.
+
+detailed_description: {{TH:CITY}}
+STAGE: A high concrete ledge overlooks a nearly empty false-city plaza. <Subject 1> stands foreground left. <Subject 2> stands foreground right. Their bodies face the plaza at a slight angle. <Subject 3> is a small figure far below, walking away with her back toward them. The distance between planes remains visually dominant.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. An out-of-focus pale square crosses the lens at very close range, carrying the direction of the preceding wraith disturbance. It clears to reveal <Subject 1> and <Subject 2> already looking in that same screen direction. Their lips remain in one closed resting shape. Their breathing is shallow. Their shoulders lean inward by only a few degrees. Far below, <Subject 3> walks steadily away. Her gaze, head and steps remain oriented toward the empty plaza. A round-edged shadow with a faint radial suggestion moves across the ground without a corresponding visible light source. At 2.302 seconds, the shadow reaches <Subject 3>. Only her cast silhouette changes: the vast outline contracts into narrow shoulders, a lowered head and hands held close to the body. <Subject 3> herself retains the full devil form. <Subject 1>’s eyes soften slightly. <Subject 2> lowers her chin behind the gold-rimmed glasses and looks more closely. The single cymbal exposes one restrained glint along one glasses rim. Every other surface remains matte.
+
+[Shot 2] At 00:04.330, a hard cut introduces the verdict. Medium frontal view of both watchers, with <Subject 3> reduced to a dark, unfocused shape between them in the far background. A slow Push In uses small amplitude and slow speed. Recognition has already happened. <Subject 1> straightens from the slight inward lean and plants her weight evenly through both feet. <Subject 2> raises her chin until her gaze passes level through the glasses. Their eyes remain fixed on <Subject 3>. Their closed mouths and still faces carry no spoken accusation. Cold violet light from low left catches only their key-side contours. The opposite sides fall into near-black. Understanding remains visible in their eyes; permission does not follow it.
+
+[Shot 3] At 00:06.918, a hard cut returns to a wide side view and reveals the unreachable distance. Static Shot. The two watchers stand high above. <Subject 3> continues below, back facing them. Two long shadows extend from the watchers’ feet toward the plaza, but both terminate at the same hard boundary several body lengths before reaching <Subject 3>. The gap stays bare porcelain-grey. At 8.068 seconds, cloth and hair complete one small wind-driven overshoot and settle. The figures then hold their final sizes and positions. Empty dark space remains above <Subject 3>, ready for the unseen logic of the following whisper.
+
+VERDICT LAW: Recognition softens posture first. Recognition then causes both bodies to become level, planted and final. Understanding changes their view of <Subject 3>; it does not change their judgement.
+
+DISTANCE LAW: <Subject 3> remains far smaller than either watcher. Her back remains toward them. Her path continues independently. The watchers’ shadows end before reaching her.
+
+BEAT LAW: {{BEATLAW}} Snare accents select changes of posture or viewpoint. Kick accents belong to planted feet and the distant footsteps of <Subject 3>. The single cymbal belongs only to the brief glasses-rim glint.
+
+LIGHT: the only light is a cold violet source low and far to the left, outside the frame. Left-facing surfaces take a hard violet edge. Surfaces turned away sink to near-black. Near-black occupies about half the picture. Red appears only on <Subject 3>’s character-bound ribbon details. Thin haze separates the ledge, plaza and far architecture. Only the glasses-rim glint blooms.
+
+FOCUS: only the three subjects carry detail. Concrete, walls and distant architecture remain large flat masses with almost no texture or small objects. They fall into near-black within a short distance of the subjects. Fewer things, further apart, most of them dark.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: Dry high wind crosses the ledge from left to right. Cloth hems answer with brief restrained movement. Two distant shoes mark <Subject 3>’s path on stone. One tiny glasses-rim vibration and the settling weight of two pairs of boots remain close and tactile. The human mouths retain their closed resting shapes while the sound field contains only wind, cloth and footsteps.
+
+non_diegetic_music: N/A

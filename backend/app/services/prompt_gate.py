@@ -80,14 +80,22 @@ def validate_video_prompt(project_id: int, params: dict) -> list[str]:
                     "打点ゼロの単位なら 'SILENT UNIT: there are no drums in this cut' と明記する")
 
     # ── カメラ ──────────────────────────────────────────────
-    for mm in CAMERA_VOCAB.finditer(prompt):
-        seg = prompt[mm.start(): mm.start() + 140]
-        if mm.group(1) in ("Static Shot", "POV"):
-            continue                      # 静止/視点指定に振幅・速度は不要
-        if not AMPLITUDE.search(seg):
-            errs.append(f"カメラ '{mm.group(1)}' に振幅(small/large amplitude)が無い")
-        if not SPEED.search(seg):
-            errs.append(f"カメラ '{mm.group(1)}' に速度(slow/fast speed)が無い")
+    # 公式: amplitude と speed は「意味があるときだけ」指定し、中程度・通常速度は省略が正
+    # (VIDEO_PROMPT_WRITING_GUIDE_base_en §4.3)。よって欠落そのものは違反ではない。
+    # 検査するのは「書き方が壊れている」場合だけ:
+    #   - amplitude/speed を書いているのに公式語彙になっていない
+    #   - 同一ショット内でカメラ運動が複数ある(憲法6条: 1ショット1運動)
+    for mm in re.finditer(r"\b(small|large|slow|fast)\s+(amplitude|speed)\b", prompt):
+        pass                              # 正しい書式。何もしない
+    bad_form = re.search(r"\b(amplitude|speed)\s*[:=]", prompt)
+    if bad_form:
+        errs.append(f"カメラの振幅/速度はタグ形式で書かない: '{bad_form.group(0)}' "
+                    "→ 'large amplitude at fast speed' のように自然文で")
+    for sh in re.finditer(r"\[Shot \d+\](.*?)(?=\[Shot \d+\]|$)", prompt, re.S):
+        moves = [x.group(1) for x in CAMERA_VOCAB.finditer(sh.group(1))
+                 if x.group(1) not in ("Static Shot", "POV")]
+        if len(set(moves)) > 1:
+            errs.append(f"1ショットにカメラ運動が複数ある: {sorted(set(moves))} (憲法6条)")
 
     # ── 語彙 ────────────────────────────────────────────────
     q = QUALITY_WORDS.search(prompt)

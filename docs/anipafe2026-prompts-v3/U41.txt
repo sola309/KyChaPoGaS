@@ -1,0 +1,23 @@
+subject_definitions: <Picture 1> (reference role: subject identity and design only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{QB_ID}}. <Picture 2> (reference role: subject identity and the current braided, wingless human state only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{HOMU_ID}}.
+
+summary: In complete silence, <Subject 1>'s red eye contains <Subject 2> as a moving silhouette window. A hard cut reveals <Subject 2> using the motionless creature as her only path forward; her hand stops one finger-width away, leaving the contract unseen.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, fixed expression, closed mouth and red eye. <Picture 2> fully_preserved for <Subject 2>'s identity and current human state; its original composition does not control the video. Never merge the characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers. Light and acting carry the sequence; the eye-window is its single graphic device.
+
+STAGE: <Subject 1> occupies the first shot only as an extreme macro eye. <Subject 2> exists inside its curved highlight. After the cut, <Subject 2> kneels on a broad dark ground plane at screen left. <Subject 1> sits at screen right. A narrow empty gap separates them. A cold overhead column illuminates only their plane. A broad rounded shadow with faint radial hints lies across the distant ground, although its owner remains outside the frame.
+
+[Shot 1] Static Shot. One red eye fills the frame edge to edge. The eyelids maintain the same aperture. The pupil and gold ring remain perfectly fixed. Its pale curved highlight draws a hard-edged window around itself, then LOCKS. Inside that protected window, <Subject 2> appears small and distant. The world outside the highlight stays near-black. The image inside cannot cross its boundary. <Subject 2> advances through three slow, continuous steps. Each step enlarges only her reflection; the eye retains the same on-screen size. Her hands stay low at her sides. Her final posture settles directly beneath the pupil. The eye offers no reaction. Red exists only in the eye.
+
+[Shot 2] At 00:04.620, hard cut to a low, static medium-wide view. <Subject 2> is already kneeling on one knee. <Subject 1> sits upright opposite her, its body and tail holding one settled pose. Its mouth remains one closed line. Its eyes remain fixed. <Subject 2>'s gaze begins beyond the creature, directed toward the empty sky outside the frame, as though the creature is only a means of pursuit. She lowers her gaze and extends one open hand through the subject plane toward <Subject 1>. The reach is slow and unaccented. Her other hand supports her against the ground. Her lips retain one closed, resolved shape. By 7.10 seconds, her palm has entered the near foreground and the camera has not moved. The space between her fingertips and the white figure becomes a clean near-black oval. One finger-width of empty space remains through 7.83 seconds. Her sleeve and hair complete a small secondary settling motion, then LOCK. The final visible event is only the unanswered reach.
+
+SILENT UNIT: there are no drums in this cut. The sound field remains at zero amplitude from the first frame through the last frame.
+EYE-WINDOW LAW: the curved highlight encloses a second spatial layer; its hard edge draws itself, settles and locks before <Subject 2> moves.
+STILLNESS LAW: all primary motion belongs to <Subject 2>. <Subject 1>'s eyelids, pupil, mouth, face, torso and tail retain the same visible state throughout each shot.
+{{ST2}}
+
+overall_soundscape: a continuous zero-amplitude sound field from beginning to end, perceived as complete vacuum-like silence.
+
+non_diegetic_music: N/A

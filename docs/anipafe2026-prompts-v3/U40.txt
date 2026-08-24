@@ -1,0 +1,26 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, the exact braided, wingless schoolgirl identity and uniform state shown in the source.
+
+summary: The fractured memory montage loses speed and closes into one present-tense image. Its final surviving window reveals <Subject 1> alone on dark ground, returned to the human form from the time of the promise.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s identity, braided hairstyle, school uniform, body proportions and wingless human state. The source composition, framing, pose, background and camera position are released. New motion-graphic panels, masks, depth placement and staging remain free.
+
+detailed_description: {{TH:PRO}}
+STAGE: A fixed frontal camera faces a deep near-black field. Cropped memory fragments occupy five separate Z-depth planes. Thick blurred scraps cross the near foreground. Hard-edged irregular panels occupy the middle planes. A narrow central window sits behind them. <Subject 1> exists inside that window on the subject plane. Her back is defined only by her braids and school blazer against empty air. Dark ground and a distant sleeping-city horizon wait on the farthest planes. Every panel edge catches one cold-violet glint. Colours survive only inside the memory windows.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. The last fragmented images from C63 rush through mismatched tiles. Tight crops show pale ribbon-like strands, empty sleeves and doll-shaped shadows without forming an explanatory tableau. Residual datamosh blocks leak between adjacent tiles. Each kick compresses the visible panel group toward the central window. The foreground scraps travel fastest. The farthest fragment barely moves. One cymbal makes every hard panel edge catch the same brief pale glint. The camera remains fixed.
+
+[Shot 2] At 00:01.115, the outermost windows hard-cut to black-backed masks. Their frames slide behind <Subject 1>, settle on the rear Z-plane, then LOCK. The central window expands vertically. Its interior reveals her braids and uniform before her face becomes readable. The window light stays cold and separate from the surrounding darkness.
+
+[Shot 3] At 00:01.555, the remaining side panels wipe inward as two solid physical shutters. They meet behind <Subject 1> rather than covering her. Their mismatched memory colours collapse into one deep-violet field. The central window expands horizontally, settles into the full 16:9 frame, then LOCKS. The fragmented montage is now one continuous place.
+
+[Shot 4] At 00:01.985, the present image is complete. <Subject 1> stands on dark open ground in the lower-left third. Her hands hang naturally at her sides. One thin wind lifts the ends of both braids, overshoots once, then lets them settle. The sleeping-city horizon resolves far behind her as a simple pale strip. The upper sky remains a large empty field of scattered stars. Empty ground on her right is held open for the next arrival. All depth planes decelerate at different rates. By 00:03.700 every panel, mask and background plane is locked. Her final breath is the only movement through 00:04.580.
+
+WINDOW LAW: Fragmented windows appear, slide, settle and LOCK. Each later window contains less time and more present space. The final window becomes the frame itself.
+Z-ORDER LAW: Near scraps remain in front of the masks. Masks travel behind <Subject 1>. <Subject 1> remains in front of the distant ground and horizon.
+BEAT LAW: {{BEATLAW}} Kicks compress the memory layers. Snares create the three hard state changes. The single cymbal gives the panel edges one shared glint. Motion ends after the third snare.
+LANDING LAW: Density falls in four visible steps: rushing fragments, reduced windows, one window, one still world.
+{{DP}} {{ST2}}
+
+overall_soundscape: Dry paper-panel slides, three restrained mechanical frame locks, the last granular datamosh crackle draining away, a thin ground wind and one quiet human breath. Every sound is close and short. The final held image carries only the fading wind.
+
+non_diegetic_music: N/A

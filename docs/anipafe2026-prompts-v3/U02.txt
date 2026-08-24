@@ -1,0 +1,27 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the design of <Subject 1>, the dark vessel: {{ORB_ID}}. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines one reaching hand cropped tightly at the wrist, with its glossy black covering preserved to the fingertips. <Picture 3> (reference role: material and object definition only, not a target frame and not a storyboard anchor) defines the thin pink threads and wooden spools.
+
+summary: In near-black space, one black-sheathed hand reaches toward a dark vessel bound by pink causal threads. An opaque white veil hides the unresolved gap before contact; at the final impact every thread releases and recoils toward its spool in one accelerating graphic snap.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s vessel design while its scale, position and surrounding space follow the description. <Picture 2> partially_preserved for the hand covering, fingertip silhouette and wrist crop only. <Picture 3> weak_reference for thread material, spool construction and restrained paper-grain texture only.
+
+detailed_description: {{TH:PRO}}
+STAGE: A small <Subject 1> hangs near the centre of a near-black void. It occupies less than one quarter of the frame. Several thin pink threads bind its body and continue toward sparse wooden spools in the far darkness. Build five to eight depth planes. One thick thread crosses extremely close to the lens and stays softly out of focus. <Subject 1> occupies the sharp subject plane. Finer crossing threads occupy separate middle planes. The distant spools barely move. Empty black space separates every element. A cold violet source falls steeply from high above. It gives upward-facing edges a narrow violet rim. Cold gold remains confined to <Subject 1>'s brightest details. Pink remains confined to the causal threads. The camera is a Static Shot throughout.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Begin with a perfectly straight white line in the same screen position as the burned cut edge of the preceding half-moon. Focus resolves and reveals that line as a hard highlight along the nearest taut pink thread. The foreground thread slides aside and exposes <Subject 1> behind it. This physical occlusion hands the half-moon boundary into the thread motif without changing the camera.
+
+One hand enters slowly from the RIGHT frame edge. The frame edge crops it exactly at the wrist. Its palm faces <Subject 1>. The index and middle fingers lead while the remaining fingers stay gently separated. The pose reads as an uncertain offer rather than a grasp. The hand advances horizontally through successive thread planes. Each crossed thread bends around the fingers, then returns to tension behind them. A narrow band of empty black remains visible between the leading fingertip and <Subject 1>.
+
+At 00:03.457, the manual buildup begins. A porcelain-white veil forms inside that remaining black gap. It increases in only one direction: narrow to broad, dim to bright, transparent to opaque. The surrounding void stays black. The veil passes in the foreground before the fingertips and advances back toward the cropped wrist. It functions as a hard-edged luminous window whose white interior contains no figure or scenery. The hand becomes progressively hidden behind this foreground veil while the visible gap remains unresolved. The image records the reach and the occlusion, while the moment beyond the veil remains unseen.
+
+The growing veil pulls air toward the far spools. Loose fibres lift first. The wooden spools begin rotating slowly, then faster. Taut threads vibrate along their length while remaining wrapped around <Subject 1>. The sole cymbal accent belongs to one brief hard crest across the veil; that visible crest produces a thin metallic shimmer.
+
+At 00:05.742, the single deep kick triggers the release. Every pink thread loses tension in the same instant. Each thread forms one visible slack curve, slips free of <Subject 1>, and snaps backward along its existing path toward its assigned spool. The recoil accelerates continuously through the final frames. Near threads cross the lens fastest and briefly cover it with blurred pink strokes. Middle threads follow at different rates. Far spools finish the pull. <Subject 1> remains suspended behind them as the frame returns toward near-black.
+
+REACH LAW: the hand approaches with separated fingers; the opaque veil alone occupies the unresolved interval between hand and vessel.
+THREAD LAW: the buildup increases spool rotation and thread vibration; the impact releases every binding thread; each released thread returns only to its own spool.
+BEAT LAW: {{BEATLAW}} The visible white crest carries the sole cymbal accent. The single kick at 00:05.742 triggers the simultaneous loosening. The recoil accelerates through the end.
+{{DP}} {{ST2}}
+
+overall_soundscape: A low, nearly roomless pressure surrounds the vessel. Taut fibres produce faint dry creaks as the hand crosses them. The white veil emits one thin metallic shimmer. Wooden spool axles begin with sparse ticks and rise into a tight rattle. At 00:05.742, one deep impact releases a short collective thread snap followed by rapidly rising fibre hiss and spinning wood.
+
+non_diegetic_music: N/A

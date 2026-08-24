@@ -1,0 +1,23 @@
+subject_definitions: <Picture 1> (reference role: subject identity and school-uniform definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, human Madoka. The reference contributes her exact identity, hair, eyes, clothing and proportions. Its composition, pose, camera distance, background and lighting remain free.
+
+summary: Human Madoka delivers the sustained English refusal “Does not go to your past.” Her restrained tears and measured voice remain steady while her refusal wakes the world behind her and begins the coming battle.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, costume and proportions. The source framing, pose, environment and lighting are released. Newly introduced acting, storm space, depth planes and motion-graphic elements are independent target-video events.
+
+detailed_description: {{TH:A3}}
+STAGE: <Subject 1> stands alone on the central subject plane, facing the lens on an eye-level frontal axis. The shot uses the same centred portrait grammar as the earlier refusal, but allows this refusal three times longer to unfold. Empty near-black space surrounds her. Five to eight background planes wait behind her at different depths. A cold violet key enters from the left. A restrained pink reflection touches only her eyes and cheek. Thin thread-like forms at the far right receive the only blood-red edge. The background falls into darkness within a short distance of her.
+
+[Shot 1] Medium close-up. Static Shot. <Subject 1> begins the English line “Does not go to your past.” Each opening of her mouth is only one English syllable wide. Her jaw stays set. Her throat tightens before each phrase. Moisture is already gathered along both lower eyelids and remains held there. The opening kick triggers one physical shift behind her: a distant dark plane slides sideways and locks with a low stone impact. A narrow hard-edged crack-shaped window draws itself behind her shoulders. Its interior contains moving violet storm cloud; the surrounding black remains still. The window stays behind <Subject 1> and settles into its final position. The first snare makes the farthest cloud layer begin travelling. <Subject 1>'s pace remains unchanged.
+
+[Shot 2] At 00:03.607, hard cut to a tighter frontal portrait on the same eye line. Slow Push In, small amplitude. Her hands enter only at the lower edge. Her fingers press together once to contain their shaking, then settle. She continues the refusal without raising her voice. Tear moisture thickens along the lower lids but stays attached to them. Separate storm planes accelerate behind her at different rates. The nearest dark fragments travel fastest. The far cloud plane barely moves. Pale feather edges catch brief cymbal glints. Kick impacts make individual background planes jolt, overshoot slightly, then lock. At 4.628 seconds, the continuous rise begins: wind speed, depth separation and violet illumination increase in one direction through the remainder of the unit. Her face and voice retain the same measured tempo.
+
+[Shot 3] At 00:05.917, hard cut to her mouth, wet eyes and fixed jaw in one close portrait. Static Shot. She completes the final English phrase. The rapid drum passage drives only the world behind her: the crack-shaped window stretches wider, black feathers stream toward the following cut, and thin red thread-shapes pull taut at the far edge. The window interior remains contained by its hard boundary. <Subject 1> finishes the last syllable and closes her lips. Her lower eyelids still carry the tears. Her expression settles into sorrowful resolve while the background reaches battle speed. One black feather enters the near foreground, larger than her eye and softly out of focus, crossing toward the lens to hand the motion into the next unit.
+
+REFUSAL LAW: <Subject 1>'s voice, mouth scale and bodily tempo remain measured while the surrounding world accelerates. Her refusal causes the battle space to wake; it does not turn her acting into aggression.
+MG LAW: the crack-shaped window exposes the moving world created by her refusal. Its hard edge stays behind <Subject 1>, receives violet light, and contains every interior layer.
+BEAT LAW: {{BEATLAW}}
+{{DP}} {{ST2}}
+
+overall_soundscape: A close, steady young English voice with restrained breath and a tightening throat. Cloth shifts softly when her fingers press together. Each visible background lock produces a dry distant stone impact. Rising wind moves through separated planes. Feather edges rasp near the end. The voice remains closest and clearest.
+
+non_diegetic_music: N/A

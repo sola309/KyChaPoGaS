@@ -1,0 +1,36 @@
+subject_definitions: <Picture 1> (reference role: protected source artwork for the official first-film title mark, subject definition only, not a target frame and not a storyboard anchor) defines the SECOND title mark. <Picture 2> defines the official second-film title mark used as the THIRD mark. <Picture 3> defines the official violet Rebellion title mark used as the FOURTH mark. <Picture 4> defines the official Walpurgis Rising title mark used as the SIXTH and final mark. Reproduce each supplied mark as one indivisible flat image. Preserve its exact glyph contours, spacing, colour relationships and internal shapes. <Picture 5> (reference role: weak reference for spatial behaviour and atmosphere only, not a target frame and not a storyboard anchor) defines the distant spiral of stars.
+
+summary: Six official title marks form a chronological series. TV-era, first film, second film, Rebellion, Kijun and Walpurgis Rising overwrite one another inside a tightening cosmic spiral. The final mark is pulled into the centre before a hard cut into Homura’s cold blue-grey memory.
+
+retention_analysis: <Pictures 1-4> fully_preserved as protected source artwork. Their letters remain parts of the copied images rather than newly typeset text. <Picture 5> weak_reference for the star spiral only. The supplied title designs do not contribute framing, camera placement or background layout. The TV-era and Kijun marks occupy their required chronological positions but lack independent supplied reference images.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading and flat protected title artwork. Every visible glyph belongs to one of the six official title marks.
+
+STAGE: Near-black space fills the frame. One loose pink causal thread crosses the lens at very close range, thick and softly out of focus, then is pulled into the centre. The title plane stays sharp in the middle depth. Sparse cold-gold dust occupies two deeper planes. A deep-violet star spiral turns in the farthest plane. The frontal camera remains fixed through the six-title chronology.
+
+[Shot 1] The final pink thread from C2 enters from the left and tightens toward the distant centre. The TV-era title mark appears as a complete flat image. At 0.24 seconds it reaches the exact centre, settles, and LOCKS. Cold violet light falls from high above. Near-black occupies more than half the frame.
+
+[Shot 2] At 00:01.400, the first-film mark overwrites the TV-era mark. The older image tears into horizontal pixel bands. Those bands move sideways behind the incoming protected artwork. The new mark slides forward from the middle plane, settles at centre, and LOCKS. The overwrite is one hard replacement.
+
+[Shot 3] At 00:02.550, the second-film mark replaces the first-film mark through the same causal action. Old contours become displaced blocks. New contours occupy their exact final position and LOCK. The star spiral tightens without changing the title’s screen size.
+
+[Shot 4] At 00:03.700, the violet Rebellion mark breaks through the previous image. Violet enters the title plane while the surrounding space grows darker. Residual blocks remain behind the sharp protected artwork and are drawn inward.
+
+[Shot 5] At 00:04.860, the cold-gold Kijun mark overwrites the violet mark. Gold light exists only inside this title image and the sparse star dust. The far spiral bends more steeply toward its centre.
+
+[Shot 6] At 00:06.010, the Walpurgis Rising mark destroys and replaces the gold mark. It settles sharply at centre and LOCKS. Each kick makes only the discarded bands recoil sideways. Each cymbal releases a brief cluster of cold-gold particles behind the protected artwork.
+
+[Shot 7] At 00:07.160, a fast Push In begins with large amplitude and fast speed. The accelerating spiral pulls the final mark, discarded blocks and gold dust toward one vanishing point. Successive snares shorten the spiral in visible steps. At 8.90 seconds the mark has compressed into a narrow dark-violet slit surrounded by a cold blue-grey vignette. The camera stops abruptly. Dust overshoots inward, then settles. Hold the slit until the hard cut to C4. The frame stops before whiteout.
+
+OVERWRITE LAW: Each new title image appears by physically destroying the preceding title image. Destruction and arrival are one event. Every new image slides into its final centre position, settles, and LOCKS. The old image remains only as displaced blocks behind it.
+
+BEAT LAW: {{BEATLAW}} Every second snare introduces the next chronological title state. Kicks displace discarded bands. Cymbals release particles behind the title plane. The accelerating snares after 00:07.160 contract the spiral rather than introducing additional marks.
+
+TEXT FIELD: The six official title marks are the only glyph-bearing shapes. Space, particles, bands and the final aperture remain completely unmarked. There are no captions, credits, subtitles, numbers, interface labels, signs, watermarks or pseudo-writing.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: A low rotating spatial rumble surrounds the distant spiral. Each overwrite produces one dry digital tear, a short block displacement and a firm locking click. Star particles make sparse glass-like ticks. The final contraction rises into a narrow wind, stops with the camera, and leaves a faint cold room tone for the cut into C4.
+
+non_diegetic_music: N/A

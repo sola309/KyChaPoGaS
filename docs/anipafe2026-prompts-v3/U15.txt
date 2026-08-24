@@ -1,0 +1,27 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. <Subject 2> is {{ORB_ID}}. <Picture 2> (reference role: environment design only, not a target frame and not a storyboard anchor) defines the approved split hill and half-moon world. Its grass, clean vertical cliff face, cloud layers and straight moon edge contribute only their designs; the written stage directions control their positions and motion.
+
+summary: <Subject 1> performs a restrained ballet duet with <Subject 2> upon a hill sliced into a cliff. The cliff and half moon share one straight boundary. Hard masks, separate depth panels and an occluding feather reveal that boundary as the first visible limit of the rewritten world.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, costume, body proportions and wings. <Picture 2> partially_preserved for the hill, cliff and half-moon designs, with composition and motion rebuilt from the written instructions. <Subject 2> fully_preserved from {{ORB_ID}}. The two subjects remain visually separate.
+
+detailed_description: {{TH:CITY}}
+STAGE: The camera faces a dark hill from slightly below its crest. The grass terminates at one perfectly straight vertical cliff. One half moon hangs directly above it. The moon's straight cut and the cliff edge occupy the same screen line. <Subject 1> stands on the grass plane. <Subject 2> floats beside her extended hand.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot with a fixed low three-quarter view. <Subject 2> initially fills most of the near foreground, softly out of focus. It travels away from the lens and reveals <Subject 1> already balanced en pointe. Her torso stays vertical. One leg extends behind her. Her arms form one long diagonal. <Subject 2> follows the path of her forward hand like a silent dance partner. Her first pointe contact presses a narrow violet seam into the stone. Her wings follow the pose with delayed secondary motion. A rounded shadow with faint radial edges crosses the grass independently of the visible light. The surviving half moon is a closed hard-edge semicircular window. Cold grey cloud moves upward inside that mask. Violet-black cloud travels sideways outside it. The two cloud motions share one sky but never cross the straight mask edge.
+
+[Shot 2] At 00:01.287, a black-and-white wing feather longer than <Subject 1>'s torso sweeps leftward across the lens at very close range. It is thick and out of focus. It physically wipes the frame and reveals a fixed frontal composition. The Z-order is explicit: violet-black sky at the back; half-moon window above it; cliff and grass in the middle; <Subject 1> and <Subject 2> in front; passing feather nearest the lens. <Subject 1> completes the ballet line. <Subject 2> reaches the exact endpoint beside her open hand. At 00:01.497, every panel settles into its final position and LOCKS. Only hair, ribbon streamers, wing tips and cloud layers retain slight overshoot. The violet seam joining moon edge and cliff edge grows steadily brighter. Its brightness is the single continuous quantity rising through the entire cut.
+
+[Shot 3] At 00:02.297, hard cut to the aligned edge alone. The seam fires from the cliff upward through the moon as one narrow porcelain-white line. It occupies the same position and angle as the light between the fingers at the opening of C18. The surrounding frame remains near-black. The line locks without filling the screen.
+
+MASK LAW: The half-moon boundary is sharp. Interior cloud remains inside its closed semicircular window. The mask edge also establishes the cut shape later repeated across C22.
+
+DANCE LAW: Each pointe impact advances <Subject 2>'s orbit and tightens the straight seam. The orb follows her gesture while remaining a separate opaque vessel.
+
+BEAT LAW: {{BEATLAW}} Kicks correspond to pointe contact, orb arrest or wing follow-through. Cymbals lift individual rim-lit feathers across separate depth planes. Snares change viewpoint, lock the panels and fire the final edge.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All surfaces remain unmarked.
+{{DP}} {{ST2}}
+
+overall_soundscape: Dry pointe-shoe contacts on stone, a faint glass resonance from <Subject 2>, grass moving in rising wind, one close feather sweep across the lens, restrained wing rustle, and a thin crystalline ring from the final straight seam. Each sound remains attached to its visible source.
+
+non_diegetic_music: N/A

@@ -1,0 +1,26 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, the goddess: {{UM_ID}}. <Picture 1> contributes only her identity, costume, hair, wings and proportions. The prompt controls framing, blocking, environment and movement. The reference artwork’s composition and surrounding elements remain outside its role.
+
+summary: Light descends from above and restores muted colour to a grey world. <Subject 1> manifests within that light as the Law of Cycles, calm and unmistakable.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>’s identity, costume, hair, wings and body proportions. Camera position, pose, scale, descent and environment are newly directed by the prompt.
+
+detailed_description: {{TH:MEM}}
+STAGE: A barren field forms broad, nearly empty planes beneath a closed blue-grey sky. <Subject 1> begins beyond the upper frame. A narrow rose-pink opening stands directly above the field. Its light travels vertically downward. The light remains behind <Subject 1> in the Z-order. Her silhouette and face stay unobstructed.
+
+[Shot 1] Static Shot from a low wide angle. The lower field remains near-black. The cold sky occupies most of the frame. A hard-edged vertical opening draws itself across the cloud ceiling. Rose-pink light drops from that opening and touches the ground. The contact restores muted cel colour only inside its boundary. The outer field keeps its cold blue-grey memory palette. The boundary behaves as one restrained vertical mask. Its edge stays crisp. Colour remains contained inside it. Each discrete expansion begins at the top and travels downward. Sparse pale petals enter behind the mask edge. They fall at one unhurried speed. The light, petals and restored colour all share the same downward direction. The camera holds its scale and angle throughout this shot.
+
+[Shot 2] At 00:01.420, hard cut beneath the opening. Pedestal Down with small amplitude and slow speed. <Subject 1> is already descending upright inside the rose-pink column. The camera travels downward beside her without overtaking her. Her hair follows above her shoulders with delayed weight. Her gown follows beneath her with a slower secondary drift. Her pale wings occupy the upper depth planes. Their edges receive the descending light. The column stays behind her. Its hard boundary keeps the coloured interior separate from the grey exterior. Each kick sends one visible compression through the column from top to ground. The compression passes behind her body and continues downward. Petals cross the near plane softly out of focus. The subject plane remains sharp. At 03.000 seconds, her face and upper torso have reached the centre of frame.
+
+[Shot 3] At 00:03.140, hard cut to a centered eye-level medium close view. Static Shot. <Subject 1> remains suspended within the column. Her calm gaze faces forward. Her lips hold one relaxed closed resting shape. The descending radiance settles behind her like a completed presence. At 03.880 seconds, her body reaches its fixed final position. Her hair and wing tips continue a small downward overshoot, then settle. The grey world remains visible at both outer edges. The coloured light occupies the centre. By 04.580 seconds, the composition is fully locked for the unused generated tail.
+
+DIRECTION LAW: Every causal change enters from above and travels downward. The opening creates the light. The light reveals <Subject 1>. Her descent restores colour. The light remains behind her and preserves her readable silhouette.
+
+MASK LAW: The rose-pink interior is a closed vertical region. Its hard boundary separates restored colour from cold blue-grey. The boundary reaches each new width, settles there, and locks.
+
+BEAT LAW: {{BEATLAW}} Snares advance the mask boundary by one discrete width or initiate a hard cut. Kicks send one compression from the upper opening toward the ground. Physical follow-through continues after each compression. The absence of cymbal events keeps the petals and radiance free of bursts.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: a low descending glass-like resonance located above the frame; soft air pressure moving down the column; restrained cloth movement; fine petal brushes; a quiet grounded tone when the light reaches the field.
+
+non_diegetic_music: N/A

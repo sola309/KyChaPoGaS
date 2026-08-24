@@ -1,0 +1,29 @@
+subject_definitions: <Pictures 1-2> (reference role: subject definition only, not a target frame and not a storyboard anchor) define <Subject 1>, the same pink-haired girl in two source-specific guises. Preserve the identity and costume belonging to each source image. <Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>: {{DOLLS_ID}}. <Picture 4> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{HOMU_ID}}. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features. The target composition uses newly drawn masks and blank geometric planes rather than the source sheets’ frames, panels, swatches, or layout.
+
+summary: Three masked floods move from past loops, through unsupported possible futures, into fragments of the self that was discarded. Past and possibility share identical motion and decay; only the final face-and-doll panels slow and converge toward one central window.
+
+retention_analysis: <Pictures 1-2> are fully_preserved for <Subject 1>'s identity and source-specific guises, and partially_preserved for pose, crop, lighting, and visibility inside rapidly moving masks. <Picture 3> is fully_preserved for every visible Claradoll design and partially_preserved for pose and panel crop. <Picture 4> is fully_preserved for <Subject 2>'s identity and partially_preserved for expression, angle, crop, and lighting. Every reference supplies subject identity only. Composition, depth order, environments, masks, motion and camera are newly constructed.
+
+detailed_description: {{TH:PRO}}
+2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, one to two shadow layers. Every frame reads as a theatrical key visual.
+
+STAGE: Use a fixed frontal Static Shot at constant image scale. The camera observes stacked flat planes. Foreground compression blocks cross closest to the lens. Hard-edged fragment windows occupy the middle planes. Subjects exist only inside those windows. A near-black gear-shaped residue from the preceding cosmic revolution turns almost imperceptibly in the far plane. Each plane receives different haze and light. The windows’ edges catch cold-violet highlights. Their interiors retain the muted colours of their own moments.
+
+[Shot 1] The final blocks from the preceding gear interior arrive already moving. They spread into narrow polygonal windows arranged along a tightening spiral, echoing the title spiral but carrying past fragments inward. Each window slides, settles for an instant, and LOCKS before its picture is displaced. The windows reveal only aftermaths involving <Subject 1>: a bow lying apart from one hand; a falling silhouette against rain; still hair across broken pavement; an empty place beneath a different sky. Locations change. The ending repeats. Successive compression blocks drag colours sideways into the following window. Earlier blocks remain embedded inside later blocks. The spiral moves fastest here. Recognition arrives only as an uncertain afterimage.
+
+[Shot 2] At 00:02.303, the same window shapes occupy the same Z-order. They travel at the same speed. They settle for the same brief interval. Their internal block decay remains identical. The contents become unsupported possibilities: <Subject 1> and <Subject 2> walking shoulder to shoulder; two hands sharing an umbrella handle; a small laugh partly hidden by a foreground panel; two pairs of shoes continuing along an ordinary street. Every glimpse begins mid-gesture and ends before its context forms. Warm cream and muted pink exist only inside the apertures. The exterior remains near-black and violet. Past and possibility therefore carry the same visual evidence.
+
+[Shot 3] At 00:04.610, the spiral opens into irregular split panels and its travel slows. Foreground blocks slide outward, overshoot slightly, settle, then LOCK. The panel sequence alternates strictly: one partial face of <Subject 2>, one <Subject 3> doll; another face, another doll. Faces hold different restrained states. Doll joints supply the secondary motion. Each panel contains one identity, sharply separated by hard black seams. The outer panels darken first. Their remaining light passes behind a central silhouette-shaped aperture. Inside that aperture, face and doll panels continue alternating. The aperture settles at center and stays open, ready for the slower closure and return to the human figure in the next cut.
+
+MOSH LAW: In Shots 1 and 2, every outgoing image transfers its block structure into its successor. The hard mask boundary remains clean while the image inside it smears. Past and possible future use identical speed, texture, window geometry and decay.
+
+PANEL LAW: Every element follows foreground → middle → far Z-order. Each panel appears, slides, settles, and LOCKS. Panel edges receive light; masked images remain contained inside their apertures.
+
+FACE-DOLL LAW: Shot 3 alternates exactly one face fragment and one doll per panel. Each identity remains discrete. Their sequence alone carries the relationship.
+
+BEAT LAW: {{BEATLAW}} Snares trigger window replacement or panel locking. Kicks trigger block displacement and seam impacts. Cymbals release brief particles inside the active window only.
+{{DP}} {{ST2}}
+
+overall_soundscape: Dry fragments of rain, cloth, a dropped bow, footsteps, umbrella fabric, a clipped laugh and doll-joint creaks rush past at their visible sources. Each sound is cut off when its mask is replaced. The final panel leaves one isolated wooden joint-creak and a low distant gear rotation.
+
+non_diegetic_music: N/A

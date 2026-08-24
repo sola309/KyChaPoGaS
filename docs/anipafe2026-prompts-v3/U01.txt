@@ -1,0 +1,28 @@
+Create a 141-frame 16:9 I2VA source from the supplied image. Preserve the half-moon’s silhouette, placement, surface character, palette and straight cut edge. Complete the usable action within the first 5.21 seconds; the remaining generated frames hold the terminal composition for editorial trimming.
+
+detailed_description: {{TH:PRO}}
+[Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
+
+STAGE: The frame contains only a moon and empty night sky. The moon has been cut exactly in half. Only its left half exists. Its outer left edge forms a smooth semicircle. Its inner right edge is a perfectly straight vertical line. The absent right half is uninterrupted sky-black rather than lunar shadow. The straight edge carries a continuous hair-thin cold-white burn. This line is the sole brightest element.
+
+CAMERA: Static Shot. The camera keeps the same position, framing, focal length and horizon throughout the shot. The moon maintains exactly the same screen size and coordinates from the first frame through the terminal hold. Every background plane also maintains its original screen position.
+
+Z-ORDER: The empty near-black sky occupies the rear plane. The fixed lunar body occupies the subject plane. One moving shadow is clipped precisely to the lunar surface. The thin white cut edge occupies the foremost graphic plane and remains visible above the shadow. The shadow’s darkness stays contained inside the existing moon until it reaches the absent half.
+
+The lunar face holds a dim deep-violet exposure. Most surface detail falls into restrained grey-black masses. The surrounding sky remains empty and near-black. Black occupies more than half of the frame. The straight white edge alone receives a narrow restrained bloom.
+
+One enormous soft-edged shadow enters across the moon from its curved outer side. It advances with unbroken, almost imperceptible slowness toward the straight cut. Its identity remains unreadable: only a broad rounded rim and a faint radial suggestion pass over the lunar surface. The shadow has no corresponding body inside the frame. Its motion follows an independent path across the otherwise fixed image.
+
+By 4.50 seconds, the trailing edge of the shadow reaches the straight boundary and disappears into the already-black missing side. The lunar silhouette, the vertical cut and the white burn retain their exact geometry and brightness throughout the crossing. For the final 0.71 seconds of the usable cut, the cleared half-moon holds in complete visual stillness. The terminal frame preserves the surrounding black as the dominant area for the following hard cut into the dark-orb space.
+
+SHADOW LAW: The unseen external shadow is the only moving visual layer. Its passage reveals an influence outside the visible world while leaving the moon physically unchanged.
+
+SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and independent of musical timing.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. Every visible surface remains unmarked.
+
+{{ST2}}
+
+overall_soundscape: Near-total quiet. One thin, distant cold-air tone remains continuous at constant level and direction. It carries no gust, pulse or impact. The shadow produces no sound.
+
+non_diegetic_music: N/A

@@ -1,0 +1,29 @@
+Create a 243-frame 16:9 video from the supplied image. Preserve it as the exact initial visual state. Use one continuous Static Shot.
+
+detailed_description: {{TH:PRO}}
+STAGE: An empty night sky fills the frame. The half-moon remains at the same height, screen position and on-screen size established by the supplied image. Its surviving pale half ends at one perfectly straight white-hot edge. The other half reads as open near-black sky. Layered grey clouds sit far behind it. The frame contains only sky, cloud, the suspended object, its shadow and the threads that arrive at the end.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. The camera is locked. Its framing, focal length and horizon remain fixed for the full shot. The suspended object stays the same size on screen.
+
+The straight cut edge begins to lift like the edge of a thin mineral shell. The pale lunar surface is an applied layer rather than the substance beneath it. Its edge curls outward by a few millimetres, catches the cold violet light, then separates in broad brittle flakes. Each flake moves slowly toward the near plane before losing its light and passing into black. The peeling advances steadily from the straight boundary across the pale half. A single restrained horizontal displacement passes through the loosening surface, physically revealing that the overwrite has failed. Beneath the false lunar skin is {{EMBLEM_ID}}. Its carved grooves contain stars and violet nebulae. The stone itself remains opaque, heavy and weathered.
+
+At 00:03.400, the final lunar flake leaves the straight boundary. The full underlying stone is now legible against the sky. The former missing half is revealed as part of the same solid object, not as a second celestial body. The narrow white line expires with the last flake.
+
+From 00:03.400 to 00:05.650, the stone hangs in complete visual stillness. Only the far cloud layer moves by a barely perceptible distance. A huge soft-edged shadow crosses those clouds at a different rate. Its contour now aligns unmistakably with the floating stone above it. The shadow and its source occupy the same sky for the first time. No explanatory symbol appears; the physical alignment completes the recognition.
+
+At 00:05.650, one thin muted pink-red thread enters from the right foreground. It is real fibre, close to the lens, softly out of focus at first. It drifts behind the nearest cloud wisp, crosses the subject plane, touches one rough horn of the stone and catches. Its free length tightens without a jerk. A second thread follows along a different depth plane. It slips around the stone and settles into the beginning of one loose loop. Red exists only in these causal threads.
+
+At 00:08.880, the loop completes its first contact and stops. A short loose end continues one small secondary sway, then settles. From 00:09.180 through 00:09.580, every principal element holds its final position. The next cycle has begun, but the knot is still only beginning to form.
+
+SEQUENCE LAW: The lunar overwrite finishes peeling before the still interval begins. The still interval finishes before the first thread enters. Each phase is slower and quieter than the preceding phase.
+
+SHADOW LAW: The cloud shadow travels independently from the clouds. Its final alignment identifies the stone as the source of the previously unexplained shadow.
+
+THREAD LAW: Contact with the stone creates tension. Tension draws the second thread around it. The first completed loop ends the visible action.
+
+SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and independent of musical beats.
+{{ST2}}
+
+overall_soundscape: Near-total silence. A thin high-altitude wind remains distant and steady. Each mineral flake makes a faint dry whisper as it separates. The stone produces no impact. At the end, two quiet fibrous contacts occur at the visible points where the threads touch and tighten around the rock. The final hold contains only the distant wind.
+
+non_diegetic_music: N/A

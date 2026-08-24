@@ -1,0 +1,25 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, human Madoka. <Picture 3> (reference role: body-weight and collapsed-pose mechanics only, not framing, environment or camera) contributes to <Subject 1>. <Picture 4> (reference role: running-stride mechanics only, not framing, environment or camera) contributes to <Subject 2>. <Subject 3> is {{ORB_ID}}.
+
+summary: <Subject 1> discovers an unreachable fracture through its shadow while holding <Subject 3>. <Subject 2> runs toward the fracture, then becomes the direct visual repetition of the divided moon.
+
+retention_analysis: <Pictures 1-2> fully_preserved for character identity and clothing. <Picture 3> partially_preserved for seated body weight only. <Picture 4> partially_preserved for <Subject 2>'s running stride only. New poses, staging, masks, lighting, depth planes and camera viewpoints remain freely constructed.
+
+detailed_description: {{TH:CITY}}
+STAGE: A simplified dark stone plane occupies the foreground and middle distance. Large empty surfaces replace small environmental detail. <Subject 1>, <Subject 3>, the running path and <Subject 2> occupy separate depth planes. Hard-edged graphic masks sit behind the characters. Their contents remain clipped inside their boundaries.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot, fixed frontal wide framing. <Subject 1> sits collapsed on the ground. Her chin points toward <Subject 3> in her lowered hand. Her body, hair, wings, fingers and clothing keep identical screen positions throughout. <Subject 3> occupies one lower third. The curved margin of a colossal shadow occupies the opposite third. Together they read as two vessels at radically different scales. The shadow is a closed ground mask behind <Subject 1>. It carries one hairline break in its otherwise clean edge. The sky supplies only uniform violet darkness, yet the shadow glides slowly across the stone. Its black interior stays behind <Subject 1> and never darkens her. The broken edge passes beyond her reach. Dense percussion produces no bodily response. The moving shadow remains the sole motion.
+
+[Shot 2] At 00:02.582, hard cut to a low Tracking Shot with medium amplitude and fast speed. This viewpoint is <Subject 1>'s pursuit. <Subject 2> runs toward a porcelain-white storm on the horizon. <Subject 1>'s open hand occupies the nearest plane, larger than <Subject 2>, softly out of focus, and fixed at the same screen size. The distance between hand and runner remains visibly open. Each footfall triggers a hairline ground fracture behind <Subject 2>. Every fracture becomes a hard-edged window revealing pale storm light beneath the stone. The light stays clipped inside each line. A huge sourceless shadow travels over the running path in the opposite direction. It remains behind <Subject 2> in Z-order. The leading fracture reaches the lens. Its near stone lip crosses left-to-right at very close range, thick and out of focus, until it covers the frame.
+
+[Shot 3] At 00:04.880, hard cut to a Static Shot, frontal and symmetrical. <Subject 2> stands centered. A moon cut cleanly in half hangs high behind her. Empty black sky fills its absent side. One perfectly straight vertical mask draws itself through the moon, <Subject 2>'s cel layer, and the shadow on the ground. The three edges share one screen coordinate across three depth planes. Porcelain-white beyond-light fills the masked portion of <Subject 2>'s image. The effect reads as a graphic removal from the cel plane, with clean anatomy and intact clothing on the retained side. The moon layer settles first. The subject mask settles second. The ground-shadow edge settles last. All three LOCK into final position. Only this single aligned cut, the half moon, and <Subject 2> remain detailed. Hold the locked key visual completely still for the final 0.7 seconds.
+
+WINDOW LAW: Every window has a hard boundary. Its interior never crosses that boundary. A shadow window stays behind a character. A fracture window stays beneath the ground plane.
+
+Z-ORDER LAW: foreground hand; <Subject 2>; ground fractures; reverse-moving shadow; storm horizon. Shot 3 orders subject mask before ground shadow and after the moon.
+
+BEAT LAW: {{BEATLAW}} Shot 1 refuses every hit. In Shot 2, kicks create footfalls and footfalls create fracture windows. The measured snares at 00:02.582 and 00:04.880 trigger the two hard cuts. Cymbals illuminate only the single brightest mask edge.
+{{DP}} {{ST2}}
+
+overall_soundscape: Close dry running footsteps, thin stone fractures, distant storm pressure, cloth and hair movement, and one low scraping sound from the vast moving shadow. The final locked image carries a narrow glass-like tone from the vertical edge. Spoken voices: N/A.
+
+non_diegetic_music: N/A

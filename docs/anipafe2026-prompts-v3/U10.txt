@@ -1,0 +1,27 @@
+Create a video from this image. Static Shot throughout.
+
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the identity of the single black-haired girl, the pale water material, her unanswered reaching pose, and the initial feather-wing geometry. It contributes those subjects and materials to their corresponding elements only. Framing, editorial masks, depth order, state changes, and motion are controlled by the text.
+
+summary: On an empty white water surface, an unanswered hand remains extended. A faint outlined wing becomes a closed silhouette window, then its black interior escapes and hardens into a physical wing.
+
+retention_analysis: <Picture 1> is fully_preserved for the black-haired girl's identity, body proportions, clothing, reaching hand, and the white-water material. The wing is partially_preserved: its position and feather geometry remain recognizable while its outline becomes opaque. The water, figure, hand, and empty counterpart space retain their established spatial relationship while the wing and detached barbs alone change state.
+
+detailed_description: {{TH:WATER}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. A fixed high overhead view holds one visible human figure beside a broad area of untouched white water. A shallow human-shaped indentation remains opposite her reaching hand. The indentation contains only pale water and a small dry hollow where another hand should have met hers. Her body and open fingers retain the same on-screen size throughout. Behind her, the faint feather outline closes itself into one precise hard-edged wing-shaped window. Inside that closed contour only, a slow black current moves beneath the surface. The outer water remains white. At 00:00.280, the first closed feather cell changes from a hairline contour into a thin grey-black plane. At 00:00.860, the black current reaches the wing root and stops sharply against every outlined edge.
+
+[Shot 2] At 00:01.430, hard cut to a new state in the same fixed view. Three overlapping feather-shaped mask panels now occupy the middle depth plane behind the girl. Each panel slides a short distance outward, settles into its final position, and LOCKS. Their rims catch a narrow cold-white specular edge. The black current folds through openings at the feather tips and becomes opaque paper-like barbs in front of the wing. At 00:02.300, another feather group locks into solid black. The wing grows darker from root to tip while the unanswered indentation stays clear and readable. Detached barbs land flat on the water with small branching dark traces rather than circular ripples.
+
+[Shot 3] At 00:03.160, hard cut to the wing in its nearly solid state. A single black feather wider than the girl's torso crosses the lens from left to right in the nearest plane, softly out of focus. Its physical passage wipes to the completed state behind it. The wing is now a dense opaque mass with individually readable feather edges. The girl's silhouette remains in front of it and keeps the same pale illumination. At 00:04.030, the final feather settles near the lens. Motion decelerates into a still composition for the remaining duration: one reaching figure, one empty indentation, one solid wing, and sparse black fallout on white water.
+
+Z-ORDER LAW: foreground loose feather, subject plane girl, middle-plane wing masks, background white water and empty indentation. Every layer settles and LOCKS; the wing remains behind the figure.
+
+WINDOW LAW: the wing contour begins as a closed window containing black water. The black content exits through the feather tips and becomes the physical wing.
+
+BEAT LAW: Each snare triggers either a hard-cut state change or one feather group locking into opacity. Each kick gives a visible barb its dry contact with the water. Each cymbal releases a brief cold-white glint from the hard mask edges.
+
+HOLD LAW: the camera position, figure size, reaching hand, white water, and empty indentation remain precisely held; transformation belongs only to the wing and its fallout.
+{{ST2}}
+
+overall_soundscape: close quiet water laps, dry paper-feather flexing, faint mask-panel clicks as each layer locks, and light barbs touching the water with small brittle taps. The final settled frame carries only distant water and one fading paper creak.
+
+non_diegetic_music: N/A

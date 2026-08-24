@@ -1,0 +1,21 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, {{GEM_ID}}. <Picture 2> (reference role: material reference only) contributes the dense internal murk to the inner volume of <Subject 1>; it controls neither the vessel design nor the composition.
+
+summary: A post-battle insert shows <Subject 1> alone as its clear violet volume becomes irreversibly clouded. The absent battle is expressed only through a dying reflection and the physical exhaustion left inside the jewel.
+
+retention_analysis: <Picture 1> is fully_preserved for the complete design, materials, proportions, violet jewel and antique-gold mount of <Subject 1>, while the camera angle and staging remain newly composed. <Picture 2> is weak_reference for the opacity, granular density and slow folded motion of the murk inside the jewel only.
+
+detailed_description: {{TH:MEM}}
+STAGE: The frame contains only <Subject 1> on a broad dim surface within receding darkness. A curved part of its gold mount occupies the nearest softly blurred plane. The front bezel forms the next plane. The sharp glass dome is the subject plane. Violet light and dark suspended matter occupy separate planes behind the glass. A cold blue-grey void recedes almost motionless behind them.
+
+[Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Use a Static Shot at close range. <Subject 1> stands rigid and upright. Its ornate mount remains sharply defined while almost everything beyond it falls into the dark vignette. The violet dome begins mostly clear. A hard blue-white reflection from the preceding unseen battle lies across the glass. At 00:00.253, that reflection slides off the curved surface and disappears. One dense fold of murk turns deep within the jewel. Each succeeding physical pulse compresses clear violet into smaller isolated pockets. Opacity blooms through the entire inner volume at once rather than rising in a layer. The glass surface stays intact and glossy. By 00:01.983, the murk has occupied the central volume, while a narrow violet perimeter still separates it from the gold bezel.
+
+[Shot 2] At 00:02.553, hard cut to a newly advanced state: the centre is almost opaque and the surviving violet has retreated to the outer shell. Begin a small-amplitude, slow-speed Push In toward the dome. The gold mount leaves the frame edges at a different rate from the inner murk, exposing the separate depth planes. The murk folds over itself like heavy suspended sediment. Its movement presses outward, then settles behind the fixed glass boundary. At 00:03.853, the camera reaches an extreme macro framing and stops abruptly. The internal matter completes one slight overshoot after the camera has stopped. At 00:04.283, the final visible violet region contracts into one thin trembling thread beside a cold white glass highlight. At 00:04.580, every layer is settled and locked. Hold the darkened jewel as the result of a struggle the frame never shows. The last white highlight remains narrow against the surrounding black, creating a severe tonal edge for the following cut into the white water surface.
+
+SOUL-GEM MASK LAW: The glass dome is a closed hard-edged mask. The murk exists on a separate plane behind it. It appears, expands, settles, then LOCKS inside the dome. Its darkness remains bounded by the glass edge. The gold mount stays in front and retains its own cold reflected light.
+
+BEAT LAW: {{BEATLAW}} Each kick makes the suspended murk complete one short inward fold. Each snare reduces the connected clear-violet area without changing the outer vessel. The two cymbal accents make the glass catch and immediately shed one cold highlight. The final pulses reduce the motion until the jewel reaches complete stillness.
+{{DP}} {{ST2}}
+
+overall_soundscape: Close granular friction moves from within the jewel. Each compression produces a low muffled pressure sound. The rigid gold mount answers with sparse dry settling ticks. The final internal fold decays into a faint glass resonance within the surrounding empty space.
+
+non_diegetic_music: N/A

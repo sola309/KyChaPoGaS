@@ -237,7 +237,7 @@ def submit(uid, u, prompt, t1):
     if ns:
         cuts = cut_ranges()
         st, en = cuts[ns[0]][0], cuts[ns[-1]][1]
-        p["place"] = {"track_id": 63, "start_frame": st,
+        p["place"] = {"track_id": 64, "start_frame": st,
                       "duration_frames": en - st + 1, "auto": False}
     if t1:
         p["quality"] = "t1"

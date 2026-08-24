@@ -1,0 +1,28 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}.
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the clothing, proportions and readable distant silhouettes of <Subject 2>: {{DOLLS_ID}}. The detailed description controls their scale, angle and distance from the lens.
+<Picture 3> (reference role: world appearance only, not a target frame and not a storyboard anchor) supplies the golden storm, broken dark ground and airborne ember behaviour.
+Never merge the characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+summary: Part of <Subject 1> peels away from her. Feathers become autonomous dolls inside a woman-shaped window, break through its boundary, and leave visible absences in her feathered silhouette.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, costume and body proportions; framing and action remain free. <Picture 2> partially_preserved because its doll designs remain identifiable while foreground views become back-lit fragments or rear silhouettes. <Picture 3> weak_reference for atmosphere, palette and material texture only.
+
+detailed_description: {{TH:GOLD}}
+STAGE: <Subject 1> stands alone on broken black ground beneath a golden storm. Her actual body occupies the subject plane. A closed silhouette window forms behind her in the middle plane. Doll fragments cross the near plane. Storm clouds and distant ground occupy separate slow far planes.
+
+[Shot 1] STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot, fixed on a back-lit covered hand filling the lower centre. A ruler-straight golden line continues at the angle and screen position of the preceding moon’s cut edge. The line becomes light trapped between her fingers. At 0.253 seconds, her fingers extend and the palm opens. The released light bursts through each gap, while her wrist remains heavy and reluctant. Only the hand, its hard golden rim and several torn feather tips carry detail.
+
+[Shot 2] At 00:00.823, a small-amplitude slow Pull Out reveals the light rising behind <Subject 1>. Its hard boundary draws itself into the exact closed outline of her standing silhouette, then settles and LOCKS in the middle plane. The window interior contains moving golden storm light; its exterior remains near-black. Black feathers fall only inside that boundary. Each feather lands tip-first. Its shaft becomes a narrow spine, its barbs fold into sleeves and a skirt, and jointed limbs unfold until a small member of <Subject 2> stands upright. The transformation is continuous material morphing. Far figures retain readable designs and faces. Near-lens figures appear as backs, opaque silhouettes, sleeves, hems, cage bars and passing limbs.
+
+[Shot 3] At 00:01.983, the locked silhouette boundary cracks from the open palm outward. A fast small-amplitude Push In stops as the hard panes separate. <Subject 2> crosses from the window into real air as solid bodies with hard shadows beneath their feet. Each doll begins moving in a different direction through its own weight and joint motion. <Subject 1>'s arm drops beside her. Her gaze stays on the emptied palm. Feather masses detach from her wings and floor-length skirt, leaving clean missing spaces in their outer silhouette. Her body proportions and costume remain fully preserved. At 3.563 seconds, the camera reaches its endpoint and becomes still. The remaining feathers overshoot, drift past her, and settle while she holds the same lowered posture through the end.
+
+WINDOW LAW: The hard closed outline belongs to <Subject 1>. Golden storm exists inside it. Near-black air exists outside it. Every departing doll removes feather mass from her silhouette, making the separation physically legible.
+
+BEAT LAW: {{BEATLAW}} Snare impacts initiate the opening, the locked transformation state and the pane fracture. Kick impacts belong to doll feet and joints contacting solid ground. Cymbal transients belong to visible feather tears and brief gold ember sprays.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, captions, subtitles, signs, pseudo-writing or watermarks. Reference-sheet frames, panels, swatches and layouts remain outside the depicted world.
+{{DP}} {{ST2}}
+
+overall_soundscape: Close dry feather tears, small doll-joint creaks, light feet striking broken ground, one sharp glass fracture, sparse ember hiss and deep storm wind. Every sound comes from its visible source. <Subject 1> remains silent.
+
+non_diegetic_music: N/A

@@ -1,0 +1,25 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the departing witch using {{WALP_ID}}. Its design contributes only to the witch and its gear; the camera, scale, sky and departure action are controlled by this prompt. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines human Homura using {{HOMU_ID}}. It contributes only her identity and clothing; the rear-view pose and ground placement are newly composed. <Picture 3> (reference role: material and colour study only, not a target frame and not a storyboard anchor) supplies the fibrous structure and muted pink colour of the causal thread. Its spools and original composition remain outside the target scene.
+
+summary: Human Homura watches from the pale water as Walpurgisnacht carries Madoka’s divinity into the receding past. A hard cut leaves only one causal thread in darkness; it frays, parts, and expresses freedom and loss through the unequal motion of its two ends.
+
+retention_analysis: <Picture 1> fully_preserved for the witch design and turning gear only. <Picture 2> fully_preserved for human Homura’s identity only. <Picture 3> weak_reference for thread material and colour only. Reference layouts, panels, written marks and framing have no authority over the generated composition.
+
+detailed_description: {{TH:A3}}
+STAGE: The pale white water surface from C57 extends across the lower plane. Human Homura stands alone near the lower-left third, facing the distant sky. Walpurgisnacht occupies the high far plane. Madoka’s divinity appears as condensed pale-pink starlight enclosed inside the turning gear and travels with it. Five depth planes separate water haze, Homura, low cloud, the witch and the remote sky.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot from low behind human Homura. {{HOMU_ID}} Her hands hang at her sides. Her shoulders stay level and rigid. {{WALP_ID}} The witch rises away while its iron gear turns with slow physical weight. The pale-pink star field remains enclosed within the gear. Reflected white light leaves Homura as a delicate dark figure. A broad lightless shadow crosses the water in the opposite direction. Homura’s body stays fixed as the distance above her deepens.
+
+[Shot 2] At 00:01.147, hard cut to Homura’s ground-level view of the sky. Use a slow Push In with small amplitude toward the departing gear. Clouds nearest the lens slide backward quickly. Distant clouds barely move. This time asymmetry makes the sky appear to return toward an earlier state while the witch recedes. The gear and its pale-pink interior contract together. The surrounding light compresses into one perfectly straight luminous seam. The seam occupies the same angle and screen position as the clean cut edge of the half-moon motif. At the end of C58, the seam becomes hair-thin while the ground wind continues below.
+
+[Shot 3] At 00:02.290, hard match cut to near-black space. The whole picture contains only one muted-pink causal thread crossing diagonally where the luminous seam had been. Static Shot, fixed frontal composition. The thread remains pulled taut between two unseen points beyond the frame. Close snare accents release individual fibres from one stressed place. Each loose fibre curls away and leaves the central strand visibly thinner. Tiny highlights travel along the fibres only when they snap. At 00:03.665, the final load-bearing fibre parts. The upper end relaxes into a weightless curve, while the lower end recoils sharply and remains drawn toward the frame edge. A widening interval of pure black separates them. Both ends settle before the cut, with nearly one second of stillness.
+
+DEPARTURE LAW: greater distance makes the witch, its gear and the enclosed pale-pink divinity contract as one object. Homura remains on the ground as the sole watcher.
+
+THREAD LAW: fibre release accumulates irreversibly. The upper severed end expresses release through relaxation. The lower severed end expresses loss through retained tension.
+
+BEAT LAW: {{BEATLAW}}
+{{DP}} {{ST2}}
+
+overall_soundscape: distant weighted gear rotation, thin wind moving across the white water, cloud pressure narrowing into a high seam tone, then dry close fibre snaps from the visible thread. The final part produces one clean tensile crack followed by near-silence.
+
+non_diegetic_music: N/A

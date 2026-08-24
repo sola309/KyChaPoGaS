@@ -1,0 +1,30 @@
+subject_definitions: <Subject 1> is Devil Homura. <Picture 3> (reference role: subject identity definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. <Picture 1> (reference role: optical subject definition only, not a target frame and not a storyboard anchor) contributes the violet eye, its wet reflective surface, and the preserved reflected figure of human Madoka to Shot 1; it does not control framing, camera position, lighting, or background. <Subject 2> is human Madoka as preserved inside that reflection. <Picture 2> (reference role: hand and costume-component definition only, not a target frame and not a storyboard anchor) contributes the exact black-sheathed hands and fingers of <Subject 1> to Shots 2 and 3; it contributes neither pose nor composition.
+
+summary: Human Madoka reaches Devil Homura only as a reflection inside her eye while pale layers descend and bury the image. A hard cut reveals red causal threads tightening around Homura’s hands; only at the end does her face appear, held for the following reply.
+
+retention_analysis: <Picture 1> is partially_preserved for the violet eye, reflective surface, and reflected human Madoka while releasing its original framing. <Picture 2> is fully_preserved for the hands, fingers, and glossy dark-purple arm covers while releasing its original pose. <Picture 3> is fully_preserved for Devil Homura’s identity and costume. <Subject 1> and <Subject 2> remain separate identities. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features. <Subject 2> remains an optical reflection inside <Subject 1>’s eye.
+
+detailed_description: {{TH:A3}}
+STAGE: Shot 1 has five ordered planes: softly blurred pale pieces nearest the lens; sharp eyelashes and corneal sheen; the violet iris; <Subject 2> held deep inside the reflection; near-black beyond the eye. Shots 2 and 3 use blurred red thread nearest the lens, sharp hands, crossing thread behind them, thin violet haze, and an almost motionless black far plane. Shot 4 isolates <Subject 1> against that darkness.
+
+[Shot 1] Static Shot. One violet eye of <Subject 1> fills the frame and keeps the same on-screen size throughout. <Subject 2> appears only inside its wet reflection, already facing back toward <Subject 1> in the final posture carried from C42. Her reflected mouth remains one small unchanging line. A restrained hand gesture and a minute settling of her shoulders carry the unheard address. A narrow violet glint begins at Homura’s pupil and travels outward across the reflected figure toward the lower lid. Porcelain-white petal-shaped planes descend from the top foreground. Each piece lands along the upper and side edges, settles, and locks into its final position. Layer after layer reduces the clear central area. The wet line on the lower lid remains held. The source of the falling pieces stays outside the frame. Light comes low from the left; the descending mass receives only a pale edge. At 4.620 seconds the buried eye is still visible through one narrow opening.
+
+[Shot 2] At 00:04.620, hard cut to a high close view of both hands of <Subject 1>. A slow Push In of small amplitude approaches the fingers. Blood-red causal threads enter from several off-screen depth planes and cross the glossy dark-purple covers. Red exists only in these threads. Their tension increases in four physical stages. The first pull presses shallow grooves into the index fingers. The next pull draws the fingers half-curled. Another pull forces the crossing threads deeper between the knuckles. The hands give one restrained fraction of resistance, then hold. The threads emit dry fibre strain and the arm covers answer with a small leather-like creak. Black remains around half the frame.
+
+[Shot 3] At 00:08.205, hard cut to a Static Shot at extreme macro distance. One red thread bites across a single sheathed finger. The compressed material bulges on both sides of the line. A tiny involuntary finger flex travels to the fingertip and stops. The thread remains taut and unbroken.
+
+[Shot 4] At 00:08.635, hard cut to a Static Shot of <Subject 1>’s face. This is the first face view after the hands. Her violet eyes lift only slightly. Her jaw settles without announcing defeat. Her lips hold a narrow resting seam, prepared for C45 rather than speaking here. At 9.215 seconds her chin steadies and her throat draws taut with one shallow intake. The composition locks through the final frame.
+
+BURIAL LAW: every pale piece descends, lands, settles, and locks. Accumulation moves only from the frame edges toward the eye.
+
+THREAD LAW: each increase of tension produces visible compression before any finger response. The causal threads remain continuous through the cut.
+
+BEAT LAW: {{BEATLAW}} The four kick accents drive the four tightening stages. The first snare creates the extreme-macro state at 8.205 seconds. The second snare and simultaneous kick expose the face at 8.635 seconds. The final kick settles the chin and throat at 9.215 seconds.
+
+C43 SILENCE LAW: from the opening frame through the hard cut at 4.620 seconds, the soundtrack contains zero audible events.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: From 0.000 through 4.620 seconds, absolute digital silence with zero room tone, voice, breath, cloth, or movement sound. After the cut: close dry fibre tension from the visible red threads, faint compression of the glossy arm covers, one tiny finger-joint sound, and a shallow breath from <Subject 1> at the end. Every sound stays attached to its visible physical source.
+
+non_diegetic_music: N/A

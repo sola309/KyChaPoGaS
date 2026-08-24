@@ -1,0 +1,25 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) contributes the exact earliest-loop human schoolgirl identity to <Subject 1>. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) contributes the exact human schoolgirl identity to <Subject 2>. <Subject 1> and <Subject 2> remain separate people. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features.
+
+summary: A tear from <Subject 1>, the girl who was torn apart, opens a hard-edged window into elapsed happiness upon white water. A few steps away, <Subject 2>, the girl who fired the arrow, remains physically whole while only her reflection splits into displaced panels.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s visual identity and earliest-loop human schoolgirl state. <Picture 2> fully_preserved for <Subject 2>'s visual identity and human schoolgirl state. Composition, posture, white-water space, masks, panel positions, Z-order and reflection behavior are controlled by the text. The reference images define subjects rather than framing.
+
+detailed_description: {{TH:WATER}}
+STAGE: An apparently endless white water surface forms the background plane. <Subject 1> occupies the left subject plane. <Subject 2> later occupies the right subject plane several steps away. The reflection plane remains beneath the water surface and behind both physical bodies. Hard-edged memory windows remain behind the subjects. Near-lens transition objects occupy the foremost plane. The camera is a fixed frontal Static Shot for every motion-graphic event.
+
+[Shot 1] A dark iron gear tooth from the preceding witch image passes downward across the lens at extremely close range. It is broader than <Subject 1>'s seated body and softly out of focus. Its passage wipes away the last black newsprint texture and exposes white water. <Subject 1> already sits alone with her head bowed. Hair and shoulder shadow occupy the entire facial area. Her ordinary human back contour ends cleanly at the school uniform. Empty white water surrounds her shoulders. Her hands rest without movement. The camera keeps her screen size constant. One clear tear gathers below the hidden face.
+
+[Shot 2] At 00:00.862, the tear strikes the water. The contact draws a hard-edged, branching fluid boundary rather than a circular graphic ring. The enclosed area becomes a window into an earlier layer of the same white water. Two distant hand shadows inside that window almost meet, then remain separated. The window stays behind <Subject 1> in Z-order and never crosses her silhouette. Its inner light is older and warmer than the outer white. Each kick extends one branch of the fluid boundary. Each cymbal places one brief pale glint upon its edge. One section of the boundary resolves into a ruler-straight fracture line aimed toward the empty right side, echoing the earlier unreachable crack. The expanding white edge reaches the right edge of the lens and fills it, forming a physical mask into the next shot.
+
+[Shot 3] At 00:02.290, hard cut through the matching white mask. <Subject 2> stands several steps away on the right, intact and motionless. Her physical body occupies the foremost sharp subject layer. Beneath her, her reflection occupies a separate masked plane under the water. Only that reflected plane is divided into irregular hard-edged panels. The real water surface and the real girl remain continuous. A snare makes one reflection panel slide sideways and settle. A kick makes another panel sink by a small fixed distance. A cymbal exposes a narrow white seam between panels. Every panel completes its movement, locks into its final position and stays there. One reflected face panel points away while the physical head remains lowered. Her hands slowly close at her sides. The final snare locks all displaced panels. The camera and physical body remain still while the broken reflection holds for the ending.
+
+TEAR-WINDOW LAW: The falling tear creates a bounded window into elapsed happiness. Its branching edge contains one straight fracture segment linking this water image to the earlier crack motif. The window remains behind the human figure.
+
+REFLECTION-INVERSION LAW: <Subject 2>'s physical body stays continuous and unharmed. Guilt appears only in the separated reflection plane. Reflection panels move in ordered Z-depth, settle and lock; the fracture never crosses into the physical subject layer.
+
+BEAT LAW: {{BEATLAW}}
+{{DP}} {{ST2}}
+
+overall_soundscape: Near-silent open-water ambience. One close tear impact makes a small liquid tap. Branching water edges produce soft spreading surface tension. Reflection panels produce restrained glass-on-water scrapes, followed by short dry locking clicks. The departing foreground gear contributes one low metal passage at the opening.
+
+non_diegetic_music: N/A
