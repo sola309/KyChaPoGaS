@@ -8,6 +8,7 @@
       レビューで確かめたい箇所だから。
 """
 import html, json, re, sys, glob
+DIR = sys.argv[2] if len(sys.argv) > 2 else "docs/anipafe2026-prompts"
 
 ACTS = [
     ("01", "序", "C1–C3", "黒・深紫・金"),
@@ -22,11 +23,7 @@ ACTS = [
 ]
 # 判断を仰ぐ単位
 FLAGGED = {
-    "U03": "本作で唯一、文字が出る単位。ロゴは参照からの図形複製で、綴りは生成させない",
-    "U16": "統合パターン。参照9枚の上限構成 — U16a/U16bの分割と排他。T1でA/B推奨",
-    "U16a": "分割パターン①(C18単独・参照3枚)。U16と排他",
-    "U16b": "分割パターン②(C19単独・参照7枚)。U16と排他",
-    "U25": "C38はジェムの公式情報が皆無のため代案で執筆(承認済)",
+    "U03": "本作で唯一、文字が出る単位。ロゴは参照からの図形複製",
 }
 
 FIELDS = ("subject_definitions", "summary", "retention_analysis",
@@ -43,13 +40,14 @@ def mark(code: str) -> str:
     s = re.sub(r"\b(fully_preserved|partially_preserved|attribute_transfer|weak_reference)\b",
                r'<b class="ret">\1</b>', s)
     s = re.sub(r"^(Create a video from this image\.)", r'<b class="fld">\1</b>', s, flags=re.M)
+    s = re.sub(r"^([A-Z][A-Z \-]+ LAW:|LAW:|STYLE THESIS:)", r'<b class="law">\1</b>', s, flags=re.M)
     return s
 
 
 def main():
-    req = json.load(open("docs/anipafe2026-prompts/requirements.json"))
+    req = json.load(open(f"{DIR}/requirements.json"))
     units = {}
-    for f in sorted(glob.glob("docs/anipafe2026-prompts/0[1-9]*.md")):
+    for f in sorted(glob.glob(f"{DIR}/0[1-9]*.md")):
         t = open(f).read()
         for m in re.finditer(r"## (U\d+[ab]?) — ([^\n]+)\n(.*?)(?=\n---\n## U|\Z)", t, re.S):
             uid, head, body = m.group(1), m.group(2), m.group(3)
@@ -105,7 +103,7 @@ def main():
   <pre class="prompt"><code>{mark(u["code"])}</code></pre>
 </article>''')
 
-    doc = f'''<title>AniPAFE2026 生成単位プロンプト集</title>
+    doc = f'''<title>AniPAFE2026 プロンプト集 v2</title>
 <style>
 :root{{
   --bg:#f6f4f9; --panel:#fff; --panel2:#f0edf5; --line:#e0dbe9; --line2:#cfc7dd;
@@ -231,7 +229,7 @@ pre.prompt{{background:var(--code-bg); border:1px solid var(--line); border-radi
 </style>
 <div class="wrap">
 <header class="mast">
-  <p class="kicker">AniPAFE2026 ／ ゲート2 レビュー</p>
+  <p class="kicker">AniPAFE2026 ／ v2 全面刷新</p>
   <h1>生成単位プロンプト集</h1>
   <p class="sub">全67カットを42の生成単位にまとめた MiniMax H3 プロンプト。骨格
   （フィールド名・<code>[Shot N]</code>・<code>{{{{タグ}}}}</code>・参照ラベル）は公式が

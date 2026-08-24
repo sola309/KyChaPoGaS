@@ -33,10 +33,12 @@ def cut_ranges():
             for i in range(0, len(pins) - 1, 2)}
 
 
-def load_units():
+def load_units(v2=False):
     spec = importlib.util.spec_from_file_location("su", ROOT / "scripts/submit_unit.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
+    if v2:
+        m.PDIR = m.PDIR_V2
     return m.parse_units()
 
 
@@ -45,9 +47,10 @@ def main():
     ap.add_argument("jobs")
     ap.add_argument("--track", type=int, default=62)
     ap.add_argument("--dry", action="store_true")
+    ap.add_argument("--v2", action="store_true")
     a = ap.parse_args()
 
-    jobs, units, cuts = json.load(open(a.jobs)), load_units(), cut_ranges()
+    jobs, units, cuts = json.load(open(a.jobs)), load_units(a.v2), cut_ranges()
     existing = api("GET", f"/clips/?track_id={a.track}")
 
     plan, skipped = [], []

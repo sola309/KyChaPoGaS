@@ -185,6 +185,21 @@ def expand(code, uid, D):
     return re.sub(r"\{\{([^}]+)\}\}", lambda m: D[m.group(1)], code)
 
 
+_CUTS = None
+
+
+def cut_ranges():
+    """ピン(track 54)を2つずつ組にして C番号 → (start, end)。テイク紐付けに使う。"""
+    global _CUTS
+    if _CUTS is None:
+        pins = [c for c in json.load(urllib.request.urlopen(API + "/clips/?track_id=54"))
+                if c.get("asset_id")]
+        pins.sort(key=lambda c: c["start_frame"])
+        _CUTS = {i // 2 + 1: (pins[i]["start_frame"], pins[i + 1]["start_frame"])
+                 for i in range(0, len(pins) - 1, 2)}
+    return _CUTS
+
+
 def submit(uid, u, prompt, t1):
     """実APIの形式に合わせる。参照画像はモードによらず keyframes[] で渡す。
     I2VA = model 'minimax-h3'(先頭1枚をfirst frameに) / Ref2VA = model 'minimax-h3-ref'(≤9枚)。
@@ -196,6 +211,14 @@ def submit(uid, u, prompt, t1):
          "duration_sec": round(u["frames"] / 24.0, 3), "fps": 24, "seed": -1,
          "negative_prompt": "", "scheduler": "simple", "easycache": False,
          "note": f"AniPAFE2026 {uid} {u['head'][:60]}"}
+    # 🗂テイク履歴はこの place.start_frame でカットへ紐付く。
+    # auto=false = タイムラインへ自動配置せずテイクとして蓄積する(運用規約)。
+    ns = [int(x) for x in re.findall(r"C(\d+)", u["head"].split("(")[0])]
+    if ns:
+        cuts = cut_ranges()
+        st, en = cuts[ns[0]][0], cuts[ns[-1]][1]
+        p["place"] = {"track_id": 63, "start_frame": st,
+                      "duration_frames": en - st + 1, "auto": False}
     if t1:
         p["quality"] = "t1"
     else:
