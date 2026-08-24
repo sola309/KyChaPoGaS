@@ -69,13 +69,17 @@
  },
  "U06": {
   "title": "C7 約束の水面",
-  "meta": "I2VA / 生成175f / 実尺6.96s / 1ショット / 盛上5.79-6.96s",
-  "mode": "I2VA",
+  "meta": "Ref2VA / 生成175f / 実尺6.96s / 4ショット / ス2キ2 / 盛上5.79-6.96s",
+  "mode": "Ref2VA",
   "assets": [
-   2944
+   2944,
+   3233,
+   3234,
+   3235,
+   3236
   ],
   "materials": [],
-  "dd_words": 129,
+  "dd_words": 350,
   "file": "docs/anipafe2026-prompts-v2/02-act1a.md"
  },
  "U07": {
