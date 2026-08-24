@@ -77,74 +77,106 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U06 — C7 約束の水面 (Ref2VA / 生成175f / 実尺6.96s / 3ショット / キ2.322,6.932 ス2.322,3.472 / 盛上5.79-6.96)
+## U06 — C7 約束の水面 (Ref2VA / 生成175f / 実尺6.96s / 3ショット / キ2.322,6.932 ス2.322,3.472 / 盛上5.790-6.957)
 
 参照(理想): <Picture 1> #3236 寄り・倒れた二人 / <Picture 2> #3235 まどか顔アップ(涙) /
 <Picture 3> #3233 眼鏡の目の極アップ / <Picture 4> #2944 引き・二人 (⚠翼は本文が支配) /
-<Picture 5> #3234 眼鏡ほむら(identity)
-⚠**3ショット構成**(前版は4ショットで②④が1.2秒しかなく、伏線が実行されなかった)。
-③に3.49秒を与え、レンズ→翼のワイプ→引き→羽根→影を入れる。
-MG: **線画グリッチ**(描かれた/まだ描かれていないが拍で明滅) / **翼の線がレンズ至近を横切るワイプ** /
-**羽根=唯一の実体** / **光源のない影**
+<Picture 5> #3234 眼鏡ほむら (identity)
+⚠intent確定事項: **翼は必ず薄く**(C11の変化が死ぬ) / **約束の言葉と口の動きは消す** / #2944の構図。
+⚠「長回しで一枚絵」はユーザー判断で3ショットへ変更(2026-08-24)。⚠眼鏡ほむら(赤縁・三つ編み)。
+設計リンク: **C11**=同じ水面・同じ構図でまどかが消え翼が濃くなる → C7は照合表。
+**C4**(唯一「届く」手)と対 → ここの手は届かない。
+MG: **窓が主役**。翼の輪郭が閉じた面積を作り、**その中だけが「黒い波」**(歌詞が窓の中身を決める・
+MG言語辞書の規則)。外は白いまま。波は**二人の背後を通過**する(Z順)。
+流体拡散は「線を描くペン」の役に留める。同心円の波紋は全面禁止。
 
 ```
 subject_definitions: <Picture 1> (reference role: framing of Shot 1 - two schoolgirls fallen
-head to head, hands reaching). <Picture 2> (reference role: framing of Shot 2 - the pink-haired
-girl's face, eyes closed, one tear). <Picture 3> (reference role: framing of Shot 3's opening -
-a violet eye behind a RED-RIMMED lens at extreme range). <Picture 4> (reference role: the wide
-view of both girls on white water; ignore its wing). <Picture 5> (reference role: subject
-definition - BRAIDED hair, RED-RIMMED GLASSES, earliest loop). Never merge the two girls.
+side by side on white water, facing each other, hands reaching). <Picture 2> (reference role:
+framing of Shot 2 - the pink-haired girl's face, eyes closed, one drop at the eye). <Picture 3>
+(reference role: framing of Shot 3's opening - a violet eye behind a RED-RIMMED lens at extreme
+range). <Picture 4> (reference role: the wide view of both girls on white water; ignore its
+wing - the wing's state is governed by the text). <Picture 5> (reference role: subject
+definition of the black-haired girl - BRAIDED hair, RED-RIMMED GLASSES, earliest loop; she
+wears her glasses in every shot). Never merge the two girls. Never remove the glasses.
 
-summary: Two fallen girls resolve out of black on a world that keeps flickering between drawn
-and undrawn; a tear falls; and inside a lens the wing is drawn by the ripple, sweeps the frame
-away, and sheds one solid feather while a sourceless shadow crosses.
+summary: On a white surface a drop blooms into branching filaments; where they pass behind the
+other girl they stiffen into the outline of a wing, and inside that outline - and nowhere else -
+a black wave is rolling in.
 
 retention_analysis: <Pictures 1-3> fully_preserved as framings. <Picture 4>
-partially_preserved. <Picture 5> fully_preserved as identity.
+partially_preserved - composition kept, wing not. <Picture 5> fully_preserved as identity.
 
 detailed_description: {{TH:WATER}}
-[Shot 1] TOTAL BLACK. White bleeds in from the centre and the picture resolves: two schoolgirls
-FALLEN head to head on white water, close range. Not posed - dropped where they stopped. Both
-hands reach and DO NOT TOUCH; the gap sits dead centre. Under the pink-haired girl the water is
-pressed down into a shallow bowl, a clear rim standing around her.
-AND THE WORLD IS NOT FINISHED: on every kick the picture FLICKERS for one frame between two
-states - fully painted, and bare contour lines on white with the fills missing. Uniforms lose
-their colour and come back. The water's caustics drop to outline and return. The girls
-themselves never flicker.
-[Shot 2] At 00:02.322, hard cut: extreme close on the pink-haired girl's face. Eyes closed. A
-tear swells, crosses her cheek, strikes the water. A ring opens and travels outward. One event,
-nothing else.
-[Shot 3] At 00:03.472, the travelling ring becomes a LENS RIM. The black-haired girl's
-red-rimmed glasses at extreme range, violet eye open behind them. Inside the lens the whole
-wide scene waits, reflected and curved, the gap still dead centre at the same size. The ring
-crosses the reflection - AND WHERE IT PASSES BEHIND HER, IT LEAVES A LINE. Contour after
-contour, a great feathered wing is DRAWN by the ripple's own edge, outline only, no fill.
-Then the drawn wing SWEEPS: its outermost contour lines rush across the lens at very close
-range, thick and out of focus, wiping the entire frame from one side - and behind that wipe we
-are outside the lens, on the real wide: the full white surface, both girls small, the gap
-unchanged, the wing still drawing itself longer behind her.
-ONE FEATHER TEARS LOOSE from the outline - a single closed shape detaching from the line-work -
-and falls, and touches the surface, and lies there: THE ONLY SOLID FULLY PAINTED OBJECT IN THE
-PICTURE. Around it the flicker continues. And ONE HUGE SOFT-EDGED SHADOW, cast by nothing
-anywhere, crosses both girls slowly. At 00:06.932 the last contour lands on the final impact
-and everything stops at once. Hold on the drawn wing, the one solid feather, the crossing
-shadow.
-UNPAINTED LAW: THIS WORLD IS A DRAWING THAT HAS NOT BEEN COLOURED YET, AND IT KEEPS SLIPPING
-BACK TO THE LINE STAGE. Each kick drops it to contours for one frame. The two girls and the one
-fallen feather are the only things that never flicker.
-RIPPLE-DRAWS-WING LAW: THE WING IS NOT SUMMONED - IT IS DRAWN, AND THE PEN IS THE TEAR'S
-RIPPLE. Line exists only where the ring has already passed; the wing can never be longer than
-the ring has travelled.
-WIPE LAW: THE ONLY WIPE IS THE WING'S OWN OUTER CONTOUR LINES CROSSING THE LENS AT CLOSE RANGE.
-No dissolve, no fade; the drawing itself moves across and the next view is behind it.
-BEAT LAW: {{BEATLAW}} The kick at 00:02.322 cuts to her face; the snare at 00:03.472 turns the
-ring into the lens; every kick flickers the world to line stage; the kick at 00:06.932 is the
-last contour.
+STAGE: One flat white water surface, level and endless, seen from above. The two girls lie ON
+it, on their sides, PARALLEL and FACING each other, one body-width apart, heads at the same
+end. The lane of empty water between them runs the length of both bodies; the gap between their
+reaching fingertips is its exact centre. Their hands never touch. NO CONCENTRIC RIPPLES
+ANYWHERE - nothing spreads as an expanding circle.
+FLUID: a drop meeting the surface does not ring, IT BLOOMS - a dense head, then long branching
+filaments reaching outward, curling, splitting finer, edges feathering into the water. Lopsided
+and dendritic. The filaments are the PEN of this video and nothing else.
+WINDOW: the drawn wing's outline encloses an area, and THAT ENCLOSED AREA IS A WINDOW ONTO A
+DIFFERENT PICTURE. Outside the outline: white still water. Inside it: A BLACK WAVE, huge and
+slow, rolling in from a far horizon that does not exist anywhere else in the frame. The window's
+edge is exactly the drawn contour - hard, thin, no glow, no blur. Nothing black ever crosses
+that edge.
+
+[Shot 1] Pedestal Down, small amplitude, very slow speed. TOTAL BLACK. A pale bloom opens at
+centre; its filaments spread and white water appears behind them until the frame is water. The
+two girls lie there, fallen - not posed, dropped where they stopped - face to face, hands
+reaching across the lane, NOT touching, the gap dead centre. Under the pink-haired girl the
+surface is pressed into a shallow bowl, a clear rim standing around her body. At 1.40 seconds
+the camera has come low enough that the two bodies fill two thirds of the frame. Their mouths
+never move; no words are shown at any point in this video.
+
+[Shot 2] At 00:02.322, hard cut. Push In, small amplitude, fast speed. Extreme close on the
+pink-haired girl's face, eyes closed. One drop gathers at the corner of her eye, crosses her
+cheek and falls. At 3.20 seconds it meets the water beside her head and BLOOMS, filaments
+branching outward. One event, nothing else.
+
+[Shot 3] At 00:03.472, hard cut. Pull Out, large amplitude, slow speed, held for the whole shot.
+The picture opens on the black-haired girl's red-rimmed glasses at extreme range, violet eye
+open behind them; inside the lens the whole wide stage is reflected, the gap still dead centre.
+At 4.30 seconds the lens fills half the frame and real white water shows around it. At 4.80
+seconds the lens is gone and the camera looks straight down at the flat stage: both girls small,
+face to face, the lane running left to right.
+THE FILAMENTS REACH BEHIND THE BLACK-HAIRED GIRL AND DO NOT STOP - each thread that passes her
+shoulder STIFFENS INTO A DRAWN LINE, and line by line they become the contour of a great
+feathered wing, OUTLINE ONLY, thin and grey, no fill.
+AND AS SOON AS THE OUTLINE CLOSES ITS FIRST AREA, THAT AREA STOPS BEING WATER: inside it a black
+wave rolls slowly in from a horizon that exists only inside the wing. Outside the line the water
+stays white and still. At 5.40 seconds the outline has reached half its length and the black
+wave inside has grown with it. The wave passes BEHIND the two girls - their bodies stay in front
+of it, unbroken silhouettes on white, never darkened by it.
+At 5.79 seconds one feather TEARS LOOSE from the outline - a single closed shape detaching from
+the line-work, carrying a piece of the black wave inside it - and falls, and lands on the white
+water, and lies there fully painted: the only solid object in the picture. At 6.30 seconds one
+huge soft-edged shadow, cast by nothing anywhere, has begun crossing both girls. At 6.93 seconds
+the last contour lands, the wing is complete in outline with the wave filling it, and the camera
+is still rising by a hair.
+
+WINDOW LAW: THE WING'S OUTLINE IS A WINDOW AND ITS CONTOUR IS THE WINDOW'S HARD EDGE. What is
+inside is a different world - the black wave. What is outside is white still water. The two
+never bleed into each other and the black never crosses the line.
+Z-ORDER LAW: THE BLACK WAVE IS BEHIND THE GIRLS. Their bodies always read in front of it, and it
+never darkens them.
+FILAMENT-DRAWS-WING LAW: THE WING IS NOT SUMMONED - IT IS DRAWN, AND THE PEN IS WHAT FELL FROM
+THE OTHER GIRL'S EYE. Line exists only where a filament has already passed; the wing can never
+be longer than the filaments have reached.
+WING LAW: THE WING IS CONTOUR LINES AND NOTHING ELSE - never filled with paint, never shaded,
+never solid. Only the window inside it carries an image, and only the one torn feather is solid.
+CAMERA LAW: ONE MOVE PER SHOT AND NO SHOT REPEATS ANOTHER'S. The stage stays flat and level; the
+camera never tilts off level, never rolls, never shakes.
+BEAT LAW: {{BEATLAW}} The kick at 00:02.322 cuts to her face; the snare at 00:03.472 cuts to the
+lens; each kick advances the black wave one surge inside the window; the kick at 00:06.932 is
+the wing's last contour.
 {{DP}} {{ST2}}
 
-overall_soundscape: silence, then water settling; one clear drop and its ring; a glassy tone at
-the lens; the dry hiss of a pen on wet paper; one soft feather-fall; two close breaths. The
-flicker makes a faint dry tick. No voices. The shadow makes no sound.
+overall_soundscape: silence, then water settling under two bodies; one clear drop striking and
+blooming; a glassy tone at the lens; the dry hiss of a line being drawn on wet paper; and from
+inside the wing, distant and muffled as if heard through a wall, the low roll of a black sea.
+One soft feather-fall. Two close breaths. No voices at any point.
 
 non_diegetic_music: N/A
 ```

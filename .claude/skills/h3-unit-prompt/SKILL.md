@@ -32,6 +32,8 @@ description: AniPAFE2026のMiniMax H3プロンプト(生成単位)を書く・�
 3. **設計リンク** — `links` と逆リンク。**そのカットが何の伏線で、何の回収か**を確認する
 4. **名簿** — `backend/data/bible/0.json`。登場するキャラ・物の `description_en` と `caution`
 5. **方針** — `docs/anipafe2026-rewrite-policy.md`(MG密度・モード・音・リップシンク・光)
+   ⚠ **MG重点カット**は `docs/anipafe2026-mg-heavy-cuts.md` を先に見る。
+   C7/C11/C16/C17/C21/C24/C30/C52/C56-57/C61-64 は密度計画より優先してMGを重くする
 6. **憲法** — `docs/anipafe2026-prompt-constitution.md`(43条+37b-h)
 7. **参照集** — `docs/prompt-refs/001〜008`。**形式を借りる相手を決める**
 
