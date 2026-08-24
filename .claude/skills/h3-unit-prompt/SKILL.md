@@ -37,6 +37,15 @@ description: AniPAFE2026のMiniMax H3プロンプト(生成単位)を書く・�
 6. **憲法** — `docs/anipafe2026-prompt-constitution.md`(43条+37b-h)
 7. **参照集** — `docs/prompt-refs/001〜008`。**形式を借りる相手を決める**
 
+## retention marker（固有名7種・混同しない）
+
+**可視参照(画像/動画)用 4種**: `fully_preserved` / `partially_preserved` /
+`attribute_transfer`(属性を別の識別可能な対象へ転写) / `weak_reference`(様式・カテゴリ・構図・雰囲気のみ)
+**音声参照用 4種**: `fully_copy` / `partially_copy` / `reference`(信号を複製せず声色・リズムを参照) /
+`weak_reference`(可視と共通)
+
+本作は音声参照を使わないので、実質は可視用4種。
+
 ## 型（Ref2VA。I2VAは3条件を満たすときだけ）
 
 ```
