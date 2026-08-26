@@ -117,6 +117,26 @@ def get_bible(project_id: int):
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+_UNIT_PROMPTS = Path(__file__).resolve().parents[3] / "docs/anipafe2026-unit-prompts.json"
+
+
+@router.get("/{project_id}/unit-prompt/{unit_id}")
+def get_unit_prompt(project_id: int, unit_id: str):
+    """生成単位のプロンプト全文(プレースホルダ展開後 = H3へ実際に渡る文面)。
+
+    展開ロジックは scripts/submit_unit.py の1箇所に置き、ここは
+    scripts/seed_units.py が書き出した結果を返すだけにする(二重実装で
+    ズレるのを避ける)。単位を開いたときだけ取りに来る = タイムライン
+    読み込みを重くしない。
+    """
+    if not _UNIT_PROMPTS.exists():
+        raise HTTPException(404, "unit prompts not generated yet")
+    data = json.loads(_UNIT_PROMPTS.read_text(encoding="utf-8"))
+    if unit_id not in data:
+        raise HTTPException(404, f"unknown unit {unit_id}")
+    return data[unit_id]
+
+
 @router.put("/{project_id}/bible")
 def put_bible(project_id: int, body: dict):
     _bible_path(project_id).write_text(

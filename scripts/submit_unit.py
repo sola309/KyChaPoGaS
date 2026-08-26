@@ -220,7 +220,144 @@ def cut_ranges():
     return _CUTS
 
 
-def submit(uid, u, prompt, t1):
+# ── 参照音声(<Audio N>)の宣言文 ────────────────────────────────
+# 執筆: Codex(gpt-5.6-sol / 資料一式106,868字 + 公式ガイド調査)。Claudeは検査のみ。
+#
+# 監督が独断で書いた初版は3点とも誤りだった:
+#   ① fully_copy を打点駆動に使った → fully_copy は「参照音声をそのまま完成音声にする」
+#      という音声側の関係指定。映像同期の強度ではない。リズム参照は `reference` が正しい
+#   ② <Audio 1> を "the clock for every visual event" と書いた → 公式にない役割の過剰指定
+#   ③ "Visual events occur only on transients" と書いた → 二次動作と着地まで禁じてしまう。
+#      実測でも総動き量が 5.41→3.83 と減った(U18 同一シード比較)
+# 映像の時刻精度は従来どおり [Shot N] At MM:SS.mmm の実測生値が主制御。
+# 参照音声はリズム条件を補強するだけで、フレーム時刻を拘束しない。
+AUDIO_BLOCK = {
+    "lipsync": (
+        "\n<Audio 1> is the synchronized vocal-performance reference for <Subject 1> (S1).\n"
+        "<Audio 1> supplies the exact lyric, syllable rhythm, vowel holds, pauses, breaths "
+        "and phrase endings for this cut.",
+        "\n<Audio 1>: reference - its lyric content, syllable rhythm, pauses, breaths and "
+        "measured delivery guide the newly generated vocal performance of <Subject 1> (S1).",
+        "{DTAG}"
+        "LIPSYNC LAW: Each syllable onset triggers one small jaw opening.\n"
+        "Each syllable ending triggers one smaller mouth aperture.\n"
+        "Each held vowel keeps one stable mouth pose.\n"
+        "Each audible pause brings the lips together.\n"
+        "Each phrase ending brings the lips together.\n"
+        "The closed lips stop the jaw until the next onset.\n"
+        "The next syllable onset restarts the jaw.",
+        None),
+    "beat": (
+        "\n<Audio 1> is the instrumental rhythm reference for this cut.\n"
+        "<Audio 1> supplies the snare, kick, cymbal, tempo, accent hierarchy, phrase contour "
+        "and buildup.",
+        "\n<Audio 1>: reference - its rhythm, accent hierarchy and phrase contour guide the "
+        "newly generated audiovisual sequence.",
+        "RAW-TIME LAW: Each [Shot N] boundary uses its written unrounded measured transient time.\n"
+        "SNARE LAW: Each selected snare boundary triggers one hard cut, mask swap or physical wipe.\n"
+        "KICK LAW: Each selected kick transient triggers one body impact or depth-plane displacement.\n"
+        "CYMBAL LAW: Each selected cymbal transient triggers one rim-light burst or particle burst.\n"
+        "Each primary impact releases one short overshoot.\n"
+        "Hair and cloth continue moving between primary impacts.\n"
+        "Haze and particles continue moving between primary impacts.\n"
+        "MG LAW: Each silhouette window encloses the lyric-indicated image behind the subject.\n"
+        "The hard window edge confines the inner image.\n"
+        "Each panel appears on its assigned depth plane.\n"
+        "The panel slides toward its final position.\n"
+        "The settled panel LOCKS at its assigned Z-order.\n"
+        "Each MG edge catches one hard specular accent from the shot key.\n"
+        "Each assigned wipe uses a pink causal thread, crack edge, golden storm band or "
+        "black feather group.\n"
+        "The motif object crosses the near foreground plane at very close range.\n"
+        "The motif object covers the lens before the next shot appears.",
+        "<Audio 1> guides a newly generated instrumental score with the same rhythm, "
+        "accent hierarchy and phrase contour."),
+    # 歌と伴奏を1本に混ぜず、<Audio 1>=歌唱 / <Audio 2>=伴奏 と分けて別々の役へ配線する
+    "full": (
+        "\n<Audio 1> is the synchronized vocal-performance reference for <Subject 1> (S1).\n"
+        "<Audio 1> supplies the exact lyric, syllable rhythm, vowel holds, pauses, breaths "
+        "and phrase endings.\n"
+        "<Audio 2> is the instrumental rhythm reference for this cut.\n"
+        "<Audio 2> supplies the snare, kick, cymbal, tempo, accent hierarchy, phrase contour "
+        "and buildup.",
+        "\n<Audio 1>: reference - its lyric content, syllable rhythm, pauses, breaths and "
+        "measured delivery guide the newly generated vocal performance of <Subject 1> (S1).\n"
+        "<Audio 2>: reference - its rhythm, accent hierarchy and phrase contour guide the "
+        "newly generated audiovisual sequence.",
+        "{DTAG}"
+        "DUAL-TRACK ROUTING LAW: Each vocal onset in <Audio 1> triggers one mouth-performance "
+        "response.\nEach instrumental accent in <Audio 2> triggers one assigned visual response.\n"
+        "LIPSYNC LAW: Each syllable onset triggers one small jaw opening.\n"
+        "Each syllable ending triggers one smaller mouth aperture.\n"
+        "Each held vowel keeps one stable mouth pose.\n"
+        "Each audible pause brings the lips together.\n"
+        "Each phrase ending brings the lips together.\n"
+        "The closed lips stop the jaw until the next onset.\n"
+        "RAW-TIME LAW: Each [Shot N] boundary uses its written unrounded measured transient time.\n"
+        "SNARE LAW: Each selected snare boundary triggers one hard cut, mask swap or physical wipe.\n"
+        "KICK LAW: Each selected kick transient triggers one body impact or depth-plane displacement.\n"
+        "CYMBAL LAW: Each selected cymbal transient triggers one rim-light burst or particle burst.\n"
+        "Each primary impact releases one short overshoot.\n"
+        "Secondary motion continues between primary impacts.\n"
+        "MG LAW: Each silhouette window encloses the lyric-indicated image behind the subject.\n"
+        "The hard window edge confines the inner image.\n"
+        "Each panel appears on its assigned depth plane.\n"
+        "The panel slides toward its final position.\n"
+        "The settled panel LOCKS at its assigned Z-order.\n"
+        "Each assigned motif object crosses the near foreground plane.\n"
+        "The motif object covers the lens before the next shot appears.",
+        "<Audio 2> guides a newly generated instrumental score with the same rhythm, "
+        "accent hierarchy and phrase contour."),
+}
+# ロール → 渡すステム。歌わない人物に余計な口の動きが出るのを避けるため、
+# MG(打点駆動)には歌声を渡さない。full は歌唱と伴奏を別々の参照として2本渡す。
+# ⚠ 公式: 参照音声は1本2〜15秒・合計15秒以内。full の2本構成は単位が7.5秒以下でないと超える。
+AUDIO_STEM = {"lipsync": ["vocal"], "beat": ["inst"], "full": ["vocal", "inst"]}
+
+
+_PACKET = None
+
+
+def packet_cuts():
+    """設計意図・歌詞・実測打点の台帳。歌詞は <d> タグの文言をここから取る。"""
+    global _PACKET
+    if _PACKET is None:
+        p = Path(__file__).resolve().parent.parent / "docs/anipafe2026-cut-packets.json"
+        _PACKET = {c["n"]: c for c in json.load(open(p))["cuts"]}
+    return _PACKET
+
+
+def _dtag(uid, units, cuts):
+    """公式の発話タグ <d>[Language] ...</d>。歌詞は本編の確定文言をそのまま置く。"""
+    ns = [int(x) for x in re.findall(r"C(\d+)", units[uid]["head"].split("(")[0])]
+    ly = (cuts[ns[0]].get("lyrics") or "").strip("「」 ")
+    if not ly:
+        return ""
+    lang = "Japanese" if re.search(r"[぀-ヿ㐀-鿿]", ly) else "English"
+    return (f"<Subject 1> (S1) performs the referenced vocal line: "
+            f"<d>[{lang}] {ly}</d>\n")
+
+
+def with_audio(prompt: str, role: str, dtag: str = "") -> str:
+    """プロンプトに <Audio N> を織り込む。6セクション構造は壊さない。"""
+    sd, ra, law, ndm = AUDIO_BLOCK[role]
+    law = law.replace("{DTAG}", dtag)
+    out = []
+    for line in prompt.split("\n"):
+        if line.startswith("subject_definitions:"):
+            line = line.rstrip() + sd
+        elif line.startswith("retention_analysis:"):
+            line = line.rstrip() + ra
+        elif line.startswith("non_diegetic_music:") and ndm:
+            line = "non_diegetic_music: " + ndm
+        elif line.startswith("overall_soundscape:"):
+            out.append(law)
+            out.append("")
+        out.append(line)
+    return "\n".join(out)
+
+
+def submit(uid, u, prompt, t1, ref_audio=None, seed=-1):
     """実APIの形式に合わせる。参照画像はモードによらず keyframes[] で渡す。
     I2VA = model 'minimax-h3'(先頭1枚をfirst frameに) / Ref2VA = model 'minimax-h3-ref'(≤9枚)。
     尺は duration_sec で渡し、バックエンド側で h3_snap_length により 17n+5 へ丸められる。"""
@@ -228,9 +365,12 @@ def submit(uid, u, prompt, t1):
     p = {"project_id": PROJECT, "prompt": prompt,
          "model": "minimax-h3" if u["mode"] == "I2VA" else "minimax-h3-ref",
          "keyframes": [{"time_sec": 0.0, "asset_id": a} for a in u["refs"][:n]],
-         "duration_sec": round(u["frames"] / 24.0, 3), "fps": 24, "seed": -1,
+         "duration_sec": round(u["frames"] / 24.0, 3), "fps": 24, "seed": seed,
          "negative_prompt": "", "scheduler": "simple", "easycache": False,
          "note": f"AniPAFE2026 {uid} {u['head'][:60]}"}
+    if ref_audio:
+        p["ref_audio_asset_ids"] = ref_audio[:3]
+        p["note"] += f" +audio{ref_audio[:3]}"
     # 🗂テイク履歴はこの place.start_frame でカットへ紐付く。
     # auto=false = タイムラインへ自動配置せずテイクとして蓄積する(運用規約)。
     ns = [int(x) for x in re.findall(r"C(\d+)", u["head"].split("(")[0])]
@@ -256,6 +396,10 @@ def main():
     ap.add_argument("--dry", action="store_true", help="展開結果を表示するだけ")
     ap.add_argument("--v2", action="store_true", help="v2ディレクトリを使う")
     ap.add_argument("--v3", action="store_true", help="v3(Codex執筆)を使う")
+    ap.add_argument("--audio", choices=["lipsync", "beat", "full"],
+                    help="参照音声を渡す。lipsync=歌唱ステム / beat=伴奏ステム / full=元音源。"
+                         "該当区間を自動で切り出し、<Audio 1>としてプロンプトに宣言する")
+    ap.add_argument("--seed", type=int, default=-1, help="A/B比較用に固定する")
     a = ap.parse_args()
     global PDIR
     if a.v2:
@@ -270,11 +414,28 @@ def main():
             sys.exit(f"✗ 未知の単位: {uid}")
         u = units[uid]
         prompt = expand(u["code"], uid, D)
+        ra = None
+        if a.audio:
+            # I2VA(FL2VA)は参照音声を取れない。渡しても静かに無視される一方、
+            # プロンプトには <Audio 1> の宣言だけが残り、存在しない参照を指す。
+            if u["mode"] != "Ref2VA":
+                sys.exit(f"✗ {uid} は {u['mode']} — 参照音声を取れるのは Ref2VA だけ。"
+                         f"音声を使うならモードを変える必要がある")
+            import ref_audio as RA
+            # 公式: 参照音声は1本2〜15秒・合計15秒以内
+            total = u["frames"] / 24.0 * len(AUDIO_STEM[a.audio])
+            if u["frames"] / 24.0 < 2.0 or total > 15.0:
+                sys.exit(f"✗ {uid}: 参照音声 {len(AUDIO_STEM[a.audio])}本×"
+                         f"{u['frames']/24:.2f}秒 = 合計{total:.2f}秒 — 公式上限(1本2〜15秒/"
+                         f"合計15秒)を外れる")
+            ra = [RA.make(uid, s) for s in AUDIO_STEM[a.audio]]
+            dtag = _dtag(uid, units, packet_cuts()) if a.audio in ("lipsync", "full") else ""
+            prompt = with_audio(prompt, a.audio, dtag)
         if a.dry:
             print(f"===== {uid} ({u['mode']} / {u['frames']}f / refs={u['refs'][:9]}) "
                   f"{len(prompt.split())}語 =====\n{prompt}\n")
             continue
-        jid = submit(uid, u, prompt, a.t1)
+        jid = submit(uid, u, prompt, a.t1, ref_audio=ra, seed=a.seed)
         jobs[uid] = jid
         print(f"{uid} → job {jid} ({u['mode']} / {u['frames']}f / {len(prompt.split())}語)")
     if jobs:

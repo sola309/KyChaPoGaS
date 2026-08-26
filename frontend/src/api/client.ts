@@ -68,6 +68,17 @@ export const projectsApi = {
   create: (data: ProjectCreate) => api.post<Project>('/projects/', data).then(r => r.data),
   get:    (id: number) => api.get<Project>(`/projects/${id}`).then(r => r.data),
   delete: (id: number) => api.delete(`/projects/${id}`),
+  /** 生成単位のプロンプト全文。単位を開いたときだけ取りに来る(数百KBあるため) */
+  unitPrompt: (id: number, unitId: string) =>
+    api.get<UnitPrompt>(`/projects/${id}/unit-prompt/${unitId}`).then(r => r.data),
+}
+
+export interface UnitPrompt {
+  unit: string
+  raw: string        // プレースホルダのまま(名簿の記述が {{HOMU_ID}} 等で入る)
+  expanded: string   // 展開後 = H3へ実際に渡る文面
+  words: number
+  error?: string
 }
 
 export interface Track {

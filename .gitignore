@@ -90,3 +90,7 @@ tools/music-struct/.venv/
 tools/music-struct/.shim/
 tools/music-struct/demix/
 tools/music-struct/__pycache__/
+
+# セッション中の一時バックアップ・派生生成物
+*.json.bak
+docs/anipafe2026-unit-prompts.json

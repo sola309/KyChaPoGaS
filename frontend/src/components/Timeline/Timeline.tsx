@@ -14,6 +14,8 @@ import { SpeedCurveEditor, pointsFromEase, samplesFromPoints, easeStringFromPoin
 import { CutLane } from './CutLane'
 import { DesignLinkLane } from './DesignLinkLane'
 import { SceneLane, deriveCutsWithScene } from './SceneLane'
+import { UnitLane } from './UnitLane'
+import { ShotLane } from './ShotLane'
 import { BoardSheet } from './BoardSheet'
 import { StoryScroll } from './StoryScroll'
 import { ClipInspector } from './ClipInspector'
@@ -1082,6 +1084,10 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           {/* カット割りレーン(Imageトラックのピンから自動導出・ドラッグに連動) */}
           {/* 🔗設計リンク: 選択カットが設計上どこと呼応しているかを弧で描く */}
           <DesignLinkLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} totalWidth={totalWidth} />
+          {/* 🎞生成単位: 1回のH3生成がどこまでを作るか。クリックでFIX内容と使用素材を開く */}
+          <UnitLane projectId={projectId} tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} totalWidth={totalWidth} />
+          {/* 🎬ショット: 生成単位の内側の切り替え。境界の色が由来(打点/カット境界) */}
+          <ShotLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} totalWidth={totalWidth} songAssetId={beatInfo?.clip.asset_id ?? null} />
           <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 
           {/* Track lanes */}

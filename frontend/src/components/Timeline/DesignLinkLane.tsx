@@ -89,7 +89,8 @@ export function DesignLinkLane({ tracks, clips, assets, pixelsPerFrame, totalWid
 
   return (
     <div className="flex flex-shrink-0 border-b border-zinc-800 bg-zinc-950/60" style={{ height: LANE_H }}>
-      <div className="w-28 flex-shrink-0 border-r border-zinc-800 px-2 flex flex-col justify-center">
+      {/* 左ヘッダ列 — 他レーンと同じ w-28 + sticky。背景が無いと帯が下を透けて貫通して見える */}
+      <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 px-2 flex flex-col justify-center sticky left-0 z-30">
         <span className="text-[10px] text-amber-300 leading-tight">🔗 設計リンク</span>
         <span className="text-[9px] text-zinc-600 leading-tight">
           {focus != null ? `C${focus} → ${links.length}本` : 'カットを選択'}
