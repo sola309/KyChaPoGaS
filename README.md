@@ -1,6 +1,8 @@
 # KyChaPoGaS
 
-**A MAD Video Creation Studio**（キチャポガス）
+> # 🍫 杏子ちゃんとポッキーゲームしたい
+
+**A MAD Video Creation Studio**（カイチャポガス）
 
 ブラウザから操作する、ローカルサーバー型の AI 統合 MAD/AMV 動画制作スタジオです。
 重い処理（AI 生成・映像分析・レンダリング）はサーバー側 GPU で実行し、クライアント
