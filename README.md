@@ -1,6 +1,6 @@
 # KyChaPoGaS
 
-> # 🍫 杏子ちゃんとポッキーゲームしたい
+> # 杏子ちゃんとポッキーゲームしたい
 
 **A MAD Video Creation Studio**（カイチャポガス）
 
