@@ -1,28 +1,35 @@
-Create a 141-frame 16:9 I2VA source from the supplied image. Preserve the half-moon’s silhouette, placement, surface character, palette and straight cut edge. Complete the usable action within the first 5.21 seconds; the remaining generated frames hold the terminal composition for editorial trimming.
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame, not a storyboard anchor and not a first-frame keyframe) defines <Subject 1>: {{HALF_MOON}}. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{ORB_ID}}. <Picture 3> (reference role: hand definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, the reaching hand cropped tightly at the wrist. <Picture 4> (reference role: material and object definition only, not a target frame and not a storyboard anchor) defines the pink causal threads and their wooden spools. <Audio 1> (reference role: accompaniment structure and sound texture only, never a visual timing driver) defines the sole musical reference.
+
+summary: An external shadow traverses an immutable half-moon. A geometric hard cut transfers its implied circle and straight burned edge into a dark vessel bound by causal threads, where an occluded hand reaches until the only impact releases every thread.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s canonical shape, straight missing half and surface character; framing and motion follow the description. <Picture 2> fully_preserved for <Subject 2>'s vessel design while its scale and position follow the described match cut. <Picture 3> partially_preserved for <Subject 3>'s covering, fingertip silhouette and wrist crop only. <Picture 4> weak_reference for thread material, spool construction and restrained paper grain only. <Audio 1> reference for instrumental timbre and broad dynamic contour only. <Subject 1> exists only in Shot 1. <Subject 2> and <Subject 3> exist only in Shot 2. Their identities remain discrete across the hard cut.
 
 detailed_description: {{TH:PRO}}
 [Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
 
-STAGE: The frame contains only a moon and empty night sky. The moon has been cut exactly in half. Only its left half exists. Its outer left edge forms a smooth semicircle. Its inner right edge is a perfectly straight vertical line. The absent right half is uninterrupted sky-black rather than lunar shadow. The straight edge carries a continuous hair-thin cold-white burn. This line is the sole brightest element.
+STAGE: Empty near-black night sky surrounds <Subject 1>. Only its left half exists. Its inner boundary is a perfectly straight vertical edge carrying a hair-thin cold-white burn. The absent right half is uninterrupted sky-black. The frame contains sky and moon alone.
 
-CAMERA: Static Shot. The camera keeps the same position, framing, focal length and horizon throughout the shot. The moon maintains exactly the same screen size and coordinates from the first frame through the terminal hold. Every background plane also maintains its original screen position.
+The camera is a Static Shot. <Subject 1> keeps one screen size and one position throughout. Dim violet exposure rests on its surface. The straight burn is the sole blooming element. One enormous soft-edged shadow crosses slowly from the curved outer side toward the straight boundary. Its casting body remains outside the visible world. Only a broad rounded rim and a faint radial suggestion are readable. The shadow is clipped to the lunar surface while the white edge stays above it. Its trailing edge reaches the straight boundary immediately before the cut. The lunar geometry remains exact through the final frame.
 
-Z-ORDER: The empty near-black sky occupies the rear plane. The fixed lunar body occupies the subject plane. One moving shadow is clipped precisely to the lunar surface. The thin white cut edge occupies the foremost graphic plane and remains visible above the shadow. The shadow’s darkness stays contained inside the existing moon until it reaches the absent half.
+[Shot 2] At 00:05.210, make one hard geometric match cut. <Subject 2>'s bulbous central body occupies the same circular centre and apparent diameter implied by <Subject 1>. The former straight white boundary becomes a hard highlight on one taut pink thread at the same screen coordinate. The moon has ended; <Subject 2> is already a separate object in near-black space.
 
-The lunar face holds a dim deep-violet exposure. Most surface detail falls into restrained grey-black masses. The surrounding sky remains empty and near-black. Black occupies more than half of the frame. The straight white edge alone receives a narrow restrained bloom.
+The camera remains a Static Shot. <Subject 2> occupies the sharp subject plane. One thick foreground thread passes close to the lens, softly out of focus. Finer threads cross separate middle planes. Sparse spools sit far behind. A steep cold-violet light touches upward-facing edges. Cold gold belongs only to <Subject 2>. Pink belongs only to the causal threads.
 
-One enormous soft-edged shadow enters across the moon from its curved outer side. It advances with unbroken, almost imperceptible slowness toward the straight cut. Its identity remains unreadable: only a broad rounded rim and a faint radial suggestion pass over the lunar surface. The shadow has no corresponding body inside the frame. Its motion follows an independent path across the otherwise fixed image.
+The highlighted foreground thread slides aside and reveals <Subject 2>. <Subject 3> enters from the right edge, cropped at the wrist. Separated fingers advance toward the vessel through successive thread planes. Each crossed thread bends around the fingers and returns to tension. A narrow black interval remains between fingertip and vessel.
 
-By 4.50 seconds, the trailing edge of the shadow reaches the straight boundary and disappears into the already-black missing side. The lunar silhouette, the vertical cut and the white burn retain their exact geometry and brightness throughout the crossing. For the final 0.71 seconds of the usable cut, the cleared half-moon holds in complete visual stillness. The terminal frame preserves the surrounding black as the dominant area for the following hard cut into the dark-orb space.
+At 8.667 seconds, spool angular velocity begins one continuous rise. Loose fibres lift. Thread vibration tightens. A porcelain-white veil grows inside the unresolved interval and progressively occludes <Subject 3>, leaving fingertip and vessel visibly separated. The veil widens as the spools accelerate.
 
-SHADOW LAW: The unseen external shadow is the only moving visual layer. Its passage reveals an influence outside the visible world while leaving the moon physically unchanged.
+At 10.952 seconds, the kick and cymbal share one release point. The kick triggers simultaneous loss of tension: every thread forms one slack curve and begins recoiling toward its own spool. The cymbal triggers one hard white crest across the veil. At 10.958 seconds, the first slack curves are clearly visible. Through the generated tail, recoil accelerates across separate depth planes; near threads cross fastest, middle threads follow, and distant spools complete the pull. Near-black remains dominant behind <Subject 2>.
 
-SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and independent of musical timing.
-
-NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. Every visible surface remains unmarked.
-
+CIRCLE MATCH LAW: the unchanged half-moon ends on the hard cut; the next shot begins with the separate vessel aligned to its implied circle.
+SHADOW LAW: the unseen external shadow is Shot 1's only moving layer.
+REACH LAW: the veil occupies the unresolved gap and preserves separation.
+THREAD LAW: every released thread returns only to its assigned spool.
+BEAT LAW: {{BEATLAW}} The numerical visual checkpoint at 10.952 creates the sole release. Kick creates slack; cymbal creates the white crest. The accompaniment does not drive visual timing.
+DEPTH APPLICATION: {{DP}} The multi-plane motion applies to Shot 2. Shot 1 keeps every visible plane fixed except the clipped shadow.
+NO-TEXT RULE: Every surface remains unmarked. Show no letters, words, numbers, logos, captions, subtitles, signs, interface labels, pseudo-writing or watermarks.
 {{ST2}}
 
-overall_soundscape: Near-total quiet. One thin, distant cold-air tone remains continuous at constant level and direction. It carries no gust, pulse or impact. The shadow produces no sound.
+overall_soundscape: Shot 1 carries a thin continuous cold-air tone at constant level; the shadow is soundless. At the hard cut, that tone narrows into dry fibre tension. Thread crossings produce faint creaks. Spool axles rise from sparse wooden ticks into a tight rattle. At 10.952 seconds, one deep impact, one thin metallic crest and one collective thread snap occur together, followed by accelerating fibre hiss and spinning wood.
 
-non_diegetic_music: N/A
+non_diegetic_music: <Audio 1> is the sole reference for accompaniment instrumentation, phrasing and broad dynamic contour. Preserve space around the visual release at 10.952 seconds. No additional vocal or musical reference is used.

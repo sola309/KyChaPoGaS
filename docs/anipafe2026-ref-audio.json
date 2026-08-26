@@ -1,0 +1,128 @@
+{
+ "U29:vocal": {
+  "asset_id": 3302,
+  "stem": "vocal",
+  "src": 757,
+  "start_sec": 178.0,
+  "dur_sec": 5.167
+ },
+ "U30:vocal": {
+  "asset_id": 3303,
+  "stem": "vocal",
+  "src": 757,
+  "start_sec": 182.583,
+  "dur_sec": 7.292
+ },
+ "U18:inst": {
+  "asset_id": 3304,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 94.042,
+  "dur_sec": 7.292
+ },
+ "U30:full": {
+  "asset_id": 3312,
+  "stem": "full",
+  "src": 357,
+  "start_sec": 182.583,
+  "dur_sec": 7.292
+ },
+ "U06:inst": {
+  "asset_id": 3313,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 31.708,
+  "dur_sec": 7.292
+ },
+ "U10:inst": {
+  "asset_id": 3314,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 52.5,
+  "dur_sec": 5.167
+ },
+ "U17:inst": {
+  "asset_id": 3316,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 87.125,
+  "dur_sec": 7.292
+ },
+ "U21:inst": {
+  "asset_id": 3317,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 117.125,
+  "dur_sec": 5.167
+ },
+ "U34:inst": {
+  "asset_id": 3318,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 203.375,
+  "dur_sec": 5.167
+ },
+ "U36:inst": {
+  "asset_id": 3319,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 217.208,
+  "dur_sec": 5.167
+ },
+ "U39:inst": {
+  "asset_id": 3320,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 235.667,
+  "dur_sec": 7.292
+ },
+ "U40:inst": {
+  "asset_id": 3321,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 242.625,
+  "dur_sec": 5.167
+ },
+ "U30:inst": {
+  "asset_id": 3328,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 182.583,
+  "dur_sec": 7.292
+ },
+ "U01:inst": {
+  "asset_id": 3343,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 0.0,
+  "dur_sec": 11.542
+ },
+ "U04:inst": {
+  "asset_id": 3344,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 20.167,
+  "dur_sec": 11.542
+ },
+ "U07:inst": {
+  "asset_id": 3345,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 38.667,
+  "dur_sec": 14.375
+ },
+ "U11:inst": {
+  "asset_id": 3346,
+  "stem": "inst",
+  "src": 758,
+  "start_sec": 57.417,
+  "dur_sec": 9.417
+ },
+ "U13:vocal": {
+  "asset_id": 3347,
+  "stem": "vocal",
+  "src": 757,
+  "start_sec": 66.333,
+  "dur_sec": 11.542
+ }
+}

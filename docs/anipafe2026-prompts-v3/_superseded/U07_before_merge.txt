@@ -1,0 +1,22 @@
+subject_definitions: <Subject 1> is {{HOMU_ID}}. <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the exact identity, costume, proportions and line-art design of <Subject 1>. Its framing and pose remain free for the new staging.
+
+summary: The white water left by the preceding promise scene loses everything associated with the absent girl. Pink light, flower petals, warmth and one thin red filament are pulled upward and taken beyond the frame, while <Subject 1> remains below in the emptied world.
+
+retention_analysis: <Picture 1> is fully_preserved for the visual identity and costume of <Subject 1>. The source composition contributes no camera placement, pose, background or target layout. The upward-moving colour belongs to the environment and remains visually separate from <Subject 1>.
+
+detailed_description: {{TH:MEM}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Begin with a Static Shot across the same vast white water surface established by the preceding scene. Its bright, even light resembles an overcast sky reflected in still water. <Subject 1> is already low on the ground in the lower-left third, small within broad negative space. Her body faces screen right. Her chin is raised toward an unseen point above the upper edge. Her hands rest beside her with the fingers curled inward. The upper half contains only pale empty glare. The first drum impacts press shallow dents into the water around the empty space opposite her. Each dent releases a physical layer of rose-pink light, loose petals and warm cream colour. These layers rise vertically instead of spreading across the surface. One narrow blood-red filament rises among them as the only saturated red. Every departing layer leaves a flat cold blue-grey patch behind. The water’s reflective skin progressively becomes a matte, colourless field.
+
+[Shot 2] At 00:01.423, hard cut to a later state containing new information: most of the field is already drained. Use a slow Tilt Up with small amplitude. A broad, paper-thin sheet of petals tears free from the middle plane. Its torn edge catches the quiet scene light. It travels upward through the subject plane, then passes across the lens at very close range, larger than <Subject 1> and softly out of focus. It briefly fills the frame as a restrained physical wipe. Behind it, the empty place where the warmth had been is porcelain-grey. The camera reaches the blank upper field while the final cluster of pink light exits beyond the top edge. Near petals travel fastest. The remaining surface lags behind. The far pale sky barely moves. <Subject 1> stays below the rising flow and follows it only with her eyes and settled jaw.
+
+[Shot 3] At 00:03.433, hard cut to the completed loss. Use a slow Pull Out with small amplitude, then decelerate sharply. The world now consists of cold blue-grey, white and deep vignette shadow. <Subject 1> and her narrow shadow are the darkest forms. The single red filament stretches upward from the empty ground, thins under tension, and slips completely beyond the upper frame. Its departure leaves a small colourless groove rather than a glow. A few last petals rise through separate depth planes and diminish into pale specks. At 00:03.920, the camera reaches its final position. The composition settles and LOCKS through 00:04.620. <Subject 1> remains small, grounded and oriented toward screen right, preparing the directional cut into the following battle.
+
+LOSS LAW: Each upward departure removes one visible property from the field. Petals remove softness. Pink light removes warmth. The red filament removes affection. All visible flow travels from the ground toward the unseen space above.
+
+BEAT LAW: {{BEATLAW}} Snare boundaries reveal later stages of the same loss. Kick impacts compress the water and release upward layers. The visible sources create the rhythm through water pressure, tearing petals and tightening filament.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: Dry close foley from visible sources only: shallow water compression, thin paper-like petal tears, cloth-soft upward rushes, and a faint taut-fibre sound as the red filament leaves. The final locked field carries distant air and the quiet residual movement of <Subject 1>'s clothing.
+
+non_diegetic_music: N/A

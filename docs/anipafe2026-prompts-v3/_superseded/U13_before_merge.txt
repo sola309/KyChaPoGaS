@@ -1,0 +1,21 @@
+subject_definitions: <Picture 1> (reference role: weak reference for crop geometry and the fixed upward viewpoint only, not a target frame and not a storyboard anchor) defines a ground-level view cropped below the goddess’s eyes: nose bridge, mouth, chin and throat. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{UM_ID}}.
+
+summary: From Homura’s unmoving viewpoint on the ground, <Subject 1> gently speaks the Japanese invitation 「綺麗な場所へ行こう」. The destination remains unseen. Her descending light and restrained mouth movement carry the invitation.
+
+retention_analysis: <Picture 1> weak_reference for the upward angle and lower-face crop only. <Picture 2> fully_preserved for <Subject 1>’s identity, hair, gown, colours and divine presence. Newly staged lighting, lip movement and the ground-level viewpoint remain independently controlled.
+
+detailed_description: {{TH:MEM}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. The camera lies motionless where Homura’s head rests on the ground. It looks straight upward from below. This camera position, lens height, angle and subject scale are the pairing template for C45. <Subject 1> occupies the same fixed lower-face close-up throughout: the bridge of her nose, mouth, chin and throat are visible; her eyes remain beyond the upper edge. {{UM_ID}} A few blurred strands of long black hair cross the lowest foreground edge and establish whose sight this is. They remain softly out of focus. A rose-white light descends from directly above, continuing the downward direction established in C13. It reaches <Subject 1> first, then touches only the upward-facing edges of the foreground hair. The surrounding field remains cold blue-grey and almost empty. <Subject 1> begins speaking 「綺麗な場所へ行こう」 in a warm, quiet Japanese voice. Her lips open only one syllable’s width. Her jaw stays composed. Her throat carries the breath. The camera is a Static Shot. Her image size remains identical from the first frame to the last.
+
+[Shot 2] At 00:02.027, a hard cut preserves the exact camera position, angle, crop and subject scale while introducing a new speaking state. <Subject 1> continues the middle of the invitation. Her mouth changes to the next restrained articulation. The corners of her lips soften without becoming a smile. The descending light becomes physically broader behind her and forms one clean vertical plane. Its edge settles behind her silhouette and locks there. It never crosses her face. The destination she offers is represented only by this light; no place is shown. Her pale hair and the edge of her gown respond with one small secondary drift, then settle.
+
+[Shot 3] At 00:03.757, a hard cut keeps the same composition and introduces the completed invitation. <Subject 1> speaks the final 「行こう」. Her lips part one syllable’s width, close gently, and remain at rest. Her chin lowers by only a few millimetres toward the viewer. The rose-white plane reaches its final position behind her and locks. The camera stays fixed. The foreground hair remains at the same size. The last 0.7 seconds hold the settled lower-face crop without a new gesture, preparing C15 to replace the divine speaker with the human respondent at the identical viewpoint.
+
+PAIRING LAW: C14 and C45 use the same camera height, upward angle, lower-face crop and on-screen subject size. Only the speaker and moral position exchange places.
+INVITATION LAW: descending light reveals the speaker, while the promised destination remains outside the image.
+BEAT LAW: {{BEATLAW}} Snare accents divide restrained mouth articulations. Kick accents correspond to short downward steps in the visible reach of the overhead light. Cymbal accents release only a few pale particles behind <Subject 1>.
+{{DP}} {{ST2}}
+
+overall_soundscape: A close, warm Japanese female voice speaks 「綺麗な場所へ行こう」 with restrained breath and one-syllable mouth openings. Fine cloth movement and a faint high-air resonance accompany the descending light. The surrounding space remains hushed.
+
+non_diegetic_music: N/A

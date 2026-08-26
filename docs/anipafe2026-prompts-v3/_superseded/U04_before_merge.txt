@@ -1,0 +1,31 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) supplies the offered hand’s exact glove, pink cuff, proportions and drawing style to the offered hand only. The shot composition, water, lighting, recipient hand, movement and final contact are controlled by the written description.
+
+summary: On dark remembered water, an offered gloved hand descends and an ungloved hand rises. Their fingertips make the film’s only completed reach, then remain together in stillness.
+
+retention_analysis: <Picture 1> partially_preserved — preserve the exact offered-hand design and costume attributes while changing its pose, screen position and movement. The reference controls no face, body, background, camera angle or composition.
+
+detailed_description: {{TH:MEM}}
+STAGE: A close view looks almost straight down at a dark, still water surface. The offered hand occupies the upper-right subject plane. The recipient hand enters from the lower-left subject plane. Their meeting point is slightly below frame centre. The crop contains only the two hands, their wrists, narrow sleeve edges, the water and their reflections. The surrounding water fills every frame edge.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. The camera holds the same distance and angle for the full 4.62 seconds. A tiny pale reflection remains at frame centre after the opening hard cut. Cold blue-grey memory light reveals the offered hand from <Picture 1> as it enters from the upper right. Its palm faces downward. Its fingers stay softly separated. The wrist leads with quiet certainty. The hand descends in one uninterrupted arc.
+
+The recipient’s ungloved hand slowly rises from the lower-left edge. Its fingers carry a small involuntary tremor while the wrist continues upward. The offered hand remains steady. The trembling decreases as the distance closes. Neither hand grasps or pulls. Each fingertip approaches its counterpart with deliberate gentleness.
+
+The water beneath them acts as a restrained graphic window. Its reflection shows the same two hands reversed vertically inside one hard-edged field of dark water. The reflected fingertips appear to meet an instant before the real fingertips. The reflection stays confined beneath the water surface and never crosses into the hands’ plane. This slight temporal asymmetry suggests a remembered promise without revealing either person.
+
+At 3.92 seconds, the real fingertips finally touch. Contact begins at one pair of fingertips, then settles across the others through visible, delicate pressure. The recipient’s tremor stops at contact. Both hands remain joined at exactly the same screen size and position for the final 0.70 seconds. A faint sleeve overshoot settles after the wrists stop. The final contact rests near the lower centre, prepared for a hard cut to the foreground hand in the following memory.
+
+REACH LAW: The offered hand closes the remaining distance. Contact is completed and visibly held. This is the sole completed reach in the film.
+
+REFLECTION LAW: The reflected contact precedes the physical contact by only a breath. The water remains intact, dark and still.
+
+SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and driven only by the two hands.
+
+PARALLAX: use five restrained depth planes — a softly blurred near-water glint, the offered hand, the recipient hand, their reflections, and the nearly motionless far water. Only the hands travel noticeably. The reflections move at a reduced mirrored rate. The far water barely moves.
+
+FOCUS: detail belongs only to the hands and the narrow contact point. The water is a large simple plane. Strong cold blue-grey vignette closes the corners like a remembered image. One soft key comes from high left. Highlights remain quiet. Near-black occupies roughly one third of the frame. Only the contact point receives a restrained pale bloom.
+{{DP}} {{ST2}}
+
+overall_soundscape: Close, hushed water ambience; two faint sleeve rustles corresponding to the visible wrists; a tiny skin-and-cloth contact sound as the fingertips meet; the surrounding space remains distant and still.
+
+non_diegetic_music: N/A
