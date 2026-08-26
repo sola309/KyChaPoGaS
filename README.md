@@ -14,11 +14,15 @@
 ## ✨ 主な機能
 
 - **タイムライン編集** — 複数トラック、クリップ配置・移動・分割・トリミング、音声波形表示
-- **AI 生成連携** — ComfyUI 経由の画像生成 / image-to-video / 音声生成
-- **映像分析** — BPM・ビート検出（音ハメ支援）、シーン検出、モーション強度解析
-- **ジョブキュー** — 重い処理を非同期 Job として管理・進捗表示・再実行
+- **設計レイヤー** — カット割り（ピン）に加え、シーン / 設計リンク / **生成単位（1回の生成でどこまで作るか）** / **ショット境界** を専用レーンで可視化・編集。ショット境界は音源解析の実測打点に吸着し、由来（スネア/キック/シンバル/カット境界/手動）を色分け表示
+- **AI 生成連携** — ComfyUI 経由の画像生成 / image-to-video / 動画生成 / 音声生成。**MiniMax H3**（参照束からの Ref2VA / 先頭フレームからの I2VA・映像+音声を同時生成）、**Wan2.2**（FLF2V / Fun-InP）、Qwen-Edit・FLUX・HiDream などに対応
+- **音合わせ支援** — BPM・ビート検出に加え、ドラム個別打点（キック/スネア/シンバル）解析。H3 の参照音声（歌唱/伴奏ステムを区間切り出し）でリップシンク・打点駆動を試行可能
+- **映像分析** — シーン検出、モーション強度解析、VLM レビュー
+- **ジョブキュー** — 重い処理を非同期 Job として管理・進捗表示・失敗の自動再投入
+- **書き出しパネル** — 最終レンダの本番版 / 軽量レビュー版をインライン再生・ダウンロード
 - **GPU / VRAM 監視** — 実行前の空き VRAM チェックと Job ゲーティング（DGX Spark GB10 のユニファイドメモリにも対応）
-- **LLM 操作** — Command API / MCP 経由で Claude などがタイムラインを操作（準備中）
+- **LLM 操作** — Command API / MCP 経由で Claude などがタイムラインを操作
+- **共同編集** — Tailscale 越しの表示名つきプレゼンス表示
 - **組み込みターミナル** — ブラウザ内で PTY ターミナルを利用
 
 ---
@@ -78,11 +82,12 @@ Local Production Server
 
 | サービス | ポート | 技術 |
 |----------|--------|------|
-| Frontend (Vite dev) | **5173** | React 19, TypeScript, Vite 8, Tailwind 4, Zustand |
+| Frontend (Vite dev) | **5173** | React 19, TypeScript, Vite 8, Tailwind 4, Zustand 5 |
 | Backend (FastAPI) | **8002** | FastAPI, SQLModel/SQLite, librosa, PySceneDetect, nvidia-ml-py |
 | Terminal server | **8765** | Node.js, node-pty, ws |
-| ComfyUI | **8188** | （`tools/comfyui/` にクローン。AI画像/動画生成） |
+| ComfyUI | **8188** | （`tools/comfyui/` にクローン。AI画像/動画生成。MiniMax H3 / Wan2.2 等） |
 | ACE-Step (音楽生成) | **7867** | （`tools/ace-step/` にクローン。ボーカル付き楽曲生成） |
+| TTS (任意) | **8088** | Irodori-TTS（日本語）/ Kokoro（英語, :8090）。歌唱・台詞合成 |
 
 > フロントの `/api` リクエストは Vite が **8002** のバックエンドへプロキシします
 > （[frontend/vite.config.ts](frontend/vite.config.ts)）。バックエンドのポートを変える場合は
@@ -96,8 +101,10 @@ Local Production Server
 repo/
   backend/            FastAPI バックエンド
     app/
-      routers/        API エンドポイント (projects, assets, clips, jobs, generation, llm, analysis, system)
-      services/       Job runner, ComfyUI 連携, FFmpeg レンダー, 音声/映像分析, GPU 監視
+      routers/        API エンドポイント (projects, assets, clips, tracks, jobs, generation,
+                      analysis, llm, music, lora, engines, companion, puppet, mad, system, ...)
+      services/       Job runner, ComfyUI 連携 (workflow_builder), FFmpeg レンダー,
+                      音声/映像分析, モーショングラフィックス, VLM レビュー, TTS, GPU 監視
       models/         SQLModel データモデル
       db/             SQLite 初期化
     mcp_server.py     MCP サーバー (Claude Code 連携)
@@ -127,6 +134,7 @@ repo/
 | `HOST` / `PORT` | バックエンドの待受 | `0.0.0.0` / `8002` |
 | `ANTHROPIC_API_KEY` | LLM チャット（Claude）に必要 | （空） |
 | `LLM_MODEL` | 使用モデル | `claude-sonnet-4-6` |
+| `TTS_API_URL` / `KOKORO_API_URL` | 歌唱・台詞合成 (任意) | `http://localhost:8088` / `:8090` |
 | `COMFYUI_URL` | ComfyUI のURL | `http://localhost:8188` |
 | `CIVITAI_TOKEN` | Civitai モデルDLに必要なAPIトークン | （空） |
 | `ACESTEP_API_URL` | 音楽生成(ACE-Step)サービスURL | `http://localhost:7867` |
@@ -202,11 +210,13 @@ POST http://localhost:8002/api/llm/chat                 # チャット (Claude t
 
 - [x] Phase 1–2: 基盤（FastAPI / React）+ タイムライン
 - [x] Phase 3: Job エンジン + FFmpeg レンダー
-- [x] Phase 4: ComfyUI Connector + workflow builder
+- [x] Phase 4: ComfyUI Connector + workflow builder（MiniMax H3 / Wan2.2 / Qwen-Edit / FLUX 等）
 - [x] Phase 5: GPU/VRAM 監視 + Job VRAM ゲーティング
-- [x] Phase 6: 映像分析基盤（BPM/beat, scene detect, motion intensity）
-- [x] Phase 7: LLM 拡張準備 + MCP 対応
-- [ ] 今後: LLM 自律編集 / 再現動画制作支援 / ローカル VLM
+- [x] Phase 6: 映像分析基盤（BPM/beat, ドラム個別打点, scene detect, motion intensity）
+- [x] Phase 7: LLM 拡張 + MCP 対応
+- [x] Phase 8: 設計レイヤー（生成単位 / ショット境界 / 設計リンク）+ 音源参照によるリップシンク・打点駆動
+- [x] Phase 9: MG エンジン強化 / VLM レビュー / 共同編集プレゼンス
+- [ ] 今後: LLM 自律編集の拡張 / 編集同期（共同編集 P2）/ 3D 生成連携
 
 ---
 
