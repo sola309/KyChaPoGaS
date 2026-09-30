@@ -1,0 +1,31 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. It contributes <Subject 1>'s covered hand, sleeve, costume materials and body identity; the detailed description controls the close crop, hand pose and action.
+
+<Picture 2> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{NAME_STONE}}. It contributes the stone form, carved grooves and the star-filled space visible through those grooves; the detailed description controls quantity, spacing, viewpoint and depth.
+
+<Picture 3> (reference role: world appearance only, not a target frame and not a storyboard anchor) supplies the golden storm light, broken dark ground, airborne embers and layered cloud behaviour. It does not control the composition or camera.
+
+summary: <Subject 1>'s open hand releases a narrow line of light. The gap between her fingers becomes one hard-edged black slit, and the slit exposes an endless field of <Subject 2> before the camera enters that field.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, covered hand, costume and proportions; the hand framing and finger action are partially_preserved. <Picture 2> fully_preserved for <Subject 2>'s material construction, carvings and star-filled interiors; field layout and viewing angle remain free. <Picture 3> weak_reference for golden illumination, atmospheric depth and moving cloud texture only.
+
+detailed_description: {{TH:GOLD}}
+STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
+
+STAGE: The frame contains exactly one person, <Subject 1>. Her hand and wrist occupy the near subject plane. The finger gap occupies a narrow middle plane. <Subject 2> fills five receding planes beyond that gap. Golden storm clouds and broken black ground form the slow far planes.
+
+[Shot 1] Her open hand fills the lower half of the frame, palm toward the lens and fingers spread upward. Her covered wrist enters from the lower edge at a steep diagonal. A thin golden filament lies between the index and middle fingers against a near-black storm. Static Shot. The hand remains the same size throughout the shot. At 0.253 seconds, the fingertips have extended their final small distance and the filament is visible from the palm crease to the fingertips. The motion begins at the wrist, passes through each knuckle, and ends at the fingertips. The palm opens with reluctant weight rather than a flourish. Each finger stops separately with a small secondary recoil. The filament brightens only where it touches the finger edges. Its hard light gives the covered fingers a narrow gold rim. The upper half remains a large, nearly empty mass of broken gold cloud and black air. Only the hand, the filament and several nearby ember flecks carry detail.
+
+[Shot 2] At 00:00.823, one hard-edged black slit occupies the centre between <Subject 1>'s fingers. Two covered fingers frame it on the left and right as dark vertical shapes. Inside the slit, a field of pale carved stones is visible, each carving showing stars. Static Shot. The slit appears at the base of the fingers, slides lengthwise toward the fingertips, settles between the near hand and the far storm, and LOCKS within 0.5 seconds. Its straight rims catch a thin gold specular line. The interior has cold pale light, while the surrounding hand remains under hard golden storm light. At 1.403 seconds, the slit spans one third of the frame height and the closest three stones are separately readable inside it. The stones stand in staggered rows over dark ground. Their carved cavities contain small fixed star fields and violet nebula light. The slit contains the entire distant field within its hard border. A cymbal accent makes one carved cavity brighten, then the light moves to a different stone rather than spreading across the surrounding air.
+
+[Shot 3] At 00:01.983, an endless field of <Subject 2> fills the frame beyond the hand. Pale stones rise from black ground in five staggered depth planes. A narrow remnant of the finger slit forms a black border around the extreme frame edges. A fast large-amplitude Push In travels straight through the slit and between the first two rows. The closest stones cross the lens at very close range, taller than the frame and softly out of focus. Middle rows separate laterally at moderate speed. Far rows and the golden cloud ceiling barely move. At 2.563 seconds, the hand has passed outside the frame and the camera is fully inside the stone field. One carving occupies the central third, with stars visible through its recessed grooves. The Push In decelerates as that carving grows to half the frame height. At 3.563 seconds, the camera reaches its endpoint directly before the carving and becomes still. Near embers overshoot the stop, cross the carving, and settle below it. The carved edge catches one hard gold highlight. The star field behind it remains cold violet. The frame holds this separation for the final 0.7 seconds.
+
+SLIT LAW: The opening of <Subject 1>'s fingers triggers the black slit. The slit exposes the stone field and becomes the physical passage into it.
+
+BEAT LAW: {{BEATLAW}} Snare transients initiate the two hard cuts and the slit-edge locks. Kick impacts land as visible finger-joint extensions or strong parallax crossings; cymbal transients brighten one visible stone carving at a time.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All depicted surfaces remain unmarked.
+{{DP}} {{ST2}}
+
+overall_soundscape: Close dry tension from <Subject 1>'s covered fingers accompanies the final extension. The locked slit produces one short glass-like edge tone from its visible gold rim. Air passing between the carved stones produces a low hollow wind, while each bright carving gives one restrained crystalline resonance from its visible cavity.
+
+non_diegetic_music: N/A

@@ -93,7 +93,14 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
 
   // Refresh the asset list when jobs complete (new precompose/proxy/generated assets)
   const completedCount = useJobStore(s => s.jobs.filter(j => j.status === 'completed').length)
-  useEffect(() => { load() }, [completedCount])
+  const prevCompleted = useRef<number | null>(null)
+  useEffect(() => {
+    // 初回(マウント時)は projectId effect が既に読んでいるので重複させない
+    if (prevCompleted.current === null) { prevCompleted.current = completedCount; return }
+    if (prevCompleted.current === completedCount) return
+    prevCompleted.current = completedCount
+    load()
+  }, [completedCount])
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return

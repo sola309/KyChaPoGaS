@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass, field
 
 log = logging.getLogger("gpu_monitor")
@@ -108,8 +109,22 @@ def _system_memory_mb() -> tuple[int, int, int]:
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 
+_status_cache: tuple[float, "GpuStatus"] | None = None
+_STATUS_TTL_SEC = 1.0
+
+
 def get_gpu_status() -> GpuStatus:
-    """Query current GPU state. Always returns a valid GpuStatus (no exceptions)."""
+    """Query current GPU state (1秒TTLキャッシュ). Always returns a valid GpuStatus."""
+    global _status_cache
+    now = time.monotonic()
+    if _status_cache and now - _status_cache[0] < _STATUS_TTL_SEC:
+        return _status_cache[1]
+    st = _query_gpu_status()
+    _status_cache = (now, st)
+    return st
+
+
+def _query_gpu_status() -> GpuStatus:
     if not _nvml_ok:
         return GpuStatus(available=False, error="pynvml not available or no NVIDIA GPU")
 

@@ -1,0 +1,40 @@
+subject_definitions: The frame contains exactly six chronological title plates and zero people. The TV-era and Kijun states use their complete official title plates as indivisible flat images.
+
+<Picture 1> (reference role: protected source artwork for the official first-film title mark, subject definition only, not a target frame and not a storyboard anchor) contributes its exact front artwork to the SECOND title state. Preserve its glyph contours, spacing, colours and internal shapes.
+
+<Picture 2> (reference role: protected source artwork for the official second-film title mark, subject definition only, not a target frame and not a storyboard anchor) contributes its exact front artwork to the THIRD title state. Preserve its glyph contours, spacing, colours and internal shapes.
+
+<Picture 3> (reference role: protected source artwork for the official Rebellion title mark, subject definition only, not a target frame and not a storyboard anchor) contributes its exact violet front artwork to the FOURTH title state. Preserve its glyph contours, spacing, colours and internal shapes.
+
+<Picture 4> (reference role: protected source artwork for the official Walpurgis Rising title mark, subject definition only, not a target frame and not a storyboard anchor) contributes its exact front artwork to the SIXTH title state. Preserve its glyph contours, spacing, colours and internal shapes. Its reverse is a flat unmarked black plane controlled by this prompt.
+
+<Picture 5> (reference role: spatial behaviour and atmosphere only, not a target frame and not a storyboard anchor) contributes the clockwise star spiral in the far depth plane. Framing, timing, title placement and lighting come exclusively from this prompt.
+
+summary: Six official title plates form a chronological series: TV-era, first film, second film, Rebellion, Kijun and Walpurgis Rising. Each plate overwrites its predecessor; the last plate physically turns over to reveal an unmarked black reverse while the surrounding universe contracts toward C4.
+
+retention_analysis: <Pictures 1-4> are fully_preserved as protected source artwork on their front faces. <Picture 5> is weak_reference for the star spiral’s spatial behaviour and atmosphere. The four supplied title designs contribute only their indivisible artwork. The TV-era and Kijun title states remain discrete from the four supplied plates.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading and flat protected title artwork.
+
+STAGE: Near-black space fills more than half of the frame. A cold violet source shines steeply from above. One loose pink causal thread occupies the nearest plane. The title artwork occupies a sharp frontal middle plane. Discarded title fragments occupy two deeper planes. Pale star-streaks turn in the farthest plane. Each title plate has a hard edge that catches one thin cold specular line. {{LENS}} {{FOCUS}}
+
+[Shot 1] Near-black space already contains a clockwise spiral of sparse pale star-streaks. One pink thread crosses the lower-left foreground at very close range, thick and softly out of focus. The exact centre remains open darkness while the thread bends toward it. A Static Shot faces the title plane directly. At 0.24 seconds the complete TV-era title plate slides forward from the middle depth, settles at centre, and LOCKS. It occupies about one third of the frame width. At 1.40 seconds <Picture 1> replaces it as one complete flat image. The TV-era plate breaks into broad horizontal bands that recoil into the deeper planes. <Picture 1> slides into the same centre position, its hard perimeter catches the violet light, then it settles and LOCKS. At 2.55 seconds <Picture 2> repeats this overwrite. Its complete protected artwork stays sharp while the older bands drift behind it. Each title keeps the same frontal orientation and screen size.
+
+[Shot 2] At 00:03.130, <Picture 2> sits at the centre of a wider field of darkness. The star spiral is now visible around all four sides of the title. Residual bands form sparse staggered layers behind the sharp title plane. A slow Pull Out with small amplitude reveals the spiral’s increasing depth. At 3.70 seconds <Picture 3> enters as the complete violet Rebellion plate, slides into the centre, settles, and LOCKS. The former plate separates into displaced blocks that move behind <Picture 3>. At 4.86 seconds the complete cold-gold Kijun title plate overwrites the violet state. Gold exists only inside that indivisible title image and on a few pale particles behind it. At 5.43 seconds the camera has reached its widest position, the Kijun plate fills one quarter of the frame width, and the spiral’s curved arms are visible from edge to edge. The Pull Out stops. The nearest thread overshoots inward by one hand-width and settles.
+
+[Shot 3] At 00:06.010, <Picture 4> is already centred as a complete frontal title plate. It occupies one third of the frame width against near-black space. Behind it a spiral of pale star-streaks turns clockwise; each streak is thicker than the logo's stroke. A Static Shot holds the frontal axis. <Picture 4> slides the final short distance, settles, and LOCKS while the Kijun plate leaves broad dark-gold bands behind it. At 7.16 seconds the upper edge of the logo plane begins rolling away around a horizontal axis. Each following accelerating snare advances one larger angular step. At 7.60 seconds the logo plane is edge-on, a single thin line. At 8.20 seconds only its black reverse side is visible. The reverse occupies the same rectangular area and carries a narrow violet specular edge. The pale star-streaks curve inward behind it and shorten toward the centre. At 8.46 seconds the black plane settles into the surrounding darkness. At 8.90 seconds the spiral contracts to one small cold-violet point, stops, and leaves a still near-black frame for the hard cut into C4.
+
+OVERWRITE LAW: Each arriving title plate physically displaces the preceding plate into broad bands or blocks behind it. Arrival triggers slide, settle and LOCK as one causal action.
+
+TURN LAW: The accelerating spiral pulls successive angular steps from <Picture 4> after 7.16 seconds. The completed black reverse triggers the spiral’s contraction toward the next memory.
+
+BEAT LAW: {{BEATLAW}} Every second snare advances one chronological title state; after 7.16, each accelerating snare advances the physical turn or tightens the spiral. Kicks recoil discarded bands, while cymbals release pale star grains behind the title plane.
+
+TEXT FIELD: The six indivisible official title plates carry every visible glyph. Space, threads, particles, displaced bands, the black reverse and the final point remain smooth and unmarked.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: A low rotating spatial rumble surrounds the distant spiral. Each overwrite produces one dry tear, one lateral block recoil and one firm locking click at the visible title plane. The turning plate makes a taut paper-and-metal flex, followed by a narrowing wind as the star-streaks contract. The final point leaves a faint cold room tone for the cut into C4.
+
+non_diegetic_music: N/A

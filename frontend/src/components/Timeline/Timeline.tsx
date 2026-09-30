@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } fr
 import type { Asset, TransitionType, BeatMatchResult } from '../../api/client'
 import { clipsApi, jobsApi, analysisApi, assetsApi, tracksApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { useShallow } from 'zustand/react/shallow'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { useCollabStore } from '../../store/collabStore'
 import { useUIStore } from '../../store/uiStore'
@@ -21,6 +22,8 @@ import { StoryScroll } from './StoryScroll'
 import { ClipInspector } from './ClipInspector'
 import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
+import { FilterLayerPopover, FilterAddPopover } from './FilterLayerPopover'
+import { isFilterClip } from './filterLayers'
 import { PinSwapModal } from './PinSwapModal'
 import { NightBatchPanel } from './NightBatchPanel'
 import { I2VSelPopover } from './I2VSelPopover'
@@ -37,14 +40,52 @@ interface Props {
   assets: Asset[]
 }
 
+// ── フレーム値だけを購読する小コンポーネント(Timeline本体を毎フレーム再描画させない)
+function Playhead({ pixelsPerFrame }: { pixelsPerFrame: number }) {
+  const currentFrame = useTimelineStore(s => s.currentFrame)
+  return (
+    <div
+      className="absolute top-0 bottom-0 w-px bg-purple-500/60 pointer-events-none"
+      style={{ left: LABEL_WIDTH + currentFrame * pixelsPerFrame }}
+    />
+  )
+}
+
+function TimeDisplay({ fps }: { fps: number }) {
+  const currentFrame = useTimelineStore(s => s.currentFrame)
+  return (
+    <span className="text-[11px] text-zinc-400 font-mono ml-2">
+      {String(Math.floor(currentFrame / fps / 60)).padStart(2, '0')}:
+      {String(Math.floor(currentFrame / fps) % 60).padStart(2, '0')}:
+      {String(currentFrame % fps).padStart(2, '0')}
+      <span className="text-zinc-600"> f{currentFrame}</span>
+    </span>
+  )
+}
+
+function LiveTimeRuler(props: Omit<React.ComponentProps<typeof TimeRuler>, 'currentFrame'>) {
+  const currentFrame = useTimelineStore(s => s.currentFrame)
+  return <TimeRuler {...props} currentFrame={currentFrame} />
+}
+
 export function Timeline({ projectId, fps, assets }: Props) {
+  // currentFrame は購読しない: 再生中は30fpsで更新されるため、ここで購読すると
+  // 全レーン(memo無し)が毎フレーム再描画される。フレーム値が要る箇所は
+  // 小さな子コンポーネント(Playhead/TimeDisplay/LiveTimeRuler)か getState() で取る。
   const {
-    tracks, clips, currentFrame, pixelsPerFrame,
+    tracks, clips, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
     loadTimeline, addTrack, addClip, placeClip, splitClip,
-    deleteClip, setCurrentFrame, setZoom, undo, redo, setClipSpeed, applySpeedEnvelope, updateClip, liveUpdateClip,
+    deleteClip, deletePin, setCurrentFrame, setZoom, undo, redo, setClipSpeed, applySpeedEnvelope, updateClip, liveUpdateClip,
     selectedClipId, setSelectedClipId, syncFromServer,
-  } = useTimelineStore()
+  } = useTimelineStore(useShallow(s => ({
+    tracks: s.tracks, clips: s.clips, pixelsPerFrame: s.pixelsPerFrame,
+    canUndo: s.canUndo, canRedo: s.canRedo, undoStack: s.undoStack, redoStack: s.redoStack,
+    loadTimeline: s.loadTimeline, addTrack: s.addTrack, addClip: s.addClip, placeClip: s.placeClip, splitClip: s.splitClip,
+    deleteClip: s.deleteClip, deletePin: s.deletePin, setCurrentFrame: s.setCurrentFrame, setZoom: s.setZoom, undo: s.undo, redo: s.redo,
+    setClipSpeed: s.setClipSpeed, applySpeedEnvelope: s.applySpeedEnvelope, updateClip: s.updateClip, liveUpdateClip: s.liveUpdateClip,
+    selectedClipId: s.selectedClipId, setSelectedClipId: s.setSelectedClipId, syncFromServer: s.syncFromServer,
+  })))
 
   const scrollRef      = useRef<HTMLDivElement>(null)
 
@@ -52,18 +93,17 @@ export function Timeline({ projectId, fps, assets }: Props) {
   // (停止中に手でスクロールして離れても、currentFrameが動かない限り介入しない)
   // 再生ヘッド追従スクロール。ズーム(pixelsPerFrame変更)では発動させない —
   // ズーム時はカーソル位置アンカーが優先で、ここが動くと表示領域が飛ぶ。
-  useEffect(() => {
+  useEffect(() => useTimelineStore.subscribe((s, prev) => {
+    if (s.currentFrame === prev.currentFrame) return
     const sc = scrollRef.current
     if (!sc) return
-    const ppf = useTimelineStore.getState().pixelsPerFrame
-    const x = LABEL_WIDTH + currentFrame * ppf
+    const x = LABEL_WIDTH + s.currentFrame * s.pixelsPerFrame
     const viewL = sc.scrollLeft + LABEL_WIDTH
     const viewR = sc.scrollLeft + sc.clientWidth
     if (x < viewL + 8 || x > viewR - 40) {
       sc.scrollLeft = Math.max(0, x - LABEL_WIDTH - sc.clientWidth * 0.3)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentFrame])
+  }), [])
 
   // ズームのアンカー維持: 新しいppfでのレイアウト確定後にscrollLeftを適用する。
   // (レイアウト前に代入すると古いscrollWidthでクランプされて表示領域が飛ぶ)
@@ -85,7 +125,19 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   const [showCurveEditor, setShowCurveEditor] = useState(false)
   const [curveSrcFrames, setCurveSrcFrames] = useState(0)   // ∿編集中のソース量(開いた時点で固定)
   const [showInspector, setShowInspector] = useState(false)
+  // インスペクタ表示中のみフレーム値を購読(閉時は定数→再生中の再描画を回避)
+  const inspectorFrame = useTimelineStore(s => (showInspector ? s.currentFrame : 0))
   const [showShotTune, setShowShotTune] = useState(false)
+  const [filterEditId, setFilterEditId] = useState<number | null>(null)   // 🎚 単色/ぼかしの編集中クリップ
+  const [showFilterAdd, setShowFilterAdd] = useState(false)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ clipId: number }>).detail?.clipId
+      if (typeof id === 'number') setFilterEditId(id)
+    }
+    window.addEventListener('kychapogas:open-filter', onOpen)
+    return () => window.removeEventListener('kychapogas:open-filter', onOpen)
+  }, [])
   const [showPinSwap, setShowPinSwap] = useState(false)
   const [showNightBatch, setShowNightBatch] = useState(false)
   const refSel = useTimelineStore(s => s.refSel)
@@ -158,7 +210,14 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
         // 1フレームカット(g.s === g.e)は開始/終了ピンが同フレームに重なる。
         const fallback = pins[idx].asset_id!
         const c1 = await st.addClip(imgTrack.id, fallback, g.s, 15)
-        const c2 = await st.addClip(imgTrack.id, fallback, g.e, 15)
+        let c2: Clip
+        try {
+          c2 = await st.addClip(imgTrack.id, fallback, g.e, 15)
+        } catch (e) {
+          // 片方だけ残ると以降の全カットのペアがずれるので、開始ピンも取り消す
+          await useTimelineStore.getState().deleteClip(c1.id)
+          throw e
+        }
         void (async () => {
           const sAsset = await videoFrameAssetAt(g.s)
           if (sAsset != null) await useTimelineStore.getState().updateClip(c1.id, { asset_id: sAsset })
@@ -295,22 +354,42 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
       .filter(f => f >= 0)
   }, [beatInfo, fps])
 
-  // Snap a frame to the nearest beat within ~8px; identity when snapping is off.
-  const snapFrame = useCallback((frame: number) => {
-    if (!snapEnabled || beatFrames.length === 0) return frame
+  // カット境界(ピン対の開始/終了+1)。クリップはカット単位で置くので最優先の吸着先。
+  const cutEdges = useMemo(() => {
+    const set = new Set<number>()
+    for (const c of motionCuts) { set.add(c.s); set.add(c.e + 1) }
+    return [...set]
+  }, [motionCuts])
+
+  // 吸着(2026-09-23 改修): 8px 以内の「カット境界・他クリップの端・再生位置」を最優先し、
+  // どれも無いときだけ拍に吸着する。以前は拍だけだったため、カット頭に置いたクリップを
+  // クリックしただけで最寄りの拍へ数フレームずれた。excludeClipId=動かしているクリップ自身。
+  const snapFrame = useCallback((frame: number, excludeClipId?: number) => {
+    if (!snapEnabled) return frame
     const threshold = 8 / pixelsPerFrame
     let best = frame, bestDist = threshold
-    for (const bf of beatFrames) {
-      const d = Math.abs(bf - frame)
-      if (d < bestDist) { bestDist = d; best = bf }
+    const consider = (f: number) => {
+      const d = Math.abs(f - frame)
+      if (d < bestDist) { bestDist = d; best = f }
     }
+    for (const f of cutEdges) consider(f)
+    const st = useTimelineStore.getState()
+    const refTracks = new Set(st.tracks.filter(t => t.track_type === 'reference').map(t => t.id))
+    for (const c of st.clips) {
+      if (c.id === excludeClipId || refTracks.has(c.track_id)) continue
+      consider(c.start_frame); consider(c.start_frame + c.duration_frames)
+    }
+    consider(st.currentFrame)
+    if (best !== frame) return best
+    for (const bf of beatFrames) consider(bf)
     return best
-  }, [snapEnabled, beatFrames, pixelsPerFrame])
+  }, [snapEnabled, beatFrames, cutEdges, pixelsPerFrame])
 
   // Selected clip — for speed controls (video clips only)
   const selectedClip = clips.find(c => c.id === selectedClipId) ?? null
   const selTrack = selectedClip ? tracks.find(t => t.id === selectedClip.track_id) : null
   const selAsset = selectedClip ? assets.find(a => a.id === selectedClip.asset_id) : null
+  const selIsFilter = isFilterClip(selectedClip)
   const isVideoClip = selTrack?.track_type === 'video'
     && (selAsset?.asset_type === 'video'
         || (selAsset?.asset_type === 'generated' && selAsset?.duration_sec != null))
@@ -354,6 +433,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
     }
     const selClip = selectedClipId !== null
       ? useTimelineStore.getState().clips.find(c => c.id === selectedClipId) : undefined
+    const currentFrame = useTimelineStore.getState().currentFrame
     if ((e.key === 's' || e.key === 'S') && !ctrl) {
       if (selectedClipId !== null && !selClip?.locked) {
         splitClip(selectedClipId, currentFrame)
@@ -368,11 +448,11 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
     }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (selectedClipId !== null && !selClip?.locked) {   // 🔒ロック中は削除不可
-        deleteClip(selectedClipId)
+        void deletePin(selectedClipId)   // ピンはペアで消える。ピン以外は deleteClip と同じ
         setSelectedClipId(null)
       }
     }
-  }, [selectedClipId, currentFrame, splitClip, deleteClip, undo, redo, setCurrentFrame])
+  }, [selectedClipId, splitClip, deletePin, undo, redo, setCurrentFrame])
 
   // ── Wheel zoom ────────────────────────────────────────────────────────
   // Reactのwheelはパッシブ登録になりpreventDefaultが効かない(=Ctrl+ホイールで
@@ -511,6 +591,20 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           className="text-[11px] px-2 py-0.5 rounded bg-amber-900 hover:bg-amber-800 text-amber-200"
           title="参照キーフレームトラック（I2V生成用）"
         >+ Ref</button>
+        <EdgeModeToggle />
+        <ResToggle />
+        <button
+          onClick={() => setShowFilterAdd(true)}
+          className="text-[11px] px-2 py-0.5 rounded bg-purple-900 hover:bg-purple-800 text-purple-200"
+          title="🎚 フィルターレイヤー追加 — 単色(黒/白/任意色・不透明度キー)/ぼかし(下のレイヤー全体・強さキー)"
+        >🎚 フィルター</button>
+        {showFilterAdd && (
+          <FilterAddPopover projectId={projectId} fps={fps} onClose={() => setShowFilterAdd(false)}
+                            onCreated={c => { setSelectedClipId(c.id); setFilterEditId(c.id) }} />
+        )}
+        {filterEditId != null && (
+          <FilterLayerPopover clipId={filterEditId} fps={fps} onClose={() => setFilterEditId(null)} />
+        )}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('kychapogas:open-board'))}
           title="📋 絵コンテ（再生ヘッド位置のシーン）— シーンレーンのブロックを右クリック/長押しでも開けます"
@@ -530,13 +624,12 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
 
         <button
           onClick={() => setSnapEnabled(v => !v)}
-          disabled={!beatInfo}
-          title={beatInfo ? 'ビートスナップ（クリップ端をビートに吸着）' : '音声のビート解析後に有効'}
-          className={`text-[11px] px-2 py-0.5 rounded disabled:opacity-30
-            ${snapEnabled && beatInfo
+          title={'吸着: カット境界・他クリップの端・再生位置を優先し、無ければ拍に吸着' + (beatInfo ? '' : '(拍は音声のビート解析後)') + '。ドラッグ中に Alt で一時解除'}
+          className={`text-[11px] px-2 py-0.5 rounded
+            ${snapEnabled
               ? 'bg-emerald-800 text-emerald-100'
               : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-        >🧲 音ハメ{snapEnabled ? 'ON' : 'OFF'}</button>
+        >🧲 吸着{snapEnabled ? 'ON' : 'OFF'}</button>
 
         <button
           onClick={handleBeatMatch}
@@ -600,12 +693,12 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           <>
             <div className="w-px h-4 bg-zinc-700 mx-1" />
             <button
-              onClick={() => { splitClip(selectedClipId, currentFrame) }}
+              onClick={() => { splitClip(selectedClipId, useTimelineStore.getState().currentFrame) }}
               className="text-[11px] px-2 py-0.5 rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-200"
               title="再生ヘッドでクリップを分割 (S)"
             >✂ 分割</button>
             <button
-              onClick={() => { deleteClip(selectedClipId); setSelectedClipId(null) }}
+              onClick={() => { void deletePin(selectedClipId); setSelectedClipId(null) }}
               className="text-[11px] px-2 py-0.5 rounded bg-red-900 hover:bg-red-800 text-red-200"
               title="クリップを削除 (Del)"
             >✕ 削除</button>
@@ -618,8 +711,17 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
               >🎵 ビートで分割</button>
             )}
 
+            {/* 🎚 フィルターレイヤー(単色/ぼかし)の編集 */}
+            {selIsFilter && selectedClip && (
+              <button onClick={() => setFilterEditId(selectedClip.id)}
+                      className="text-[11px] px-2 py-0.5 rounded border bg-purple-950/60 text-purple-300 border-purple-700 hover:bg-purple-900/60"
+                      title="不透明度/ぼかし強さのキーと色を編集">
+                🎚 {selectedClip.kind === 'solid' ? '単色' : 'ぼかし'}を編集
+              </button>
+            )}
+
             {/* Transition into this clip (rendered on the primary video track) */}
-            {selTrack?.track_type === 'video' && selectedClip && (
+            {selTrack?.track_type === 'video' && selectedClip && !selIsFilter && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
                 <span className="text-[10px] text-zinc-500">遷移</span>
@@ -640,6 +742,28 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
                   <option value="white">白フラッシュ</option>
                   <option value="black">黒</option>
                 </select>
+                {selectedClip.transition_in && (
+                  <>
+                  <select
+                    value={selectedClip.transition_ease ?? 'linear'}
+                    onChange={e => updateClip(selectedClip.id, { transition_ease: e.target.value })}
+                    className="text-[11px] px-1 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700"
+                    title="遷移のカーブ(重なり区間の不透明度の変化)"
+                  >
+                    <option value="linear">リニア</option>
+                    <option value="ease">なめらか</option>
+                    <option value="ease-in">遅→速</option>
+                    <option value="ease-out">速→遅</option>
+                  </select>
+                  {(selectedClip.transition_in === 'white' || selectedClip.transition_in === 'black') && (
+                    <label className="text-[10px] text-zinc-400 flex items-center gap-1" title="白/黒に完全になる位置(重なり区間内の割合)">
+                      切替
+                      <input type="range" min={0.1} max={0.9} step={0.05} value={selectedClip.transition_hold ?? 0.5}
+                        onChange={e => updateClip(selectedClip.id, { transition_hold: Number(e.target.value) })} className="w-14" />
+                    </label>
+                  )}
+                  </>
+                )}
                 {selectedClip.transition_in && (
                   <select
                     value={String(selectedClip.transition_frames)}
@@ -693,7 +817,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
 
             {/* Layer transform inspector: scale/pos/rotation + keyframes + opacity/blend.
                 Quick presets stay one click away; the inspector is for precise authoring. */}
-            {selectedClip && selTrack?.track_type === 'video' && (
+            {selectedClip && selTrack?.track_type === 'video' && !selIsFilter && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
                 <span className="text-[10px] text-zinc-500">動き</span>
@@ -731,7 +855,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
                     <ClipInspector
                       clip={selectedClip}
                       isOverlay={tracks.find(t => t.track_type === 'video')?.id !== selTrack.id}
-                      localT={(currentFrame - selectedClip.start_frame) / Math.max(1, selectedClip.duration_frames)}
+                      localT={(inspectorFrame - selectedClip.start_frame) / Math.max(1, selectedClip.duration_frames)}
                       beatTs={selBeatTs}
                       onChange={patch => liveUpdateClip(selectedClip.id, patch)}
                       onClose={() => setShowInspector(false)}
@@ -758,6 +882,13 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
                     <option value={String(selectedClip.speed)}>{selectedClip.speed.toFixed(2)}x</option>
                   )}
                 </select>
+                {(selectedClip.remap_json ?? '') !== '' && (
+                  <button onClick={() => { void updateClip(selectedClip.id, { remap_json: '' }) }}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/70 text-amber-200 border border-amber-700"
+                          title="⏱時間リマップのキーがあるため速度は無視されています。クリックでリマップを解除">
+                    ⚠ リマップ中(速度無効)・解除
+                  </button>
+                )}
                 <span>
                   <button
                     onClick={() => {
@@ -947,12 +1078,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           >▶ レンダー</button>
         </div>
 
-        <span className="text-[11px] text-zinc-400 font-mono ml-2">
-          {String(Math.floor(currentFrame / fps / 60)).padStart(2, '0')}:
-          {String(Math.floor(currentFrame / fps) % 60).padStart(2, '0')}:
-          {String(currentFrame % fps).padStart(2, '0')}
-          <span className="text-zinc-600"> f{currentFrame}</span>
-        </span>
+        <TimeDisplay fps={fps} />
       </div>
 
       {/* Scrollable area */}
@@ -967,11 +1093,10 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           {/* Ruler row */}
           <div className="flex flex-shrink-0 sticky top-0 z-10 bg-zinc-900">
             <div className="w-28 flex-shrink-0 border-r border-b border-zinc-700 bg-zinc-900 sticky left-0 z-30" />
-            <TimeRuler
+            <LiveTimeRuler
               pixelsPerFrame={pixelsPerFrame}
               fps={fps}
               totalWidth={totalWidth}
-              currentFrame={currentFrame}
               onSeek={setCurrentFrame}
             />
           </div>
@@ -1160,12 +1285,35 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           ))}
 
           {/* Playhead — full height */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-purple-500/60 pointer-events-none"
-            style={{ left: LABEL_WIDTH + currentFrame * pixelsPerFrame }}
-          />
+          <Playhead pixelsPerFrame={pixelsPerFrame} />
         </div>
       </div>
     </div>
+  )
+}
+
+/** クリップ端ドラッグのモード切替: ✂トリム ⇔ ⇔速度伸縮(尺と速度を同時に変える)。Ctrl/⌘ を押している間は逆のモード */
+function EdgeModeToggle() {
+  const on = useTimelineStore(s => s.edgeStretch)
+  const set = useTimelineStore(s => s.setEdgeStretch)
+  return (
+    <button onClick={() => set(!on)}
+            className={`text-[11px] px-2 py-0.5 rounded border ${on ? 'bg-sky-900/70 text-sky-200 border-sky-700' : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'}`}
+            title="クリップの端をドラッグしたときの動作。トリム=使う範囲を切り詰める / 速度伸縮=使う範囲はそのままに尺を変え、速度を自動計算する。Ctrl(⌘)を押しながらドラッグすると一時的に逆のモード">
+      端ドラッグ: {on ? '⇔ 速度伸縮' : '✂ トリム'}
+    </button>
+  )
+}
+
+/** 🔍解像度表示の切替: クリップに「1344·T3」などのバッジ、ネイティブ未満は赤枠 */
+function ResToggle() {
+  const on = useTimelineStore(s => s.showRes)
+  const set = useTimelineStore(s => s.setShowRes)
+  return (
+    <button onClick={() => set(!on)}
+            className={`text-[11px] px-2 py-0.5 rounded border ${on ? 'bg-emerald-900/70 text-emerald-200 border-emerald-700' : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700'}`}
+            title="素材の解像度と生成ティア(T1/T2/T3)をクリップに表示。緑=1344(ネイティブ)・黄=1152前後・赤=960(ネイティブ未満、赤枠)・灰=元動画など大きい素材。♻=採用動画を参照して描き直した素材(元動画は参照していない)">
+      🔍 解像度
+    </button>
   )
 }

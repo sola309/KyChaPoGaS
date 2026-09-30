@@ -84,22 +84,25 @@ export function GpuStatusBar() {
   const esRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
-    const es = new EventSource(systemApi.gpuSseUrl())
-    esRef.current = es
-
-    es.onmessage = (e) => {
-      try {
-        setStatus(JSON.parse(e.data) as GpuStatus)
-      } catch { /* ignore */ }
+    // 非表示タブでは接続を閉じる(見えないバーのために2秒毎のNVML問い合わせと再描画を続けない)
+    const open = () => {
+      if (esRef.current) return
+      const es = new EventSource(systemApi.gpuSseUrl())
+      esRef.current = es
+      es.onmessage = (e) => {
+        try {
+          setStatus(JSON.parse(e.data) as GpuStatus)
+        } catch { /* ignore */ }
+      }
+      es.onerror = () => {
+        // reconnect is automatic via EventSource, but clear stale data on sustained failure
+      }
     }
-    es.onerror = () => {
-      // reconnect is automatic via EventSource, but clear stale data on sustained failure
-    }
-
-    return () => {
-      es.close()
-      esRef.current = null
-    }
+    const close = () => { esRef.current?.close(); esRef.current = null }
+    const onVis = () => { if (document.visibilityState === 'visible') open(); else close() }
+    onVis()
+    document.addEventListener('visibilitychange', onVis)
+    return () => { document.removeEventListener('visibilitychange', onVis); close() }
   }, [])
 
   if (!status) return null

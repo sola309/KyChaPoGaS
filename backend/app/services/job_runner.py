@@ -597,7 +597,8 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
         slot = next((c for c in session.exec(
             select(Clip).where(Clip.track_id == int(place["track_id"]),
                                Clip.start_frame == start)).all()
-            if c.asset_id is None and not c.locked), None)
+            if c.asset_id is None and not c.locked
+            and (c.kind or "media") not in ("solid", "blur")), None)
         if slot is not None:
             slot.asset_id = asset_id
             session.add(slot)
@@ -815,10 +816,28 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
     # (シード選抜には使えない — 使うのはプロンプトと構成の検証)。
     if str(params.get("quality", "")).lower() == "t1":
         params = dict(params)
-        params.update({"width": 960, "height": 544, "steps": 4,
+        # 2026-09-27: ユーザー指示で T1 もネイティブ 1344x768 に。960x544 の T1 素材が採用後に
+        # タイムラインへ多数残り、書き出しの解像度不足になったため(縦長は縦横を入れ替える)。
+        portrait = int(params.get("height", 768) or 768) > int(params.get("width", 1344) or 1344)
+        params.update({"width": 768 if portrait else 1344, "height": 1344 if portrait else 768, "steps": 4,
                        "turbo_lora": 0.75, "easycache": True,
                        "ref_image_size": "match"})
-        log.info("T1下見プリセット適用: 960x544/step4/turbo0.75(ref2v)/easycache")
+        log.info("T1プリセット適用: 1344x768(ネイティブ)/step4/turbo0.75(ref2v)/easycache")
+
+    # ── T0超速プレビュープリセット ────────────────────────────────
+    # params["quality"]="t0" で「予告編モード」を最速構成に展開する。
+    # T1(step4)のシグマ列のうち**先頭1段だけ**を実行し、SamplerCustomAdvanced の
+    # denoised_output(x0予測)をデコードする。res_multistep が決定論的なので、
+    # ボケてはいるが**完成形と同じ構図・被写体サイズ・配置**が得られる(builder参照)。
+    # 用途はプロンプト検討の初期反復に絞る — 構図・配置・キャラ判別が読めれば十分な段階。
+    # 質感・ディテール・最終的な破綻は分からない(それはT1/T3で見る)。
+    # step4の1/4段+attention1回ぶんなので、T1のおよそ1/3〜1/4の時間で出る。
+    if str(params.get("quality", "")).lower() == "t0":
+        params = dict(params)
+        params.update({"width": 960, "height": 544, "steps": 4,
+                       "turbo_lora": 0.75, "easycache": True,
+                       "ref_image_size": "match", "preview_steps": 1})
+        log.info("T0超速プレビュー適用: 960x544/step4→先頭1段のx0予測/turbo0.75")
 
     model_id = params.get("model", "wan2.2-flf2v")
     if model_id.startswith("wan2.2") or model_id.startswith("minimax-h3"):
@@ -990,7 +1009,7 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
     duration   = float(params.get("duration_sec", 3.0))
     total_len  = max(5, int(round(duration * WAN22_FPS)))
 
-    if not keyframes:
+    if not keyframes and not (mode == "minimax-h3-ref" and (params.get("ref_video_asset_ids") or params.get("ref_audio_asset_ids"))):
         raise ValueError("Wan2.2 I2V には最低1つのキーフレーム（開始フレーム）が必要です")
 
     def _asset_path(asset_id: int) -> Path:
@@ -1043,86 +1062,162 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
         frames.sort()
         return frames
 
-    # MiniMax H3 Ref2VA: 参照束(画像/動画/音声)+指示文→映像+音声
-    if mode == "minimax-h3-ref":
-        from app.services.workflow_builder import build_minimax_h3_ref_video, h3_snap_length, H3_FPS
-        _update_progress(job.id, 0.05)
-        # keyframes=参照画像(≤9)。動画/音声参照はasset_idリストで受ける
-        rv_names, ra_names = [], []
-        for aid in (params.get("ref_video_asset_ids") or [])[:3]:
-            pth = _asset_path(int(aid))
-            rv_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
-        for aid in (params.get("ref_audio_asset_ids") or [])[:3]:
-            pth = _asset_path(int(aid))
-            ra_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
-        length = h3_snap_length(int(round(duration * H3_FPS)))
-        wf = build_minimax_h3_ref_video(
-            prompt=prompt, ref_image_names=names[:9],
-            ref_video_names=rv_names or None, ref_audio_names=ra_names or None,
-            width=width, height=height, length=length,
-            seed=seed, steps=int(params.get("steps") or 15),
-            scheduler=str(params.get("scheduler") or "beta"),
-            ref_image_size=str(params.get("ref_image_size") or "match"),
-            easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
-            use_ref_video_audio=bool(params.get("use_ref_video_audio")),
-            turbo_lora=(float(params["turbo_lora"]) if params.get("turbo_lora") else None),
-            preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
-        )
-        prompt_id = await comfyui.submit(wf)
-        outputs = await comfyui.wait_for_outputs(
-            prompt_id, lambda p: _update_progress(job.id, 0.05 + p * 0.89),
-            phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
-        video_path = None
-        for out in outputs:
-            fn = out.get("filename", "")
-            if fn.endswith((".mp4", ".webm", ".mov")):
-                video_path = await comfyui.download_output(
-                    fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
-                break
-        if not video_path:
-            raise RuntimeError(f"H3 Ref2VAが動画を出力しませんでした: {outputs}")
-        newp = dest_dir / f"h3r_{job.id}{video_path.suffix}"
-        video_path.replace(newp)
-        asset_id = _register_asset(project_id, newp, "generated", params)
-        _update_result_assets(job.id, [asset_id])
-        _place_result(params, asset_id)
-        log.info(f"MiniMax H3 Ref2VA done: {length}f, refs={len(names)}img/{len(rv_names)}vid/{len(ra_names)}aud → {newp.name}")
-        return
+    # ── VDN-H3 (params["vdn"]=true または dict): 8step蒸留のハイブリッド注意。
+    # Turbo LoRAとは排他、EasyCacheは明示ONのみ(蒸留8stepでは再利用の余地が小さい)。
+    vdn_cfg: dict | None = None
+    if mode.startswith("minimax-h3") and params.get("vdn"):
+        vdn_cfg = dict(params["vdn"]) if isinstance(params["vdn"], dict) else {}
+        if params.get("turbo_lora"):
+            log.warning(f"Job id={job.id}: VDN-H3指定のため turbo_lora を無効化(排他)")
+    def _h3_steps(default: int) -> int:
+        from app.services.workflow_builder import H3_VDN_STEPS
+        return int(params.get("steps") or (H3_VDN_STEPS if vdn_cfg is not None else default))
+    def _h3_easycache() -> bool:
+        return (params.get("easycache") is True) if vdn_cfg is not None else (params.get("easycache") is not False)
+    def _h3_turbo() -> float | None:
+        if vdn_cfg is not None or not params.get("turbo_lora"):
+            return None
+        return float(params["turbo_lora"])
+    def _h3_extra() -> dict:
+        # Turbo LoRAファイル/シグマシフト/サンプラーの上書き(lightx2vの組指定用)
+        out: dict = {}
+        if params.get("turbo_lora_name"):
+            out["turbo_lora_name"] = str(params["turbo_lora_name"])
+        for k in ("shift_video", "shift_audio"):
+            if params.get(k) is not None:
+                out[k] = float(params[k])
+        if params.get("sampler"):
+            out["sampler"] = str(params["sampler"])
+        if params.get("sol") is not None and params.get("sol") is not False:
+            # {} や true でも適用(空dict=既定設定)。VDNと同じ落とし穴に注意
+            out["sol"] = dict(params["sol"]) if isinstance(params["sol"], dict) else {}
+        if params.get("fbc") is not None and params.get("fbc") is not False:
+            # First Block Cache(Sol Engine キャッシュ系)。{} / true で既定値
+            out["fbc"] = dict(params["fbc"]) if isinstance(params["fbc"], dict) else {}
+        return out
 
-    # MiniMax H3: 映像+ネイティブ音声を1パス生成(最初/最後フレーム条件付け)
-    if mode == "minimax-h3":
-        from app.services.workflow_builder import build_minimax_h3_video, h3_snap_length, H3_FPS
-        _update_progress(job.id, 0.08)
-        first_name = names[0]
-        last_name = names[-1] if len(names) >= 2 else None
-        length = h3_snap_length(int(round(duration * H3_FPS)))
-        wf = build_minimax_h3_video(
-            prompt=prompt, width=width, height=height, length=length,
-            first_image_name=first_name, last_image_name=last_name,
-            seed=seed, steps=int(params.get("steps") or 15),
-            easycache=params.get("easycache") is not False,   # 既定ON(明示OFFのみ無効)
-            preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
-        )
-        prompt_id = await comfyui.submit(wf)
-        outputs = await comfyui.wait_for_outputs(
-            prompt_id, lambda p: _update_progress(job.id, 0.08 + p * 0.86),
-            phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
-        # SaveVideoはmp4(音声込み)を直接出力する — フレーム再結合は不要
-        video_path = None
-        for out in outputs:
-            fn = out.get("filename", "")
-            if fn.endswith((".mp4", ".webm", ".mov")):
-                video_path = await comfyui.download_output(
-                    fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
-                break
-        if not video_path:
-            raise RuntimeError(f"H3が動画を出力しませんでした: {outputs}")
-        newp = dest_dir / f"h3_{job.id}{video_path.suffix}"
-        video_path.replace(newp)
+    # ── MiniMax H3(FL2VA / Ref2VA)。362f(15.08秒)超は継続生成で複数セグメントに分けて連結する。
+    #    params["chain"] = {"mode": "latent"|"guide"} (省略時 latent)。362f以下なら1セグメントで従来通り。
+    if mode in ("minimax-h3-ref", "minimax-h3"):
+        from app.services.workflow_builder import (
+            build_minimax_h3_ref_video, build_minimax_h3_video, h3_plan_segments,
+            H3_FPS, H3_CHAIN_OVERLAP)
+        is_ref = mode == "minimax-h3-ref"
+        _update_progress(job.id, 0.05)
+        rv_names, ra_names = [], []
+        if is_ref:
+            # keyframes=参照画像(≤9)。動画/音声参照はasset_idリストで受ける
+            for aid in (params.get("ref_video_asset_ids") or [])[:3]:
+                pth = _asset_path(int(aid))
+                rv_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
+            for aid in (params.get("ref_audio_asset_ids") or [])[:3]:
+                pth = _asset_path(int(aid))
+                ra_names.append((await comfyui.upload_image(pth)).get("name", pth.name))
+        # 任意フレームへの画像アンカー(Ref2VA のみ): [{"asset_id": int, "frame_idx": int}]
+        guides: list[dict] = []
+        if is_ref:
+            for g in (params.get("guide_keyframes") or []):
+                pth = _asset_path(int(g["asset_id"]))
+                guides.append({"image": (await comfyui.upload_image(pth)).get("name", pth.name),
+                               "frame_idx": int(g.get("frame_idx", 0))})
+            # 動画の連続フレームをガイドに(ブリッジ生成 2026-09-19): 前クリップ末尾 / 次クリップ先頭を両端に固定
+            for g in (params.get("guide_videos") or []):
+                pth = _asset_path(int(g["asset_id"]))
+                guides.append({"video": (await comfyui.upload_image(pth)).get("name", pth.name),
+                               "batch_index": int(g.get("batch_index", 0)), "length": int(g.get("length", 22)),
+                               "frame_idx": int(g.get("frame_idx", 0))})
+        # Fun ControlNet(Ref2VA のみ): [{"control_asset_id", "mask_asset_id", "source_asset_id", "strength", "start_percent", "end_percent"}]
+        fun_controls: list[dict] = []
+        if is_ref:
+            for fc in (params.get("fun_controls") or []):
+                cfg = {k: fc[k] for k in ("strength", "start_percent", "end_percent", "patch_name") if k in fc}
+                for src_key, dst_key in (("control_asset_id", "control_video"), ("mask_asset_id", "mask_video"), ("source_asset_id", "source_video")):
+                    if fc.get(src_key):
+                        pth = _asset_path(int(fc[src_key]))
+                        cfg[dst_key] = (await comfyui.upload_image(pth)).get("name", pth.name)
+                fun_controls.append(cfg)
+        chain_cfg = params.get("chain") if isinstance(params.get("chain"), dict) else {}
+        chain_mode = str(chain_cfg.get("mode") or "latent")
+        overlap = int(chain_cfg.get("overlap") or H3_CHAIN_OVERLAP)
+        plan = h3_plan_segments(int(round(duration * H3_FPS)), overlap)
+        n_seg = len(plan)
+        net_total = plan[0] + sum(L - overlap for L in plan[1:])
+        prefix = f"h3_context/kychapogas_job{job.id}"
+        seg_files: list[Path] = []
+        prev_name: str | None = None
+        for i, seg_len in enumerate(plan, start=1):
+            chain = None
+            if n_seg > 1:
+                chain = {"mode": chain_mode, "index": i, "count": n_seg, "overlap": overlap,
+                         "latent_prefix": prefix, "prev_video": prev_name}
+                _update_phase(job.id, f"継続生成 {i}/{n_seg}({chain_mode})")
+            if is_ref:
+                wf = build_minimax_h3_ref_video(
+                    prompt=prompt, ref_image_names=names[:9],
+                    ref_video_names=rv_names or None, ref_audio_names=ra_names or None,
+                    width=width, height=height, length=seg_len,
+                    seed=seed, steps=_h3_steps(15),
+                    scheduler=str(params.get("scheduler") or "beta"),
+                    ref_image_size=str(params.get("ref_image_size") or "match"),
+                    easycache=_h3_easycache(),   # 既定ON(明示OFFのみ無効)。VDN時は明示ONのみ
+                    use_ref_video_audio=bool(params.get("use_ref_video_audio")),
+                    turbo_lora=_h3_turbo(),
+                    preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
+                    vdn=vdn_cfg, chain=chain, guides=(guides or None), fun_controls=(fun_controls or None), **_h3_extra(),
+                )
+            else:
+                # FL2VA: 先頭画像は第1セグメントだけ、末尾画像は最終セグメントだけに付ける
+                first_name = names[0] if i == 1 else None
+                last_name = (names[-1] if len(names) >= 2 else None) if i == n_seg else None
+                wf = build_minimax_h3_video(
+                    prompt=prompt, width=width, height=height, length=seg_len,
+                    first_image_name=first_name, last_image_name=last_name,
+                    seed=seed, steps=_h3_steps(15),
+                    easycache=_h3_easycache(),
+                    preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
+                    vdn=vdn_cfg, chain=chain, **_h3_extra(),
+                )
+            prompt_id = await comfyui.submit(wf)
+            base, span = 0.05 + (i - 1) / n_seg * 0.85, 0.85 / n_seg
+            outputs = await comfyui.wait_for_outputs(
+                prompt_id, lambda p, b=base, sp=span: _update_progress(job.id, b + p * sp),
+                phase_cb=lambda ph: _update_phase(job.id, ph), workflow=wf)
+            video_path = None
+            # LoadVideo(参照動画)が入力ファイルをプレビュー出力(type=input)として履歴に載せるため、
+            # 保存ノードの出力(type=output)だけを結果に採る(2026-09-08: 参照クリップを結果に取り違えた)
+            for out in outputs:
+                fn = out.get("filename", "")
+                if out.get("type", "output") != "output":
+                    continue
+                if fn.endswith((".mp4", ".webm", ".mov")):
+                    video_path = await comfyui.download_output(
+                        fn, out.get("subfolder", ""), out.get("type", "output"), dest_dir)
+                    break
+            if not video_path:
+                raise RuntimeError(f"H3{'(Ref2VA)' if is_ref else ''} セグメント{i}/{n_seg} が動画を出力しませんでした: {outputs}")
+            tag = "h3r" if is_ref else "h3"
+            segp = dest_dir / (f"{tag}_{job.id}{video_path.suffix}" if n_seg == 1
+                               else f"{tag}_{job.id}_seg{i}{video_path.suffix}")
+            video_path.replace(segp)
+            seg_files.append(segp)
+            if n_seg > 1 and i < n_seg and chain_mode == "guide":
+                prev_name = (await comfyui.upload_image(segp)).get("name", segp.name)
+        if n_seg == 1:
+            newp = seg_files[0]
+        else:
+            _update_phase(job.id, "セグメント連結")
+            newp = dest_dir / f"{'h3r' if is_ref else 'h3'}_{job.id}.mp4"
+            # guide方式は各セグメント先頭の重複overlapフレームをここで捨てる。
+            # latent方式は Trim ノードが ComfyUI 内で落としているので 0。
+            head_trim = overlap if chain_mode == "guide" else 0
+            await asyncio.to_thread(_h3_concat_segments, seg_files, newp, head_trim, net_total, H3_FPS)
+            params["chain_result"] = {"mode": chain_mode, "segments": [str(f.name) for f in seg_files],
+                                      "plan": plan, "overlap": overlap, "net_frames": net_total}
         asset_id = _register_asset(project_id, newp, "generated", params)
         _update_result_assets(job.id, [asset_id])
         _place_result(params, asset_id)
-        log.info(f"MiniMax H3 done: {length}f(+audio) → {newp.name}")
+        log.info(f"MiniMax H3{' Ref2VA' if is_ref else ''} done: {plan} → 正味{net_total}f"
+                 f"({n_seg}セグメント/{chain_mode if n_seg > 1 else 'single'}) → {newp.name}")
         return
 
     # VACE: 任意フレーム位置に1パスで釘打ち(区間連結なし=つなぎ目の断絶なし)
@@ -1428,6 +1523,46 @@ async def _analyze_audio(job: Job, params: dict) -> None:
 
 
 # ── アセット登録 ──────────────────────────────────────────────────────────────
+
+
+def _h3_concat_segments(seg_files: list[Path], out: Path, head_trim: int, total_frames: int, fps: int) -> None:
+    """H3継続生成のセグメントを連結する。2本目以降は先頭 head_trim フレーム(前セグメントの複製)を
+    映像・音声とも捨て、最後に正味 total_frames で切る。多段再エンコを避けるため1パス(crf16)。"""
+    import subprocess
+
+    def _has_audio(f: Path) -> bool:
+        r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                            "stream=codec_type", "-of", "csv=p=0", str(f)], capture_output=True, text=True)
+        return "audio" in r.stdout
+    has_audio = all(_has_audio(f) for f in seg_files)
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    for f in seg_files:
+        cmd += ["-i", str(f)]
+    parts, vlab, alab = [], [], []
+    for i in range(len(seg_files)):
+        t = head_trim if i > 0 else 0
+        parts.append(f"[{i}:v]trim=start_frame={t},setpts=PTS-STARTPTS[v{i}]")
+        vlab.append(f"[v{i}]")
+        if has_audio:
+            parts.append(f"[{i}:a]atrim=start={t / fps:.6f},asetpts=PTS-STARTPTS[a{i}]")
+            alab.append(f"[a{i}]")
+    n = len(seg_files)
+    if has_audio:
+        parts.append("".join(v + a for v, a in zip(vlab, alab)) + f"concat=n={n}:v=1:a=1[vc][ac]")
+        parts.append(f"[vc]trim=end_frame={total_frames},setpts=PTS-STARTPTS[vo]")
+        parts.append(f"[ac]atrim=end={total_frames / fps:.6f},asetpts=PTS-STARTPTS[ao]")
+        maps = ["-map", "[vo]", "-map", "[ao]", "-c:a", "aac", "-b:a", "192k"]
+    else:
+        parts.append("".join(vlab) + f"concat=n={n}:v=1:a=0[vc]")
+        parts.append(f"[vc]trim=end_frame={total_frames},setpts=PTS-STARTPTS[vo]")
+        maps = ["-map", "[vo]"]
+    cmd += ["-filter_complex", ";".join(parts), *maps,
+            "-c:v", "libx264", "-crf", "16", "-preset", "medium", "-pix_fmt", "yuv420p",
+            "-r", str(fps), "-movflags", "+faststart", str(out)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 or not out.exists():
+        raise RuntimeError(f"H3セグメント連結に失敗: {r.stderr[-800:]}")
+
 
 def _register_asset(project_id: int, file_path: Path, source: str, gen_params: dict) -> int:
     """Register a generated file as an Asset in the DB. Returns asset_id."""
@@ -1897,58 +2032,253 @@ async def _cutout(job: Job, params: dict) -> None:
     dest_dir.mkdir(parents=True, exist_ok=True)
     out = dest_dir / f"{src.stem}_cut_{job.id}.png"
     im.save(out)
+    # 2026-09-08: 保存だけして登録していなかった(8/21 復元時の欠落)。アセット登録して結果に紐付ける
+    asset_id = _register_asset(project_id, out, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    log.info(f"cutout done: {src.name} → #{asset_id} {out.name}")
 
 
 async def _analyze_video(job: Job, params: dict) -> None:
-    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+    from app.services.video_analyzer import analyze_scenes, analyze_motion, analyze_motion_curve
+    from app.models.analysis import AnalysisResult
 
-    ジョブ種別 "analyze_video" はこの関数が実装されるまで使えない。
-    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
-    """
-    raise RuntimeError(
-        "_analyze_video は2026-08-21の編集事故で失われ、未復元です。"
-        "docs/incident-2026-08-21.md を参照してください。")
+    asset_id = params["asset_id"]
+    with Session(engine) as session:
+        from app.models import Asset
+        asset = session.get(Asset, asset_id)
+        if not asset:
+            raise ValueError(f"Asset {asset_id} not found")
+        file_path = Path(asset.file_path)
+
+    _update_progress(job.id, 0.05)
+
+    scene_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_scenes, file_path
+    )
+    _update_progress(job.id, 0.45)
+
+    motion_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_motion, file_path
+    )
+    _update_progress(job.id, 0.7)
+
+    curve_result = await asyncio.get_event_loop().run_in_executor(
+        None, analyze_motion_curve, file_path
+    )
+    _update_progress(job.id, 0.95)
+
+    with Session(engine) as session:
+        for atype, result in (
+            ("scene_changes", scene_result),
+            ("motion", motion_result),
+            ("motion_curve", curve_result),
+        ):
+            old = session.exec(
+                select(AnalysisResult)  # type: ignore[arg-type]
+                .where(AnalysisResult.asset_id == asset_id)
+                .where(AnalysisResult.analysis_type == atype)
+            ).first()
+            if old:
+                session.delete(old)
+            session.add(AnalysisResult(
+                asset_id=asset_id,
+                analysis_type=atype,
+                result_json=json.dumps(result),
+            ))
+        session.commit()
+
+    log.info(
+        f"Video analysis done: asset={asset_id} "
+        f"scenes={scene_result['scene_count']}"
+    )
 
 
 async def _vlm_review(job: Job, params: dict) -> None:
-    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+    """レンダー動画をローカルVLMで意味QA→コメントキューに自動起票(lightレーン)。"""
+    from app.services.ffmpeg_render import FFMPEG
+    from app.services import vlm_review as V
 
-    ジョブ種別 "vlm_review" はこの関数が実装されるまで使えない。
-    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
-    """
-    raise RuntimeError(
-        "_vlm_review は2026-08-21の編集事故で失われ、未復元です。"
-        "docs/incident-2026-08-21.md を参照してください。")
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src, project_id = Path(asset.file_path), asset.project_id
+    _update_progress(job.id, 0.05)
+    findings = await asyncio.to_thread(
+        V.review_video, src, str(FFMPEG), int(params.get("frames", 12)))
+    n = V.file_comments(project_id, findings, src.stem)
+    _update_progress(job.id, 1.0)
+    with Session(engine) as session:
+        j = session.get(Job, job.id)
+        j.result_json = json.dumps({"findings": findings, "comments_filed": n},
+                                   ensure_ascii=False)
+        session.add(j); session.commit()
 
 
 async def _puppet_clip(job: Job, params: dict) -> None:
-    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+    """コンパニオンを透過webm素材化(MAD/動画用)。idle/talk/nodのループ系モーション。"""
+    import tempfile
+    from app.services.ffmpeg_render import FFMPEG
 
-    ジョブ種別 "puppet_clip" はこの関数が実装されるまで使えない。
-    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
-    """
-    raise RuntimeError(
-        "_puppet_clip は2026-08-21の編集事故で失われ、未復元です。"
-        "docs/incident-2026-08-21.md を参照してください。")
+    pid = params["puppet_id"]
+    motion = params.get("motion", "idle")
+    dur = float(params.get("duration", 4))
+    fps = int(params.get("fps", 30))
+    project_id = params["project_id"]
+
+    with tempfile.TemporaryDirectory(prefix="puppet_clip_") as td:
+        # keyframes: スタジオのモーションエディタのトラックJSONを渡す
+        extra: list[str] = []
+        if motion == "keyframes":
+            mj = Path(td) / "motion.json"
+            mj.write_text(json.dumps({"tracks": params.get("keyframes") or {}},
+                                     ensure_ascii=False))
+            extra = [str(mj)]
+        proc = await asyncio.create_subprocess_exec(
+            "node", str(REPO_ROOT / "frontend" / "puppet_clip.mjs"),
+            pid, motion, str(dur), str(fps), td, *extra,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+            cwd=str(REPO_ROOT / "frontend"))
+        out, _ = await proc.communicate()
+        if proc.returncode != 0:
+            raise RuntimeError(f"puppet_clip.mjs failed:\n{out.decode(errors='replace')[-800:]}")
+        _update_progress(job.id, 0.8)
+        dest_dir = GENERATED_DIR / str(project_id)
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        outp = dest_dir / f"puppet_{pid}_{motion}_{job.id}.webm"
+        proc2 = await asyncio.create_subprocess_exec(
+            str(FFMPEG), "-y", "-framerate", str(fps), "-i", f"{td}/f%05d.png",
+            "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "24",
+            "-auto-alt-ref", "0", str(outp),
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        o2, _ = await proc2.communicate()
+        if proc2.returncode != 0 or not outp.exists():
+            raise RuntimeError(f"webm encode failed:\n{o2.decode(errors='replace')[-500:]}")
+    asset_id = _register_asset(project_id, outp, "puppet_clip",
+                               {"puppet_id": pid, "motion": motion, "duration": dur, "fps": fps})
+    _update_result_assets(job.id, [asset_id])
 
 
 async def _render_motion_graphics(job: Job, params: dict) -> None:
-    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
+    from app.services.motion_graphics import render_html_to_video
 
-    ジョブ種別 "render_motion_graphics" はこの関数が実装されるまで使えない。
-    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
-    """
-    raise RuntimeError(
-        "_render_motion_graphics は2026-08-21の編集事故で失われ、未復元です。"
-        "docs/incident-2026-08-21.md を参照してください。")
+    project_id = params["project_id"]
+    # Server-side templates (single source of truth, shared by UI + AI).
+    template = params.get("template")
+    if template == "lyric_motion":
+        from app.services.lyric_motion import build_lyric_motion_html
+        html = build_lyric_motion_html(params.get("style", "pop"))
+    else:
+        html = params.get("html", "")
+    if not html.strip():
+        raise ValueError("html が空です")
+
+    transparent = bool(params.get("transparent", False))
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / (f"mg_{job.id}.mov" if transparent else f"mg_{job.id}.mp4")
+
+    # Data-driven MG: expose the project's real beat grid (+ params.lyrics) to
+    # the page as window.kycha, so templates can sync to the actual music.
+    duration_sec = float(params.get("duration_sec", 3.0))
+    offset_sec = float(params.get("offset_sec", 0.0))   # MGをタイムラインのどこに置くか
+    lyrics = params.get("lyrics", "")
+    if not lyrics:
+        # Auto-fetch the song lyrics from the project's most recent music job.
+        try:
+            with Session(engine) as session:
+                audio_jobs = session.exec(
+                    select(Job)
+                    .where(Job.project_id == project_id)
+                    .where(Job.job_type == "generate_audio")
+                    .order_by(Job.id.desc())
+                ).all()
+            for aj in audio_jobs:
+                p = json.loads(aj.params) if isinstance(aj.params, str) else (aj.params or {})
+                if p.get("lyrics"):
+                    lyrics = p["lyrics"]
+                    break
+        except Exception as e:
+            log.warning(f"lyrics autofetch failed: {e}")
+    inject: dict = {
+        "duration": duration_sec, "offset": offset_sec,
+        "fps": float(params.get("fps", 30)),
+        "lyrics": lyrics,
+        "bpm": None, "beats": [], "downbeats": [],
+    }
+    try:
+        from app.services import command_api
+        with Session(engine) as session:
+            grid = command_api.get_beat_grid(project_id, session)
+        if "error" not in grid:
+            from app.models import Project as _P
+            with Session(engine) as session:
+                proj = session.get(_P, project_id)
+            pfps = proj.fps if proj else 30.0
+            # MGローカル秒 (offsetを引いてクリップ内時刻に変換)
+            beats = [round(b["frame"] / pfps - offset_sec, 4) for b in grid["beats"]]
+            downs = [round(f / pfps - offset_sec, 4) for f in grid["downbeat_frames"]]
+            inject.update({
+                "bpm": grid.get("bpm"),
+                "beats": [t for t in beats if -0.05 <= t <= duration_sec + 0.05],
+                "downbeats": [t for t in downs if -0.05 <= t <= duration_sec + 0.05],
+            })
+    except Exception as e:
+        log.warning(f"MG beat injection skipped: {e}")
+
+    await render_html_to_video(
+        html, out,
+        duration_sec=duration_sec,
+        fps=float(params.get("fps", 30)),
+        width=int(params.get("width", 1280)),
+        height=int(params.get("height", 720)),
+        transparent=transparent,
+        inject_data=inject,
+        progress_cb=lambda p: _update_progress(job.id, 0.05 + 0.9 * p),
+    )
+
+    asset_id = _register_asset(project_id, out, "generated", params)
+    _update_result_assets(job.id, [asset_id])
+    _update_progress(job.id, 1.0)
+    log.info(f"Motion graphics done → asset {asset_id}")
 
 
 async def _interpolate(job: Job, params: dict) -> None:
-    """⚠ 未復元。2026-08-21の事故で失われ、ログからも完全な形で復元できなかった。
-
-    ジョブ種別 "interpolate" はこの関数が実装されるまで使えない。
-    黙って失敗すると原因が分からなくなるので、明示的に失敗させる。
     """
-    raise RuntimeError(
-        "_interpolate は2026-08-21の編集事故で失われ、未復元です。"
-        "docs/incident-2026-08-21.md を参照してください。")
+    フレーム補間: 低fpsの生成動画(Wan等)を滑らかな高fpsへ。
+    まずは ffmpeg minterpolate(動き補償)。RIFE系への昇格パスは stem-kit venv(torch)
+    + Practical-RIFE を想定(tools/README参照)。
+    """
+    from app.services.ffmpeg_render import FFMPEG
+
+    with Session(engine) as session:
+        asset = session.get(Asset, params["asset_id"])
+        if not asset:
+            raise ValueError(f"Asset {params['asset_id']} not found")
+        src = Path(asset.file_path)
+        project_id = asset.project_id
+
+    fps = int(params.get("fps", 60))
+    dest_dir = GENERATED_DIR / str(project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    is_webm = src.suffix.lower() == ".webm"
+    out = dest_dir / f"{src.stem}_{fps}fps_{job.id}{'.webm' if is_webm else '.mp4'}"
+
+    vcodec = (["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "24", "-pix_fmt", "yuva420p"]
+              if is_webm else ["-c:v", "libx264", "-crf", "16", "-preset", "medium"])
+    cmd = [str(FFMPEG), "-y", "-i", str(src),
+           "-vf", f"minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1",
+           *vcodec, "-an", str(out)]
+    _update_progress(job.id, 0.1)
+    proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
+                                                stderr=asyncio.subprocess.STDOUT)
+    o, _ = await proc.communicate()
+    if proc.returncode != 0 or not out.exists():
+        raise RuntimeError(f"minterpolate failed:\n{o.decode(errors='replace')[-800:]}")
+    _update_progress(job.id, 0.95)
+    asset_id = _register_asset(project_id, out, "interpolate",
+                               {"src_asset_id": params["asset_id"], "fps": fps,
+                                "method": "minterpolate"})
+    _update_result_assets(job.id, [asset_id])
+
+

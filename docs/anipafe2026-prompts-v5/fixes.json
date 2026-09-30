@@ -1,0 +1,124 @@
+{
+ "U01": [
+  "C1 影の動きを可視チェックポイント2つで書く: `At 2.60 seconds the shadow's leading edge has crossed the centre of the disc. At 5.10 seconds it reaches the straight edge.`",
+  "C2『光に飲まれる』を物理で: 白い光の面が foreground plane を右から左へ横切って手を覆う(何か/大きさ/面/方向/ピンぼけの5点)。糸の緩みは `every thread sags into one slack curve` の1文。"
+ ],
+ "U02": [
+  "廻天ロゴの裏返りをチェックポイントで: `At 7.60 seconds the logo plane is edge-on, a single thin line. At 8.20 seconds only its black reverse side is visible.`",
+  "螺旋を物理で: `behind it a spiral of pale star-streaks turns clockwise; each streak is thicker than the logo's stroke`。"
+ ],
+ "U03": [
+  "C4 光の線を1文で: `a single hair-thin white line draws itself along the silhouette of the reaching arm from fingertip to shoulder within 0.4 seconds, then fades`。",
+  "C5『反転』は判別不能なので削り、代わりにガラス面の色を一段冷たくするだけにする。"
+ ],
+ "U04": [
+  "⚠参照を絞る: #2944(2人の全身・構図)を主参照にし、顔クロップ #3235/#3233 は渡さない(顔アップを招いた)。目の極アップ #3233 も外す。",
+  "冒頭文を全身俯瞰で固定: `Overhead view. Two girls lie on white water: the pink-haired girl on the left, the black-haired girl on the right, one body-width apart, their fingertips a hand's width apart at frame centre. Their whole bodies are in frame and keep the same size throughout.`",
+  "翼窓を物体で: `a wing-shaped outline, hair-thin and grey, is drawn on the water behind the black-haired girl; only inside that outline a black tide moves`。Push In 禁止(全身固定)。ショットは3つ以内。"
+ ],
+ "U05": [
+  "C8 色の持ち去りを物体で: `the violet and pink of her dress lift off her as thin flat sheets, one sheet per snare, and rise out of the top of the frame; what remains is grey except the red ribbon`。",
+  "C9 を1動作1弧で: `<Subject 1> draws the bow; the arrow leaves; the struck creature's outline dissolves into edgeless black that pools on the ground`。弓 <Picture 2>・魔獣 <Picture 3> に仕事を宣言する。",
+  "白飛び対策: 各ショット頭に `PALETTE: near-black, cold violet, one red` を置く。"
+ ],
+ "U06": [
+  "溢れ出しをチェックポイントで: `At 2.30 seconds the black tide crosses the wing outline at the wing tip and spreads onto the white water as three branching veins.`"
+ ],
+ "U07": [
+  "C12 瞳の反射を数値で: `inside the red iris a thin vertical white line, one fifth of the iris height, descends from top to centre`。",
+  "C13 届かない光を物理で: `the band of rose light stops a hand's width short of her outline and bends around it`。"
+ ],
+ "U08": [
+  "C17 同一直線を物理で: `the cliff's cut edge and the moon's straight edge form one continuous vertical line at frame centre; the moon sits directly above the cliff edge`。"
+ ],
+ "U09": [
+  "⚠画角を参照に合わせ、手から始める: Shot 1 = `her open hand fills the lower half of the frame`。シルエット窓は困難なので代替: `the gap between her fingers becomes one hard-edged black slit; inside the slit a field of pale carved stones is visible, each carving showing stars`。",
+  "3ショット構成(手→スリット→石の野へ Push In)にし、1ショット1弧。"
+ ],
+ "U10": [
+  "輪郭線を1人1文で: `a bright hairline traces the silhouette of <Subject 2> from head to foot within 0.5 seconds and stays lit`。人物ごとにスネア境界でショットを切る(群れ全体は Shot 1 で固定)。武器は輪郭の一部として `the outline runs along the sword` の1句だけ。"
+ ],
+ "U11": [
+  "C20 白い光: `a cold white glow rises out of the floor crack and lights her from below`。",
+  "C21 走る線: `a hairline crack races ahead of her feet along the road, faster than she runs`。",
+  "C22 窓の中身: `inside the vertical crack, one twentieth of the frame width, a black tide moves`。"
+ ],
+ "U12": [
+  "C23 反射のワスを1文+チェックポイントに: `the black water below reflects her face; at 2.88 seconds the reflection smiles while her own face does not`。",
+  "C24 断片パネルを物体で: `the ground around her feet breaks into flat rectangular slabs; one slab drops away per snare; each slab's edge catches a cold white highlight`。"
+ ],
+ "U13": [
+  "C25 光: `a vertical band of rose light lands on her shoulders from above and stops at her outline`。",
+  "C26 視差: `the upper light shrinks to a point at slow speed while the lower white field grows at fast speed`。"
+ ],
+ "U14": [
+  "C29 影: `a second, softer shadow lies across the gate's shadow, pointing in a different direction`。",
+  "C30 向き: `every creature faces the same direction, toward the left edge of the frame`。"
+ ],
+ "U15": [
+  "眼鏡の動作をチェックポイントで: `At 6.20 seconds <Subject 1> removes her glasses with her right hand. At 7.30 seconds she puts them back on.`",
+  "バストアップを明示: `both faces fill the upper half of the frame, chest-up`。"
+ ],
+ "U16": [
+  "接触: `<Subject 1>'s forepaw rests on the stone's carved surface`。",
+  "吸われる: `the starfield inside the carving dims from its edges inward until it is black at 4.30 seconds`。"
+ ],
+ "U17": [
+  "C35 影を物体で: `on the ground between the stones lies one shadow the shape of a standing girl with twin tails; nothing casts it; it is pure black with soft edges and holds no red`。",
+  "C36 石の暗転をチェックポイントで: `At 4.10 seconds the starfield inside the nearest stone goes black. At 5.30 seconds the next stone goes black.` 足元の砕けは1文。",
+  "C37 名が燃える画を3要素の物理で: `a thin thread of white light leaves the carving and travels to the red eye at the right edge; the carving is black behind it; black water seeps from the stone's base and spreads as branching veins`。",
+  "C38 沈む影: `two dark human-shaped shadows on the ground slide toward the stones and sink into the earth over 1.5 seconds` + {{SEEOFF}}。"
+ ],
+ "U18": [
+  "C39 黒い波を物理で: `a black tide with no hard edge spreads between the stones as branching veins, not ripples; it rises to her knees`。",
+  "C41 溶けるを部位順のチェックポイントで: `At 7.30 seconds <Subject 2>'s reaching hand has become loose black grains that fall into the tide. At 8.40 seconds her shoulders are gone. At 9.60 seconds only her face remains, then it too breaks into grains.` 質感は `dry black sand` などの実在物。"
+ ],
+ "U19": [
+  "上を見る動作を終端状態で: `her chin is raised; her face is turned straight up toward the top of the frame` を Shot 1 冒頭に既成事実で書く。",
+  "光を物体で: `a narrow column of rose-white light descends from the top edge and widens; at 4.20 seconds its lower end reaches her raised face`。波は `the black tide stands still at her waist; its surface is flat` で高さを固定。"
+ ],
+ "U20": [
+  "C44 糸の空間を明示: `one red thread enters from the top edge and one from the bottom edge; both are wound around her fingers and pulled taut in opposite directions`。"
+ ],
+ "U21": [
+  "C45 複数の影を物体で: `behind her, three flat shadows of her own head and shoulders stand on separate planes; each shadow's mouth opens and closes 0.2 seconds after hers`。",
+  "口の動きを指定: `her lips open one syllable wide on each word of <d>…</d> and close between words`。C46 涙: `two tears stand on her lower eyelids and do not fall`。"
+ ],
+ "U22": [
+  "C47 を人物なしで固定: Shot 1 冒頭 `The frame contains no people. A black tide fills it, its surface broken into flat rectangular panels, each panel a different shade of black, edges hard`。人物は C48 のショットまで出さない。",
+  "C48 の差異を数値で: `<Subject 1> stands one full step in front of the other four; her feet are nearer the camera`。"
+ ],
+ "U23": [
+  "C50 弓と指を寄りで: `close-up: her left hand holds the bow's grip; her right index finger touches the string`(1ショット1弧)。",
+  "C52 光の線を物体で: `as the string draws back, one straight line of white light, as thin as a hair, runs from the arrow tip to the right edge of the frame and splits the picture; the tear track on her cheek is a second thinner line`。",
+  "C53 鏡像対峙を2人だけに: `exactly two people face each other in profile at equal distance from the centre line; the left half of <Subject 1>'s body is missing its outline`。3人目は出さない。"
+ ],
+ "U24": [
+  "C54 顔の明示: `the witch's face is <Subject 1>'s face, lit from the front, the only lit face in the frame`。白黒反転は `At 2.00 seconds every value inverts: black becomes white, white becomes black, for the rest of the shot`。",
+  "C55 名を呼ぶ線を物体で: `a single straight line of white light crosses the black tide from left to right in 0.4 seconds; behind the line, one human silhouette at a time regains a hard bright outline and rises out of the top of the frame`。"
+ ],
+ "U25": [
+  "C56 一滴と窓: `one black drop falls from above and lands on the white water at frame centre; the circle where it landed turns grey and inside it the reflected sky moves at half speed`(同心円は使わず、面の色差で)。",
+  "C57 反射だけ割れる: `<Subject 2> stands whole; her reflection below the waterline is broken into shards with dark gaps; one new gap opens per snare; her body above the water shows no crack`。"
+ ],
+ "U26": [
+  "C58 降下を物体で: `the giant inverted figure sinks toward the bottom edge at slow speed; the black tide sinks with it; <Subject 2> stands small at the top edge, seen from behind`。",
+  "C59 赤い糸を実在物で: `Shot 2: one red thread, as thick as a finger, runs straight from the top edge to the bottom edge of the frame against black; nothing else is in the frame; the thread's twist tightens and its length between the two edges visibly grows`。参照 <Picture 3>(#2529) に `thread material only` の仕事を与える。"
+ ],
+ "U27": [
+  "二人分の視界を物体で: `the frame is split by a soft vertical seam at centre; the left half shows the gear teeth slightly higher than the right half, as if seen by two eyes`。",
+  "歯車と螺旋: `enormous dark iron gear teeth fill the foreground plane and turn slowly; through the gaps between teeth, a spiral of pale streaks turns counter-clockwise`。参照 <Picture 1> の歯車内部に `environment definition` の仕事を与える。"
+ ],
+ "U28": [
+  "C61 断片の密度を数値で: `six overlapping rectangular panels fill the frame; each holds one frozen moment of <Subject 1> falling; the panels slide past each other and smear into one another at their edges (datamosh)`。影絵率は `figures are flat black silhouettes on grey`。",
+  "C63 ほむらの顔の断片: `four panels each hold the same face — <Subject 4>'s face — at slightly different angles; the panels are separated by hard black gaps`。",
+  "C64 満月の一瞬をチェックポイントで: `At 7.20 seconds the moon is a complete white disc. At 8.90 seconds its right half is black again.`"
+ ],
+ "U29": [
+  "C65 石の中の宇宙が消えた状態を明示: `inside the carving there are no stars: the carved channel is matte black, and the red eye's reflection is the only light on the stone`。",
+  "C66 口形を3段で: `At 0.30 seconds her lips are rounded. At 1.20 seconds her lips are closed and pressed. At 2.10 seconds her mouth is open a finger's width. Nothing else in the frame moves.`"
+ ],
+ "U30": [
+  "(診断で未実現なし) v4本文をほぼ維持。影のチェックポイント2つを C1(U01)と逐語共有する。"
+ ]
+}

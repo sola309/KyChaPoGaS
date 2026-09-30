@@ -1,0 +1,27 @@
+subject_definitions: <Picture 1> (reference role: mirrored vertical relationship only, not a target frame and not a storyboard anchor) contributes the face-to-face geometry between a physical figure above and a reflected figure below. It controls neither framing, environment, timing nor identity. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. <Picture 3> (reference role: reflected-subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: Wasu, a separate person who shares <Subject 1>'s face. <Subject 2> exists only inside the black-water reflection.
+
+summary: <Subject 1> looks down through a hard-edged crack and briefly meets <Subject 2>'s smiling reflection. The viewpoint then cuts to <Subject 1>'s motionless feet as the exposed ground separates into falling depth panels, making the bottom recede after every release.
+
+retention_analysis: <Picture 1> is weak_reference for the mirrored vertical relationship only. <Picture 2> is fully_preserved for <Subject 1>'s identity and costume; its framing and background are released. <Picture 3> is fully_preserved for <Subject 2>'s identity inside the reflection only; its framing, body, costume presentation and background are released. <Subject 1> remains the physical figure above the crack. <Subject 2> remains an image confined beneath its hard border.
+
+detailed_description: {{TH:CITY}}
+STAGE: A near-black fractured platform hangs above an immeasurable vertical gulf. Cold violet light enters only from the far left. The crack forms a narrow hard-edged window through the floor. {{BLACK_WAVE}} moves far below and remains completely contained inside that window. The platform, <Subject 1>, falling slabs and distant bottom occupy separate depth planes.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. High oblique view behind <Subject 1>. A slow small-amplitude Push In follows her fixed downward gaze toward the crack. Her body remains still. The straight cut inherited from C22 extends beneath her feet and closes into a narrow crack-shaped mask. Inside it, black water reflects <Subject 1>'s face with the mirrored geometry of <Picture 1>. Outside the hard border, the floor stays opaque and near-black. At 00:02.590, the camera reaches its endpoint and stops.
+
+[Shot 2] At 00:02.880, hard cut while preserving the exact camera endpoint, crack position and physical pose. Static Shot. The reflected face switches sharply to <Subject 2>. Only the reflection forms a small smile. <Subject 1>'s unseen physical face supplies no answer. A sheet of borderless black water slides across the reflected face, covering it from below while remaining inside the crack. By 00:04.610, only featureless black water remains. The hard crack edge continues to catch one thin violet highlight.
+
+[Shot 3] At 00:04.920, hard cut to a fixed foot-level cross-section. Static Shot. <Subject 1>'s boots and long skirt occupy the sharp subject plane and retain identical screen position throughout. The exposed floor section divides into irregular editorial panels along the existing crack. At 00:05.043, the nearest panel peels downward, passes across the lower lens plane as a thick softly out-of-focus physical wipe, then reveals the same cut edge farther below. At 00:05.763, a second panel drops from the middle plane. Its rim catches violet light before falling into black. At 00:05.903, the remaining panels settle and LOCK. Each missing layer reveals another smaller cross-section beneath it, so the bottom becomes visibly deeper without moving the camera. At 00:06.773, the locked composition answers the dense impact with complete immobility.
+
+Z-ORDER LAW: near falling panel; <Subject 1>'s motionless feet; hard crack border; nested cross-section panels; contained black water; remote gulf. Foreground panels may cover the lens. Window contents stay behind <Subject 1> and inside their hard edges.
+
+DISTANCE LAW: A falling panel triggers a deeper nested section. Less visible ground creates more visible distance. <Subject 1> keeps the same scale and position while the bottom alone recedes.
+
+BEAT LAW: {{BEATLAW}} The snare at 2.88 triggers the reflected-identity cut. The internal boundary at 4.92 triggers the foot-level cross-section. The snares at 5.043 and 5.763 release separate panels. Later impacts preserve the final lock.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. Every floor and panel surface remains unmarked.
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: A low hollow gulf tone rises from beneath the platform. The black water makes one restrained surface shear as it covers the reflected face. Each stone panel releases with a dry fracture, scrapes past its neighbouring layer and falls with diminishing echoes that reveal increasing depth. The final locked hold carries only distant air and the fading lowest impact.
+
+non_diegetic_music: N/A

@@ -1,0 +1,33 @@
+Create a video from this image. Static Shot throughout.
+
+subject_definitions: <Picture 1> (reference role: subject definition and initial-state source only, not a target frame and not a storyboard anchor) defines <Subject 1>, the white-water material, the unanswered reaching pose, the empty human-shaped indentation, and the initial feather-wing geometry. It contributes those subjects and materials only. Editorial masks, depth order, the boundary breach, and the final state are controlled by the text.
+
+summary: On the white water, <Subject 1> reaches toward the human-shaped indentation left by the vanished counterpart. A hard-edged wing window darkens feather by feather. The black wave inside finally crosses its outline and spreads across the outer water as branching fluid.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s identity, body proportions, clothing, hand pose, and relationship to the empty indentation. The water material and fixed high-overhead camera geometry are fully_preserved. The wing is partially_preserved: its position and feather geometry remain recognizable while its cells become opaque masks. The black interior changes from contained current to unbounded branching fluid. The source image is not used as a final-frame target.
+
+detailed_description: {{TH:WATER}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. A Static Shot holds the same fixed high-overhead view for the entire 5.21 seconds. <Subject 1> remains beside a broad field of white water. Her open hand reaches toward a shallow human-shaped indentation. Pale water and a small dry hollow occupy that indentation. Her body, hand, and indentation retain the same screen size and position throughout.
+
+Behind <Subject 1>, a closed wing-shaped window occupies the middle depth plane. Its perimeter is one precise hard line. At first, {{BLACK_WAVE}} moves only inside the wing-shaped mask. The outer water remains pale. Each feather cell draws its own hard contour from root to tip, fills with black, slides a few pixels outward, settles, and LOCKS. At 00:00.572, the first feather cell becomes an opaque plane. At 00:01.152, the second cell locks beside it. Narrow cold-white highlights travel only along the newly completed edges.
+
+At 00:02.302, the fifth feather locks. Pressure folds the black current against the wing root. The contour holds it for one last interval. At 00:03.452, the eighth feather locks and the first breach opens between two feather tips. {{BLACK_WAVE}} passes through that opening. Outside the window it loses every enclosing edge and divides into thin branching streams across the water. Each branch advances by contact with the surface. Its forks replace circular ripples with irregular fluid paths.
+
+At 00:04.322, the tenth feather materializes in the nearest plane. It is wider than <Subject 1>'s torso, softly out of focus, and crosses the lens from left to right. Its physical passage performs a full-frame wipe. Behind it, the wing is nearly black and the escaped fluid covers separated patches of the outer water. The subject plane remains in front of the wing masks. The indentation stays readable as an absence.
+
+At 00:05.182, the eleventh feather locks. The breach widens once. One final branch reaches beyond the wing’s former boundary. All panels stop in their assigned positions. The last image holds the reaching figure, the empty indentation, the dark wing, and the borderless black spill.
+
+Z-ORDER LAW: nearest-plane wiping feather; subject-plane <Subject 1>; middle-plane feather masks and wing window; background-plane white water, indentation, and branching spill. The wing stays behind <Subject 1>. The spilled wave travels on the water behind her body.
+
+WINDOW LAW: the wing begins as a closed silhouette window. Its hard contour contains {{BLACK_WAVE}} until the first breach. The content crossing that contour is the irreversible state change.
+
+MASK LAW: every feather is an independent hard-edged mask panel. Each panel appears, slides, settles, and LOCKS. The black wave outside the wing has fluid forks and carries no enclosing outline.
+
+BEAT LAW: {{BEATLAW}} Each snare materializes exactly one feather cell and locks it into opacity. Each kick makes one branch tip contact the water and divide. Each cymbal sends one brief cold-white glint along completed mask edges. The visual action anticipates each contact, lands on the transient, and immediately follows through.
+
+HOLD LAW: the camera, <Subject 1>, the reaching hand, the white water, and the human-shaped indentation remain precisely held. Transformation belongs to the wing masks and {{BLACK_WAVE}}.
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: Quiet close water laps surround the fixed view. Every feather cell arrives with a dry paper flex and a small mechanical lock. Branch tips touch the water with soft wet taps and separate with faint fibrous tearing. The foreground feather produces one close passing rush. The final lock leaves distant water and a fading paper creak.
+
+non_diegetic_music: N/A

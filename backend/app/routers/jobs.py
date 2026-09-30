@@ -40,11 +40,16 @@ def _to_read(job: Job, slim: bool = False) -> JobRead:
 
 
 @router.get("/", response_model=list[JobRead])
-def list_jobs(project_id: int, session: Session = Depends(get_session)):
-    jobs = session.exec(
-        select(Job).where(Job.project_id == project_id).order_by(Job.created_at.desc())
-    ).all()
-    return [_to_read(j, slim=True) for j in jobs]
+def list_jobs(project_id: int, limit: int | None = None, offset: int = 0,
+              session: Session = Depends(get_session)):
+    """新しい順。limit省略時は全件(スクリプト互換)。UIやLLMは limit を付けて呼ぶこと
+    (project29で2669件/1.7MB になる)。"""
+    q = select(Job).where(Job.project_id == project_id).order_by(Job.created_at.desc(), Job.id.desc())
+    if offset:
+        q = q.offset(offset)
+    if limit is not None:
+        q = q.limit(max(1, limit))
+    return [_to_read(j, slim=True) for j in session.exec(q).all()]
 
 
 @router.post("/", response_model=JobRead, status_code=201)
@@ -112,6 +117,49 @@ def list_renders(project_id: int, session: Session = Depends(get_session)):
             "download_url": f"/api/jobs/{j.id}/download",
         })
     return rows
+
+
+def _upload_dir(project_id: int):
+    """投稿用ファイル(YouTube/ニコニコ向けに書き出し直したもの)の置き場所。"""
+    return export_path(project_id, 0).parent / "upload"
+
+
+@router.get("/uploads")
+def list_uploads(project_id: int):
+    """投稿用ファイルの一覧。exports/<project>/upload/ に置いた mp4 を新しい順で返す。"""
+    import subprocess
+    d = _upload_dir(project_id)
+    if not d.is_dir():
+        return []
+    rows = []
+    for f in sorted(d.glob("*.mp4"), key=lambda x: x.stat().st_mtime, reverse=True):
+        info = {}
+        try:
+            out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0",
+                                  "-show_entries", "stream=width,height,r_frame_rate:format=duration,bit_rate",
+                                  "-of", "json", str(f)], capture_output=True, text=True, timeout=10).stdout
+            j = json.loads(out or "{}")
+            st = (j.get("streams") or [{}])[0]
+            fm = j.get("format") or {}
+            info = {"width": st.get("width"), "height": st.get("height"),
+                    "duration_sec": float(fm["duration"]) if fm.get("duration") else None,
+                    "bitrate_mbps": round(int(fm["bit_rate"]) / 1e6, 1) if fm.get("bit_rate") else None}
+        except Exception:
+            pass
+        rows.append({"filename": f.name, "size_bytes": f.stat().st_size,
+                     "modified_at": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+                     "download_url": f"/api/jobs/uploads/{project_id}/{f.name}", **info})
+    return rows
+
+
+@router.get("/uploads/{project_id}/{name}")
+def download_upload(project_id: int, name: str):
+    d = _upload_dir(project_id).resolve()
+    p = (d / name).resolve()
+    if p.parent != d or p.suffix.lower() != ".mp4" or not p.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    return FileResponse(p, media_type="video/mp4",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @router.delete("/renders/{job_id}", status_code=204)
@@ -216,10 +264,31 @@ async def stream_jobs(project_id: int, request: Request):
     """
     async def generator():
         last_payload = ""
+        last_fp: tuple = ()
         beat = 0
         while not await request.is_disconnected():
+            beat += 1
             # New session per poll (thread-safe for SQLite)
             with Session(engine) as session:
+                # 変化検知: 軽い列だけ読んで指紋を作り、変わっていなければ
+                # 全件のJSON直列化(タブごと2秒毎)を丸ごと省く。
+                fp_active = session.exec(
+                    select(Job.id, Job.status, Job.progress, Job.phase, Job.error_msg)
+                    .where(Job.project_id == project_id)
+                    .where(Job.status.in_(("running", "pending")))
+                ).all()
+                fp_recent = session.exec(
+                    select(Job.id, Job.status, Job.completed_at)
+                    .where(Job.project_id == project_id)
+                    .order_by(Job.created_at.desc()).limit(50)
+                ).all()
+                fp = (tuple(fp_active), tuple(fp_recent))
+                if fp == last_fp and last_payload:
+                    if beat % 8 == 0:
+                        yield f"data: {last_payload}\n\n"
+                    await asyncio.sleep(2)
+                    continue
+                last_fp = fp
                 # 実行中・待機中は件数を切らずに必ず全部送る。
                 # (直近50件だけを送ると、キューが長いときに古い実行中ジョブが
                 #  枠外に落ちてUIの進捗が止まって見える)
@@ -252,7 +321,6 @@ async def stream_jobs(project_id: int, request: Request):
                     rows.append(d)
                 payload = json.dumps(rows, default=str)
             # 変化があった時だけ送信(接続維持のため15秒ごとにハートビート)
-            beat += 1
             if payload != last_payload or beat % 8 == 0:
                 last_payload = payload
                 yield f"data: {payload}\n\n"

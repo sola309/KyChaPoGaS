@@ -1,21 +1,28 @@
 import { JobProgressPill } from './components/JobProgressPill'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ProjectView } from './pages/ProjectView'
-import { TerminalPanel } from './components/Terminal/TerminalPanel'
 import { GpuStatusBar } from './components/GpuStatusBar'
 import { CollabToasts } from './components/CollabToasts'
 import { MobileNotice } from './components/MobileNotice'
 import { BrandLogo } from './components/BrandLogo'
-import { CompanionView } from './companion/CompanionView'
 import { SettingsModal } from './components/SettingsModal'
 import { InspectOverlay } from './components/InspectOverlay'
-import { MusicStudio } from './components/Music/MusicStudio'
-import { CompositionStudio } from './components/Composition/CompositionStudio'
-import { AiModeView } from './components/AiMode/AiModeView'
-import { PuppetStudioView } from './components/PuppetStudio/PuppetStudioView'
-import { LoraLab } from './components/Lora/LoraLab'
 import { useUIStore } from './store/uiStore'
+
+// 編集以外の画面は開いた時に読み込む(コード分割)。既定の編集画面が最初に必要とするJSから
+// pixi.js(コンパニオン)や xterm(ターミナル)を外し、初期ロードを軽くする。
+const TerminalPanel     = lazy(() => import('./components/Terminal/TerminalPanel').then(m => ({ default: m.TerminalPanel })))
+const CompanionView     = lazy(() => import('./companion/CompanionView').then(m => ({ default: m.CompanionView })))
+const MusicStudio       = lazy(() => import('./components/Music/MusicStudio').then(m => ({ default: m.MusicStudio })))
+const CompositionStudio = lazy(() => import('./components/Composition/CompositionStudio').then(m => ({ default: m.CompositionStudio })))
+const AiModeView        = lazy(() => import('./components/AiMode/AiModeView').then(m => ({ default: m.AiModeView })))
+const PuppetStudioView  = lazy(() => import('./components/PuppetStudio/PuppetStudioView').then(m => ({ default: m.PuppetStudioView })))
+const LoraLab           = lazy(() => import('./components/Lora/LoraLab').then(m => ({ default: m.LoraLab })))
+
+const AppFallback = () => (
+  <div className="flex flex-1 items-center justify-center text-xs text-zinc-500">読み込み中…</div>
+)
 
 const MIN_TERM_H  = 160
 const MAX_TERM_H  = 600
@@ -183,6 +190,7 @@ function App() {
       </div>
 
       {/* Main area — the active app */}
+      <Suspense fallback={<AppFallback />}>
       {activeApp === 'companion' ? (
         <div className="flex flex-1 min-h-0">
           <CompanionView />
@@ -214,6 +222,7 @@ function App() {
           <ProjectView />
         </div>
       )}
+      </Suspense>
 
       {/* Bottom terminal drawer */}
       {termOpen && termEnabled && (
@@ -250,7 +259,7 @@ function App() {
 
             {/* xterm.js mount point */}
             <div className="flex-1 min-h-0">
-              <TerminalPanel visible={termOpen} />
+              <Suspense fallback={null}><TerminalPanel visible={termOpen} /></Suspense>
             </div>
           </div>
         </>

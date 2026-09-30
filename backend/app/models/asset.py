@@ -4,7 +4,7 @@ from sqlmodel import SQLModel, Field
 
 
 class AssetBase(SQLModel):
-    project_id: int = Field(foreign_key="project.id")
+    project_id: int = Field(foreign_key="project.id", index=True)
     name: str
     asset_type: str  # video | audio | image | generated
     file_path: str
@@ -18,7 +18,7 @@ class AssetBase(SQLModel):
     # 「同条件で再生成」「条件を変えて再生成」の根拠になる。インポート時も保持される。
     gen_params_json: str = ""
     # ⭐スター: 全プロジェクトのアセットパネルに共有表示される(キャラ設定画などの横断素材用)
-    starred: bool = False
+    starred: bool = Field(default=False, index=True)
 
 
 class Asset(AssetBase, table=True):

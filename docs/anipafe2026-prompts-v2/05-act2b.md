@@ -42,7 +42,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U20 — C27+C28+C29 日常三連 (Ref2VA / 生成175f / 実尺6.91s / 3ショット / 境界2.29s, 4.62s)
+## U20 — C27+C28+C29+C30 日常三連→魔獣の異変 (Ref2VA / 生成243f / 実尺9.46s / 融合4カット)
+
+参照: <Picture 1> #3048 / <Picture 2> #953 / <Picture 3> #956 / <Picture 4> #954 / <Picture 5> #955 / <Picture 6> #2911 / <Picture 7> #3045 / <Picture 8> #2946 / <Picture 9> #2947
+⚠ U20+U21 を融合(apply_merges.py)。音声=inst。融合前は _superseded/。
+
+```
+(本文は v3/U20.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> #3048 河川敷 / <Picture 2> #3042 公園 / <Picture 3> #3044 校門 (各bg) /
 <Picture 4-8> #953 #956 #954 #955 #2911 (identity)
@@ -85,7 +92,7 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U21 — C30 魔獣の異変 (Ref2VA / 生成124f / 実尺2.58s / 2ショット / ス6 / 人物なし)
+## U21old — C30 魔獣の異変 (Ref2VA / 生成124f / 実尺2.58s / 2ショット / ス6 / 人物なし) 〔U20へ融合により停止〕
 
 参照(理想): <Picture 1> #3045 裏路地bg / <Picture 2> #2946 魔獣 / <Picture 3> #2947 設定資料(枠禁止)
 MG: リミテッド平塗り(style_study #3142の系)=生気の欠如。一斉回頭はスネアで一発
@@ -210,7 +217,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U24 — C35 進行する亀裂 (Ref2VA / 生成124f / 実尺3.42s / 1ショット / ス1 / 人物なし)
+## U24 — C35+C36+C37+C38 進行する亀裂→職務 → 見送り → 来ない光 (Ref2VA / 生成345f / 実尺13.79s / 融合4カット)
+
+参照: <Picture 1> #3002 / <Picture 2> #947 / <Picture 3> #957 / <Picture 4> #2946
+⚠ U24+U25 を融合(apply_merges.py)。音声=inst。融合前は _superseded/。
+
+```
+(本文は v3/U24.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> #3002 M-2半月亀裂 (subject definition・空と雲を保持) 
 MG: 静のインサート。唯一のスネア(2.553s)で亀裂が一段進む

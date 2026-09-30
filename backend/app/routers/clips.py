@@ -56,6 +56,10 @@ def _clamp_duration_to_cut(session, clip: Clip, start: int, dur: int) -> int:
     カット1個分へ一律に切ってはいけない。
     """
     from app.models import Track
+    # フィルターレイヤー(単色/ぼかし)は素材の尺スナップと無関係。カット境界で切らない
+    # (暗転やぼかしは複数カットにまたがって掛けるのが普通)。
+    if (getattr(clip, "kind", "") or "") in ("solid", "blur"):
+        return dur
     track = session.get(Track, clip.track_id)
     if not track or track.track_type != "video":
         return dur
@@ -74,7 +78,22 @@ def _clamp_duration_to_cut(session, clip: Clip, start: int, dur: int) -> int:
     for e in ends:
         if e >= start and (e - start + 1) <= dur:
             best = e
-    return (best - start + 1) if best is not None else dur
+    clamped = (best - start + 1) if best is not None else dur
+    # 同一レイヤーの重なり遷移(2026-09-20): 次クリップが遷移(transition_in)を持つ場合、
+    # その重なり分(next.start + transition_frames)まではカット境界を越えて伸ばしてよい。
+    nxt = session.exec(
+        select(Clip).where(Clip.track_id == clip.track_id, Clip.start_frame > start,
+                           Clip.asset_id.is_not(None), Clip.id != clip.id)
+        .order_by(Clip.start_frame)
+    ).first()
+    if nxt is not None and (nxt.transition_in or "") and (nxt.transition_frames or 0) > 0:
+        allowed = nxt.start_frame - start + int(nxt.transition_frames)
+        clamped = max(clamped, min(dur, allowed))
+    # 連続配置(継続延長など): 直後に別クリップが隙間なく続く場合は、カットを完全に
+    # 覆えなくても切らない(残りはそのクリップが埋める)。
+    if nxt is not None and nxt.start_frame <= start + dur:
+        clamped = max(clamped, dur)
+    return clamped
 
 
 @router.patch("/{clip_id}", response_model=ClipRead)

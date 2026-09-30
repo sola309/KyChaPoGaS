@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { assetsApi, type Track, type Clip, type Asset } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
@@ -21,7 +21,7 @@ interface Props {
   selectedClipId: number | null
   onSelectClip: (id: number) => void
   onDropAsset: (trackId: number, assetId: number, startFrame: number) => void
-  snapFrame?: (frame: number) => number
+  snapFrame?: (frame: number, excludeClipId?: number) => number
 }
 
 export function TrackLane({
@@ -35,6 +35,44 @@ export function TrackLane({
   const setTrackHidden = useTimelineStore(s => s.setTrackHidden)
   const reorderTrack = useTimelineStore(s => s.reorderTrack)
   const addClip = useTimelineStore(s => s.addClip)
+  const updateClip = useTimelineStore(s => s.updateClip)
+  // 同一レイヤー内の重なり(=遷移区間)。映像トラックのみ。前クリップの終端が
+  // 自クリップの開始より後なら overlapIn、次クリップの開始が自クリップの終端より前なら overlapOut。
+  const isVideoTrack = track.track_type === 'video'
+  const overlaps = (() => {
+    const m = new Map<number, { in: number; out: number }>()
+    if (!isVideoTrack) return m
+    const vs = clips.filter(c => c.asset_id != null).sort((a, b) => a.start_frame - b.start_frame)
+    for (let i = 0; i < vs.length; i++) {
+      const c = vs[i]
+      let oin = 0, oout = 0
+      for (let j = 0; j < i; j++) {
+        const p = vs[j]; const pend = p.start_frame + p.duration_frames
+        if (pend > c.start_frame) oin = Math.max(oin, Math.min(pend, c.start_frame + c.duration_frames) - c.start_frame)
+      }
+      for (let j = i + 1; j < vs.length; j++) {
+        const n = vs[j]; const cend = c.start_frame + c.duration_frames
+        if (n.start_frame < cend) oout = Math.max(oout, Math.min(cend, n.start_frame + n.duration_frames) - n.start_frame)
+      }
+      m.set(c.id, { in: oin, out: oout })
+    }
+    return m
+  })()
+  // 重なりが出来たら遷移フレーム数を自動で同期(種別が未設定なら cross)。
+  const syncedRef = useRef<string>('')
+  useEffect(() => {
+    if (!isVideoTrack) return
+    const key = [...overlaps.entries()].map(([id, o]) => `${id}:${o.in}`).join(',')
+    if (key === syncedRef.current) return
+    syncedRef.current = key
+    for (const c of clips) {
+      const o = overlaps.get(c.id); if (!o) continue
+      if (o.in > 0 && (c.transition_in === '' || c.transition_frames !== o.in)) {
+        void updateClip(c.id, { transition_in: c.transition_in || 'cross', transition_frames: o.in })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips, isVideoTrack])
   const clipBuffered = useTimelineStore(s => s.clipBuffered)
   const clipBufferedHQ = useTimelineStore(s => s.clipBufferedHQ)
   const others = useCollabStore(s => s.others)
@@ -232,6 +270,8 @@ export function TrackLane({
                 clip={clip}
                 asset={asset}
                 trackName={track.name}
+                overlapIn={overlaps.get(clip.id)?.in ?? 0}
+                overlapOut={overlaps.get(clip.id)?.out ?? 0}
                 pixelsPerFrame={pixelsPerFrame}
                 trackHeight={height}
                 selected={selectedClipId === clip.id}

@@ -1,0 +1,34 @@
+Create a video from this image. Static Shot throughout.
+
+subject_definitions: <Picture 1> (reference role: initial-state subject and material definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, the white-water surface, the unanswered human-shaped indentation, and the initial feather-wing geometry. It contributes these existing subjects, their relative scale, and their starting arrangement only. <Subject 2> is the feather-wing outline from <Picture 1>. <Subject 3> is {{BLACK_WAVE}}.
+
+summary: One person remains beside an empty human-shaped indentation on white water. The black current inside a wing-shaped window crosses its hard outline, branches across the water, and turns the promise’s protected boundary into a spreading breach.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s identity, body proportions, clothing, pose, extended hand, and scale. The white-water material and unanswered indentation are fully_preserved. <Subject 2> is partially_preserved: its placement and feather geometry remain recognizable while its pale outline darkens and becomes a layered mask. The framing, depth order, overflow, branching veins, feather materialization, and final composition are controlled by the text.
+
+detailed_description: {{TH:WATER}}
+
+[Shot 1] A fixed high overhead view already shows <Subject 1> lying diagonally across a broad white water plane. Her extended hand occupies the lower centre, while a shallow human-shaped indentation lies opposite it. Behind her, <Subject 2> spans the upper-left middle plane as a closed hard-edged wing-shaped mask with <Subject 3> moving inside it. The frame contains exactly one person. The empty indentation contains pale water and a hand-sized dry hollow at the point where two hands should have met. Its edges stay shallow enough to read as the immediate absence of a body rather than a second figure.
+
+The wing-shaped mask sits behind <Subject 1>'s torso and hand. Its rim is a narrow solid line that catches one cold-white specular edge. Inside the rim, <Subject 3> advances from the wing root toward the feather tips as a borderless black fluid. The flow branches inside individual feather cells, but every branch initially ends against the hard mask edge. Each feather cell appears as a flat dark panel in the middle depth plane, slides less than one hand-width toward its assigned tip, settles flush with the wing geometry, and LOCKS.
+
+At 1.152 seconds <Subject 3> fills most of the closed wing area, while the outer water remains a broad white plane. The current presses against one upper feather tip until that short section of the rim bends outward by one fifth of the feather width. <Subject 1>'s reaching hand and the empty indentation retain their original screen sizes. At 2.30 seconds the black tide crosses the wing outline at the wing tip and spreads onto the white water as three branching veins. The three veins have unequal lengths and fork like spilled ink following shallow channels rather than forming circular ripples.
+
+[Shot 2] At 00:02.592, hard cut to the same fixed overhead viewpoint after the first breach. Three black veins now lie outside <Subject 2> and extend across the white water behind <Subject 1>. The unanswered indentation remains isolated in a pale gap between two branches. The exposed fluid advances from the wing tip in one continuous outward action. Its leading edges have no enclosing rim, while the wing cells behind them retain hard feather-shaped borders. The contrast between those two edges makes the broken boundary immediately visible.
+
+Each new feather appears first as a hard-edged mask in the middle plane. It slides outward from the breached tip, settles above one black branch, and LOCKS as an opaque physical feather. A narrow cold-white specular line travels once along its upper edge and then stops. At 3.452 seconds the longest vein has reached a point one hand-width short of the empty indentation, while the other two turn away from it and divide again. The pale hollow stays untouched, preserving only the shape of the missing person.
+
+One final black feather, wider than <Subject 1>'s torso, passes from left to right across the lens at very close range in the nearest foreground plane, thick and softly out of focus. It covers the whole frame for an instant as a physical wipe. When it clears, <Subject 2> is a dense dark wing behind <Subject 1>, and the three exterior veins remain spread across the white surface. The final feather settles near the lower-right edge and LOCKS. All motion decelerates, then the last 0.70 seconds hold one still arrangement: one reaching person, one empty indentation, one dark wing, and three branching traces beyond its outline.
+
+WINDOW LAW: Contact between <Subject 3> and the upper wing tip triggers the first breach. The contained black area becomes three borderless exterior branches.
+
+Z-ORDER LAW: nearest-plane wipe feather; subject-plane <Subject 1>; middle-plane wing masks and locked feathers; background white water, branching fluid, and empty indentation. The wing remains behind <Subject 1>, and its specular rim stays visible around her silhouette.
+
+BEAT LAW: Each snare triggers one feather cell changing from a flat mask into one opaque feather. Each kick lands as one dry feather contact, while each cymbal releases one brief cold-white glint from a visible hard edge.
+
+Every visible surface is an unmarked field of water, feather, skin, or cloth.
+{{LENS}} {{FOCUS}} {{ST2}}
+
+overall_soundscape: Quiet water laps remain wide and distant. Each feather panel produces a dry paper flex, a short sliding scrape, and one restrained locking click from its visible position. The foreground feather makes a close cloth-like rush across the lens, followed by brittle taps as the final feathers meet the water. The held ending carries only faint water and one fading feather creak.
+
+non_diegetic_music: N/A

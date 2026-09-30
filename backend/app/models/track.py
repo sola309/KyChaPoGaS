@@ -3,7 +3,7 @@ from sqlmodel import SQLModel, Field
 
 
 class TrackBase(SQLModel):
-    project_id: int = Field(foreign_key="project.id")
+    project_id: int = Field(foreign_key="project.id", index=True)
     name: str
     track_type: str  # video | audio | reference
     order: int = 0

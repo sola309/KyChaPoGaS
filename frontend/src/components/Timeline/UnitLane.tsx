@@ -56,7 +56,13 @@ export interface UnitInfo {
 
 export const unitOfPin = (pin: Clip | undefined): UnitInfo | null => {
   if (!pin?.attrs_json) return null
-  try { return (JSON.parse(pin.attrs_json).unit as UnitInfo) ?? null } catch { return null }
+  try {
+    const u = JSON.parse(pin.attrs_json).unit
+    // 文字列や欠損フィールドの unit で UnitLane 全体が落ちないように正規化する(2026-09-07 の事故: unit:"U08")
+    if (!u || typeof u !== 'object' || typeof u.id !== 'string') return null
+    return { mode: 'Ref2VA', frames: 0, title: '', ...u,
+             cuts: Array.isArray(u.cuts) ? u.cuts : [], refs: Array.isArray(u.refs) ? u.refs : [] } as UnitInfo
+  } catch { return null }
 }
 
 const attrOf = (pin: Clip | undefined, key: string): string => {

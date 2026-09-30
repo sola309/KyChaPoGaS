@@ -1,3 +1,6 @@
+# ⚠ 2026-09-04: 本書は v1(公開前の予想)のカット設計。ストーリーv2以降のカット意図は **ピン attrs → `anipafe2026-cut-packets.json` の intent** が正で、物語は `anipafe2026-story.md`(v2)。
+# 音源由来のカット境界・打点表・幕の構造的事実(尺・スネア数・無音区間)は v2 でも変わらないので、その部分だけ参照する。
+
 # AniPAFE2026 カット設計（幕ごとに確定していく）
 
 前提: `anipafe2026-story.md`(物語) / `anipafe2026-direction-principles.md`(演出4原則) /

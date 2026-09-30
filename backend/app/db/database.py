@@ -1,5 +1,6 @@
 import logging
 
+from sqlalchemy import event
 from sqlmodel import SQLModel, create_engine, Session, text
 from pathlib import Path
 
@@ -8,7 +9,34 @@ log = logging.getLogger("db")
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "kychapogas.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
+# timeout: 書き込みロック待ち(ジョブランナーの進捗更新と一覧取得が競合する)
+engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, connect_args={"timeout": 30})
+
+
+@event.listens_for(engine, "connect")
+def _sqlite_pragmas(dbapi_conn, _record) -> None:
+    # WAL: 書き込み中も読み取りをブロックしない(既定のdeleteモードは進捗更新のたびに
+    # 全リーダーが待たされる)。synchronous=NORMAL はWALでは安全かつ高速。
+    cur = dbapi_conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL")
+    cur.execute("PRAGMA synchronous=NORMAL")
+    cur.execute("PRAGMA busy_timeout=5000")
+    cur.close()
+
+
+# 絞り込み列の索引。SQLModelのforeign_keyは索引を作らないため明示する。
+# 既存DBには create_all が索引を足さないので _migrate でも IF NOT EXISTS で作る。
+INDEXES = [
+    ("ix_asset_project_id",  "asset", "project_id"),
+    ("ix_asset_starred",     "asset", "starred"),
+    ("ix_job_project_id",    "job",   "project_id"),
+    ("ix_job_status",        "job",   "status"),
+    ("ix_job_created_at",    "job",   "created_at"),
+    ("ix_job_project_created", "job", "project_id, created_at"),
+    ("ix_clip_track_id",     "clip",  "track_id"),
+    ("ix_clip_asset_id",     "clip",  "asset_id"),
+    ("ix_track_project_id",  "track", "project_id"),
+]
 
 
 def _migrate(conn) -> None:
@@ -48,6 +76,10 @@ def _migrate(conn) -> None:
         if "speed_ease" not in clip_cols:
             conn.execute(text("ALTER TABLE clip ADD COLUMN speed_ease VARCHAR DEFAULT 'linear'"))
             log.info("Migration: added clip.speed_ease")
+        if "transition_ease" not in clip_cols:
+            conn.execute(text("ALTER TABLE clip ADD COLUMN transition_ease VARCHAR DEFAULT 'linear'"))
+            conn.execute(text("ALTER TABLE clip ADD COLUMN transition_hold FLOAT DEFAULT 0.5"))
+            log.info("Migration: added clip.transition_ease/transition_hold")
 
     # ── Track hidden (表示/非表示) ─────────────────────────────────────────
     if "track" in tables and "hidden" not in columns("track"):
@@ -101,6 +133,11 @@ def _migrate(conn) -> None:
             if col not in clip_cols:
                 conn.execute(text(ddl))
                 log.info(f"Migration: added clip.{col}")
+
+    # ── 索引(冪等) ────────────────────────────────────────────────────────
+    for name, table, cols in INDEXES:
+        if table in tables:
+            conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({cols})"))
 
 
 def create_db_and_tables() -> None:

@@ -1,0 +1,26 @@
+subject_definitions: <Picture 1> (reference role: subject and water-surface definition only, not a target frame and not a storyboard anchor) contributes the identity of <Subject 1>, earliest-loop human Homura in school uniform, with her braided human state exactly as shown. <Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) contributes the identity of <Subject 2>, human Madoka in school uniform. <Picture 3> (reference role: reflection-behavior definition only, not a target frame and not a storyboard anchor) contributes irregular fracture topology and separated reflection panels exclusively to <Subject 2>'s reflected image. <Subject 1> and <Subject 2> remain separate people. Never merge the characters. Never exchange their hair, eyes, clothing, accessories, or facial features.
+
+summary: One unexplained black drop turns only its contact area into a hard-edged window showing elapsed happiness. On the same white water, <Subject 2> remains physically whole while successive fractures divide only her reflected image.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity and braided human schoolgirl state; weak_reference for the white-water material. <Picture 2> fully_preserved for <Subject 2>'s identity and human schoolgirl state. <Picture 3> partially_preserved only for fracture topology, displaced reflected panels, and reflection-plane separation. The text controls posture, framing, masks, panel positions, Z-order, timing, and the unbroken physical layers. Each reference defines its assigned subject or behavior rather than composition.
+
+detailed_description: {{TH:WATER}}
+STAGE: Endless white water forms the far plane. A sealed time-window lies immediately beneath its surface. The reflection plane lies deeper and behind both physical figures. <Subject 1> occupies the left subject plane in Shot 1. <Subject 2> occupies the right subject plane in Shot 2. A near-lens light trace forms the foremost transition plane. Both shots use a fixed frontal Static Shot. Subject size remains constant.
+
+[Shot 1] The luminous arrow trace left by the preceding image crosses the lens at extremely close range. It is broader than <Subject 1>'s body and softly out of focus. Its white field covers the frame, then becomes the water surface. <Subject 1> is already seated alone, facing away. Her braid, uniformed shoulders, hands, and uninterrupted human back contour remain visible. Empty water surrounds her. Her face stays outside the camera’s view. One opaque black drop descends from above the frame. At 00:00.862, it strikes beside her hand. The touched area changes time. A thin, hard contour branches outward in unequal angular lobes. At 00:01.432, the contour closes and locks, creating a bounded window behind <Subject 1>. Inside it, two distant hand shadows repeat the earlier reaching gesture at a slower rate and stop apart. The image remains sealed inside the contour. At 00:02.012, one branch straightens and travels toward screen-right. Its pale edge fills the lens as a physical mask.
+
+[Shot 2] At 00:02.290, hard cut through the matching white mask. The same water continues. <Subject 2> stands several steps away on the right, seen from behind with her head inclined. Her body occupies the sharp foreground subject layer. Its contour remains continuous. Her reflection occupies a separate masked plane beneath the intact surface. At 00:02.600, the first snare draws one fracture through that reflection. At 00:03.020, a second line creates an offset panel. At 00:03.170, a third line divides another reflected fragment. Each enclosed panel slides once, settles, and locks. Kicks lower selected panels by one small fixed step. Cymbals expose narrow pale seams between them. At 00:04.320, the final snare draws one straight downward fracture. The physical figure and upper water remain one uninterrupted layer. The broken reflection holds through 00:04.620.
+
+TIME-WINDOW LAW: The black drop creates one irregular bounded area with a hard contour. Only the enclosed area occupies the earlier time. Its contents remain behind <Subject 1> and stay inside the boundary.
+
+REFLECTION-INVERSION LAW: Damage exists exclusively inside <Subject 2>'s reflection mask. The physical subject and water surface retain continuous contours. Every displaced panel completes one movement, settles, and locks.
+
+BEAT LAW: {{BEATLAW}} In Shot 1, kicks lengthen boundary branches and cymbals light their hard edges. In Shot 2, every snare adds one reflection fracture. Kicks displace reflection panels. Cymbals expose the seams.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing, or watermark. All surfaces remain unmarked.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: Sparse open-water ambience. The visible drop produces one close liquid tap. Branching contour growth produces restrained surface-tension creaks. Each reflected panel moves with a short glass-on-water scrape and ends with a dry locking click. Pale seams answer with brief brittle ticks. The opening light trace carries one soft passing rush.
+
+non_diegetic_music: N/A

@@ -94,3 +94,9 @@ tools/music-struct/__pycache__/
 # セッション中の一時バックアップ・派生生成物
 *.json.bak
 docs/anipafe2026-unit-prompts.json
+
+# 元ネタ音声の分離・解析キャッシュ(著作物由来・大容量)
+backend/demix/
+backend/spec/
+# 外部リポジトリの作業コピー(独自の .git を持つ)
+tools/h3-spark-sol/

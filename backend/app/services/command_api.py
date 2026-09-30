@@ -58,14 +58,16 @@ def get_recent_operations(project_id: int, session: Session, limit: int = 50) ->
 
 # ── Read operations ───────────────────────────────────────────────────────────
 
-def get_project_state(project_id: int, session: Session) -> dict:
+def get_project_state(project_id: int, session: Session, assets: list[Asset] | None = None) -> dict:
     tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
     clips  = session.exec(
         select(Clip).where(
             Clip.track_id.in_([t.id for t in tracks])
         )
     ).all()
-    assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+    if assets is None:
+        assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+    asset_name = {a.id: a.name for a in assets}
 
     return {
         "tracks": [
@@ -79,9 +81,7 @@ def get_project_state(project_id: int, session: Session) -> dict:
                         "start_frame": c.start_frame,
                         "duration_frames": c.duration_frames,
                         "asset_in_frame": c.asset_in_frame,
-                        "asset_name": next(
-                            (a.name for a in assets if a.id == c.asset_id), None
-                        ),
+                        "asset_name": asset_name.get(c.asset_id),
                     }
                     for c in clips if c.track_id == t.id
                 ],
@@ -106,8 +106,8 @@ def get_llm_state(project_id: int, session: Session) -> dict:
     if not project:
         return {"error": f"Project {project_id} not found"}
 
-    state = get_project_state(project_id, session)
     assets = session.exec(select(Asset).where(Asset.project_id == project_id)).all()
+    state = get_project_state(project_id, session, assets=assets)
 
     # Running / pending jobs
     jobs = session.exec(

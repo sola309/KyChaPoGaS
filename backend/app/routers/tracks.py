@@ -132,8 +132,11 @@ def scenes_sync(project_id: int, session: Session = Depends(get_session)):
     tracks = session.exec(select(Track).where(Track.project_id == project_id)).all()
     img = next((t for t in tracks if t.track_type == "reference" and t.name == "Image"), None)
     scenes = next((t for t in tracks if t.track_type == "video" and t.name == "Scenes"), None)
-    if not img or not scenes:
-        raise HTTPException(status_code=404, detail="Image/Scenesトラックがありません")
+    if not img:
+        raise HTTPException(status_code=404, detail="Imageトラックがありません")
+    if not scenes:
+        # Scenes レイヤーは任意(削除して運用してもよい)。無ければ何もしない
+        return {"enabled": False, "cuts": 0, "moved": 0, "bound": 0, "created": 0, "removed": 0}
 
     pins = session.exec(
         select(Clip).where(Clip.track_id == img.id, Clip.asset_id.is_not(None))
@@ -142,8 +145,24 @@ def scenes_sync(project_id: int, session: Session = Depends(get_session)):
     cuts = [(pins[i], pins[i + 1]) for i in range(0, len(pins) - 1, 2)]
     pin_by_id = {p.id: p for p in pins}
 
-    clips = session.exec(select(Clip).where(Clip.track_id == scenes.id)).all()
-    moved = bound = created = 0
+    clips = list(session.exec(select(Clip).where(Clip.track_id == scenes.id)).all())
+    moved = bound = created = removed = 0
+
+    # 0) 束縛先のピンが消えた「空枠」は捨てる(素材入りは残す)。
+    #    残すと現在のカット枠と重なって「重複した空クリップ」に見える(2026-09-08 ユーザー指摘)
+    keep = []
+    for c in clips:
+        try:
+            attrs = _json.loads(c.attrs_json) if c.attrs_json else {}
+        except Exception:
+            attrs = {}
+        bind = attrs.get("cut_bind")
+        if (c.asset_id is None and isinstance(bind, list) and len(bind) == 2
+                and (bind[0] not in pin_by_id or bind[1] not in pin_by_id)):
+            session.delete(c); removed += 1
+        else:
+            keep.append(c)
+    clips = keep
 
     # 1) 束縛済みクリップをピンの現在位置へ追従させる
     for c in clips:
@@ -199,4 +218,4 @@ def scenes_sync(project_id: int, session: Session = Depends(get_session)):
         session.add(nc); created += 1
 
     session.commit()
-    return {"cuts": len(cuts), "moved": moved, "bound": bound, "created": created}
+    return {"enabled": True, "cuts": len(cuts), "moved": moved, "bound": bound, "created": created, "removed": removed}

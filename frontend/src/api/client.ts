@@ -108,6 +108,9 @@ export interface Clip {
   /** Transition into this clip: '' cut | crossfade | white flash | dip to black */
   transition_in: TransitionType
   transition_frames: number
+  /** 重なり遷移のカーブ(linear/ease/ease-in/ease-out)と、白/黒遷移で完全に色になる位置(0..1) */
+  transition_ease?: string
+  transition_hold?: number
   /** Audio fades (audio clips), in timeline frames */
   fade_in_frames: number
   fade_out_frames: number
@@ -136,6 +139,8 @@ export interface ClipUpdate {
   speed_ease?: SpeedEase
   transition_in?: TransitionType
   transition_frames?: number
+  transition_ease?: string
+  transition_hold?: number
   fade_in_frames?: number
   fade_out_frames?: number
   opacity?: number
@@ -222,12 +227,14 @@ export const assetsApi = {
     `/api/assets/${assetId}/frame-preview?time_sec=${timeSec.toFixed(3)}&height=${height}`,
   extractAudio: (assetId: number) =>
     api.post<Asset>(`/assets/${assetId}/extract-audio`).then(r => r.data),
-  extractClip: (assetId: number, startSec: number, durSec: number, endSec?: number, padToSec?: number) =>
+  /** h3Grid=true: 出力フレーム数を 17k+5 に合わせて後ろへ実フレームを伸ばす(H3 が参照の末尾を捨てない) */
+  extractClip: (assetId: number, startSec: number, durSec: number, endSec?: number, padToSec?: number, h3Grid?: boolean) =>
     api.post<Asset>(`/assets/${assetId}/extract-clip`, null, {
       params: {
         start_sec: startSec, dur_sec: durSec,
         ...(endSec != null ? { end_sec: endSec } : {}),
         ...(padToSec != null ? { pad_to_sec: padToSec } : {}),
+        ...(h3Grid ? { h3_grid: true } : {}),
       },
     }).then(r => r.data),
   separateVocals: (assetId: number) =>
@@ -262,7 +269,19 @@ export interface I2VKeyframe  { time_sec: number; asset_id: number }
 export interface PlaceSpec       { track_id: number; start_frame: number; duration_frames?: number; replace_clip_id?: number }
 export interface ImageGenParams  { project_id: number; prompt: string; negative_prompt?: string; model?: string; width?: number; height?: number; seed?: number; init_asset_id?: number; denoise?: number; ref_asset_ids?: number[]; use_lightning?: boolean; loras?: [string, number][]; place?: PlaceSpec }
 export interface AudioGenParams  { project_id: number; prompt: string; lyrics?: string; duration_sec?: number; vocal_language?: string; instrumental?: boolean | null; model?: string; seed?: number }
-export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; turbo_lora?: number; place?: PlaceSpec }
+export interface VideoI2VParams  { project_id: number; keyframes: I2VKeyframe[]; duration_sec?: number; fps?: number; motion_strength?: number; model?: string; seed?: number; prompt?: string; negative_prompt?: string; width?: number; height?: number; use_lightning?: boolean; steps?: number; ref_video_asset_ids?: number[]; ref_audio_asset_ids?: number[]; scheduler?: string; ref_image_size?: string; easycache?: boolean; turbo_lora?: number; preview_steps?: number; quality?: 't0' | 't1'; place?: PlaceSpec }
+
+/** 投稿用ファイル1件(GET /jobs/uploads) — YouTube/ニコニコ向けに書き出し直したもの */
+export interface UploadFile {
+  filename: string
+  size_bytes: number
+  modified_at: string
+  download_url: string
+  width?: number | null
+  height?: number | null
+  duration_sec?: number | null
+  bitrate_mbps?: number | null
+}
 
 /** 書き出し済みファイル1件(GET /jobs/renders) */
 export interface RenderFile {
@@ -306,6 +325,8 @@ export const jobsApi = {
   listRenders: (projectId: number) =>
     api.get<RenderFile[]>('/jobs/renders', { params: { project_id: projectId } }).then(r => r.data),
   deleteRender: (id: number) => api.delete(`/jobs/renders/${id}`),
+  listUploads: (projectId: number) =>
+    api.get<UploadFile[]>('/jobs/uploads', { params: { project_id: projectId } }).then(r => r.data),
   nightBatchState: () => api.get<NightBatchState>('/jobs/nightbatch/state').then(r => r.data),
   nightBatchStart: (projectId: number, weights: Record<string, number>, keepInFlight = 2) =>
     api.post<NightBatchState>('/jobs/nightbatch/start', {

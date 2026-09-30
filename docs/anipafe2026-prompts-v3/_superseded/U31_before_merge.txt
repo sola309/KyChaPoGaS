@@ -1,0 +1,24 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the silhouette vocabulary of the Claradolls:
+{{DOLLS_ID}}. <Picture 1> contributes only their distinct outlines, clothing edges and relative variety to castless shadows on the ground. The delivered scene contains feathers, taut threads, bare ground, directional light and shadows. The reference composition and visible doll bodies do not transfer.
+
+summary: An empty violet-black staging ground prepares for battle through accumulation alone. Black feathers leave the air, blood-red threads pull taut, and castless doll shadows multiply until overwhelming numbers have replaced nearly every lit surface.
+
+retention_analysis: <Picture 1> partially_preserved — each Claradoll remains identifiable only through a simplified flat shadow profile. Identity variety is retained across the ranks. Colour, facial detail, source framing and source layout remain controlled by the target scene.
+
+detailed_description: {{TH:A3}}
+STAGE: A broad porcelain-white ground plane lies beneath near-black open space. A cold violet source outside frame-left rakes horizontally across it. The nearest plane holds several large softly blurred black feathers. Smaller sharp feathers occupy staggered middle planes. Eight thin blood-red threads cross a higher plane. The ground and its castless shadows form the lowest visible layer. Empty darkness remains behind everything. Red exists only in the threads.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot from a low frontal angle. The complete visible inventory is ground, feathers, threads and light. Black feathers descend at different speeds through the depth planes. A snare makes one physical thread whip in from beyond both frame edges, pull perfectly straight, vibrate once and remain taut. Later snares add separate parallel threads. Each thread catches a narrow violet specular edge while its red core stays dark and controlled. Feather rotation provides the only soft motion.
+
+[Shot 2] At 00:01.988, cut to a ground-level viewpoint introducing the first castless shadows. Use a slow Pedestal Down with small amplitude. A kick drives one feather into the lit ground. At contact, its opaque black material flattens continuously into the crisp profile of a different Claradoll shadow. The new shadow slides a short distance into rank, settles into its final position and LOCKS. Further impacts repeat this material change across the width of the frame. Each new rank sits behind the previous rank in clear Z-order. Shadow edges remain hard. Their interiors never cross onto the threads. As shadows accumulate below, the number of airborne feathers visibly decreases above. At 3.138 seconds the camera has reached ground height, with only narrow porcelain lanes remaining between the ranks.
+
+[Shot 3] At 00:03.138, cut to a wide high frontal view introducing the completed imbalance. Static Shot. The taut red web occupies only the upper third. Below it, many distinct doll-shaped shadows fill the ground in ordered ranks, yet every physical surface remains empty. Overlapping ranks turn most of the lower frame into one near-black absence. Two final feathers land and become the last profiles. Their edges overshoot slightly, return, settle and LOCK. The remaining threads stop vibrating. The last 0.7 seconds hold the completed composition without camera drift: an emptied sky above and overwhelming quantity below.
+
+THREAD LAW: Each snare adds one separate taut thread. Every added thread remains straight and under tension. Red belongs only to these threads.
+SHADOW LAW: Each kick-driven feather contact becomes one new castless Claradoll shadow. Airborne feather quantity decreases as grounded shadow quantity increases. Every shadow settles once and remains fixed.
+BEAT LAW: {{BEATLAW}}
+{{DP}} {{ST2}}
+
+overall_soundscape: Close feather flutter moves from high air to the ground plane. Each visible thread produces one short, high tension twang followed by a rapidly decaying vibration. Feather contact makes a dry paper tap. Each newly settled shadow produces a faint flat cloth scrape at its visible edge. The final locked ranks leave only distant thread resonance and thin air movement.
+
+non_diegetic_music: N/A

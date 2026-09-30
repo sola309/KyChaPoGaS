@@ -1,0 +1,26 @@
+Create a video from this image. Create a 243-frame 16:9 video. Preserve the supplied image as the exact initial visual state. Use one continuous Static Shot. Complete the visible passage within 9.58 seconds, then hold the resulting composition through the final generated frame.
+
+detailed_description: {{TH:PRO}}
+STAGE: An empty night sky fills the frame. {{HALF_MOON}} remains at the exact height, screen position, scale and orientation established by the supplied image. Its surviving left half ends at one perfectly straight cut edge. A narrow white light rests only on that edge. The absent right half reads as open near-black sky rather than shaded lunar matter. Layered grey clouds remain fixed far behind the moon. The complete frame inventory is sky, clouds, {{HALF_MOON}} and {{SOURCELESS_SHADOW}}.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. The camera is locked for the entire unit. Framing, focal length, horizon and focus remain fixed. The moon keeps the same on-screen size. Every cloud keeps its initial contour and position. The straight lunar edge retains the same width and brightness.
+
+{{SOURCELESS_SHADOW}} begins at its exact position and scale established by the supplied image. It moves slowly across the visible lunar surface in one uninterrupted direction. The shadow travels as a separate flat depth layer. Its movement does not pull the clouds, the moon or the camera with it. Its edge stays soft enough to belong to shadow, while its overall contour remains coherent from entrance to exit. It darkens only the portion of the pale moon beneath it. The open black half of the sky remains visually unchanged.
+
+The passage is extremely slow and evenly weighted. The shadow requires almost the full 9.58 seconds to cross the pale half. It neither accelerates nor pauses. Its apparent size remains constant. The last trace leaves the straight lunar edge near the end of the cut. A faint residual dimming lingers on that edge for one restrained moment, then the supplied half-moon composition is restored. The final frame visually returns to the opening frame and closes the loop.
+
+LIGHT LAW: Cold violet light falls steeply from high above. Near-black occupies more than half of the image. The pale lunar half is the single brightest surface. Only its straight cut edge carries restrained bloom. The moving shadow emits and reflects no light.
+
+LOOP LAW: The opening and final compositions match in framing, moon position, cloud placement and luminous cut edge. The shadow passage is the only intervening change.
+
+MOTION LAW: {{SOURCELESS_SHADOW}} alone crosses the fixed image. All other visible layers stay locked to their initial positions. The motion remains continuous, unaccented and free of secondary events.
+
+SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and independent of musical beats.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All visible surfaces remain unmarked.
+
+{{LENS}} {{FOCUS}} {{ST2}}
+
+overall_soundscape: Near-total silence. A thin high-altitude wind remains distant and steady. The shadow makes no contact sound. The final hold contains only the same distant wind.
+
+non_diegetic_music: N/A

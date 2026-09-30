@@ -1,0 +1,32 @@
+subject_definitions: <Picture 1> (reference role: hand and sleeve definition only, not a target frame and not a storyboard anchor) defines the offered hand used in Shot 1. It contributes its exact hand design, wrist edge and costume attributes. Written instructions control the crop, movement, water and self-drawing contour. <Picture 2> (reference role: subject definition and emotional relationship only, not a target frame and not a storyboard anchor) defines two separate characters: <Subject 1>, human Madoka in school uniform, and <Subject 2>, Homura as depicted in <Picture 2>. It contributes their identities, faces, costumes, canonical colours and scale relationship. Written instructions control the glass-separated composition and restrained acting. <Picture 3> (reference role: transparent-material and fracture definition only, not a target frame and not a storyboard anchor) defines the glass plane, shard material and fracture vocabulary used in Shot 3.
+
+summary: Three cold memories show the film’s only successful reach, an unspoken confrontation across flawless glass, and the impact that removes both girls from the frame. A single hard contour establishes that a called name creates a boundary; the final white gaps reveal the first trace of {{BLACK_WAVE}}.
+
+retention_analysis: <Picture 1> partially_preserved — preserve the offered hand, sleeve and anatomy while changing its position over water. <Picture 2> fully_preserved for both identities, faces, costumes and canonical colours; partially_preserved for pose and environment. The two identities remain separate. Their hair, eyes, clothing, accessories and facial features remain assigned to their original character. <Picture 3> partially_preserved — preserve transparent-glass material, shard scale and fracture character while allowing the written sequence to determine the unbroken state, impact and final arrangement.
+
+detailed_description: {{TH:MEM}}
+STAGE: Three hard-cut memories share one fixed frontal axis and a strong dark vignette. Shot 1 contains one hand over dark water. Shot 2 contains two girls on opposite sides of flawless glass. Shot 3 contains only glass fragments, white gaps, {{BLACK_WAVE}} and {{SOURCELESS_SHADOW}}.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. The crop contains only the offered hand from <Picture 1>, a narrow wrist edge, dark water and its vertically reversed reflection. The hand advances slowly from the upper right toward one empty point above the surface. Its fingers remain relaxed. Cold blue-grey light touches the upper edges. The remaining frame falls into vignetted darkness. The hand completes its reach. A thin line of pale light leaves the fingertip and draws one closed human contour in a single uninterrupted pass. The contour has a hard edge. Its interior contains only the same dark water, making it a boundary drawn across space rather than a body. The completed line settles beside the fingertip and holds through 00:04.620.
+
+[Shot 2] At 00:04.620, hard cut to the flawless glass from <Picture 2>. Static Shot. <Subject 1> and <Subject 2> stand at equal scale on opposite sides of the transparent pane, directly facing one another. <Subject 1> gives one small, quiet smile. <Subject 2> keeps the chin level and lowers the eyes. Their mouths retain one resting shape. Their shoulders barely move with breathing. A narrow cold highlight reveals the glass without dividing either face. The distant world beyond the pane is subtly mirrored left-to-right: large architectural planes and light falloff exchange sides while both characters remain stable. Canonical character colours remain muted inside the cold blue-grey memory frame. The smile, lowered gaze and flawless pane settle before 00:09.240.
+
+[Shot 3] At 00:09.240, hard cut to the same pane without people. Static Shot. At exactly 9.243 seconds, the sole kick becomes one dry impact from beyond the glass. The pane breaks into large irregular shards and hard white gaps. Each shard travels outward once, decelerates and locks. The shard edges act as rigid masks. A restrained trace of {{BLACK_WAVE}} moves only within the exposed white gaps as fluid without an enclosing contour. A vast {{SOURCELESS_SHADOW}} crosses the glass surfaces without revealing a caster. White absence remains the brightest element. One suspended shard keeps a faint residual tremor after every other fragment has stopped.
+
+NAME-CONTOUR LAW: The successful reach triggers one self-drawing hard contour. The line closes once and remains legible without symbols or writing.
+
+GLASS LAW: The flawless pane holds the smile and lowered gaze. The isolated impact converts that same plane into shards, white absence and the first trace of {{BLACK_WAVE}}.
+
+MG LAW: Motion graphics remain restrained. The contour draws itself in Shot 1. Reflection inversion affects only the far side of Shot 2. Shard edges become physical masks in Shot 3.
+
+BEAT LAW: {{BEATLAW}} The interval through 00:09.240 uses continuous unaccented motion. The raw kick at 9.243 seconds is the sole hard transient and the sole fracture event.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+
+REFERENCE-SHEET RULE: Only the depicted hand, identities, glass material and fracture behaviour transfer. The output uses clean image space instead of source frames, panels, swatches or layout elements.
+
+{{LENS}} {{DP}} {{FOCUS}} {{ST2}}
+
+overall_soundscape: Dark-water hush, distant wind and soft cloth movement use rounded, aperiodic attacks through the first two shots. The drawing contour produces one thin glass-like tone that follows the visible line and decays when it closes. Breathing and the faint pressure of air against the flawless pane remain subdued. At exactly 9.243 seconds, one dry fracture becomes the sole hard transient. Brittle shard tones decay into displaced air, a low structural groan and one fading suspended-glass tremor.
+
+non_diegetic_music: N/A

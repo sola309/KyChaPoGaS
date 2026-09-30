@@ -1,0 +1,50 @@
+subject_definitions:
+<Picture 1> (reference role: name-stone definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{NAME_STONE}}. It contributes the weathered shell, hard carved contours and visible cosmic depth inside the grooves. The carvings remain unmarked shapes rather than writing.
+
+<Picture 2> (reference role: burned-stone definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{BURNED_STONE}}. It contributes the extinguished interior, darkened grooves and the physical source from which branching black liquid emerges.
+
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, Devil Homura: {{HOMU_ID}}
+
+<Picture 4> (reference role: eye-detail definition only, not a target frame and not a storyboard anchor) defines <Subject 4>, one impassive red eye. It contributes only the red-and-gold eye structure and its fixed expressionless state. The surrounding body remains outside the composition.
+
+<Picture 5> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 5>, Selma Therese: {{SELUMA_ID}}
+
+<Picture 6> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 6>, Choka: {{CHOKA_ID}}
+
+summary:
+An empty field of name-stones reveals the motionless trace of Marguerite. Devil Homura crosses the field as names are consumed, while Selma and Choka silently witness the resulting nameless shadows sink into the root.
+
+retention_analysis:
+<Pictures 1-2> fully_preserved for stone identity, carved contour language, cosmic interior and burned state; partially_preserved for scale, placement and viewing angle.
+
+<Picture 3> fully_preserved for <Subject 3>'s identity, costume, proportions, wings, asymmetrical legs and red ribbon. Her walking pose, shadows and camera angle are authored by this prompt.
+
+<Picture 4> fully_preserved for the eye design and fixed expression; partially_preserved for cropping and surrounding darkness.
+
+<Pictures 5-6> fully_preserved for <Subjects 5-6>' identities, costumes, proportions and colour assignments. Their rear three-quarter poses and placement are authored by this prompt.
+
+Never merge the characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+detailed_description:
+{{TH:ROOT}}
+STAGE: Six depth planes form the root: blurred stone edges near the lens, isolated name-stones, the subject plane, further stone rows, low mineral haze and a nearly fixed sky. Detail belongs only to carved contours, controlled light and the witnesses. Red appears only in <Subject 4>'s eye and <Subject 3>'s ribbon.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. A Static Shot holds the peopleless field until 3.420 seconds. {{HALF_MOON}} hangs above the stone rows. {{SOURCELESS_SHADOW}} covers half of its remaining luminous face. One motionless {{MARG_SHADOW}} lies at the exact centre of the field without a body casting it. It carries no red accent. Buried mineral knocks at 0.823 and 1.693 seconds tighten faint light inside distant grooves. The snare at 2.553 seconds makes the central shadow's contour briefly hard and exact, then leaves it motionless.
+
+[Shot 2] At 00:03.420, hard cut to a low lateral Tracking Shot with small amplitude and slow speed beside <Subject 3>. She walks between the stones. Two separate ground shadows follow her stride: her own winged outline and a second human outline one pace behind. The kick at 3.427 seconds compresses loose stone beneath her planted shoe. Snares at 4.007, 4.287, 4.437 and 4.867 seconds extinguish four cosmic carvings in succession as she passes them. The kick at 4.587 seconds splits one loose fragment underfoot. Hair, feathers and ribbon settle after each step while the second shadow preserves its distance.
+
+[Shot 3] At 00:06.880, hard cut to a fixed macro Static Shot. <Subject 1>'s carved edge fills the left planes. <Subject 4> waits in darkness at far right. At 7.468 seconds, the star field inside one groove dims. Its remaining light narrows into a hard thread and is drawn across the empty gap into the red eye. Snares at 8.328, 9.198 and 10.058 seconds repeat the extraction across adjacent grooves. Each light stays bounded by its stone contour until it becomes a line. Branching black liquid seeps from <Subject 2>'s base along irregular paths, without circular symmetry.
+
+[Shot 4] At 00:10.340, hard cut to a fixed rear three-quarter Static Shot. {{SEEOFF}} <Subject 5> and <Subject 6> stand side by side with both hands lowered. Dark human shadows rise thinly from burned stones, lose their hard contours, then sink vertically into the ground. Snares at 10.93, 11.79 and 12.66 seconds commit three separate shadows to the stone floor. From 12.405 to 13.840 seconds, the last shadow descends continuously while the branching black seams lengthen toward the lower frame edge. The witnesses remain still. The composition settles at 13.840 seconds.
+
+NAME LAW: A surviving name remains bounded by a hard carved contour. Extraction converts its cosmic light into one thin line. The burned remainder becomes edgeless black liquid.
+WITNESS LAW: {{SEEOFF}} <Subjects 5-6> watch with lowered hands. Their silence and placement mirror the later farewell in C42.
+EVENT-DENSITY LAW: Named timestamps carry structural changes. Other percussion becomes foot recoil, mineral vibration, feather settling or brief edge-light response.
+BEAT LAW: {{BEATLAW}}
+NO-TEXT RULE: Show no letters, words, numbers, logos, captions, signs, interface labels, pseudo-writing or watermark. Carved surfaces contain only abstract contours and visible star fields.
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape:
+Dry stereo foley remains attached to visible sources: distant mineral knocks, measured footsteps, loose stone cracking, feather movement, brittle cosmic-light extraction and slow viscous seepage. Each extinguished groove gives one thin glass tone that narrows as its light enters the eye. The sinking shadows produce low granular pressure beneath the witnesses. Root ambience remains cold, sparse and exposed.
+
+non_diegetic_music: N/A

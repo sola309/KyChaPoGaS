@@ -22,11 +22,13 @@ def job(jid):
     return json.load(urllib.request.urlopen(f"{API}/jobs/{jid}", timeout=10))
 
 
-def submit(uid, v3, t1):
+def submit(uid, v3, t1, extra=()):
     cmd = [sys.executable, str(ROOT / "scripts/submit_unit.py")]
-    cmd += ["--v3"] if v3 else ["--v2"]
+    if "--v4" not in extra:
+        cmd += ["--v3"] if v3 else ["--v2"]
     if t1:
         cmd.append("--t1")
+    cmd += list(extra)
     cmd.append(uid)
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
     m = [l for l in r.stdout.splitlines() if l.startswith("{")]
@@ -36,11 +38,13 @@ def submit(uid, v3, t1):
     return json.loads(m[-1])[uid]
 
 
-def units_of(v3):
+def units_of(v3, v4=False):
     spec = importlib.util.spec_from_file_location("su", ROOT / "scripts/submit_unit.py")
     m = importlib.util.module_from_spec(spec)
     sys.argv = ["x"]
     spec.loader.exec_module(m)
+    if v4:
+        return sorted(m.parse_units_v4())
     if v3:
         return sorted(m.parse_units_v3())
     m.PDIR = m.PDIR_V2
@@ -56,9 +60,25 @@ def main():
     ap.add_argument("--retries", type=int, default=3)
     ap.add_argument("--inflight", type=int, default=1)
     ap.add_argument("--out", default="")
+    ap.add_argument("--v4", action="store_true", help="v4(連番U01-U30)")
+    ap.add_argument("--t2", action="store_true", help="T2(1344x768 / Turbo 8step 768p)")
+    ap.add_argument("--track", type=int, default=None, help="配置先トラック")
+    ap.add_argument("--auto", action="store_true", help="タイムラインへ自動配置")
+    ap.add_argument("--auto-audio", action="store_true", help="v4: 参照音声をロールで自動付与")
     a = ap.parse_args()
+    extra = []
+    if a.v4:
+        extra += ["--v4"]
+    if a.t2:
+        extra += ["--t2"]
+    if a.track:
+        extra += ["--track", str(a.track)]
+    if a.auto:
+        extra += ["--auto"]
+    if a.auto_audio:
+        extra += ["--auto-audio"]
 
-    targets = units_of(a.v3) if a.all else (a.units or [])
+    targets = units_of(a.v3, a.v4) if a.all else (a.units or [])
     pending = list(targets)
     tries = {u: 0 for u in targets}
     live, done, dead = {}, {}, []
@@ -67,7 +87,7 @@ def main():
     while pending or live:
         while pending and len(live) < a.inflight:
             u = pending.pop(0)
-            jid = submit(u, a.v3, a.t1)
+            jid = submit(u, a.v3, a.t1, extra)
             if jid:
                 live[u] = jid
                 print(f"→ {u} job {jid}", flush=True)

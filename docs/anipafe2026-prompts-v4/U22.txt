@@ -1,0 +1,48 @@
+subject_definitions:
+<Picture 1> (reference role: texture definition only, not a target frame and not a storyboard anchor) defines the sparse pale square erosion associated with {{MAJUU_ID}}. Transfer only that surface breakup into {{BLACK_WAVE}}. The target remains an edgeless fluid mass rather than humanoid anatomy.
+
+<Picture 2> (reference role: subject definition only for <Subject 1>, not a target frame and not a storyboard anchor) defines Madoka’s exact identity, face, current magical-girl outfit and proportions.
+
+<Picture 3> (reference role: subject definition only for <Subjects 2-5>, not a target frame and not a storyboard anchor) defines <Subject 2> Sayaka, <Subject 3> Kyoko, <Subject 4> Mami and <Subject 5> Nagisa. It contributes their exact identities, faces, current magical-girl outfits, proportions and relative heights.
+
+<Picture 4> (reference role: weapon definition only for <Subject 2>, not a target frame and not a storyboard anchor) defines a cutlass with a straight single-edged blade, a black grip wrapped with a pale blue band, and a flat gold hand-guard shaped like a stylised hilt plate.
+
+<Picture 5> (reference role: weapon definition only for <Subject 3>, not a target frame and not a storyboard anchor) defines a long spear with a slim gold shaft and a red-and-gold leaf-shaped head; it separates into linked segments joined by chain so it can be used as a chain-whip or a flail.
+
+<Picture 6> (reference role: weapon definition only for <Subject 4>, not a target frame and not a storyboard anchor) defines a long single-shot flintlock musket with a glossy white wooden stock carved with a silver fleur-de-lis, a black receiver and fore-end inlaid with flowing white scrollwork, a polished silver barrel and a small brass hammer; she conjures many identical copies of it at once.
+
+<Picture 7> (reference role: weapon definition only for <Subject 5>, not a target frame and not a storyboard anchor) defines a stylised bassoon-like horn with a wide flared bell, painted in orange, purple, blue and yellow segments with a black body and a yellow flower-shaped key.
+
+<Picture 8> (reference role: weak reference for spacing only, not a target frame and not a storyboard anchor) contributes the breathing distance between five separate silhouettes. Faces and costumes come exclusively from <Pictures 2-3>. Weapon construction and ownership come exclusively from <Pictures 4-7>.
+
+summary:
+A personless field of {{BLACK_WAVE}} divides into many unanswering panels. A hard cut replaces anonymous quantity with Madoka and four individually outlined magical girls, and Madoka alone steps forward.
+
+retention_analysis:
+<Picture 1>: weak_reference for sparse pale square erosion only; its bodies, framing and composition are released.
+<Picture 2>: fully_preserved for <Subject 1>’s identity, face, outfit and proportions; weak_reference for background and pose.
+<Picture 3>: fully_preserved for <Subjects 2-5>’s identities, faces, outfits, proportions and relative heights; weak_reference for background and arrangement.
+<Pictures 4-7>: attribute_transfer for each assigned weapon only. Each weapon belongs exclusively to its designated subject.
+<Picture 8>: weak_reference for separation distance between figures only.
+Never merge the five characters. Never exchange their hair, eyes, clothing, accessories, facial features or weapons.
+
+detailed_description: {{TH:A3}}
+{{LENS}}
+{{FOCUS}}
+STAGE: The first space is a bare floor of {{TH:ROOT}} beneath near-black depth. {{BLACK_WAVE}} occupies one broad horizontal plane. Cold violet light enters from frame-left. The second space uses the same floor and light direction. <Subject 1> stands one pace before a shallow line. From left to right behind her stand <Subject 3>, <Subject 2>, <Subject 4> and <Subject 5>. Every face has a clear sightline to the lens.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. The visible inventory is black fluid, hard panel seams, pale square erosion, floor and violet light. {{BLACK_WAVE}} slowly presses upward like a heavy tide. Its surface remains continuous and unarticulated. At 00:00.258, the first snare draws one rigid porcelain-white seam across the fluid plane. The seam divides one view of the wave into two mismatched phases. Each later snare adds exactly one new panel. Every completed panel slides a few pixels, settles, then LOCKS. Each panel contains its allotted black fluid inside a hard contour. At 00:01.988, four divisions are visible. Cropped panel edges imply ranks continuing beyond the frame. Pale squares intermittently detach from the fluid and fall straight down. At 00:04.298, the final added panel locks. The complete field reads as one nameless mass broken into many simultaneous fragments. Light touches only the seams and falling squares.
+
+[Shot 2] At 00:04.580, hard cut to five distinct bodies on the root floor. Use a slow Push In with small amplitude and slow speed. <Subject 1> occupies the central foreground. <Subjects 2-5> remain separately readable behind her. At 00:04.865, the violet side-light reaches their faces in sequence. Their individual colour identities remain isolated by hard contour lines. <Subject 2> holds her cutlass in a low guard. <Subject 3> braces her rigid spear diagonally. <Subject 4> levels one musket while further copies form a restrained rear rank. <Subject 5> steadies her horn across her body. At 00:06.025, all four rear figures complete one quiet weight shift and hold. Their lips rest naturally closed. Resolve appears through steady eyes, level jaws, tightened grips and controlled breathing. At 00:07.755, <Subject 1> begins one deliberate step beyond the defensive line. The camera continues forward while the four rear figures remain fixed. At 00:08.335, <Subject 1>’s leading foot crosses their shared contour line. Hair tips, ribbons and coat edges make one restrained secondary motion. At 00:09.195, her foot takes full weight. The camera stops. All five outlines remain hard, separate and still.
+
+NAME LAW: Anonymous matter has fluid boundaries. Named individuals hold hard contours. Panel seams organize quantity; body contours preserve identity.
+OWNERSHIP LAW: Every face, body and weapon stays separately readable. Each hand controls only its assigned weapon.
+DENSITY LAW: Graphic motion remains subordinate to fluid pressure, light, breathing, grips and weight shifts.
+BEAT LAW: {{BEATLAW}} Each snare adds one locked panel or confirms one individual stance. Kicks compress the black fluid or settle bodily weight. Cymbals place brief glints on existing seams, eyes and weapon edges.
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+{{DP}} {{ST2}}
+
+overall_soundscape:
+Visible sources produce dry close foley. The black fluid moves with low wet pressure and restrained stone-floor friction. New panel seams arrive with short ceramic ticks and stop with flat locking clicks. Falling pale squares make light mineral taps. After the cut, cloth tension, controlled breaths, one cutlass-guard scrape, tightening spear links, musket mechanism clicks, horn-key pressure and Madoka’s single measured footstep occupy separate stereo positions. Weapon sounds remain brief and attached to their owners.
+
+non_diegetic_music: N/A

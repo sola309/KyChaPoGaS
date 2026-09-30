@@ -79,19 +79,44 @@ app.add_middleware(
     allow_headers=["*"],
 )
 # JSON/JSバンドルの転送量を数分の1に。SSEはgzipバッファでイベントが届かなくなるため除外。
-from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+# 動画/画像/音声/バイナリ(Content-Typeで判定)も除外: 圧縮率ゼロでCPUだけ食い、
+# 206 Range応答のContent-Lengthが消えてシークが重くなる(実測: 6MB動画 0.005s→0.14s)。
+from starlette.middleware.gzip import GZipMiddleware, GZipResponder  # noqa: E402
+from starlette.datastructures import Headers as _Headers  # noqa: E402
+
+_GZIP_TYPES = ("application/json", "text/", "application/javascript",
+               "application/xml", "image/svg+xml", "application/wasm")
+
+
+class _TypedGZipResponder(GZipResponder):
+    async def send_with_gzip(self, message):
+        if message["type"] == "http.response.start":
+            ctype = _Headers(raw=message["headers"]).get("content-type", "")
+            if not ctype.startswith(_GZIP_TYPES):
+                # 親クラスの「既にContent-Encodingあり」経路 = 無加工で素通し
+                self.initial_message = message
+                self.content_encoding_set = True
+                return
+        await super().send_with_gzip(message)
 
 
 class SelectiveGZipMiddleware(GZipMiddleware):
     async def __call__(self, scope, receive, send):
-        path = scope.get("path", "") if scope["type"] == "http" else ""
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
         if path.endswith("/stream/sse") or path.endswith("/gpu/stream"):
             await self.app(scope, receive, send)
             return
-        await super().__call__(scope, receive, send)
+        if "gzip" not in _Headers(scope=scope).get("Accept-Encoding", ""):
+            await self.app(scope, receive, send)
+            return
+        await _TypedGZipResponder(self.app, self.minimum_size,
+                                  compresslevel=self.compresslevel)(scope, receive, send)
 
 
-app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024)
+app.add_middleware(SelectiveGZipMiddleware, minimum_size=1024, compresslevel=6)
 
 app.include_router(projects.router, prefix="/api")
 app.include_router(assets.router, prefix="/api")

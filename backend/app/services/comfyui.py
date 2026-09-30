@@ -19,7 +19,7 @@ import httpx
 
 from app.config import COMFYUI_URL
 
-COMFY_TIMEOUT_S = 9000.0  # max wait for a generation job。H3のフルユニット(328f/step25)は実測ペースで約82分かかるため150分に設定(2026-08-19、40分でU03がタイムアウトした対処)
+COMFY_TIMEOUT_S = 21600.0  # 2026-09-26: 362f の T3(20step 非Turbo)が約3.5〜4時間かかるため6時間へ。max wait for a generation job。H3のフルユニット(328f/step25)は実測ペースで約82分かかるため150分に設定(2026-08-19、40分でU03がタイムアウトした対処)
 POLL_INTERVAL_S = 2.0
 
 

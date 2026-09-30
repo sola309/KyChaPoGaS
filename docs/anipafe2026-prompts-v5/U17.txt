@@ -1,0 +1,52 @@
+subject_definitions:
+<Picture 1> (reference role: unburned stone definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, {{NAME_STONE}}. It contributes the weathered stone body, hard carved boundary and visible starfield held inside the carving. It controls neither viewpoint nor arrangement of the stone field.
+
+<Picture 2> (reference role: burned stone definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, {{BURNED_STONE}}. It contributes the blackened carving, exhausted interior and dark material gathered around the base. It controls neither framing nor surrounding terrain.
+
+<Picture 3> (reference role: character identity only, not a target frame and not a storyboard anchor) defines <Subject 3>: {{HOMU_ID}}.
+
+<Picture 4> (reference role: isolated eye definition only, not a target frame and not a storyboard anchor) defines <Subject 4>, one red eye seen as an extreme edge crop. It contributes only the eye geometry, red iris and gold-ringed detail to the right edge of Shot 3.
+
+<Picture 5> (reference role: character identity only, not a target frame and not a storyboard anchor) defines <Subject 5>, Selma Therese: a magical girl with orange hair in two large drill twin-tails and violet eyes, wearing a cream and ochre-orange dress with a white fur-trimmed collar and a red bow at the throat, a rounded pumpkin-shaped orange skirt with red ribbon streamers and gold bell buttons, brown tights, and pale yellow cuffed boots.
+
+<Picture 6> (reference role: character identity only, not a target frame and not a storyboard anchor) defines <Subject 6>, Choka: a magical girl with bright green hair tied in a high ponytail, round gold-rimmed glasses and amber eyes, wearing a dark olive-green corset dress with a white fur-trimmed collar and a black ribbon tie, gold-trimmed black detached sleeves and elbow gloves, a rounded olive skirt, black thigh-high stockings with gold ribbon ties, and black boots.
+
+The stone field follows {{TH:ROOT}}. The moon follows {{HALF_MOON}}. The unsupported girl-shaped shadow follows {{MARG_SHADOW}}. The branching black fluid follows {{BLACK_WAVE}}. The final rear-view arrangement follows {{SEEOFF}}.
+
+summary:
+A peopleless field of named stones holds an unsupported shadow beneath the half moon. <Subject 3> crosses the field as the stones lose their inner skies; one name is drawn into a red eye, and <Subjects 5-6> watch the resulting shadows sink into the ground.
+
+retention_analysis:
+<Picture 1> partially_preserved for the unburned stone body, carving boundary and enclosed starfield. New scales, angles and repeated field placement are authored here.
+
+<Picture 2> partially_preserved for the burned carving and exhausted stone state. Its root material is extended into branching black water.
+
+<Picture 3> fully_preserved for <Subject 3>'s identity, costume, proportions and colour assignment; partially_preserved for the side-on walking pose and distant full-body scale.
+
+<Picture 4> fully_preserved for the isolated red eye and partially_preserved for its extreme right-edge crop. The visible subject in Shot 3 is the eye alone.
+
+<Pictures 5-6> fully_preserved for character identity, costume, proportions and colour assignment. Their rear poses, placement and eye lines are authored by the reference-defined see-off composition.
+
+Never merge the characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+detailed_description:
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers. All surfaces remain unmarked; stone grooves, shadows and light lines carry every graphic function.
+
+STAGE: Five separated depth planes contain near out-of-focus stone edges, the sharp subject plane, further stone rows, low violet haze and a nearly fixed black sky. The nearest stones move fastest during tracking; the farthest stones barely move. Detail stays on the carved interiors, the unsupported shadows and the single red eye. Ground and sky remain broad near-black planes.
+
+[Shot 1] A peopleless wide view already shows a vast field of stones beneath a black-violet sky. Rows of <Subject 1> occupy the lower two-thirds, each carving holding a small enclosed starfield. The half moon hangs in the upper centre, and a broad sourceless shadow covers half of its remaining bright face. A Static Shot holds the field at one constant scale. On the ground between the stones lies one shadow the shape of a standing girl with twin tails; nothing casts it; it is pure black with soft edges and holds no red. At 2.553 seconds, its outline becomes a hard line for less than half a second, catches one cold specular edge, then returns to soft black. The shadow stays fixed while thin haze moves behind it.
+
+[Shot 2] At 00:03.420, exactly one person is already walking from left to right between the stones. <Subject 3>'s full figure occupies about one-third of the frame height in strict side profile. Lit carvings stand ahead of her while black carvings recede behind her. A Tracking Shot with small amplitude and slow speed moves beside <Subject 3>. Two human-shaped shadows travel at her feet: one joins her heels, while the second lies a hand’s width behind the first. At 4.10 seconds the starfield inside the nearest stone goes black. At 5.30 seconds the next stone goes black. Each darkening begins only after <Subject 3> passes its carved face. One footfall breaks a thumb-sized stone chip, which skips once and settles. Her pace and forward orientation remain even.
+
+[Shot 3] At 00:06.880, one <Subject 1> stone already fills the left two-thirds of a fixed close composition. <Subject 4> occupies the extreme right edge, with the red iris measuring about one-fifth of the frame height. The root floor beneath the stone is a flat violet-black plane. A Static Shot holds both objects at constant screen size. At 7.468 seconds, a thin hard-edged thread of white light leaves the carving and travels across the middle depth plane to the red eye at the right edge; the carving is black behind it; black water seeps from the stone's base and spreads as branching veins. The thread catches one narrow specular edge, contracts as it enters the iris, settles as a pinpoint, and LOCKS there within 0.5 seconds. The enclosed starfield remains bounded by the carving until its light departs. At 9.198 seconds, the branching black water reaches one-third of the frame width and settles into the floor without forming rings.
+
+[Shot 4] At 00:10.340, exactly two people are already standing side by side with their backs toward the camera. <Subject 5> stands on the left and <Subject 6> stands on the right, separated by one shoulder-width gap. Their full rear silhouettes occupy the lower half while dark stones rise ahead of them. A Static Shot preserves the reference-defined see-off composition. Their hands hang beside their bodies, and their eye lines remain directed toward the ground between the stones. At 11.510 seconds, two dark human-shaped shadows on the ground slide toward the stones and sink into the earth over 1.5 seconds. From 12.405 seconds, their visible height shortens continuously until both disappear below the flat ground. <Subjects 5-6> remain still as the final trace settles. By 13.140 seconds every plane is locked, and the composition remains fixed through 13.840 seconds.
+
+NAME-BURNING LAW: Departing light turns the enclosed carving black and feeds the isolated red eye. The exhausted stone releases branching black water from its base.
+
+BEAT LAW: Each snare triggers one hard cut, stone blackout or shadow-state change. Each kick lands as one footfall or ground contact; each cymbal releases light from a visible carving or specular edge.
+
+overall_soundscape:
+Dry stone footsteps, one brittle chip impact and low mineral settling remain attached to visible ground contacts. The departing light produces a narrow glass-string tone that contracts toward the red eye, while branching black water makes a soft viscous creep across stone. The sinking shadows end with two muted subterranean pressures, followed by exposed low air across the field.
+
+non_diegetic_music: N/A

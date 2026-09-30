@@ -1,0 +1,43 @@
+subject_definitions: <Picture 1> (reference role: name-stone definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, {{NAME_STONE}}. It contributes the stone’s exact material, carved hard contours and inner cosmic depth. Fracture, scale and surrounding space remain prompt-controlled.
+
+<Picture 2> (reference role: fracture-light behavior only, not a target frame and not a storyboard anchor) contributes the internal rupture, separated fragments and upward flash to Shot 1. It supplies motion and light behavior rather than subject identity.
+
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, Madoka. It contributes her exact identity, costume and proportions. Framing, hand position, tears and pose remain prompt-controlled.
+
+<Picture 4> (reference role: weapon definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, Madoka’s bow. It contributes the exact weapon design. Appearance in <Subject 2>’s hand and string tension remain prompt-controlled.
+
+<Picture 5> (reference role: celestial-object definition only, not a target frame and not a storyboard anchor) defines <Subject 4>, {{HALF_MOON}}. It contributes the missing half and straight cut edge. The new crack remains prompt-controlled.
+
+<Picture 6> (reference role: mirrored spatial-composition vocabulary only, not a target frame and not a storyboard anchor) contributes the opposed figures, unreachable central distance and third-stage mirrored geometry to Shot 5.
+
+<Picture 7> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 5>, {{HOMU_ID}}. It contributes her exact identity, costume, asymmetric legs, ribbon streamers and wings. Pose and voluntary contour dissolution remain prompt-controlled.
+
+summary: Five hard-cut states transform an escaping name into Madoka’s drawn line. The sequence resolves as a mirrored encounter between the caller and Homura, who silently allows half her named contour to join the nameless wave.
+
+retention_analysis: <Picture 1>: partially_preserved for <Subject 1> while its interior breaks open. <Picture 2>: weak_reference for rupture physics and flash direction only. <Picture 3>: fully_preserved for <Subject 2>’s identity, costume and proportions. <Picture 4>: attribute_transfer to <Subject 3> held by <Subject 2>. <Picture 5>: partially_preserved for <Subject 4>’s severed silhouette while adding one crack. <Picture 6>: weak_reference for mirrored opposition only. <Picture 7>: fully_preserved for <Subject 5>’s identity, costume and proportions. Each reference owns only its declared contribution. Never merge <Subject 2> and <Subject 5>. Never exchange their hair, eyes, clothing, accessories, limbs, weapons or facial features.
+
+detailed_description: {{TH:A3}}
+STAGE: One straight screen axis joins stone, fingertips, moon crack, bowstring and the final distance. Cold violet enters from the left. Rose light belongs to <Subject 2>. Red remains confined to ribbons, gems and character-bound accents.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. <Subject 1> occupies the middle plane without any person. At 00:00.280, pressure from its cosmic interior splits the carved contour. The <Picture 2> flash drives fragments outward. At 00:00.860, a broad fragment crosses the lens right-to-left, larger than the stone and softly out of focus. Released light escapes vertically through the opening.
+
+[Shot 2] At 00:01.170, hard cut behind that fragment to a static macro of <Subject 2>’s hand. At 00:01.433, <Subject 3> settles grip-first into her palm. Its opaque limbs lock into place. At 00:02.013, one fingertip touches the string. The escaping light aligns with that contact.
+
+[Shot 3] At 00:02.340, hard cut to a static medium-wide view of <Subject 5> beneath <Subject 4>. {{BLACK_WAVE}} rises behind her as borderless fluid. At 00:02.597, she relaxes one outlined edge into the wave. Each later snare removes another small section of her hard contour. Her posture remains deliberate and composed. At 00:04.327, a crack crosses the surviving half-moon along the same axis.
+
+[Shot 4] At 00:04.630, hard cut to a static frontal close-up of <Subject 2>. The lunar crack matches <Subject 3>’s string position. At 00:04.895, one tear begins descending. She draws through fingers, wrist, elbow and shoulder. The taut light becomes a hard line crossing the frame. The tear track forms a second line beside it. Both lines expose narrow masks of pale white distance while their contents remain inside crisp edges.
+
+[Shot 5] At 00:06.920, the light line sweeps across the lens at very close range and reveals a static frontal mirrored composition. <Subject 2> faces forward as the caller. <Subject 5> occupies the opposing plane. Half her contour remains hard; half flows into {{BLACK_WAVE}} by her own settled posture. Their expressions carry grief and recognition. A crack-shaped window draws itself between them. Its hard border contains the vertical distance. The wave remains behind both figures. From 00:06.917 through 00:09.250, the window narrows, the string tightens and the light line intensifies. The arrow stays seated. The final composition locks briefly before C54.
+
+MASK AND Z-ORDER LAW: far darkness, {{BLACK_WAVE}}, <Subject 5>, central window, <Subject 2>, bowstring, tear line and foreground fragments occupy separate ordered planes. Window contents stop at their hard borders.
+
+BEAT LAW: {{BEATLAW}} Snares trigger fractures, contour removal and panel locks. Kicks trigger fragment recoil, fingertip contact and string tension. Cymbals trigger the upward flash and light-line exposure. Remaining transients move only stone dust, string fibres, tear highlights, cloth edges and wave folds.
+
+NAME LAW: a name is a hard contour. {{BLACK_WAVE}} has no enclosing edge. Drawing the bow draws the line used to call, and the line remains aimed at recognition rather than impact.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+NO-TEXT RULE: show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+
+overall_soundscape: Dry visible-source Foley in restrained stereo: stone pressure, sharp mineral rupture, fragments crossing air, an upward pressure rush, bow material settling, fingertip against string, lunar cracking, soft fluid folds, bow-limb strain, one restrained breath, tear contact and a close light-line sweep. Every sound remains attached to its visible source.
+
+non_diegetic_music: N/A

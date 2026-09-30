@@ -1,0 +1,43 @@
+subject_definitions:
+<Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, Choka. It contributes only her identity, costume and gold-rimmed glasses.
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, Selma Therese. It contributes only her identity and costume.
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, Devil Homura: {{HOMU_ID}}.
+<Picture 4> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Subject 4>, the repeated name stones: {{NAME_STONE}}. It contributes only stone shape, carved-line construction and the star-filled depth visible inside each carving.
+<Picture 5> (reference role: crop geometry and viewpoint only, not a target frame and not a storyboard anchor) defines <Subject 5>, the half moon: {{HALF_MOON}}. It contributes only the straight cut geometry of the moon.
+<Subject 6> is the shadow crossing the lunar face: {{MARG_SHADOW}}.
+The environment, depth and compositing follow {{TH:ROOT}} {{LENS}} {{FOCUS}} {{DP}} {{ST2}}.
+
+summary:
+Devil Homura lands among the name stones while Choka and Selma watch from far away. They recognize the frightened child suggested by her cast shadow, then silently avert their eyes and restore their distance.
+
+retention_analysis:
+<Picture 1> is fully_preserved for <Subject 1>’s identity, costume and glasses; pose, hand position and crop are partially_preserved.
+<Picture 2> is fully_preserved for <Subject 2>’s identity and costume; pose and crop are partially_preserved.
+<Picture 3> is fully_preserved for <Subject 3>’s identity and costume; face visibility and pose are partially_preserved in Shots 1–2 because her back faces the watchers.
+<Picture 4> is fully_preserved for each <Subject 4> stone’s material and carving design; the target supplies their number, spacing and field arrangement.
+<Picture 5> is fully_preserved for <Subject 5>’s straight cut edge; the surrounding sky is weak_reference.
+Never merge the three characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+detailed_description:
+STAGE: A field of <Subject 4> stones descends into near-black depth. <Subject 3> occupies the near ground. <Subject 1> and <Subject 2> stand together on a distant rise behind her. <Subject 5> hangs above that rise.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. <Subject 3> is already descending feet-first between two rows of <Subject 4>. <Subject 1> and <Subject 2> are small full-body figures in the far upper-right. Cold violet light crosses the field from low left, while the surrounding ground forms broad near-black planes. The frame contains exactly three people. A slow Pedestal Down follows <Subject 3> through one body-height. The carved lines in nearby stones remain hard, and star fields appear only inside those grooves. Her cast shadow already has narrow shoulders, a bowed head and childlike proportions. Her body retains its tall devil silhouette. At 1.152 seconds the camera is at knee height, and <Subject 3>’s boots are one hand’s width above the nearest stone. At 2.012 seconds the camera is at ankle height, and both boots press into the pale dust. The impact releases one low ring from the stone beneath her.
+
+[Shot 2] At 00:02.302, a hard cut introduces the sky above all three figures. <Subject 3> stands full-body in the lower centre with her back toward the distant watchers. <Subject 1> and <Subject 2> remain side by side on the high right ridge. <Subject 5> fills one quarter of the upper-left frame. Static Shot. <Subject 3> keeps her gaze lowered toward the stones. <Subject 6> appears on the farthest depth plane, slides across the lunar face, settles over exactly half of its remaining luminous area, and LOCKS. Its boundary is hard-edged. One cold white specular thread catches along the moon’s straight cut edge. Inside the shadow boundary the lunar surface becomes featureless black; outside it the exposed surface stays cold white. At 3.452 seconds the camera is still at stone height, and the settled shadow covers half of the remaining lunar face.
+
+[Shot 3] At 00:04.330, a hard cut introduces a frontal chest-up view of the watchers. The frame contains exactly three people. <Subject 1> and <Subject 2> stand shoulder to shoulder; both faces fill the upper half of the frame, chest-up. <Subject 3> appears between them as a small out-of-focus back-facing shape near the lower edge. A slow Push In uses small amplitude. Both watchers initially look directly toward <Subject 3>. Their eyes hold the reflected child-proportioned shadow at one fifth of each iris height. Both mouths hold one closed resting shape. <Subject 2> keeps her chin level and her hands still. At 6.20 seconds <Subject 1> removes her glasses with her right hand. At 6.338 seconds the camera is at face distance, and the glasses have cleared both of <Subject 1>’s eyes.
+
+[Shot 4] At 00:06.918, a hard cut introduces the completed verdict. Exactly three people remain visible. <Subject 1> and <Subject 2> are chest-up in three-quarter profile; both faces fill the upper half of the frame. <Subject 3> remains small and blurred between their shoulders. Static Shot. Both watchers’ eyes are already directed toward opposite outer edges of the frame. Their chins remain level. Their mouths retain the same closed resting shape. At 7.30 seconds <Subject 1> puts them back on. The right hand seats both temples in one precise motion and lowers out of frame. From 8.25 seconds onward, every figure holds the same screen size and position for the final 0.70 seconds.
+
+SHADOW LAW: <Subject 3>’s landing reveals a child-proportioned cast shadow. That visible mismatch triggers recognition in both watchers.
+
+VERDICT LAW: Removing the glasses exposes recognition. Replacing them completes the averted gaze and fixes the judgement.
+
+BEAT LAW: Each chosen snare triggers one hard cut, glasses action or fixed eye-line change. Kick accents land through <Subject 3>’s boots and stone contact; the single cymbal produces one cold glint on the glasses rim.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+
+overall_soundscape:
+A low wind moves across the stone field, separated into near and distant layers. <Subject 3>’s boots compress dry dust, and the contacted stone answers with a short hollow ring. The glasses produce two small tactile clicks as they leave and return to <Subject 1>’s face. Closed resting mouths leave wind, stone and glasses as the only close sound sources.
+
+non_diegetic_music: N/A

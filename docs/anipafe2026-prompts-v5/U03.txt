@@ -1,0 +1,42 @@
+subject_definitions:
+<Subject 1> is human Madoka in school uniform as shown in <Picture 2>. <Picture 1> (reference role: hand and sleeve definition only, not a target frame and not a storyboard anchor) contributes the anatomy, costume edge and viewing angle of <Subject 1>'s offered hand in Shot 1. Written instructions control its position, motion, recipient contour, water and crop.
+
+<Picture 2> (reference role: paired subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1> and <Subject 2>, their faces, costumes, relative scale and restrained expressions. <Subject 2> is {{HOMU_ID}}. Written instructions control their screen positions, the glass plane, camera distance and colour change.
+
+<Picture 3> (reference role: glass material and fracture-geometry definition only, not a target frame and not a storyboard anchor) contributes the transparent pane, large irregular shards and hard white gaps in Shot 3. Written instructions control impact timing, depth order, shadow and the far space beyond the gaps.
+
+<Subject 3> is {{BLACK_WAVE}}.
+<Subject 4> is {{SOURCELESS_SHADOW}}.
+
+summary:
+A cropped hand completes the film’s only successful reach, and one white line briefly gives the reached absence a contour. Madoka and Homura then face each other through flawless glass before one isolated impact leaves shards, white space, shadow and the first distant trace of <Subject 3>.
+
+retention_analysis:
+<Picture 1>: partially_preserved for Shot 1 — preserve the offered hand, sleeve edge and anatomy while the written crop and reaching motion replace its original staging.
+<Picture 2>: fully_preserved for the identities, faces, costumes, relative scale and expressions of <Subject 1> and <Subject 2>; partially_preserved for its original environment and framing.
+<Picture 3>: partially_preserved for transparent material, shard scale and fracture vocabulary while written instructions govern the impact and final depth arrangement.
+<Subject 1>: partially_preserved in Shot 1 because only the hand and forearm are visible; fully_preserved in Shot 2.
+<Subject 2>: fully_preserved in Shot 2.
+Never merge <Subject 1> and <Subject 2>. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+detailed_description: {{TH:MEM}}
+STAGE: Three memories share a frontal viewing axis and use hard cuts. Shot 1 contains a cropped hand, an empty arm-shaped contour and dark water. Shot 2 contains exactly two people separated by an unbroken glass plane. Shot 3 contains zero people and places glass fragments before white absence, <Subject 4>, and a small far-depth trace of <Subject 3>.
+
+[Shot 1] A cropped hand and forearm belonging to <Subject 1> enter from the upper right and occupy one third of the frame. Dark blue-grey water fills the background beneath a strong oval vignette. An empty human arm-shaped absence reaches from the lower left, with only its fingertips and shoulder arc visible. 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Static Shot. <Subject 1>'s head and torso remain beyond the upper-right crop. The offered palm lowers steadily toward the empty fingertips. The water moves in broad, slow sheets while the two arm shapes stay sharp in the subject plane. At 3.920 seconds, the fingertips meet and the water becomes still beneath the contact. a single hair-thin white line draws itself along the silhouette of the reaching arm from fingertip to shoulder within 0.4 seconds, then fades. The line has a hard edge, lies on the subject-depth plane, and catches one cold specular glint as it reaches the shoulder. The completed arm contour settles for a brief instant and remains LOCKED beneath the fading light. The joined fingertip position holds through the final 0.700 seconds.
+
+[Shot 2] At 00:04.620, the frame contains exactly two people at waist-up scale, with <Subject 1> on the left and <Subject 2> on the right. Their profiles face each other across a flawless vertical glass pane centered in the frame. Broad cold blue-grey city planes fill the distance beneath the same dark memory vignette. A slow Push In begins without changing their eye line. <Subject 1> holds a small, direct smile. <Subject 2>'s chin remains level while her eyes rest downward, one hand hanging motionless beside the glass. Their communication consists entirely of the smile, the lowered gaze and the measured space between their hands. The pane remains transparent and intact. Its surface gradually shifts by one narrow tonal step from blue-grey to colder pale steel-blue. Skin, clothing and the distant city retain their established memory colours. At 8.540 seconds, both faces occupy equal visual weight on opposite sides of the pane. The Push In decelerates, stops, and leaves one slight movement in hair and ribbon before the final 0.700-second hold.
+
+[Shot 3] At 00:09.240, the glass pane fills the frame from edge to edge. The frame contains exactly zero people. Pale blue-grey glass occupies the near and middle planes, while hard white space and a small formless stain of <Subject 3> occupy the far plane. Static Shot. At exactly 9.243 seconds, one impact from beyond the pane breaks it into large irregular fragments and angular white gaps. Each shard moves outward once, catches a cold edge glint, decelerates, and settles into a fixed depth plane. <Subject 4> crosses only the glass surfaces as one broad curved boundary without revealing a body. Through one upper gap, <Subject 3> appears as an edgeless black fluid trace smaller than one tenth of the frame. The trace remains far behind the locked shards. The white gaps stay brightest and prepare the white water field of the following cut. During the final 0.700 seconds, every shard is LOCKED while one suspended edge retains a faint physical tremor.
+
+NAME LAW: Fingertip contact triggers one hard-edged contour trace. The trace fades after the reached absence has acquired a readable outline.
+
+GLASS LAW: The held confrontation cools only the flawless pane by one tonal step. The isolated impact converts that same pane into shards and white openings.
+
+BEAT LAW: {{BEATLAW}} The raw kick at 9.243 seconds triggers the unit’s sole fracture event. The movements before 9.243 seconds use sustained, unaccented motion.
+
+{{LENS}} {{DP}} {{FOCUS}} {{ST2}}
+
+overall_soundscape:
+Dark-water movement, distant wind and restrained cloth rustle fill Shots 1 and 2 with rounded, aperiodic attacks. Fingertip contact, breathing and the hand near the glass remain quiet visible-source sounds. At 9.243 seconds, one dry glass fracture becomes the sole hard transient, followed by brief shard tones, displaced air, a low structural groan and one fading glass tremor.
+
+non_diegetic_music: N/A

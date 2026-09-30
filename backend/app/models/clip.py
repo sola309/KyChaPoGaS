@@ -3,8 +3,8 @@ from sqlmodel import SQLModel, Field
 
 
 class ClipBase(SQLModel):
-    track_id: int = Field(foreign_key="track.id")
-    asset_id: Optional[int] = Field(default=None, foreign_key="asset.id")
+    track_id: int = Field(foreign_key="track.id", index=True)
+    asset_id: Optional[int] = Field(default=None, foreign_key="asset.id", index=True)
     start_frame: int = 0       # position on the timeline (in frames)
     duration_frames: int = 30  # length of the clip (in frames)
     asset_in_frame: int = 0    # which frame of the source asset to start from
@@ -18,6 +18,8 @@ class ClipBase(SQLModel):
     # xfade, so the timeline length (and music sync) never changes.
     transition_in: str = ""
     transition_frames: int = 0   # transition duration (timeline frames)
+    transition_ease: str = "linear"   # 重なり遷移のカーブ linear/ease/ease-in/ease-out(書き出しは linear 近似)
+    transition_hold: float = 0.5      # 白/黒遷移で完全に色になる位置(0..1)
     # Audio fades (audio clips; timeline frames at project fps)
     fade_in_frames: int = 0
     fade_out_frames: int = 0
@@ -67,6 +69,8 @@ class ClipUpdate(SQLModel):
     speed_ease: Optional[str] = None
     transition_in: Optional[str] = None
     transition_frames: Optional[int] = None
+    transition_ease: Optional[str] = None
+    transition_hold: Optional[float] = None
     fade_in_frames: Optional[int] = None
     fade_out_frames: Optional[int] = None
     opacity: Optional[float] = None

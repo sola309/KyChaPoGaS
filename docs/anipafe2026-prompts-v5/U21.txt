@@ -1,0 +1,34 @@
+subject_definitions:
+<Picture 1> (reference role: subject identity and canonical costume definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, Devil Homura: {{HOMU_ID}}. The reference contributes identity, exact costume, asymmetric leg design, ribbon streamers, wings and proportions. Written instructions alone control framing, pose, shadows, light and environment.
+
+<Picture 2> (reference role: subject identity and school-uniform definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, human Madoka in school uniform. The reference contributes identity, exact clothing and proportions. Written instructions alone control framing, pose, tears, light and environment.
+
+<Element 1> is the nameless black wave: {{BLACK_WAVE}}. It contributes an edgeless black fluid mass on the far rear planes.
+
+summary:
+Generate one complete 11.542-second Ref2VA sequence. <Subject 1> speaks through three delayed shadows, then <Subject 2> answers with a measured refusal that wakes <Element 1> behind her.
+
+retention_analysis:
+<Picture 1>: fully_preserved for <Subject 1>’s identity, costume, body proportions, asymmetric legs, ribbons and wings. Source framing, pose, lighting and environment are released.
+<Picture 2>: fully_preserved for <Subject 2>’s identity, school uniform and body proportions. Source framing, pose, lighting and environment are released.
+The sequence contains exactly two people, each alone in separate shots. Never merge <Subject 1> and <Subject 2>. Never exchange their hair, eyes, clothing, ribbons, wings, accessories or facial features.
+
+detailed_description: {{TH:A3}}
+STAGE: Use one fixed ground-level camera mark for the entire sequence. Both speakers occupy reciprocal standing marks on the same axis. Their faces retain identical size, angle, eye line and negative-space geometry when the identity changes at 00:04.580. Five depth planes run from sparse near haze through the active subject, three rear shadow planes and the distant black field.
+
+[Shot 1] <Subject 1> is already alone in a tight head-and-shoulders close-up at center, with her face occupying two fifths of the frame. She faces the lens from a slight low angle; cold violet light touches her left cheek while her right cheek rests in near-black. Behind her, three flat shadows of her own head and shoulders stand on separate planes; each shadow's mouth opens and closes 0.2 seconds after hers. 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. <Subject 1> (S1) sings <d>[English] We know the hell when you get my real love</d>. Her lips open one syllable wide on each word of <d>[English] We know the hell when you get my real love</d> and close between words. Her jaw stays set. Tension travels visibly through her throat. The three delayed mouths make the singular body appear to speak as a plural chorus. A thin red rim touches only her ribbon streamers. Each shadow has a hard outer edge carrying a narrow violet highlight.
+
+[Shot 2] At 00:02.280, <Subject 1> appears at the identical camera mark, face size and angle. The three head-and-shoulder shadows now span the rear planes at clearly separated depths. Their pale mouth lines remain visible against the near-black wall. Static Shot. The snare triggers a hard registered match cut into this separated state. The shadow planes slide a hand’s width apart, settle without drift and LOCK behind <Subject 1>. She continues the same sentence without restarting it. Her lips close after “love.” The nearest shadow closes its mouth 0.2 seconds later; the middle and far shadows follow at equal delays. Her ribbons make one small secondary movement, then the entire composition becomes still.
+
+[Shot 3] At 00:04.580, <Subject 2> is already alone on the reciprocal standing mark in the same tight head-and-shoulders framing. Her face occupies the same two fifths of the frame, with the same low camera angle and eye line. Two tears stand on her lower eyelids and do not fall. Static Shot. <Subject 2> (S1) sings <d>[English] Does not go to your past</d>. Her lips open one syllable wide on each word of <d>[English] Does not go to your past</d> and close between words. Her articulation stays small and measured. Her fixed jaw and drawn throat carry the refusal. At 4.587 seconds, the opening kick makes <Element 1> rise one finger-width from the far rear plane behind her shoulders. At 6.297 seconds, the snare advances its edgeless surface onto the next rear plane while <Subject 2> stays sharp and still in front. Each cymbal sends one cold violet reflection across the moving fluid. From 9.208 seconds through 11.542 seconds, the wave height, wind pressure and separation between rear planes increase continuously. The wave reaches two thirds of the frame while remaining behind her. At 10.857 seconds, her lips close and her face settles. Her hair and clothing complete one restrained overshoot, then hold still for the final 0.685 seconds as <Element 1> continues toward C47.
+
+SHADOW LAW: <Subject 1>’s three separated shadows are the visible plural “We.” Her mouth triggers their articulation with successive 0.2-second delays.
+
+BEAT LAW: {{BEATLAW}} The 00:02.280 snare separates and locks the shadow planes. The 4.587 kick wakes <Element 1>; the 6.297 snare advances it, and later impacts increase only the world behind <Subject 2>.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape:
+The two close English vocal performances use restrained breath, narrow mouth movement and audible throat tension. C45 carries a faint ribbon rustle and one dry shadow-lock impact. C46 adds distant fluid pressure, rising wind and low stone-like impacts, each attached to visible movement behind <Subject 2>.
+
+non_diegetic_music: N/A

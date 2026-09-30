@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { Track, Clip, ClipUpdate, SpeedEase } from '../api/client'
 import { tracksApi, clipsApi } from '../api/client'
 import { useCollabStore } from './collabStore'
+import { filterCarry } from '../components/Timeline/filterLayers'
 
 // Tell other collaborators a committed timeline change happened (they re-sync).
 const notifyEdit = () => { try { useCollabStore.getState().broadcastEdit() } catch { /* noop */ } }
@@ -43,10 +44,17 @@ interface TimelineState {
   reorderTrack: (dragId: number, targetId: number) => Promise<void>
   deleteTrack: (trackId: number) => Promise<void>
   addClip: (trackId: number, assetId: number | null, startFrame: number, durationFrames: number) => Promise<Clip>
+  /** ■単色/◌ぼかし フィルタークリップを作る(asset_id=null, kind+attrs_json)。アンドゥ可 */
+  addFilterClip: (trackId: number, kind: 'solid' | 'blur', startFrame: number, durationFrames: number, attrsJson: string) => Promise<Clip>
+  /** 映像トラックを任意の order で作る(最前面に置くなら既存の最小 order - 1) */
+  addTrackAt: (projectId: number, type: 'video' | 'audio' | 'reference', name: string, order: number) => Promise<Track>
   placeClip: (projectId: number, trackType: 'video' | 'audio' | 'reference', assetId: number, durationFrames: number, atFrame?: number) => Promise<Clip>
   moveClip: (clipId: number, prevFrame: number, newFrame: number) => Promise<void>
   trimClip: (clipId: number, before: ClipUpdate, after: ClipUpdate) => Promise<void>
   deleteClip: (clipId: number) => Promise<void>
+  /** Imageトラックのピンはペア(開始/終了)で削除する。ピンでなければ deleteClip と同じ。
+   *  1本だけ消すと以降の全カットのペアがずれる(2026-09-07 の事故)ため、単独削除の入口を塞ぐ */
+  deletePin: (clipId: number) => Promise<void>
   splitClip: (clipId: number, splitFrame: number) => Promise<void>
   updateClip: (clipId: number, data: ClipUpdate) => Promise<void>
   // Optimistic + debounced persist — for live slider/keyframe scrubbing in the
@@ -65,6 +73,12 @@ interface TimelineState {
   setEditingClipId: (id: number | null) => void
   // Preview-only layer visibility (declutter / lighten preview; does NOT affect render)
   previewHidden: number[]                 // track ids hidden in the compositor
+  /** クリップ端ドラッグのモード: trim=切り詰め / stretch=素材範囲そのまま尺と速度を同時に変える(Ctrl/⌘で一時反転) */
+  edgeStretch: boolean
+  /** 🔍解像度表示: クリップに解像度・生成ティアのバッジを出し、ネイティブ未満を赤枠にする */
+  showRes: boolean
+  setShowRes: (v: boolean) => void
+  setEdgeStretch: (v: boolean) => void
   toggleTrackHidden: (trackId: number) => void
   // クリップごとの読み込み済み範囲(クリップ長に対する割合の区間リスト)。
   // PreviewPlayerが定期更新し、TrackLaneが配信サービス風のバッファバーとして描画する。
@@ -107,6 +121,10 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     canUndo: false,
     canRedo: false,
     previewHidden: [],
+    showRes: (() => { try { return localStorage.getItem('timeline.showRes') === '1' } catch { return false } })(),
+    setShowRes: (v) => { try { localStorage.setItem('timeline.showRes', v ? '1' : '0') } catch { /* ignore */ } ; set({ showRes: v }) },
+    edgeStretch: (() => { try { return localStorage.getItem('timeline.edgeStretch') === '1' } catch { return false } })(),
+    setEdgeStretch: (v) => { try { localStorage.setItem('timeline.edgeStretch', v ? '1' : '0') } catch { /* ignore */ } ; set({ edgeStretch: v }) },
     clipBuffered: {},
     setClipBuffered: (m) => set({ clipBuffered: m }),
     clipBufferedHQ: {},
@@ -215,6 +233,38 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       return clip
     },
 
+    addFilterClip: async (trackId, kind, startFrame, durationFrames, attrsJson) => {
+      const data = {
+        track_id: trackId, asset_id: null, start_frame: startFrame,
+        duration_frames: durationFrames, asset_in_frame: 0, kind, attrs_json: attrsJson,
+      }
+      const clip = await clipsApi.create(data)
+      set(s => ({ clips: [...s.clips, clip] }))
+      let liveId = clip.id
+      pushHistory({
+        label: kind === 'solid' ? '単色レイヤー追加' : 'ぼかしレイヤー追加',
+        undoFn: async () => {
+          const id = liveId
+          await clipsApi.delete(id)
+          set(s => ({ clips: s.clips.filter(c => c.id !== id) }))
+        },
+        redoFn: async () => {
+          const c2 = await clipsApi.create(data)
+          liveId = c2.id
+          set(s => ({ clips: [...s.clips, c2] }))
+        },
+      })
+      notifyEdit()
+      return clip
+    },
+
+    addTrackAt: async (projectId, type, name, order) => {
+      const track = await tracksApi.create({ project_id: projectId, name, track_type: type, order })
+      set(s => ({ tracks: [...s.tracks, track] }))
+      notifyEdit()
+      return track
+    },
+
     // Place an asset on a track (creating the track if needed). Appends at the
     // track end by default, or at `atFrame` when given. Used to auto-place
     // generated assets and to drop extracted keyframes onto a Reference track.
@@ -263,8 +313,19 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
     },
 
     trimClip: async (clipId, before, after) => {
-      await clipsApi.update(clipId, after)
-      applyLocal(clipId, after as Partial<Clip>)
+      // サーバーは映像クリップを伸ばすとき尺をカット境界で切り詰めることがある
+      // (routers/clips.py _clamp_duration_to_cut)。要求値でなく返り値を反映し、
+      // 速度伸縮(speed 同時指定)で尺が変わった場合は素材範囲を保つよう速度を再計算する。
+      const persist = async (data: ClipUpdate) => {
+        let upd = await clipsApi.update(clipId, data)
+        if (data.speed != null && data.duration_frames != null && upd.duration_frames !== data.duration_frames) {
+          const span = data.duration_frames * data.speed
+          const sp = Math.max(0.05, Math.min(8, span / Math.max(1, upd.duration_frames)))
+          upd = await clipsApi.update(clipId, { speed: Number(sp.toFixed(4)) })
+        }
+        set(s => ({ clips: s.clips.map(c => c.id === clipId ? upd : c) }))
+      }
+      await persist(after)
       notifyEdit()
 
       pushHistory({
@@ -274,8 +335,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
           applyLocal(clipId, before as Partial<Clip>)
         },
         redoFn: async () => {
-          await clipsApi.update(clipId, after)
-          applyLocal(clipId, after as Partial<Clip>)
+          await persist(after)
         },
       })
     },
@@ -306,6 +366,40 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
       })
     },
 
+    deletePin: async (clipId) => {
+      const st = get()
+      const clip = st.clips.find(c => c.id === clipId)
+      if (!clip) return
+      const tr = st.tracks.find(t => t.id === clip.track_id)
+      const isPinTrack = !!tr && tr.track_type === 'reference' && tr.name === 'Image'
+      if (!isPinTrack) return st.deleteClip(clipId)
+      const pins = st.clips.filter(c => c.track_id === clip.track_id && c.asset_id != null)
+        .sort((a, b) => a.start_frame - b.start_frame || a.id - b.id)
+      const idx = pins.findIndex(c => c.id === clipId)
+      const partner = idx < 0 ? undefined : pins[idx % 2 === 0 ? idx + 1 : idx - 1]
+      const targets = partner ? [clip, partner] : [clip]
+      for (const c of targets) await clipsApi.delete(c.id)
+      const ids = new Set(targets.map(c => c.id))
+      set(s => ({ clips: s.clips.filter(c => !ids.has(c.id)) }))
+      notifyEdit()
+
+      let restored: number[] = []
+      const datas = targets.map(c => { const { id: _id, ...d } = c as Clip & { id: number }; return d })
+      pushHistory({
+        label: partner ? 'カット(ピン2本)削除' : 'ピン削除',
+        undoFn: async () => {
+          const created = await Promise.all(datas.map(d => clipsApi.create(d)))
+          restored = created.map(c => c.id)
+          set(s => ({ clips: [...s.clips, ...created] }))
+        },
+        redoFn: async () => {
+          const ids2 = restored; restored = []
+          for (const id of ids2) await clipsApi.delete(id)
+          set(s => ({ clips: s.clips.filter(c => !ids2.includes(c.id)) }))
+        },
+      })
+    },
+
     splitClip: async (clipId, splitFrame) => {
       const clip = get().clips.find(c => c.id === clipId)
       if (!clip) return
@@ -319,11 +413,13 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
           track_id: clip.track_id, asset_id: clip.asset_id,
           start_frame: clip.start_frame, duration_frames: leftDuration,
           asset_in_frame: clip.asset_in_frame,
+          ...filterCarry(clip, 0, leftDuration),
         }),
         clipsApi.create({
           track_id: clip.track_id, asset_id: clip.asset_id,
           start_frame: splitFrame, duration_frames: rightDuration,
           asset_in_frame: clip.asset_in_frame + leftDuration,
+          ...filterCarry(clip, leftDuration, rightDuration),
         }),
       ])
       await clipsApi.delete(clipId)
@@ -345,6 +441,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
             track_id: clip.track_id, asset_id: clip.asset_id,
             start_frame: clip.start_frame, duration_frames: clip.duration_frames,
             asset_in_frame: clip.asset_in_frame,
+            ...(clip.kind && clip.kind !== 'media' ? { kind: clip.kind, attrs_json: clip.attrs_json, opacity: clip.opacity, blend: clip.blend } : {}),
           })
           restoredId = restored.id
           leftId = -1
@@ -361,11 +458,13 @@ export const useTimelineStore = create<TimelineState>((set, get) => {
               track_id: clip.track_id, asset_id: clip.asset_id,
               start_frame: clip.start_frame, duration_frames: leftDuration,
               asset_in_frame: clip.asset_in_frame,
+              ...filterCarry(clip, 0, leftDuration),
             }),
             clipsApi.create({
               track_id: clip.track_id, asset_id: clip.asset_id,
               start_frame: splitFrame, duration_frames: rightDuration,
               asset_in_frame: clip.asset_in_frame + leftDuration,
+              ...filterCarry(clip, leftDuration, rightDuration),
             }),
           ])
           await clipsApi.delete(rId)

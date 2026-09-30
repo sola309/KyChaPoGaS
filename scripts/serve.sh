@@ -75,9 +75,11 @@ start() {
     echo -e "  ${YELLOW}[安全]${NC} ターミナルは管理者IP (${ADMIN_IP}) からのみ許可。招待者は不可"
   fi
 
+  # 監視は backend/app のみ。backend/ 全体を監視すると data/(20GB超・ジョブが常時書く)と
+  # .venv(8000ディレクトリ)まで inotify 対象になる。main.py を編集した時だけ手動再起動。
   spawn backend 8002 "$ROOT/backend" \
     "${TERM_ENV[@]}" "$ROOT/backend/.venv/bin/uvicorn" main:app --host 0.0.0.0 --port 8002 \
-    --reload --reload-dir "$ROOT/backend/app" --reload-dir "$ROOT/backend" \
+    --reload --reload-dir "$ROOT/backend/app" \
     --timeout-graceful-shutdown 5
 
   # vite build --watch rebuilds dist/ on every change (FastAPI serves it live).

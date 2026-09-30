@@ -1,0 +1,38 @@
+subject_definitions: <Subject 1> is {{HOMU_ID}}. <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the exact identity, costume, proportions and line-art design of <Subject 1>. <Picture 2> (reference role: weapon design only, not a target frame and not a storyboard anchor) defines <Object 1>, the bow transferred into the hands of <Subject 1>. <Picture 3> (reference role: creature definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{MAJUU_ID}}. <Picture 4> (reference role: colour-material definition only, not a target frame and not a storyboard anchor) contributes its hard violet optical colour solely to the emitted arrow light. <Picture 5> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Object 2>: {{ORB_ID}}.
+
+summary: Colour and affection are carried upward from the rewritten water world while <Subject 1> remains motionless. She then shoots a nameless <Subject 2>, revealing {{BLACK_WAVE}}, before an empty <Object 2> extinguishes itself and falls sideways.
+
+retention_analysis: <Picture 1> is fully_preserved for the identity, costume and proportions of <Subject 1>; pose, framing, weapon use and environment remain newly composed. <Picture 2> is fully_preserved for the exact design of <Object 1> and attribute_transfer into the hands of <Subject 1>. <Picture 3> is partially_preserved for the anatomy, cloth, head lattice and dissolution behaviour of <Subject 2>; framing and visible fragment count may change. <Picture 4> is weak_reference for the violet arrow-light hue only. <Picture 5> is fully_preserved for the complete design and proportions of <Object 2>; its scale becomes hand-sized and its interior state becomes hollow. Never merge the subjects. Never exchange their hair, eyes, clothing, accessories or facial features. Reference-sheet frames, panels, swatches, measurements and layouts remain source metadata rather than pictured elements.
+
+detailed_description: {{TH:MEM}}
+STAGE: Three registers form a descending relay. White water holds rising colour bands behind <Subject 1>. A cold empty plaza holds the bow, arrow and cropped fragments of <Subject 2>. A black floor holds only <Object 2>. Every background is reduced to large unmarked planes.
+
+PALETTE: cold blue-grey, porcelain white and near-black. Motif red remains saturated. Arrow light is hard violet-white.
+
+[Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Static Shot across white water. <Subject 1> stands motionless in the lower-left third. Flat bands of rose, cream and violet peel upward from the background, one band per snare. Each rising band acts as a hard-edged mask. The area it leaves becomes cold blue-grey. The motif-red elements on <Subject 1> retain their saturation.
+
+[Shot 2] At 00:01.993, hard cut to a later drained state. Use a small-amplitude slow Tilt Up. The remaining colour bands pass behind <Subject 1>, cross the upper foreground close to the lens, and leave empty porcelain-grey planes. At 00:04.303, the final non-red band clears the frame. The camera stops. <Subject 1> holds the same posture while the rising sheets overshoot and settle.
+
+[Shot 3] At 00:04.620, hard cut to a static macro battle view containing <Object 1>, the hands of <Subject 1>, and its taut string. The last saturated line from the previous shot shares the string’s screen axis. At 00:04.738, a kick releases one violet-white arrow. String recoil and displaced cloth provide the follow-through. The frame keeps the wider battle outside this cropped view.
+
+[Shot 4] At 00:06.608, hard cut to a fixed ground-level view of <Subject 2>. At 00:06.898, the arrow crosses its cloth and reveals the absence beneath its defined surface. <Subject 2> remains upright while its outer form separates into dark liquid fragments. The fragments lose every hard edge, descend under gravity and collect as {{BLACK_WAVE}} on the floor. Later impacts detach more edgeless matter without producing a fallen body.
+
+[Shot 5] At 00:09.240, hard cut from the final arrow glint to a static macro view of <Object 2>. Only the hand-sized vessel and an unmarked black floor occupy the frame. Its shell rests upright, but its central volume is hollow. Several small lights remain inside separate window apertures. Each snare extinguishes one light and leaves that aperture dark.
+
+[Shot 6] At 00:11.223, hard cut to the advanced empty state. Use a small-amplitude slow Push In. The near edge of the mount, the shell and the far windows travel at separate rates. At 00:13.093, the final internal light vanishes and the unsupported vessel tips sideways. At 00:13.523, its mount touches the floor with one dry impact. It settles and LOCKS. The floor edge remains a hard horizontal line for the next cut.
+
+LOSS LAW: Each rising band removes its own visible colour. Motif red alone remains below.
+
+NAME LAW: Arrow impact reveals rather than kills. Defined cloth opens; edgeless {{BLACK_WAVE}} remains and pools beneath it.
+
+ORB LAW: Each snare removes one internal light. The final extinction causes the physical sideways fall.
+
+BEAT LAW: {{BEATLAW}} The snares at 00:01.993, 00:06.608 and 00:11.223 create hard cuts. The snare at 00:04.303 completes the colour loss. The kicks at 00:04.738 and 00:06.898 create release and impact. After 00:09.240, each snare extinguishes one visible window light. The final extinction at 00:13.093 triggers the fall, and 00:13.523 locks the landing. Remaining kicks and snares become band tension, string recoil, cloth separation, liquid contact or shell ticks within the current action.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All surfaces remain unmarked.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: Visible-source foley only: paper-like colour sheets peeling upward, shallow water pressure, taut bow fibre, one bowstring snap, arrow hiss, cloth separation, viscous liquid contact, small internal glass ticks and the dry contact of the vessel’s mount against the floor. Every sound remains attached to its pictured source.
+
+non_diegetic_music: N/A

@@ -1,0 +1,49 @@
+subject_definitions:
+<Picture 1> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Object 1>, {{NAME_STONE}}. It contributes the stone’s exact carved structure and visible inner space. Fracture direction, scale and lighting remain controlled by the prompt.
+
+<Picture 2> (reference role: fracture-and-flash behaviour only, not a target frame and not a storyboard anchor) contributes the physical breakup, fragment scale and upward flash to Shot 1. It contributes neither framing nor surrounding space.
+
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, Madoka in her referenced magical-girl form. It contributes her exact identity, costume and proportions. Framing, pose and expression remain controlled by the prompt.
+
+<Picture 4> (reference role: weapon definition only, not a target frame and not a storyboard anchor) defines <Object 2>, Madoka’s bow. It contributes the exact weapon design. Appearance, string tension and light remain controlled by the prompt.
+
+<Picture 5> (reference role: celestial-object definition only, not a target frame and not a storyboard anchor) defines <Object 3>, {{HALF_MOON}}. It contributes the missing right half and straight cut edge. The new crack remains controlled by the prompt.
+
+<Picture 6> (reference role: crop geometry and viewpoint only, not a target frame and not a storyboard anchor) contributes the equal mirrored spacing, central axis and opposed profiles to Shot 5 only.
+
+<Picture 7> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, {{HOMU_ID}}. It contributes her exact identity, costume, covered arms, asymmetric legs, ribbon streamers and wings. Pose, framing and dissolving outline remain controlled by the prompt.
+
+<Object 4> is {{BLACK_WAVE}}.
+
+summary: Five hard-cut states move from a liberated name to the line that calls it. <Subject 2> completes the call while <Subject 1> willingly surrenders half of her outline and offers no visible answer.
+
+retention_analysis:
+<Picture 1>: partially_preserved for <Object 1> while its intact form breaks apart. <Picture 2>: weak_reference for fracture physics and upward flash only. <Picture 3>: fully_preserved for <Subject 2>’s identity, costume and proportions. <Picture 4>: fully_preserved for <Object 2>’s design. <Picture 5>: partially_preserved for <Object 3> while a crack crosses its surviving half. <Picture 6>: weak_reference for Shot 5’s spatial opposition only. <Picture 7>: fully_preserved for <Subject 1>’s identity and costume; partially_preserved for her silhouette boundary in Shots 3 and 5. Each reference owns only its declared contribution. Never merge <Subject 1> and <Subject 2>. Never exchange their hair, eyes, clothing, accessories, limbs, weapons or facial features.
+
+detailed_description: {{TH:A3}} {{TH:ROOT}}
+STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
+
+STAGE: Near-black stone fields occupy the far plane. Violet light enters from the left. White belongs to released names and the bow line. Red remains on character-bound ribbons and accents.
+
+[Shot 1] A single <Object 1> already fills the middle of the frame. The frame contains exactly zero people. Near-black space surrounds the stone on every side. Static Shot. At 00:00.280, pressure from its inner space breaks it outward. A white column, one fifth of the frame width, escapes vertically through the opened core. Hard-edged fragments enter near and middle planes, slide apart, settle and LOCK. At 00:00.860, their carved edges catch one cold specular line. The largest fragment crosses the lens from lower left to upper right at very close range, broader than the stone and softly out of focus.
+
+[Shot 2] At 00:01.170, hard cut to <Subject 2>’s hands against a flat near-black field. Her left palm surrounds a narrow rose-white slit. Her right index finger waits one finger-width from it. Static Shot. At 00:01.433, the hard-edged slit draws itself between her fingers. <Object 2> appears inside it, slides grip-first into the subject plane, settles and LOCKS as an opaque bow. Its edge catches a white specular point while the slit closes behind it. At 00:02.013, close-up: her left hand holds the bow’s grip; her right index finger touches the string.
+
+[Shot 3] At 00:02.340, hard cut to <Subject 1> standing full-length in the lower centre. <Object 4> pools around her feet without a defined edge. <Object 3> hangs in the upper-right background. Static Shot. The frame contains exactly one person. At 00:02.597, <Subject 1> lowers an open covered hand toward <Object 4>. One bright segment of her outline withdraws into the fluid on each following snare. Her shoulders stay lowered and her face stays composed. At 00:03.607, a hair-thin crack crosses the surviving half of <Object 3>. The crack follows the same diagonal as her disappearing outline and catches cold white light.
+
+[Shot 4] At 00:04.630, hard cut to <Subject 2> filling the right half of the frame. <Object 2> crosses her chest in sharp side view. One tear already rests beneath her eye. A slow small-amplitude Push In begins. At 00:04.895, she draws through shoulder, elbow and wrist while the arrow stays seated. As the string draws back, one straight line of white light, as thin as a hair, runs from the arrow tip to the right edge of the frame and splits the picture; the tear track on her cheek is a second thinner line. The line occupies the foremost graphic plane and catches a white specular edge. At 00:06.055, the lower picture plane slides one fingertip downward, settles and LOCKS. The hairline opening contains only the upward white light released in Shot 1.
+
+[Shot 5] At 00:06.920, exactly two people face each other in profile at equal distance from the centre line; the left half of <Subject 1>’s body is missing its outline. <Subject 1> occupies the left third and <Subject 2> occupies the right third. A near-black stone field and <Object 3> remain behind them. Static Shot. <Object 4> fills the missing half of <Subject 1> and stays borderless. <Subject 2> holds <Object 2> at full anchor; the seated arrow stops one hand’s width short of <Subject 1>’s remaining outline. Their mouths rest softly and their shoulders remain lowered. At 00:07.203, two tall black-glass plates slide inward behind both figures, settle at equal distances and LOCK. Their hard inner edges form a narrow vertical window containing the rising white light. At 00:08.513, the centre gap reaches one finger-width and both figures hold fixed screen positions. String tension, tear highlight and the remaining half-outline settle into stillness for the final 0.7 seconds.
+
+BEAT LAW: {{BEATLAW}} Each snare triggers a hard cut, a mask lock or the loss of one outline segment. Each kick lands as a visible hand, shard, string or cloth contact; each cymbal releases white light from a visible stone, bow, crack or window.
+
+MASK AND Z-ORDER LAW: Far stone field, half-moon, black wave, window contents, characters, bow and near fragments remain ordered from back to front. A locked window catches one white specular edge and confines the rising light to its interior.
+
+BUILDUP LAW: Shot 5 tightens only the centre gap, bowstring and proportion of <Subject 1> surrendered to <Object 4>. The seated arrow and lowered shoulders hold the confrontation as a call awaiting an answer.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+NO-TEXT RULE: show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+
+overall_soundscape: Dry visible-source Foley in restrained stereo. Stone rupture, turning fragments and the upward pressure rush occupy Shot 1. Bow material, fingertip contact, fluid movement, lunar cracking, string strain, tear contact and black-glass plates locking remain attached to their visible sources.
+
+non_diegetic_music: N/A

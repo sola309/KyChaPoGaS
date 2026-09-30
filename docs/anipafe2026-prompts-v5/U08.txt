@@ -1,0 +1,39 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{UM_ID}}. It contributes only <Subject 1>’s canonical identity, divine form and clothing.
+
+<Picture 2> (reference role: crop geometry and fixed upward viewpoint only, not a target frame and not a storyboard anchor) defines the lower-face scale, camera height and crop for C14.
+
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{HOMU_ID}}. It contributes only <Subject 2>’s canonical identity and costume.
+
+<Picture 4> (reference role: reflection-plane geometry only, not a target frame and not a storyboard anchor) defines the reflected lower-face placement and hard mask boundary for C15.
+
+<Picture 5> (reference role: environment geometry only, not a target frame and not a storyboard anchor) defines the split hill and vertical cliff cut for C17.
+
+<Picture 6> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Subject 3>: {{HALF_MOON}}.
+
+summary: Across 11.57 seconds, <Subject 1> offers a destination and <Subject 2> gives the first refusal. The closed mouth becomes a ground crack, then becomes the shared cut line of a cliff and half moon.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>’s identity, gown, hair, colours and divine form. <Picture 2> weak_reference for camera height, upward angle, lower-face crop and fixed on-screen scale only. <Picture 3> fully_preserved for <Subject 2>’s reflected lower face in Shot 2; partially_preserved for the rear-facing full-body pose in Shot 4 while preserving costume and silhouette. <Picture 4> weak_reference for reflection material, crop and mask geometry only. <Picture 5> partially_preserved for the hill and cliff design while written staging controls their vertical alignment. <Picture 6> fully_preserved for <Subject 3>’s sliced geometry and cloud treatment while written staging controls its screen position.
+
+detailed_description: C14-C15 TREATMENT: {{TH:MEM}} C16-C17 TREATMENT: {{TH:CITY}}
+
+STAGE: Shots 1 and 2 share one immovable ground-level viewpoint. The camera looks upward from <Subject 2>’s position on the ground. Shot 1 contains exactly one visible person. Shot 2 contains exactly one reflected person. Shot 3 contains zero people. Shot 4 contains exactly one person. The recurring dividing line stays at frame centre from Shot 2 onward.
+
+[Shot 1] STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. <Subject 1> already fills a fixed upward lower-face close-up. Her nose, mouth, jaw and throat occupy the middle of frame. A rose-white vertical plane stands behind her against cold blue-grey. Static Shot. Her eyes remain beyond the upper frame edge. The crop and mouth size exactly match C45. <Subject 1> (S1) sings <d>[Japanese] 綺麗な場所へ行こう</d>. At 0.297 seconds her first narrow lip opening is visible. Each opening spans only one syllable. Her jaw stays level and her throat carries the breath. A hard-edged vertical mask appears from the upper mid-plane. It slides downward behind <Subject 1>, then settles and LOCKS. Its edges catch a thin rose-white specular. Its interior contains an even white destination; the surrounding frame remains cold blue-grey. At 4.327 seconds her lips have met and the mask is fully locked.
+
+[Shot 2] At 00:04.620, <Subject 2>’s reflected mouth already occupies the central lower-face crop. Her jaw and throat match Shot 1’s size and upward angle. A hard-edged transparent reflection sheet spans the nearest foreground plane. Static Shot. <Subject 2> (S1) sings <d>[Japanese] どこにもない</d>. Each mora creates one restrained opening followed by lip contact. The reflection sheet appears from the right edge and slides toward frame centre. Violet specular runs along its rigid boundary. Its interior contains only <Subject 2>’s reflected mouth against featureless black. The sheet turns through one quarter rotation while the camera stays fixed. It settles and LOCKS with the closed lip line standing vertically at frame centre. At 6.782 seconds the final lip contact forms one straight dark-violet line.
+
+[Shot 3] At 00:06.950, black ground already fills the frame from edge to edge. One vertical hairline crack begins at the lower frame edge. Empty dark planes surround the crack. Static Shot. The closed lip line from Shot 2 occupies the same position and width at the cut. The crack appears beneath that line and advances upward in kick-sized stages. Both cut edges are perfectly straight and cleanly sliced. Only their hair-thin porcelain-white edges burn with light. The opening between them contains bottomless black. At 7.788 seconds the crack reaches one third of the frame. At 8.648 seconds it crosses the centre and continues upward. The advancing line settles against the upper edge and LOCKS. Its exposed length and white edge-light increase continuously through the shot.
+
+[Shot 4] At 00:09.240, <Subject 2> already stands at the edge of the split cliff from <Picture 5>. Her rear-facing full figure occupies the lower centre. <Subject 3> hangs directly above her in the clouded sky. Static Shot. <Subject 2> stands still and looks into the bottomless black below. Her face points downward and away from the camera. A hard-edged black cutout plane appears from beneath the cliff. It slides upward behind <Subject 2>, the cliff and <Subject 3>. Its interior contains only the lightless depth beneath the land and the absent side of the moon. Its left boundary catches one thin porcelain-white specular. The cliff's cut edge and the moon's straight edge form one continuous vertical line at frame centre; the moon sits directly above the cliff edge. {{SOURCELESS_SHADOW}} crosses the cliff top before the cutout settles. At 10.737 seconds the cutout plane settles and LOCKS. Every depth plane then holds still. At 11.537 seconds the continuous cut line flashes sharply while its geometry remains locked.
+
+CAUSAL LAW: <Subject 2>’s final lip contact triggers the ground crack. The ground crack becomes the cliff-and-moon cut line, whose final flash leads into C18’s hand light.
+
+BEAT LAW: {{BEATLAW}} Structural snares trigger hard cuts or mask locks. Each kick extends the visible crack; each cymbal releases light from the visible white edge.
+
+NO-TEXT RULE: Every surface remains blank and unmarked. Abstract planes, hard mask edges and reflected shapes perform every graphic function.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: Restrained throat breath and small lip contacts remain close to their visible sources. The reflection sheet produces one dry glass slide and a short lock click. Ground fractures answer with narrow stone snaps, followed by a low cliff resonance and one thin edge-light tone.
+
+non_diegetic_music: N/A

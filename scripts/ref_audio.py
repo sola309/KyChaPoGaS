@@ -53,6 +53,28 @@ def make(uid: str, stem: str, force: bool = False) -> int:
     return a["id"]
 
 
+def make_v4(uid: str, stem: str, start_sec: float, dur_sec: float, force: bool = False) -> int:
+    """v4(連番U01-U30)用。同じ src/start/dur のステムが台帳にあれば(旧U番号でも)再利用する。"""
+    led = json.loads(LEDGER.read_text()) if LEDGER.exists() else {}
+    key = f"v4:{uid}:{stem}"
+    if not force and key in led:
+        return led[key]["asset_id"]
+    src = STEMS[stem]
+    for k, v in led.items():
+        if (v.get("src") == src and abs(v.get("start_sec", -1) - start_sec) < 0.02
+                and abs(v.get("dur_sec", -1) - dur_sec) < 0.02):
+            led[key] = dict(v)
+            LEDGER.write_text(json.dumps(led, ensure_ascii=False, indent=1))
+            return v["asset_id"]
+    q = f"start_sec={start_sec:.3f}&dur_sec={dur_sec:.3f}"
+    r = urllib.request.Request(f"{API}/assets/{src}/extract-clip?{q}", method="POST")
+    a = json.load(urllib.request.urlopen(r, timeout=120))
+    led[key] = {"asset_id": a["id"], "stem": stem, "src": src,
+                "start_sec": round(start_sec, 3), "dur_sec": round(dur_sec, 3)}
+    LEDGER.write_text(json.dumps(led, ensure_ascii=False, indent=1))
+    return a["id"]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("units", nargs="+")

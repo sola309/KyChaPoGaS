@@ -1,0 +1,34 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, {{HOMU_ID}}. It contributes Homura’s exact identity and true face to the completed witch. It contributes neither composition nor witch anatomy.
+
+<Picture 2> (reference role: resulting-subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, {{WALP_ID}}. It contributes the enormous inverted girl, bell-shaped skirt and dark iron gear silhouette. Its facial region is controlled exclusively by <Picture 1>.
+
+<Picture 3> (reference role: object definition only, not a target frame and not a storyboard anchor) defines {{NAME_STONE}}. It contributes the weathered stone, hard carving and visible cosmos inside the grooves.
+
+<Picture 4> (reference role: object definition only, not a target frame and not a storyboard anchor) defines {{HALF_MOON}}.
+
+<Picture 5> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, Madoka, the pink-haired magical-girl Madoka exactly as shown in <Picture 5> (same form as C48-C53). It contributes her identity, bow and arrow-bearing action.
+
+summary: A black-and-white reversal replaces Was’s false Homura-like face with Homura’s true face, completing a new Walpurgisnacht. Madoka’s arrow crosses the black wave as the hard line of a spoken name, restoring every recoverable record while burned anonymity remains inside the witch.
+
+retention_analysis: <Picture 1> is fully_preserved for Homura’s true face and identity. <Picture 2> is fully_preserved for the inverted body, frilled silhouette and iron gear; its face is replaced by <Picture 1>. <Picture 3> and <Picture 4> are fully_preserved as separate objects sharing one composition only in C55. <Picture 5> is fully_preserved for Madoka’s identity and partially_preserved for pose and framing. Never merge <Subject 1>, <Subject 2> and <Subject 3>. Their identities, costumes and facial features remain separately routed.
+
+detailed_description: {{TH:GOLD}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Continue the held confrontation from C53. A Static Shot faces {{BLACK_WAVE}} beneath the fused golden storm. Was’s false Homura-like face initially rests upon the edgeless wave as a thin cut-paper mask. At 00:00.260, the entire stage reverses black and white. The false mask snaps away at the same instant. <Subject 1>’s true face occupies the opening with one stable cel drawing and a hard unbroken contour. The wave remains fluid and borderless around it. Above the wave, <Subject 2>’s enormous inverted girl and iron gear rise as a single stark silhouette. The gear turns slowly. The frilled mass settles over the wave like a dark suspended bell. Hard gold touches only the outer edges. Near-black and paper white dominate everything else. The completed form holds in quiet scale rather than explanatory action.
+
+[Shot 2] At 00:04.580, hard cut to <Subject 3> at screen left and the completed witch across the middle distance. A Static Shot preserves their distance. {{HALF_MOON}} hangs above {{NAME_STONE}}; this is their sole shared frame. At 00:04.867, Madoka releases the arrow from <Picture 5>. It becomes one narrow rose-pink line with a hard edge. The line travels straight through {{BLACK_WAVE}} as a physical wipe. Its passage divides the fluid without creating panels or written marks. Recoverable records emerge behind it in successive irregular order. Each begins as loose darkness, gains one distinct human contour, then rises as pale light. The viewer reads liberation without counting figures.
+
+[Shot 3] At 00:06.607, hard cut to the resulting state. A slow large-amplitude Pull Out passes through separate planes of pale ascending contours, the hard pink line, {{NAME_STONE}}, the edgeless remaining wave, Homura’s face and the distant gear. Named records continue upward beyond the half-moon. Burned records remain fused into borderless darkness. Within the surviving witch, Homura’s face is the sole personal image. At 00:08.337, the camera brakes on the complete silhouette. Gear and fabric overshoot slightly, then settle. One black droplet separates beneath the wave and begins falling toward C56. The final composition holds for the remaining time.
+
+NAME LAW: A name is a hard contour. Madoka’s arrow draws that contour. Recoverable darkness becomes distinct people only after the line passes. Burned anonymity retains the continuous edge-free behavior of {{BLACK_WAVE}}.
+
+REVERSAL LAW: The black-and-white reversal occurs only when Was’s false face becomes Homura’s true face. It completes rather than decorates the witch.
+
+BEAT LAW: {{BEATLAW}} Snares trigger polarity reversal, hard cuts and successive contour recovery. Kicks seat the iron gear and give the arrow physical passage through the wave. Cymbals release pale ascending records from visible opened contours.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All stone surfaces carry only physical grooves and celestial light.
+
+{{DP}} {{ST2}} {{LENS}} {{FOCUS}}
+
+overall_soundscape: Dry cut-paper snaps accompany the face replacement. The iron gear turns with a deep indexed grind. Madoka’s bowstring releases once with a taut crystalline note. The arrow line parts the wave with a narrow tearing sound. Each recovered contour produces a brief paper-edge crack and an upward glass resonance. The remaining wave moves with low liquid pressure. The final black droplet separates in near silence.
+
+non_diegetic_music: N/A

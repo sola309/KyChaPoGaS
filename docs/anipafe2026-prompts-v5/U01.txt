@@ -1,0 +1,39 @@
+subject_definitions: <Picture 1> (reference role: lunar shape and surface definition only, not a target frame, not a storyboard anchor and not a first-frame keyframe) defines <Subject 1>: {{HALF_MOON}}. <Picture 2> (reference role: vessel design only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{ORB_ID}}. <Picture 3> (reference role: hand covering, fingertip silhouette and wrist crop only, not a target frame and not a storyboard anchor) defines <Subject 3>: {{REACH_HAND}}. <Picture 4> (reference role: thread material and wooden-spool construction only, not a target frame and not a storyboard anchor) defines <Subject 4>, the pink causal threads and their assigned spools. <Subject 5> is {{SOURCELESS_SHADOW}}.
+
+summary: A sourceless shadow traverses a geometrically exact half-moon. A hard match cut reveals an empty dark vessel bound by causal threads; a reaching hand is covered by a passing plane of white light before one impact releases every thread.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s canonical missing half, perfectly straight cut edge and lunar surface. <Picture 2> is fully_preserved for <Subject 2>'s intact exterior design; the empty interior and transmitted light are the new story state. <Picture 3> is partially_preserved for <Subject 3>'s covering, fingers and tight wrist crop. <Picture 4> is weak_reference for <Subject 4>'s fibre material, spool construction and restrained paper grain. <Subject 1> and <Subject 5> exist in Shot 1. <Subject 2>, <Subject 3> and <Subject 4> exist in Shot 2. Shot 1 contains zero people. Shot 2 contains exactly one cropped human hand, one vessel and its threads.
+
+detailed_description: {{TH:PRO}}
+[Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers.
+
+<Subject 1> is already suspended at the centre of an empty near-black sky, filling slightly less than half the frame height. Its surviving left half ends at a perfectly straight vertical edge whose hair-thin cold-white line is the brightest mark in the frame. Sky-black fills the absent right half and every corner; the frame contains the moon, sky and <Subject 5> alone.
+
+The camera is a Static Shot. <Subject 1> keeps the same screen size and position for the entire shot. Cold violet light falls steeply from high above and gives the lunar surface one muted plane of tone. The straight white edge carries restrained bloom. Near-black occupies more than half the image.
+
+<Subject 5> begins as a broad soft-edged darkness touching the curved outer rim of <Subject 1>. It travels slowly across the lunar surface toward the straight edge. Its casting body stays beyond the visible frame. The lunar disc clips the shadow precisely, while the straight white edge remains a clean foreground line. At 2.60 seconds the shadow's leading edge has crossed the centre of the disc. At 5.10 seconds it reaches the straight edge. The moon remains geometrically exact at the cut.
+
+[Shot 2] At 00:05.210, make one hard geometric match cut. <Subject 2> is already centred in near-black space, occupying the same apparent circle and diameter implied by <Subject 1>. <Subject 3> is already reaching inward from the right edge, cropped tightly at the wrist, while pink threads cross four distinct depth planes between the hand and vessel.
+
+The camera is a Static Shot. <Subject 2> stays sharp on the subject plane. One thread passes across the lens at very close range, thick and softly out of focus. Finer threads occupy separate middle planes. Small wooden spools sit far behind and barely move. A cold violet source high above marks upward-facing edges. Cold gold touches <Subject 2>; pink belongs to <Subject 4>.
+
+<Subject 2>'s intact shell surrounds a visibly empty near-black cavity. A narrow violet backlight enters through one crystal window and leaves through the opposite side as an uninterrupted line, showing the absence of retained light. <Subject 3>'s separated fingers advance through successive thread planes. Each touched thread bends around a finger and returns to tension. A hand-width interval remains between the fingertips and <Subject 2>.
+
+At 8.667 seconds, a hard-edged porcelain-white plane appears at the extreme right foreground. It is twice the hand's height, thicker than any thread, and softly out of focus because it passes across the lens at very close range. It slides from right to left and covers <Subject 3>. Its physical rim catches one cold specular line. It settles inside the hand-width interval and LOCKS between hand and vessel. The final visible state keeps <Subject 3> covered behind the white plane and <Subject 2> exposed on its left.
+
+From 8.667 seconds onward, every spool increases its angular velocity along one continuous rising curve. Loose fibres lift and thread vibration tightens across the depth planes. At 10.952 seconds, every thread sags into one slack curve. Each curve immediately recoils toward its assigned spool. Near threads accelerate first, middle threads follow, and distant spools pull last. Through the generated tail, the remaining curves shorten, the spool motion decelerates, and <Subject 2> becomes the fixed centre of the dark frame.
+
+CIRCLE MATCH LAW: the hard cut replaces the implied full circle of <Subject 1> with <Subject 2> at the same screen coordinate. The former straight lunar edge becomes the highlighted foreground thread.
+
+OCCLUSION LAW: the white foreground plane covers the unresolved gap before the hand reaches the vessel. Its locked final position preserves the visible separation.
+
+BEAT LAW: {{BEATLAW}} The sole kick at 10.952 triggers simultaneous thread slack, and the sole cymbal creates one cold-white crest along the locked plane. Visible spool rotation supplies the rising motion through the buildup from 8.667 to 11.0 seconds.
+
+All visible surfaces are clean, unmarked geometric colour fields.
+{{LENS}} {{FOCUS}}
+{{DP}} Shot 1 fixes every visible depth plane except the clipped shadow. Shot 2 moves near threads fastest, middle threads at moderate speed and distant spools slowest.
+{{ST2}}
+
+overall_soundscape: Shot 1 carries a thin, constant cold-air tone while the shadow crosses in silence. The hard cut narrows the air tone into dry fibre tension. Thread contact produces restrained creaks, and spool axles rise from isolated wooden ticks into a compact rattle. At 10.952 seconds, one deep impact, one thin metallic crest and one collective fibre release occur together, followed by accelerating thread hiss and decelerating spool rotation.
+
+non_diegetic_music: N/A

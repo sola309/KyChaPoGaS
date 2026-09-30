@@ -1,0 +1,47 @@
+subject_definitions:
+<Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the first source-specific guise of <Subject 1>, Madoka. Preserve the exact identity, hairstyle, costume and proportions shown in this source.
+
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines human Madoka in school uniform. Preserve her exact identity, hairstyle, costume and proportions. This source also governs <Subject 1> standing alone in Shot 4.
+
+<Picture 3> (reference role: grouped subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, the four separate girls Kyoko, Mami, Sayaka and Nagisa. Preserve each visible identity, relative scale, hair, clothing and character colour. Their poses, crops and daily-life surroundings are newly constructed.
+
+<Picture 4> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{HOMU_ID}}. Preserve the exact identity and source-correct costume while allowing fragmented crops and new angles.
+
+<Picture 5> (reference role: discarded-likeness definition only, not a target frame and not a storyboard anchor) defines the Homura-faced false likeness used inside the divided panels of Shot 3. Preserve the visible face and hair only. The panels, costume visibility, Z-order and surrounding space are newly constructed.
+
+<Picture 6> (reference role: environment-material definition only, not a target frame and not a storyboard anchor) defines the pale water-surface material and hard moon-window geometry used in Shot 4. Its original composition is weak_reference.
+
+Never merge the subjects. Never exchange their hair, eyes, clothing, accessories or facial features. Newly drawn masks and depth planes replace every source frame, panel, swatch and layout element.
+
+summary:
+Three classes of memory contract inward: repeated past deaths, a past from which Homura is absent, and the discarded Homura-faced self. Their divided windows close into one white-water world where a full moon exists for only an instant before returning to {{HALF_MOON}}.
+
+retention_analysis:
+<Pictures 1-2> are fully_preserved for <Subject 1>'s identity and source-specific guise, and partially_preserved for pose, crop, lighting and visibility inside masks. <Picture 3> is fully_preserved for the four separate identities and partially_preserved for pose, crop and daily-life action. <Picture 4> is fully_preserved for <Subject 2>'s identity and costume, and partially_preserved for fragmented visibility. <Picture 5> is fully_preserved for the discarded Homura-faced likeness and partially_preserved for crop and division across panels. <Picture 6> is weak_reference for water material, moon geometry and reflected light. Composition, masks, motion, Z-order and environments are newly constructed.
+
+detailed_description: {{TH:MEM}}
+STAGE: A fixed frontal view looks through seven flat depth planes inside the turning memory of the group. Soft compression blocks cross nearest the lens. Hard-edged windows occupy the middle planes. Subjects and remembered colour exist only inside those windows. A dark gear residue turns almost imperceptibly in the far plane. Near-black fills more than half the frame. Cold violet light falls from above. Window edges catch hard white glints. {{LENS}} {{FOCUS}}
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. At 00:00.283, a snare locks narrow polygonal windows into a tightening spiral. Each aperture draws itself, slides, settles and LOCKS before replacement. The windows reveal hundreds of different endings for <Subject 1>: a released bow dropping from frame, a small silhouette falling beneath changing skies, loosened ribbons on empty ground, and the same motionless outline after every change. Outgoing macroblocks datamosh into the next fragment. Brief fragments of the four separate girls from <Picture 3> enter the same current, then are overwritten. Every surface remains clean and unmarked. The mask edges remain hard while their contents bleed forward in time.
+
+[Shot 2] At 00:02.330, a hard cut preserves exactly the same camera, window geometry, replacement speed, texture and datamosh decay. At 00:02.590, paired walking silhouettes appear inside successive panels. The left figure is human Madoka in school uniform. The adjoining figure-shaped window closes before its person can resolve, leaving one clean empty contour beside her. Further apertures show <Subject 1> standing alone in places designed for two. Warm daily-life fragments of <Subject 3> pass briefly behind her. Memory and impossible history remain visually indistinguishable.
+
+[Shot 3] At 00:04.620, a hard cut changes the spiral into irregular split panels. A small-amplitude slow Push In begins. At 00:05.038, a snare locks the Homura-faced discarded likeness from <Picture 5> across mismatched tiles. Adjacent panels reveal fragments of <Subject 2>. One face becomes many without duplication in the same physical space: each fragment belongs to its own hard-bounded aperture. Black seams separate every piece. Outer panels slide inward, overshoot once, settle and LOCK. The divided false face and the self-erased outline contract toward one empty centre.
+
+[Shot 4] At 00:06.950, a hard cut reveals the white water surface. Static Shot. At 00:07.205, tall black shutters cross the middle planes from both sides and close every remaining panel behind <Subject 1>. One circular window remains overhead. Its missing right half slides into place, producing a complete white moon for a single held instant. At 00:08.935, the right half withdraws along the same perfectly straight edge, returning the moon to {{HALF_MOON}}. Below it, human Madoka in school uniform stands alone on the pale water and looks upward. Her reflection remains whole. By 00:10.830, every plane has settled and LOCKED. Only her clothing edges and the water’s thin surface light continue their final secondary motion.
+
+MOSH LAW: Outgoing images transfer block structure into their successors. Smearing remains inside hard mask boundaries. Shots 1 and 2 use identical velocity, geometry, texture and decay.
+
+PANEL LAW: Every element follows near foreground → middle window → subject → far background Z-order. Each panel draws itself, slides, settles and LOCKS. Window contents remain enclosed by hard lines.
+
+BEAT LAW: {{BEATLAW}} Snares replace an existing masked fragment. Kicks displace active panels by one short physical increment. Cymbals glint existing edges or release pale particles inside the current window. Visible panel locks produce the matching dry impact.
+
+LANDING LAW: Density falls in four visible states: unreadable repeated past, equally unreadable impossible past, slower divided self, then one continuous world. The full moon is the brief completion point. The restored straight cut is the final state.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All surfaces remain unmarked.
+{{DP}} {{ST2}}
+
+overall_soundscape:
+Close dry foley comes only from visible events: a released bow, falling cloth, footsteps cut short by closing masks, rigid panel slides, hard panel locks and two restrained shutter movements. Every fragment sound ends when its aperture closes. Impacts become progressively farther apart. Shot 4 carries thin water-surface air, one quiet breath and the distant mechanical settling of the last depth plane.
+
+non_diegetic_music: N/A

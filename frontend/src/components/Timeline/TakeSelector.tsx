@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { Asset } from '../../api/client'
 import { assetsApi, generationApi, type VideoI2VParams } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
+import { isFilterClip } from './filterLayers'
 
 /**
  * 🗂 テイクブラウザ — カットごとの生成履歴(テイク)を閲覧・プレビュー・採用する。
@@ -51,13 +52,16 @@ const jobIdOf = (filePath: string): number | undefined => {
 
 /**
  * Tier判定 — リサーチ結論に基づく検証段階。
+ *  T0 速見: T1の先頭1段だけ(予告編)。構図・配置の確認専用・最速
  *  T1 下見: 低解像度・低ステップ。プロンプト解釈の検証専用(シードは本番に引き継げない)
  *  T2 選定: 本番解像度・低ステップ。シードが本番へ引き継げる唯一の構成
  *  T3 本番: 本番解像度・高ステップ
  */
-const tierOf = (p: Record<string, unknown>): 1 | 2 | 3 => {
+const tierOf = (p: Record<string, unknown>): 0 | 1 | 2 | 3 => {
   const px = Number(p.width ?? 0) * Number(p.height ?? 0)
   const steps = Number(p.steps ?? 20)
+  // 予告編モード(先頭N段のx0予測)は T1 の更に手前=T0。構図だけ読める。
+  if (p.preview_steps) return 0
   // 🚀Turbo LoRAはモデルの重み自体が変わるため、同じseedでも非Turboでは再現しない。
   // 本番解像度で回していてもT2(=シードを本番へ引き継げる構成)とは呼べないのでT1扱い。
   if (p.turbo_lora) return 1
@@ -65,6 +69,7 @@ const tierOf = (p: Record<string, unknown>): 1 | 2 | 3 => {
   return steps <= 10 ? 2 : 3
 }
 const TIER_STYLE: Record<number, { label: string; cls: string }> = {
+  0: { label: 'T0 速見', cls: 'bg-amber-900/70 text-amber-200 border-amber-600' },
   1: { label: 'T1 下見', cls: 'bg-sky-900/70 text-sky-200 border-sky-600' },
   2: { label: 'T2 選定', cls: 'bg-violet-900/70 text-violet-200 border-violet-600' },
   3: { label: 'T3 本番', cls: 'bg-emerald-900/70 text-emerald-200 border-emerald-600' },
@@ -84,6 +89,9 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
   const [tierFilter, setTierFilter] = useState<0 | 1 | 2 | 3>(0)  // 0=すべて
   const [msg, setMsg] = useState('')
 
+  // 🗂を押したクリップ自身の開始位置。カット割りが細かく(C9/C10のように)分かれていても、
+  // そのクリップの頭で生成された長いテイクを一覧に出すため。
+  const srcClipStart = sourceClipId != null ? clips.find(c => c.id === sourceClipId)?.start_frame : undefined
   const takes = useMemo<Take[]>(() => {
     const out: Take[] = []
     for (const a of assets) {
@@ -98,7 +106,8 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
         // (C18-20をまとめて作ったもの等)も出す。部分だけをShotsへ採るため。
         const startsHere = Math.abs(drift) <= SNAP
         const covers = place.start_frame - SNAP <= cut.s && place.start_frame + span >= cut.e
-        if (!startsHere && !covers) continue
+        const startsAtClip = srcClipStart != null && Math.abs(place.start_frame - srcClipStart) <= SNAP
+        if (!startsHere && !covers && !startsAtClip) continue
         if (!String(p?.model ?? '').match(/minimax-h3|wan2\.2|svd/)) continue
         out.push({ asset: a, seed: p.seed, prompt: p.prompt, model: p.model, steps: p.steps,
                    easycache: p.easycache, raw: p,
@@ -108,7 +117,7 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
       } catch { /* gen_params壊れは無視 */ }
     }
     return out.sort((a, b) => b.asset.id - a.asset.id)   // 新しい順
-  }, [assets, cut.s, cut.e])
+  }, [assets, cut.s, cut.e, srcClipStart])
 
   const shotsTrack = tracks.find(t => t.track_type === 'video' && t.name === 'Shots')
   // 採用先の自動解決。以前は Shots の「開始フレームが完全一致するクリップ」だけを見ていたため、
@@ -121,6 +130,7 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
     // 枠を敷く運用になったので、空枠を弾くと未着手カットへ採用できなくなる。
     const covering = clips.filter(c => {
       if (!vids.has(c.track_id)) return false
+      if (isFilterClip(c)) return false   // ■単色/◌ぼかしは空枠ではない(採用先にしない)
       return c.start_frame <= cut.s && cut.s <= c.start_frame + c.duration_frames - 1
     })
     if (!covering.length) return undefined
@@ -140,8 +150,23 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
   // 採用の書き換え先。🗂を押したクリップがあればそれ一択(他のレイヤーには触らない)。
   // 無ければ従来どおり Shots の該当カット(無ければ新規作成)。
   const sourceClip = sourceClipId != null ? clips.find(c => c.id === sourceClipId) : undefined
-  const sourceTrack = sourceClip ? tracks.find(x => x.id === sourceClip.track_id) : undefined
-  const targetClip = sourceClip ?? currentClip
+  // 採用先はユーザーが選べる(2026-09-08): 比較用レイヤーが並ぶと自動解決が Shots 以外を
+  // 選び、「採用しても Shots が変わらない」ように見えた。既定は Shots の該当クリップ、
+  // 無ければ Shots に新規作成。カット割りレーン以外(🗂ボタン)から開いたときはそのクリップ固定。
+  const candidates = useMemo(() => {
+    // 元動画を置く 'Video' トラックは採用先にしない(全編クリップが常に候補に出て誤操作の元)
+    const vids = tracks.filter(t => t.track_type === 'video' && !t.hidden && t.name !== 'Video')
+    const byTrack = new Map(vids.map(t => [t.id, t]))
+    return clips
+      .filter(c => byTrack.has(c.track_id) && !isFilterClip(c) && c.start_frame <= cut.s && cut.s <= c.start_frame + c.duration_frames - 1)
+      .sort((a, b) => (byTrack.get(a.track_id)!.order ?? 0) - (byTrack.get(b.track_id)!.order ?? 0) || a.id - b.id)
+      .map(c => ({ id: c.id, label: `${byTrack.get(c.track_id)!.name} (f${c.start_frame}・${c.duration_frames}f${c.asset_id == null ? '・空枠' : ''})` }))
+  }, [clips, tracks, cut.s])
+  const shotsCovering = shotsTrack ? candidates.find(c => clips.find(x => x.id === c.id)?.track_id === shotsTrack.id) : undefined
+  const [targetSel, setTargetSel] = useState<number | 'shots-new'>(
+    sourceClip ? sourceClip.id : shotsCovering ? shotsCovering.id : (currentClip && !shotsTrack) ? currentClip.id : 'shots-new')
+  const targetClip = targetSel === 'shots-new' ? undefined : clips.find(c => c.id === targetSel)
+  const sourceTrack = targetClip ? tracks.find(x => x.id === targetClip.track_id) : undefined
 
   // 昇格: 同じプロンプトのまま上位Tierの条件で再実行する。
   // T1→T2は解像度が変わるためシードは意味を持たない(新規サンプル)。
@@ -166,7 +191,7 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
 
   const adopt = async (tk: Take) => {
     const st = useTimelineStore.getState()
-    const target = sourceClip ?? currentClip
+    const target = targetClip
     // このテイクの中で、対象クリップの開始位置が何フレーム目に当たるか(頭出し)
     const offAt = (startFrame: number) => Math.max(0, startFrame - tk.srcStart)
 
@@ -211,11 +236,16 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
           </span>
           <span className="flex items-center gap-2">
             {/* 採用の書き換え先を明示(誤操作でも他レイヤーに波及しないことの見える化) */}
-            <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400">
-              採用先: {targetClip
-                ? `${tracks.find(x => x.id === targetClip.track_id)?.name ?? '?'} クリップ(f${targetClip.start_frame}・${targetClip.duration_frames}f)`
-                : `Shots f${cut.s}(新規作成)`}
-            </span>
+            <label className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 flex items-center gap-1"
+                   title="採用したテイクを書き込むクリップ。既定は Shots の該当カット。比較用レイヤーへ入れたいときはここで選ぶ">
+              採用先:
+              <select value={String(targetSel)} disabled={sourceClip != null}
+                      onChange={e => setTargetSel(e.target.value === 'shots-new' ? 'shots-new' : Number(e.target.value))}
+                      className="bg-zinc-900 text-zinc-200 border border-zinc-700 rounded px-1 py-0.5 text-[10px] max-w-[260px]">
+                {candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {shotsTrack && !shotsCovering && <option value="shots-new">Shots f{cut.s}(新規作成)</option>}
+              </select>
+            </label>
             {/* カット位置を動かしたあとに、テイクの紐付けを現在のカット割りへ手動で寄せ直す。
                 自動実行にすると短いカットが隣り合う箇所で取り違えるため手動にしている。 */}
             <button
@@ -294,6 +324,13 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
                     <span className="px-1 rounded bg-amber-900/60 text-amber-200 border border-amber-700/60"
                           title="生成ジョブ番号 — 会話やログでこのテイクを指すときに使う">
                       job {t.jobId}
+                    </span>
+                  )}
+                  {/* 生成日時(アセット登録時刻, ローカル時刻)。夜間バッチの順序や新旧の見分け用 */}
+                  {t.asset.created_at && (
+                    <span className="px-1 rounded bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          title={`生成日時 ${new Date(t.asset.created_at.endsWith('Z') ? t.asset.created_at : t.asset.created_at + 'Z').toLocaleString('ja-JP')}`}>
+                      {(() => { const d = new Date(t.asset.created_at.endsWith('Z') ? t.asset.created_at : t.asset.created_at + 'Z'); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` })()}
                     </span>
                   )}
                   {Boolean(t.raw?.turbo_lora) && (

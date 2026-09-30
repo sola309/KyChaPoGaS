@@ -5,9 +5,9 @@ from sqlmodel import SQLModel, Field
 
 
 class JobBase(SQLModel):
-    project_id: int = Field(foreign_key="project.id")
+    project_id: int = Field(foreign_key="project.id", index=True)
     job_type: str   # generate_image | generate_audio | generate_video_i2v
-    status: str = "pending"   # pending | running | completed | failed | cancelled
+    status: str = Field(default="pending", index=True)   # pending | running | completed | failed | cancelled
     params: str = "{}"        # JSON string
     result_asset_ids: str = "[]"  # JSON array
     result_json: str = ""     # ジョブ固有の構造化結果(takes/vlm_review等)
@@ -16,7 +16,7 @@ class JobBase(SQLModel):
     error_msg: Optional[str] = None
     vram_estimated_mb: Optional[int] = None   # pre-run VRAM estimate
     vram_peak_mb: Optional[int] = None        # actual peak VRAM observed during run
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 

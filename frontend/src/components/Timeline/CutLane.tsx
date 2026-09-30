@@ -28,6 +28,39 @@ interface Props {
 }
 
 interface CutInfo { s: number; e: number; sId: number; eId: number }
+
+/**
+ * MiniMax H3 の推奨尺(17n+5 フレーム @24fps, 124〜362f = 5.17〜15.08秒)への当てはまり。
+ * プロジェクトfpsが24でない場合は24fps換算してから判定する。
+ *  ◎ 完全一致 / ○ 使用率90%以上 / △ 70〜90% / ▽ 70%未満(生成分の3割超を捨てる)
+ *  短 = 124f未満(伸ばす or 隣とまとめる) / 分割 = 362f超(2本に割る)
+ */
+export const h3Grid = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }
+export type H3Fit = { n24: number; snap: number; use: number; grade: '◎' | '○' | '△' | '▽' | '短' | '継続' | '分割'; color: string; hint: string }
+export function h3Fit(frames: number, fps: number): H3Fit {
+  const n24 = Math.max(1, Math.round(frames * 24 / fps))
+  const snap = h3Grid(n24)
+  const use = n24 / snap
+  const sec = (f: number) => (f / 24).toFixed(2) + 's'
+  const toProj = (f24: number) => Math.round(f24 * fps / 24)
+  if (n24 < 124) return { n24, snap, use, grade: '短', color: '#f87171', hint: `最短124f(${sec(124)})に ${toProj(124 - n24)}f 足りない → 伸ばすか隣と統合` }
+  if (n24 > 1042) return { n24, snap, use, grade: '分割', color: '#f87171', hint: `継続生成の上限3段(1042f=${sec(1042)})超 → 分割が必要` }
+  if (n24 > 362) {
+    // 362f超は継続生成(前セグメント末尾22fを次の先頭へ固定→連結)。正味は 17n+5 グリッドに乗る
+    const segs = Math.ceil((n24 - 362) / 340) + 1
+    const g = n24 + (5 - (n24 % 17)) % 17
+    return { n24, snap: g, use: n24 / g, grade: '継続', color: '#fbbf24',
+             hint: `362f超 → 継続生成${segs}段(正味${g}f=${sec(g)})` + (g === n24 ? '・グリッド一致' : ` ・ +${toProj(g - n24)}f でグリッド一致`) }
+  }
+  const up = snap - n24
+  const down = n24 - (snap - 17)
+  if (up === 0) return { n24, snap, use, grade: '◎', color: '#4ade80', hint: `17n+5 に完全一致(${sec(snap)})` }
+  const adj = `+${toProj(up)}f で ${sec(snap)} 一致` + (snap - 17 >= 124 ? ` / −${toProj(down)}f で ${sec(snap - 17)} 一致` : '')
+  if (use >= 0.9) return { n24, snap, use, grade: '○', color: '#a3e635', hint: `生成${snap}f(${sec(snap)})の${Math.round(use * 100)}%を使用 ・ ${adj}` }
+  if (use >= 0.7) return { n24, snap, use, grade: '△', color: '#fbbf24', hint: `生成${snap}f(${sec(snap)})の${Math.round(use * 100)}%を使用(捨て多め) ・ ${adj}` }
+  return { n24, snap, use, grade: '▽', color: '#fb923c', hint: `生成${snap}f(${sec(snap)})の${Math.round(use * 100)}%しか使わない ・ ${adj}` }
+}
+
 interface DragState { cutIdx: number; side: 'l' | 'r'; frame: number; origFrame: number }
 
 const hue = (i: number) => `hsl(${Math.round(((i * 0.14) % 1) * 360)}, 45%, 38%)`
@@ -180,12 +213,24 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
     window.addEventListener('pointerup', onUp)
   }
 
+  const fitStats = useMemo(() => {
+    let bad = 0, meh = 0
+    for (const c of cuts) { const g = h3Fit(c.e + 1 - c.s, fps).grade; if (g === '短' || g === '分割') bad++; else if (g === '△' || g === '▽' || g === '継続') meh++ }
+    return { bad, meh }
+  }, [cuts, fps])
+
   if (cuts.length === 0 && dangling == null) return null
 
   return (
     <div className="flex flex-shrink-0 border-b border-zinc-800" style={{ height: LANE_H }}>
       <div className="w-28 flex-shrink-0 border-r border-zinc-800 bg-zinc-950 flex items-center px-2 sticky left-0 z-30">
-        <span className="text-[9px] text-zinc-500">🎬 カット割り {cuts.length}</span>
+        <span className="text-[9px] text-zinc-500 whitespace-nowrap"
+              title={`H3尺(17n+5f@24fps, 5.17〜15.08s)の適合: 緑=◎一致/○90%以上・黄=△70〜90%/継続(>15.08s、継続生成n段)・橙=▽70%未満・赤=短すぎ(<5.17s)/分割要(>43.4s)`}>
+          🎬 カット割り {cuts.length}
+          {dangling != null && <span className="text-yellow-300 ml-1" title="ピンが奇数本です。未ペアのピン(黄)以降のカットがずれていないか確認してください。ピンはダブルクリック/Delで相方ごと消えます">⚠奇数</span>}
+          {fitStats.bad > 0 && <span className="text-red-400 ml-1">✗{fitStats.bad}</span>}
+          {fitStats.meh > 0 && <span className="text-amber-400 ml-0.5">△{fitStats.meh}</span>}
+        </span>
       </div>
       <div className="relative flex-shrink-0 bg-zinc-950" style={{ width: totalWidth }}>
         {cuts.map((c, i) => {
@@ -199,6 +244,7 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
           const w = Math.max(2, (e + 1 - s) * pixelsPerFrame)
           const isDoomed = doomed.has(i)
           const isSelected = refSel.includes(c.sId) && refSel.includes(c.eId)
+          const fit = h3Fit(e + 1 - s, fps)
           return (
             <div
               key={`${c.sId}-${i}`}
@@ -209,7 +255,7 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
                             : 'border-black/30 hover:brightness-125'}`}
               style={{ left: s * pixelsPerFrame, width: w,
                        background: isDoomed ? '#7f1d1d' : hue(i % 12) }}
-              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)— クリック=選択(i2v/Ref2V用)・ダブルクリック=🗂テイク履歴・端ドラッグ=境界調整`}
+              title={`C${i + 1}: ${(c.s / fps).toFixed(2)}s → ${((c.e + 1) / fps).toFixed(2)}s(${((c.e + 1 - c.s) / fps).toFixed(1)}秒)\nH3尺 ${fit.grade}: ${fit.n24}f@24fps → ${fit.hint}\nクリック=選択(i2v/Ref2V用)・ダブルクリック=🗂テイク履歴・端ドラッグ=境界調整`}
               onClick={() => {
                 if (justDraggedRef.current) return
                 setCurrentFrame(c.s)
@@ -240,7 +286,11 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
               <span className="absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none flex gap-1 items-baseline overflow-hidden max-w-full">
                 {w > 34 && <span>C{i + 1}</span>}
                 {w > 84 && <span className="text-white/50">{((e + 1 - s) / fps).toFixed(1)}s</span>}
+                {w > 110 && <span style={{ color: fit.color }}>{fit.grade}{fit.grade === '◎' || fit.grade === '短' || fit.grade === '分割' ? '' : fit.grade === '継続' ? `${Math.ceil((fit.n24 - 362) / 340) + 1}段` : `${Math.round(fit.use * 100)}%`}</span>}
               </span>
+              {/* H3尺インジケータ: 下辺の色帯(狭いカットでも見える) */}
+              <div className="absolute left-0 right-0 bottom-0 h-[3px] rounded-b-sm pointer-events-none"
+                   style={{ background: fit.color, opacity: isDoomed ? 0.3 : 0.95 }} />
               {/* 端ドラッグハンドル: 8px+外側4pxまで掴める。狭いカットは右端のみ */}
               {w >= 18 && (
                 <div className="absolute top-0 bottom-0 cursor-ew-resize z-10 group/hl"

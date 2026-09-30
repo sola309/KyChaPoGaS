@@ -1,0 +1,38 @@
+subject_definitions: <Picture 1> (reference role: protected source artwork for the first-film title mark, subject definition only, not a target frame and not a storyboard anchor) defines the SECOND title mark. <Picture 2> (reference role: protected source artwork for the second-film title mark, subject definition only, not a target frame and not a storyboard anchor) defines the THIRD title mark. <Picture 3> (reference role: protected source artwork for the violet Rebellion title mark, subject definition only, not a target frame and not a storyboard anchor) defines the FOURTH title mark. <Picture 4> (reference role: protected source artwork for the Walpurgis Rising title mark, subject definition only, not a target frame and not a storyboard anchor) defines the SIXTH and final title mark. Reproduce every supplied mark as one indivisible flat image. Preserve its exact glyph contours, spacing, colour relationships and internal shapes. <Picture 5> (reference role: spatial behaviour and atmosphere only, not a target frame and not a storyboard anchor) defines the distant spiral of stars.
+
+summary: Six title marks form a chronological series: TV-era, first film, second film, Rebellion, Kijun and Walpurgis Rising. Each mark overwrites the previous mark inside a tightening cosmic spiral. After 00:07.160, the final mark rotates as a rigid plate until its unmarked black reverse faces the viewer. The spiral then converges into the next cycle.
+
+retention_analysis: <Pictures 1-4> are fully_preserved as protected source artwork. Their letters remain inseparable parts of copied logo images rather than newly typeset text. <Picture 5> is weak_reference for the star spiral only. The supplied designs contribute neither framing nor camera placement. The TV-era and Kijun states occupy their required chronological positions as complete indivisible logo plates; their glyphs are never assembled separately. The reverse of <Picture 4> is a flat black surface without markings.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading and flat protected title artwork. Every visible glyph belongs to one of the six chronological title marks.
+
+STAGE: Near-black space fills the frame. One loose pink causal thread from C2 crosses the lens at very close range, thick and softly out of focus, then draws inward. The title plane remains sharp at middle depth. Sparse cold-gold dust occupies two deeper planes. A deep-violet star spiral turns in the farthest plane. The frontal camera remains fixed throughout the chronology. Near-black occupies more than half of every composition.
+
+[Shot 1] The pink thread enters from the left and tightens toward the distant centre. The complete TV-era title plate appears. At 0.24 seconds it reaches the exact centre, settles and LOCKS. Cold violet light falls steeply from high above. Only the title plate and sparse dust receive highlights.
+
+[Shot 2] At 00:01.400, the first-film mark overwrites the TV-era plate. The displaced image breaks into horizontal pixel bands. The bands recoil behind the incoming protected artwork. The new plate settles at the same screen position and LOCKS. The camera remains static.
+
+[Shot 3] At 00:02.550, the second-film mark performs the same overwrite. Old contours become displaced blocks. The protected replacement occupies the centre and LOCKS. The star spiral tightens while the title retains the same screen size.
+
+[Shot 4] At 00:03.700, the violet Rebellion mark breaks through the preceding plate. Violet enters only through the copied artwork. Residual blocks drift behind it and are pulled into the far spiral.
+
+[Shot 5] At 00:04.860, the cold-gold Kijun mark overwrites the violet plate. Gold remains confined to the title image and sparse dust. The far spiral bends more steeply toward its centre.
+
+[Shot 6] At 00:06.010, the Walpurgis Rising mark destroys and replaces the gold plate. <Picture 4> settles sharply at centre and LOCKS as one intact flat object. Kicks displace only discarded blocks. Cymbals release brief cold-gold particle clusters behind the title plane.
+
+[Shot 7] At 00:07.160, the final title plate unlocks and begins a stepped 180-degree pivot around its vertical centre axis. Each successive accelerating snare advances the same rigid plate through one visible angular step. Its apparent width narrows until it is edge-on, then widens as the reverse comes forward. Small angular overshoots settle before the next step. At 8.90 seconds the rotation finishes. A perfectly flat, unmarked black reverse faces the camera. The deep-violet spiral immediately contracts behind that black plane. Stars, discarded blocks and gold dust converge into one narrow centre aperture. The aperture closes into near-black before the hard cut to C4. The camera and black reverse stop together.
+
+OVERWRITE LAW: Every incoming title plate physically displaces the preceding plate. Destruction and arrival form one event. Each replacement reaches the same centre position, settles and LOCKS. Discarded material remains behind the protected artwork.
+
+REVERSAL LAW: The final logo rotates as one rigid plate. Its front remains <Picture 4>. Its reverse is featureless black. The accelerating snares advance the rotation; completion triggers the spiral’s convergence.
+
+BEAT LAW: {{BEATLAW}} Every second snare introduces the next chronological title state at 0.24, 1.40, 2.55, 3.70, 4.86 and 6.01 seconds. Kicks recoil discarded bands. Cymbals release particles behind the title plane. Every accelerating snare from 7.16 through 8.90 seconds advances the final plate’s reversal.
+
+TEXT FIELD: The six complete title plates are the only glyph-bearing objects. Space, thread, particles, displaced bands, the black reverse and the closing aperture remain unmarked. Graphic fields use plain geometry in place of captions, credits, subtitles, numbers, interface labels, signs, watermarks and pseudo-writing.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: A low rotating spatial rumble surrounds the distant spiral. Each overwrite produces one dry digital tear, a short block displacement and a firm locking click. Dust emits sparse glass-like ticks. The stepped reversal produces five tightening mechanical turns. The completed black reverse triggers a narrow inward wind. Convergence ends on a dry stop, leaving a faint cold room tone for C4.
+
+non_diegetic_music: N/A

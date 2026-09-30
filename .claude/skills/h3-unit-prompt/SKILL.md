@@ -104,7 +104,18 @@ python3 scripts/lint_unit_prompts.py docs/anipafe2026-prompts-v2
 ⚠ **生成後は必ずタイムラインへ配置してから報告する**(運用規約)。
 `python3 scripts/place_units.py <jobs.json> --track 63 --v2`
 
-## 現在の運用値
+## 現在の運用値（v4・2026-09-04 ストーリーv2）
+
+- **v4 = `docs/anipafe2026-prompts-v4/`(units.json + U01〜U30.txt・連番)**。物語は `docs/anipafe2026-story.md`(v2)が正。
+  v3(`-v3/`・旧番号U01〜U42飛び番)は形式の見本として凍結
+- I2VAは **U06(C11)/U30(C67)** のみ。他はRef2VA
+- リップシンクは **U08(C14-15 日本語)・U21(C45-46 英語)** の2単位4カットのみ
+- 参照音声は units.json の audio ロール(beat=伴奏 / lipsync=歌唱)で投入時に自動付与(`--auto-audio`)
+- 新プレースホルダ: `{{NAME_STONE}}` 名の石 / `{{BURNED_STONE}}` 燃えた石 / `{{BLACK_WAVE}}` 名無しの群 / `{{MARG_SHADOW}}` マルグリートの影 / `{{TH:ROOT}}` 底根の様式
+- 投入: `python3 scripts/submit_unit.py --v4 --t1 --auto-audio --track <id> --auto U04`
+  一括: `python3 scripts/run_batch.py --v4 --t1 --all --auto --auto-audio --track <id>`
+
+## 旧運用値(v2/v3・参考)
 
 - v2 = `docs/anipafe2026-prompts-v2/`(43単位)。v1は比較用に凍結
 - I2VAは **U01/U06/U10/U42** のみ。他は全てRef2VA

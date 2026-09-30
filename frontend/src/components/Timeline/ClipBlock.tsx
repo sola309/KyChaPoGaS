@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react'
-import type { Clip, Asset } from '../../api/client'
+import type { Clip, Asset, ClipUpdate } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useUIStore } from '../../store/uiStore'
@@ -7,7 +7,9 @@ import { useAnalysisStore } from '../../store/analysisStore'
 import { SceneMarkers, MotionHeat } from './SceneMarkers'
 import { MotionCanvas } from './MotionCanvas'
 import { RemapEditor } from './RemapEditor'
+import { resInfo } from './resolutionBadge'
 import { allKeyframeTimes, removeKeyframe, TPROPS } from '../Preview/transformEval'
+import { isFilterClip, getKeys, filterLabel, solidColor, defaultValue, BLUR_MAX, type FilterKind, keyValueAt, withKeys } from './filterLayers'
 
 const CLIP_COLORS: Record<string, string> = {
   video:     'bg-blue-800 border-blue-600',
@@ -32,16 +34,46 @@ interface Props {
   trackHeight: number
   onSelect: (id: number) => void
   selected: boolean
-  /** Snap a timeline frame to the nearest beat (identity when snapping is off). */
-  snapFrame?: (frame: number) => number
+  /** 吸着(カット境界・他クリップ端・再生位置 > 拍)。excludeClipId=動かしているクリップ自身 */
+  snapFrame?: (frame: number, excludeClipId?: number) => number
   /** Another collaborator has this clip selected (outline color). */
   remoteSelect?: string | null
   /** Another collaborator is actively editing this clip (soft lock). */
   remoteLock?: { name: string; color: string } | null
+  /** 同一レイヤーで前クリップと重なるフレーム数(=このクリップへの遷移区間) */
+  overlapIn?: number
+  /** 同一レイヤーで次クリップと重なるフレーム数(=次クリップへの遷移区間、素材の続きが下に敷かれる) */
+  overlapOut?: number
 }
 
-export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock, trackName }: Props) {
-  const snap = snapFrame ?? ((f: number) => f)
+export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, trackHeight, onSelect, selected, snapFrame, remoteSelect, remoteLock, trackName, overlapIn = 0, overlapOut = 0 }: Props) {
+  // Alt を押している間は吸着しない。自分自身の端には吸着しない。
+  const snapEv = (f: number, ev?: { altKey: boolean }) =>
+    (!snapFrame || ev?.altKey) ? f : snapFrame(f, clip.id)
+  // 端ドラッグを「速度伸縮」で扱うか(ツールバーの切替、Ctrl/⌘ 押下中は反転)。
+  // 伸縮=使う素材範囲(duration×speed)はそのままに尺を変え、速度を自動計算する。動画素材のみ。
+  const isStretchDrag = (ev: { ctrlKey: boolean; metaKey: boolean }) => {
+    const base = useTimelineStore.getState().edgeStretch
+    const on = (ev.ctrlKey || ev.metaKey) ? !base : base
+    return on && !!asset?.duration_sec && !isFilterClip(clip)
+  }
+  // 伸縮後の値: 速度は 0.05〜8 に制限し、リマップのキーは尺の比率で時間方向に伸縮する
+  const stretchVals = (newDur: number) => {
+    const span = clip.duration_frames * (clip.speed || 1)
+    const dur = Math.max(Math.ceil(span / 8), Math.min(Math.floor(span / 0.05), Math.max(1, newDur)))
+    const out: Partial<Clip> = { duration_frames: dur, speed: Number((span / dur).toFixed(4)) }
+    if ((clip.remap_json ?? '') !== '') {
+      try {
+        const r = JSON.parse(clip.remap_json!)
+        const k = dur / clip.duration_frames
+        r.keys = (r.keys ?? []).map((x: { t: number }) => ({ ...x, t: Math.round(x.t * k) }))
+        out.remap_json = JSON.stringify(r)
+      } catch { /* keep */ }
+    }
+    return out
+  }
+  // これだけ動くまではドラッグを開始しない(クリック=選択だけで位置は変えない)
+  const DRAG_DEADZONE_PX = 4
   // 個別セレクタ購読(アクション参照は安定)— 全ストア購読だと再生中30fpsの
   // currentFrame更新で全ClipBlockが再レンダされてしまう
   const moveClip = useTimelineStore(s => s.moveClip)
@@ -64,8 +96,10 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   }
   const hardLocked = !!clip.locked   // 🔒確定カット(ユーザーが明示的にロック)
   const locked = !!remoteLock || hardLocked
-  const scenes = useAnalysisStore(s => s.scenes)
-  const motion = useAnalysisStore(s => s.motion)
+  // 自分のアセット分だけ購読: マップ全体を購読すると他アセットの解析が届くたびに
+  // 全クリップが再描画され、memo が無効になる
+  const assetScenes = useAnalysisStore(s => (asset ? s.scenes[asset.id] : undefined))
+  const assetMotion = useAnalysisStore(s => (asset ? s.motion[asset.id] : undefined))
 
   const toggleLock = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -79,15 +113,20 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
     ? Math.max(1, Math.floor(asset.duration_sec * projectFps))
     : null
   const isStretchable = sourceFrames == null   // images stretch without limit
-  const assetScenes = asset ? scenes[asset.id] : undefined
-  const assetMotion = asset ? motion[asset.id] : undefined
   const dragRef = useRef<{ startX: number; origFrame: number } | null>(null)
   const [dragging, setDragging] = useState(false)
   const [remapOpen, setRemapOpen] = useState(false)   // ⏱リマップエディタ
 
   const left  = clip.start_frame * pixelsPerFrame
   const width = Math.max(clip.duration_frames * pixelsPerFrame, HANDLE_PX * 2 + 4)
-  const colorClass = CLIP_COLORS[asset?.asset_type ?? 'video']
+  // ■単色/◌ぼかし(フィルターレイヤー): 素材を持たないので専用の見た目にする
+  const isFilter = isFilterClip(clip)
+  const showRes = useTimelineStore(s => s.showRes)
+  const ri = showRes && !isFilterClip(clip) ? resInfo(asset) : null
+  const openFilter = () => window.dispatchEvent(new CustomEvent('kychapogas:open-filter', { detail: { clipId: clip.id } }))
+  const colorClass = isFilter
+    ? (clip.kind === 'blur' ? 'bg-cyan-950 border-cyan-600' : 'bg-zinc-800 border-zinc-400')
+    : CLIP_COLORS[asset?.asset_type ?? 'video']
 
   // Interactions use Pointer Events so mouse, touch, and pen all work.
   // タッチは「長押しでドラッグ開始」: 以前は touch-action:none で指の動きが即編集に
@@ -136,6 +175,10 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   }
 
   // ── Main body: move ──────────────────────────────────────────────────
+  // 2026-09-23: クリックしただけで数フレームずれる不具合を修正。以前は押した瞬間に
+  // ドラッグを開始し、離したときに動いていなくても拍スナップを通していた。
+  // いまは DRAG_DEADZONE_PX 動くまで何もせず、動かしたら始点・終点のうち
+  // 吸着先に近い方で合わせる(カット末尾にぴったり付けたい時も効く)。
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation()
     if (locked) {                      // 🔒 or 共同編集ロック: 選択のみ許可、移動不可
@@ -143,32 +186,51 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       return
     }
     onSelect(clip.id)
-    setEditingClipId(clip.id)
     const origFrame = clip.start_frame
-    dragRef.current = { startX: e.clientX, origFrame }
-    setDragging(true)
+    const dur = clip.duration_frames
+    const x0 = e.clientX
+    dragRef.current = { startX: x0, origFrame }
+    let started = false
+
+    const target = (ev: PointerEvent) => {
+      const raw = Math.max(0, Math.round(origFrame + (ev.clientX - x0) / pixelsPerFrame))
+      const byStart = snapEv(raw, ev)
+      const byEnd = snapEv(raw + dur, ev) - dur
+      const dS = Math.abs(byStart - raw), dE = Math.abs(byEnd - raw)
+      // 動いた方(=吸着が効いた方)を採る。両方効いたら近い方
+      if (byStart !== raw && (byEnd === raw || dS <= dE)) return byStart
+      if (byEnd !== raw) return Math.max(0, byEnd)
+      return raw
+    }
 
     const onMove = (ev: PointerEvent) => {
       if (!dragRef.current) return
-      const dx = ev.clientX - dragRef.current.startX
-      const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
+      if (!started) {
+        if (Math.abs(ev.clientX - x0) < DRAG_DEADZONE_PX) return
+        started = true
+        setDragging(true)
+        setEditingClipId(clip.id)
+      }
+      const newFrame = target(ev)
       useTimelineStore.setState(s => ({
         clips: s.clips.map(c => c.id === clip.id ? { ...c, start_frame: newFrame } : c),
       }))
     }
 
     const onUp = (ev: PointerEvent) => {
-      if (!dragRef.current) return
-      const dx = ev.clientX - dragRef.current.startX
-      const newFrame = snap(Math.max(0, Math.round(dragRef.current.origFrame + dx / pixelsPerFrame)))
-      if (newFrame !== dragRef.current.origFrame) {
-        moveClip(clip.id, dragRef.current.origFrame, newFrame)
-      }
-      dragRef.current = null
-      setDragging(false)
-      setEditingClipId(null)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      if (!dragRef.current) return
+      if (started) {
+        const newFrame = target(ev)
+        if (newFrame !== origFrame) moveClip(clip.id, origFrame, newFrame)
+        else useTimelineStore.setState(s => ({   // 元の位置に戻した: 表示だけ戻す
+          clips: s.clips.map(c => c.id === clip.id ? { ...c, start_frame: origFrame } : c),
+        }))
+        setDragging(false)
+        setEditingClipId(null)
+      }
+      dragRef.current = null
     }
 
     window.addEventListener('pointermove', onMove)
@@ -180,16 +242,39 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
     e.stopPropagation()
     if (locked) return
     onSelect(clip.id)
-    setEditingClipId(clip.id)
     const startX      = e.clientX
     const origStart   = clip.start_frame
     const origDur     = clip.duration_frames
     const origAssetIn = clip.asset_in_frame
+    let started = false
 
-    const clamp = (dx: number) => {
-      const newStart = Math.max(0, snap(origStart + Math.round(dx / pixelsPerFrame)))
+    const origSpeed = clip.speed
+    const origRemap = clip.remap_json ?? ''
+    const clamp = (ev: PointerEvent): ClipUpdate => {
+      const dx = ev.clientX - startX
+      const newStart = Math.max(0, snapEv(origStart + Math.round(dx / pixelsPerFrame), ev))
       const moved    = newStart - origStart
+      if (isStretchDrag(ev)) {
+        // 終点は固定、始点だけ動かす。素材の頭出しは変えない
+        const sv = stretchVals(origDur - moved)
+        const d = sv.duration_frames!
+        return { ...sv, start_frame: origStart + origDur - d, asset_in_frame: origAssetIn }
+      }
+      // フィルター(単色/ぼかし)のキーはクリップ先頭基準なので、左端を動かしたら
+      // 絶対時刻が変わらないようにずらす(詰めた分は先頭キーにその時点の値を置く)
+      let filterAttrs: ClipUpdate = {}
+      if (isFilterClip(clip)) {
+        const kind = clip.kind as FilterKind
+        const ks = getKeys(clip)
+        if (ks.length) {
+          const shifted = moved > 0
+            ? [{ t: 0, v: keyValueAt(ks, moved, defaultValue(kind)) }, ...ks.filter(k => k.t > moved).map(k => ({ t: k.t - moved, v: k.v }))]
+            : ks.map(k => ({ t: k.t - moved, v: k.v }))
+          filterAttrs = { attrs_json: withKeys(clip.attrs_json, kind, shifted) }
+        }
+      }
       return {
+        ...filterAttrs,
         start_frame:     newStart,
         duration_frames: Math.max(1, origDur - moved),
         asset_in_frame:  Math.max(0, origAssetIn + moved),
@@ -197,21 +282,28 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
     }
 
     const onMove = (ev: PointerEvent) => {
-      const vals = clamp(ev.clientX - startX)
+      if (!started) {
+        if (Math.abs(ev.clientX - startX) < DRAG_DEADZONE_PX) return
+        started = true
+        setEditingClipId(clip.id)
+      }
+      const vals = clamp(ev)
       useTimelineStore.setState(s => ({
         clips: s.clips.map(c => c.id === clip.id ? { ...c, ...vals } : c),
       }))
     }
 
     const onUp = (ev: PointerEvent) => {
-      const after = clamp(ev.clientX - startX)
-      trimClip(clip.id,
-        { start_frame: origStart, duration_frames: origDur, asset_in_frame: origAssetIn },
-        after,
-      )
-      setEditingClipId(null)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      if (!started) return            // クリックだけ: 何も変えない
+      const after = clamp(ev)
+      trimClip(clip.id,
+        { start_frame: origStart, duration_frames: origDur, asset_in_frame: origAssetIn, speed: origSpeed, remap_json: origRemap,
+          ...(isFilterClip(clip) ? { attrs_json: clip.attrs_json } : {}) },
+        { speed: origSpeed, remap_json: origRemap, ...after },
+      )
+      setEditingClipId(null)
     }
 
     window.addEventListener('pointermove', onMove)
@@ -223,35 +315,49 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
     e.stopPropagation()
     if (locked) return
     onSelect(clip.id)
-    setEditingClipId(clip.id)
     const startX  = e.clientX
     const origDur = clip.duration_frames
     // For finite-source clips, cap at the remaining source frames.
     const maxDur  = sourceFrames != null ? Math.max(1, sourceFrames - clip.asset_in_frame) : Infinity
+    let started = false
 
-    const clamp = (dx: number) => {
-      // Snap the clip's END (start + duration) to a beat so cuts land on the beat.
-      const snappedEnd = snap(clip.start_frame + Math.round(origDur + dx / pixelsPerFrame))
+    const clamp = (ev: PointerEvent) => {
+      // 終点(start + duration)を吸着させる(カット境界・他クリップ端・拍)
+      const snappedEnd = snapEv(clip.start_frame + Math.round(origDur + (ev.clientX - startX) / pixelsPerFrame), ev)
       const dur = snappedEnd - clip.start_frame
       return Math.min(maxDur, Math.max(1, dur))
     }
+    const origSpeedR = clip.speed
+    const origRemapR = clip.remap_json ?? ''
+    const valsR = (ev: PointerEvent): ClipUpdate => {
+      if (isStretchDrag(ev)) {
+        const snappedEnd = snapEv(clip.start_frame + Math.round(origDur + (ev.clientX - startX) / pixelsPerFrame), ev)
+        return stretchVals(snappedEnd - clip.start_frame)
+      }
+      return { duration_frames: clamp(ev), speed: origSpeedR, remap_json: origRemapR }
+    }
 
     const onMove = (ev: PointerEvent) => {
-      const dur = clamp(ev.clientX - startX)
+      if (!started) {
+        if (Math.abs(ev.clientX - startX) < DRAG_DEADZONE_PX) return
+        started = true
+        setEditingClipId(clip.id)
+      }
+      const v = valsR(ev)
       useTimelineStore.setState(s => ({
-        clips: s.clips.map(c => c.id === clip.id ? { ...c, duration_frames: dur } : c),
+        clips: s.clips.map(c => c.id === clip.id ? { ...c, ...(v as Partial<Clip>) } : c),
       }))
     }
 
     const onUp = (ev: PointerEvent) => {
-      const dur = clamp(ev.clientX - startX)
-      trimClip(clip.id,
-        { duration_frames: origDur },
-        { duration_frames: dur },
-      )
-      setEditingClipId(null)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      if (!started) return            // クリックだけ: 何も変えない
+      trimClip(clip.id,
+        { duration_frames: origDur, speed: origSpeedR, remap_json: origRemapR },
+        valsR(ev),
+      )
+      setEditingClipId(null)
     }
 
     window.addEventListener('pointermove', onMove)
@@ -266,14 +372,17 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       style={{
         left, width, height: trackHeight - 8,
         ...(remoteLock ? { outline: `2px solid ${remoteLock.color}`, outlineOffset: '-1px' }
-          : remoteSelect ? { outline: `1px dashed ${remoteSelect}`, outlineOffset: '-1px' } : {}),
+          : remoteSelect ? { outline: `1px dashed ${remoteSelect}`, outlineOffset: '-1px' }
+          : ri?.low ? { outline: '2px solid rgb(220 38 38)', outlineOffset: '-2px' } : {}),
       }}
       onDoubleClick={() => {
+        if (isFilter) { openFilter(); return }
         if (locked) return
         if (isMgShot) openEditor()
         else deleteClip(clip.id)
       }}
       title={remoteLock ? `${remoteLock.name} が編集中`
+        : isFilter ? `${filterLabel(clip)} — ダブルクリック/🎚でキー編集`
         : isMgShot ? `${asset?.name ?? 'shot'} — ダブルクリック/✎でショットエディタ`
         : `${asset?.name ?? 'clip'}${isStretchable ? '（静止画: 自由に引き伸ばし可）' : ''} — ダブルクリックで削除`}
     >
@@ -294,6 +403,37 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           style={{ background: remoteLock.color }}
         >🔒 {remoteLock.name}</span>
       )}
+      {/* フィルターレイヤー: キー補間のカーブ(単色=色で塗った不透明度 / ぼかし=強さ) */}
+      {isFilter && (() => {
+        const ks = getKeys(clip)
+        const kind = clip.kind as FilterKind
+        const last = Math.max(1, clip.duration_frames - 1)
+        const vmax = kind === 'solid' ? 1 : Math.min(BLUR_MAX, Math.max(10, ...ks.map(k => k.v)))
+        const fb = defaultValue(kind)
+        const pts: [number, number][] = ks.length
+          ? [[0, ks[0].v], ...ks.map(k => [Math.min(last, k.t), k.v] as [number, number]), [last, ks[ks.length - 1].v]]
+          : [[0, fb], [last, fb]]
+        const poly = pts.map(([t, v]) => `${(t / last) * 100},${100 - (v / vmax) * 100}`).join(' ')
+        return (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {kind === 'solid'
+              ? <polygon points={`0,100 ${poly} 100,100`} fill={solidColor(clip)} fillOpacity={0.85}
+                         stroke="#a1a1aa" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              : <polygon points={`0,100 ${poly} 100,100`} fill="#22d3ee" fillOpacity={0.25}
+                         stroke="#67e8f9" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
+          </svg>
+        )
+      })()}
+      {isFilter && selected && getKeys(clip).map(k => (
+        <div key={`fk${k.t}`}
+          className="absolute z-20 w-2.5 h-2.5 rotate-45 bg-purple-300 border border-purple-600 cursor-pointer hover:bg-white"
+          style={{ left: (Math.min(k.t, clip.duration_frames - 1) / Math.max(1, clip.duration_frames - 1)) * width - 5, bottom: 1 }}
+          title={`キー +${k.t}f = ${k.v}(クリックでジャンプ)`}
+          onPointerDown={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); setCurrentFrame(clip.start_frame + k.t) }}
+        />
+      ))}
+
       {/* Filmstrip background (video clips) — タイルが常に16:9で表示されるよう
           クリップ表示幅からコマ数を逆算(段階量子化でキャッシュ効率を保つ) */}
       {asset && (asset.asset_type === 'video' || (asset.asset_type === 'generated' && asset.duration_sec != null)) && (() => {
@@ -342,20 +482,42 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         />
       ))}
 
-      {/* Transition-in indicator (◣ at the head of the clip) */}
-      {clip.transition_in && (
+      {/* 重なり(遷移)区間: 先頭側=前クリップから溶け込む区間、末尾側=次クリップへ溶け込ませる区間 */}
+      {overlapIn > 0 && (
+        <div className="absolute left-0 top-0 bottom-0 pointer-events-none z-[21] flex items-start"
+          style={{ width: Math.max(8, overlapIn * pixelsPerFrame),
+                   background: 'repeating-linear-gradient(135deg, rgba(56,189,248,0.55) 0 4px, rgba(56,189,248,0.15) 4px 8px)',
+                   borderRight: '1px solid rgba(56,189,248,0.9)' }}
+          title={`前クリップとの重なり ${overlapIn}f(遷移: ${clip.transition_in || 'cross'})`}>
+          <span className="text-[9px] leading-none px-0.5 text-white" style={{ background: 'rgba(0,0,0,0.55)' }}>⇄{overlapIn}</span>
+        </div>
+      )}
+      {overlapOut > 0 && (
+        <div className="absolute right-0 top-0 bottom-0 pointer-events-none z-[21]"
+          style={{ width: Math.max(8, overlapOut * pixelsPerFrame),
+                   background: 'repeating-linear-gradient(45deg, rgba(56,189,248,0.35) 0 4px, rgba(56,189,248,0.08) 4px 8px)',
+                   borderLeft: '1px dashed rgba(56,189,248,0.8)' }}
+          title={`次クリップとの重なり ${overlapOut}f(この区間は素材の続きが下に敷かれる)`} />
+      )}
+
+      {/* Transition-in indicator (◣ at the head of the clip) — 重なりが無い旧方式の遷移のみ表示 */}
+      {clip.transition_in && overlapIn === 0 && (
         <div
-          className="absolute left-0 top-0 bottom-0 pointer-events-none z-[5]"
+          className="absolute left-0 top-0 bottom-0 pointer-events-none z-20 flex items-end"
           style={{
-            width: Math.max(6, clip.transition_frames * pixelsPerFrame),
+            width: Math.max(10, clip.transition_frames * pixelsPerFrame),
             background: clip.transition_in === 'white'
               ? 'linear-gradient(to right, rgba(255,255,255,0.75), transparent)'
               : clip.transition_in === 'black'
               ? 'linear-gradient(to right, rgba(0,0,0,0.85), transparent)'
               : 'linear-gradient(to right, rgba(238,152,168,0.7), transparent)',
           }}
-          title={`遷移: ${clip.transition_in}`}
-        />
+          title={`遷移: ${clip.transition_in === 'cross' ? 'クロス(前クリップの続きに溶かす)' : clip.transition_in} ${clip.transition_frames}f`}
+        >
+          <span className="text-[9px] leading-none px-0.5 text-white drop-shadow" style={{ background: 'rgba(0,0,0,0.45)' }}>
+            {clip.transition_in === 'cross' ? '⤳' : clip.transition_in === 'white' ? '☀' : '●'}{clip.transition_frames}
+          </span>
+        </div>
       )}
 
       {/* Left trim handle */}
@@ -373,7 +535,15 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       >
         <span className="truncate leading-tight">
           {hardLocked && <span className="mr-0.5">🔒</span>}
-          {asset?.name ?? `clip ${clip.id}`}
+          {ri && (
+            <span className={`mr-1 px-1 rounded font-mono text-[9px] leading-none py-0.5 ${ri.cls}`}
+                  title={`素材 ${asset?.width}×${asset?.height}${ri.tier ? ` / ${ri.tier}` : ''}${ri.low ? '(ネイティブ 1344×768 未満)' : ''}${ri.redraw ? ' / ♻ 採用動画を参照した描き直し(元動画は参照していない)' : ri.tier ? ' / 元動画を参照した生成' : ''}`}>
+              {ri.label}{ri.tier ? `·${ri.tier}` : ''}{ri.redraw ? '·♻' : ''}
+            </span>
+          )}
+          {isFilter
+            ? <span className="px-1 rounded bg-black/55">{filterLabel(clip)}</span>
+            : (asset?.name ?? `clip ${clip.id}`)}
         </span>
       </div>
 
@@ -394,8 +564,18 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
                      onClose={() => setRemapOpen(false)} />
       )}
 
+      {/* 🎚 フィルター編集(単色/ぼかし) */}
+      {selected && isFilter && (
+        <button
+          onClick={e => { e.stopPropagation(); openFilter() }}
+          onPointerDown={e => e.stopPropagation()}
+          className="absolute top-0 right-6 z-20 text-[11px] leading-none px-1 py-0.5 rounded-bl bg-black/50 text-zinc-300 hover:text-purple-300"
+          title="🎚 キー(不透明度/ぼかし強さ)と色を編集"
+        >🎚</button>
+      )}
+
       {/* 🗂テイク履歴: このクリップ位置の生成テイクを一覧(選択時に表示) */}
-      {selected && (
+      {selected && !isFilter && (
         <button
           onClick={e => {
             e.stopPropagation()

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import mimetypes
 import shutil
@@ -129,10 +130,13 @@ async def upload_asset(
         dest = dest_dir / f"{stem}_{counter}{suffix}"
         counter += 1
 
-    with dest.open("wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    info = probe(dest)
+    # 書き込みとffprobeはブロッキング。async defのままループ上で回すと
+    # アップロード中に他の全リクエストとジョブランナーが止まる。
+    def _save_and_probe():
+        with dest.open("wb") as f:
+            shutil.copyfileobj(file.file, f)
+        return probe(dest)
+    info = await asyncio.to_thread(_save_and_probe)
 
     asset = Asset(
         project_id=project_id,
@@ -387,6 +391,7 @@ def extract_clip(
     end_sec: float | None = None,   # 指定時: 動画はこの時刻に表示中の源フレームまで「包含」で切る(フレーム厳密)
     pad_to_sec: float | None = None,  # 動画のみ: 出力がこれ未満なら最終フレームをフリーズして延長(H3参照の最小2秒対策)
     crop_aspect: float | None = None,  # 動画のみ: この比へ中央クロップ(H3は参照と出力のアスペクト一致で構図が安定)
+    h3_grid: bool = False,            # 動画のみ: 出力フレーム数を 17k+5 に切り上げ、その分だけ**後ろへ実フレームを伸ばす**
     session: Session = Depends(get_session),
 ):
     """
@@ -427,6 +432,22 @@ def extract_clip(
                 dur_sec = (frames_cap + 2) / fps        # 読み込み範囲(余裕込み)。本命はframes_cap
             else:
                 dur_sec = end_sec - start_sec
+    # H3 の Ref2V ノードは参照動画を 17k+5 フレームに「切り下げ」る(207f→205f)。末尾を捨てられると
+    # 参照の動きが生成尺へわずかに引き伸ばされる(2026-09-08 ユーザー指摘)。規則: 参照フレームは1枚も
+    # 捨てない。切り出し時点で 17k+5 まで後ろへ実フレームを伸ばし、源が尽きた分だけ最終フレームを凍結。
+    grid_freeze_frames = 0
+    if h3_grid and frames_cap is not None and not is_audio:
+        info = _src_video_info(src)
+        if info:
+            fps_v, total_sec = info
+            g = frames_cap + (5 - (frames_cap % 17)) % 17
+            if g > frames_cap:
+                n0 = int(round(t * fps_v + 0.5))
+                avail = max(0, int(total_sec * fps_v + 1e-6) - n0)   # 源に残っているフレーム数
+                take = min(g, avail)
+                grid_freeze_frames = g - take
+                frames_cap = g
+                dur_sec = (take + 2) / fps_v
     ext = ".wav" if is_audio else ".mp4"
     dest = dest_dir / f"ref_{asset_id}_{int(t * 1000)}ms_{int(dur_sec * 1000)}ms{ext}"
     counter = 1
@@ -460,6 +481,10 @@ def extract_clip(
                     pad = (target_frames - frames_cap) / fps_v + 0.02
                     vf_chain.append(f"tpad=stop_mode=clone:stop_duration={pad:.3f}")
                     frames_cap = target_frames
+        if grid_freeze_frames > 0:
+            info = _src_video_info(src)
+            fps_v = info[0] if info else 24.0
+            vf_chain.append(f"tpad=stop_mode=clone:stop_duration={grid_freeze_frames / fps_v + 0.02:.3f}")
         if vf_chain:
             codec = ["-vf", ",".join(vf_chain), *codec]
         if frames_cap is not None:

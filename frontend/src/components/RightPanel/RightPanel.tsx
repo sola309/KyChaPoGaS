@@ -32,9 +32,12 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
   const [tab, setTab] = useState<PanelTab>('assets')
   const panelOpen = useUIStore(s => s.panelOpen)
   const closeDrawers = useUIStore(s => s.closeDrawers)
-  const { startSSE, stopSSE, checkComfyUI, jobs } = useJobStore()
-
-  const runningCount = jobs.filter(j => j.status === 'running' || j.status === 'pending').length
+  const startSSE = useJobStore(s => s.startSSE)
+  const stopSSE = useJobStore(s => s.stopSSE)
+  const checkComfyUI = useJobStore(s => s.checkComfyUI)
+  // 件数だけ購読: 一覧オブジェクトを購読するとSSEフレーム(2秒毎)ごとに7タブ全部が再描画される
+  const runningCount = useJobStore(s =>
+    s.jobs.reduce((n, j) => n + (j.status === 'running' || j.status === 'pending' ? 1 : 0), 0))
 
   useEffect(() => {
     // 再生優先の読み込み順: タイムライン(クリップ/音声/プロキシ)の初期化を先に走らせ、

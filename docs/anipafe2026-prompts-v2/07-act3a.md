@@ -45,7 +45,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U29 — C45 We know the hell (Ref2VA / 生成124f / 実尺4.58s / 2ショット / ス1 / リップシンク英語)
+## U29 — C45+C46 We know the hell→Does not go to your past (Ref2VA / 生成277f / 実尺11.50s / 融合2カット)
+
+参照: <Picture 1> #2627 / <Picture 2> #936
+⚠ U29+U30 を融合(apply_merges.py)。音声=vocal。融合前は _superseded/。
+
+```
+(本文は v3/U29.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> 【要素材】悪魔ほむらのバストアップクロップ(FRAME_A画角・頭と胸が上2/3) /
 <Picture 2> #2627 全身 (identity)
@@ -85,7 +92,7 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U30 — C46 Does not go to your past (Ref2VA / 生成175f / 実尺6.96s / 3ショット / ス9シ11 / 盛上4.63-6.96s / リップシンク英語)
+## U30old — C46 Does not go to your past (Ref2VA / 生成175f / 実尺6.96s / 3ショット / ス9シ11 / 盛上4.63-6.96s / リップシンク英語) 〔U29へ融合により停止〕
 
 参照(理想): <Picture 1> 【要素材】まどか制服の顔クロップ(涙を湛えた画角) / <Picture 2> #936 (identity)
 MG: 背後の世界の起動=盛上区間の連続量。ドラム1発目=世界が動き出す瞬間
@@ -124,7 +131,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U31 — C47 物量 (Ref2VA / 生成124f / 実尺4.58s / 3ショット / ス8キ13シ12 / 人物なし)
+## U31 — C47+C48 物量→個 (Ref2VA / 生成226f / 実尺9.17s / 融合2カット)
+
+参照: <Picture 1> #2605 / <Picture 2> #2892 / <Picture 3> #2781 / <Picture 4> #2782 / <Picture 5> #2788 / <Picture 6> #2783 / <Picture 7> #2871
+⚠ U31+U32 を融合(apply_merges.py)。音声=inst。融合前は _superseded/。
+
+```
+(本文は v3/U31.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> #2605 人形 (design) / <Picture 2> 【要素材】赤糸の網プレート(weak)
 MG: **糸の網=画面を横切る張線**(スネアごとに1本)。影の隊列=パネルの床
@@ -162,7 +176,7 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U32 — C48 個 (Ref2VA / 生成124f / 実尺4.62s / 5ショット / ス7キ13シ14)
+## U32old — C48 個 (Ref2VA / 生成124f / 実尺4.62s / 5ショット / ス7キ13シ14) 〔U31へ融合により停止〕
 
 参照(理想): <Picture 1> #2892 4人プレート / <Picture 2> #2781 / <Picture 3> #2782 / <Picture 4> #2788 /
 <Picture 5> #2783 なぎさ / <Picture 6> #2871 弓 / <Picture 7> 【要素材】まどかの顔クロップ
@@ -205,7 +219,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U33 — C49+C50+C51 交互切り前半 (Ref2VA / 生成124f / 実尺4.63s / 3ショット / 境界1.17s, 2.34s / ス10シ14)
+## U33 — C49+C50+C51+C52+C53 交互切り前半→引き絞り → 敵の鏡像 (Ref2VA / 生成226f / 実尺9.21s / 融合5カット)
+
+参照: <Picture 1> #2791 / <Picture 2> #953 / <Picture 3> #2871 / <Picture 4> #3002 / <Picture 5> #2869 / <Picture 6> #2627
+⚠ U33+U34 を融合(apply_merges.py)。音声=inst。融合前は _superseded/。
+
+```
+(本文は v3/U33.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> #2791 オーブ / <Picture 2> #953 まどか / <Picture 3> #2871 弓 /
 <Picture 4> #3002 半月亀裂 (design)
@@ -246,7 +267,7 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U34 — C52+C53 引き絞り → 敵の鏡像 (Ref2VA / 生成124f / 実尺4.62s / 3ショット / 境界2.29s / ス9シ17 / 盛上2.29-4.62s)
+## U34old — C52+C53 引き絞り → 敵の鏡像 (Ref2VA / 生成124f / 実尺4.62s / 3ショット / 境界2.29s / ス9シ17 / 盛上2.29-4.62s) 〔U33へ融合により停止〕
 
 参照(理想): <Picture 1> 【要素材】まどかの顔+引き手クロップ(涙の画角) / <Picture 2> #953 /
 <Picture 3> #2871 弓 / <Picture 4> #2869 鏡像対峙 (identity・何も足さない) / <Picture 5> #2627

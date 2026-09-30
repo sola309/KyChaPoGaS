@@ -1,0 +1,32 @@
+subject_definitions: <Picture 1> (reference role: subject identity and costume only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. <Picture 2> (reference role: colour and luminous falloff only, not a target frame and not a storyboard anchor) defines the rose-white radiance associated with {{UM_ID}} and transfers it to <Subject 2>, a hard-edged vertical plane of light.
+
+summary: A rose-white light from above reaches for <Subject 1> but cannot follow her outline. <Subject 1> steps into the fissure and descends with folded wings between the receding upper light and the approaching white stone field.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s identity, costume, wings and asymmetrical leg design. Its facial view is partially_preserved because both shots present her from behind. <Picture 2> is weak_reference for <Subject 2>'s rose-white colour and luminous falloff. <Subject 2> remains a geometric plane of light. The frame contains exactly one person, <Subject 1>.
+
+detailed_description: {{TH:CITY}}
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. The frame contains exactly one person. <Subject 1> is already standing in the right half of the frame, shown from behind as a full figure occupying one third of the frame height, with her feet, hips, shoulders and head facing a diagonal fissure below. A near-black ground plane surrounds her, while a cold violet edge from the lower left touches her wings and the fissure rim. Static Shot. Near-black occupies half the image. The fissure and the upper light are the only detailed background elements.
+
+A vertical band of rose light lands on her shoulders from above and stops at her outline. <Subject 2> appears in the upper far plane, slides vertically into the subject plane within 0.5 seconds, settles across her shoulder line, and LOCKS. Its two hard parallel edges catch a thin porcelain-white specular. Its interior contains uninterrupted rose-white radiance. The illuminated area remains rectangular above her, while two straight strips continue below a hand’s width away from either arm. The light therefore touches her shoulder line but draws no contour around her body.
+
+At 1.110 seconds the camera is still at the rear diagonal axis, and the locked rose band is visible across both shoulders. Her covered hands hang beside her skirt. Her head, shoulders, hips and feet keep their shared forward orientation. At 2.830 seconds the camera remains fixed, and the two disconnected strips of light are visible beside her arms. One folded feather settles against another with a small secondary motion. <Subject 1> shifts her weight into the forward leg. The rear heel lifts. At 4.280 seconds her forward boot is suspended beyond the hard fissure rim, while the back of her head stays directed toward the opening. Her body crosses the rose band without carrying its light.
+
+[Shot 2] At 00:04.580, hard cut to a vertical view inside the fissure. <Subject 1> is already descending upright through the center as a full rear silhouette occupying one quarter of the frame height. Her wings are folded tightly into a narrow black column, with their tips and her long hair trailing above her. A small rose-white opening hangs above her, while a broad porcelain-white field from the stone plain shines below. A Tracking Shot descends beside <Subject 1> at moderate speed and keeps her body the same size in frame.
+
+Six depth planes move at unequal rates. Near black fissure slabs pass upward fastest and briefly cover the frame edges. Folded wing tips and loose hair occupy the next plane and lag above her shoulders. Mid-distance fissure walls travel upward at moderate speed. The distant upper opening barely moves. The lower white field expands rapidly through the far and middle planes. The upper light shrinks to a point at slow speed while the lower white field grows at fast speed.
+
+At 5.727 seconds the camera is level with her waist, the upper opening measures one fifth of the frame width, and the lower white field fills the bottom quarter. Her wings remain compressed against the downward airflow. At 7.457 seconds the camera is level with her shoulders, the upper light is a small rose point, and the lower white field fills two thirds of the frame. The nearest fissure plane passes upward across the left edge, then clears it. At 8.457 seconds the camera and <Subject 1> share the same downward speed; the white field occupies four fifths of the image and throws a pale edge along her folded wings. The relative motion eases. The final 0.7 seconds hold this rear silhouette almost still against the approaching white field.
+
+LIGHT LAW: Contact with <Subject 1>'s shoulders triggers <Subject 2> to stop as a straight rectangular plane; her forward step leaves that plane fixed above the fissure.
+
+DESCENT LAW: Her step beyond the rim triggers the hard cut into vertical descent. Unequal depth-plane speeds make the upper distance lengthen while the lower distance closes.
+
+BEAT LAW: {{BEATLAW}} Each snare triggers one hard cut, light-plane registration or depth-plane handoff; each kick lands as the boot’s weight transfer or a brief acceleration of passing fissure planes; each cymbal releases light from <Subject 2> or the lower white field.
+
+NO-TEXT RULE: All surfaces remain unmarked. Graphic information consists of flat colour planes, the clean fissure and geometric light.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: The descending rose plane produces a narrow glasslike hum at the visible shoulder contact. One boot sole presses against the fissure rim, followed by feather barbs tightening as the wings fold into the descent. Air moves upward past the fissure slabs with increasing depth, while the lower white field carries a low stone resonance.
+
+non_diegetic_music: N/A

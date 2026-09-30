@@ -65,7 +65,7 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
   const [vidModel, setVidModel] = useState('wan2.2-flf2v')
   const [h3Steps, setH3Steps] = useState(15)
   const snap4n1 = (n: number) => Math.max(5, Math.round((n - 1) / 4) * 4 + 1)
-  const snapH3 = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362
+  const snapH3 = (n: number) => { const m = Math.max(124, Math.min(1042, n)); return Math.min(1042, m + (5 - (m % 17)) % 17) }   // 1本124-362、362超は継続生成(最大3段1042f)。バックエンドが自動分割
   const isH3 = vidModel.startsWith('minimax-h3')
   const [easycache, setEasycache] = useState(true)
   // 🚀Turbo: lightx2v蒸留LoRA。4stepで約30%短縮するがテクスチャが平坦化するのでT1下見向け
@@ -134,7 +134,9 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
 
   if (!params || !kind) return null
 
-  const handleRegen = async () => {
+  // quality="t0" のときは超速プレビュー(T1の先頭1段=構図確認)。
+  // バックエンドの quality プリセットが解像度・ステップ・preview_steps を上書きする。
+  const handleRegen = async (quality: '' | 't0' = '') => {
     setMsg('')
     try {
       const place = { track_id: clip.track_id, start_frame: clip.start_frame,
@@ -176,6 +178,7 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
           prompt, negative_prompt: negPrompt,
           width, height, seed, use_lightning: lightning,
           ...(isH3 ? { steps: h3Steps, easycache, ...(turbo ? { turbo_lora: 0.75 } : {}) } : {}),
+          ...(quality ? { quality } : {}),   // T0: サーバ側プリセットが構成を上書き
           // Ref2V: 参照動画/音声・scheduler・ref_image_sizeを元条件のまま引き継ぐ
           ...(vidModel === 'minimax-h3-ref' ? {
             ...(Array.isArray(params.ref_video_asset_ids) && params.ref_video_asset_ids.length ? { ref_video_asset_ids: params.ref_video_asset_ids } : {}),
@@ -375,10 +378,17 @@ export function RegenPanel({ clip, asset, projectId, fps, assets }: Props) {
             </div>
           )}
 
-          <button onClick={handleRegen}
-                  className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white">
-            🔁 再生成して差し替え
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => handleRegen()}
+                    className="text-xs px-3 py-1.5 rounded bg-purple-700 hover:bg-purple-600 text-white">
+              🔁 再生成して差し替え
+            </button>
+            <button onClick={() => handleRegen('t0')}
+                    title="T0超速プレビュー: 先頭1段だけ描く。構図・配置・キャラ判別の確認用(最速・質感は崩れる)"
+                    className="text-xs px-2.5 py-1.5 rounded bg-amber-800 hover:bg-amber-700 text-amber-100">
+              ⚡ T0速見
+            </button>
+          </div>
           {msg && <p className="text-[10px] text-zinc-400">{msg}</p>}
         </div>
         </div>,

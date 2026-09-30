@@ -1,0 +1,48 @@
+subject_definitions:
+<Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines one source-specific guise of <Subject 1>, Madoka. Preserve the exact identity, hairstyle, costume and proportions shown in this source.
+
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines the second source-specific guise of <Subject 1>, including human Madoka in school uniform for Shot 4. Preserve the exact identity, hairstyle, costume and proportions belonging to this source.
+
+<Picture 3> (reference role: subject-group definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, consisting exactly of Sayaka, Kyoko, Mami and Nagisa. Preserve each person as a separate identity and preserve their relative scale.
+
+<Picture 4> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 4>: {{HOMU_ID}}. Preserve the exact identity and source-correct costume. Shot 3 may change face angle and crop.
+
+<Picture 5> (reference role: crop geometry and viewpoint only, not a target frame and not a storyboard anchor) defines the four-panel facial arrangement for Shot 3. Its job ends at panel division, face scale and viewing angle.
+
+<Picture 6> (reference role: environment geometry only, not a target frame and not a storyboard anchor) defines the white-water plane and moon-scale relationship for Shot 4. Its job ends at horizon placement, surface geometry and spatial scale.
+
+<Object 1> is {{HALF_MOON}}.
+
+Never merge the subjects. Never exchange their hair, eyes, clothing, accessories or facial features. Every newly constructed panel replaces the source sheets’ framing and layout.
+
+summary:
+Three motion-graphic memory states contract from repeated past, to an empty paired composition, to four divided images of one discarded face. The divisions then close into one white-water world where a complete moon lasts briefly above Madoka.
+
+retention_analysis:
+<Pictures 1-2> are fully_preserved for <Subject 1> identity and source-specific costumes, and partially_preserved for falling poses, silhouettes, crops and panel placement. <Picture 3> is fully_preserved for the four separate identities within <Subject 2>, and partially_preserved for pose, crop and momentary visibility. <Picture 4> is fully_preserved for <Subject 4> identity and costume, and partially_preserved for the four face angles in Shot 3. <Picture 5> is weak_reference for crop geometry and viewpoint only. <Picture 6> is weak_reference for the water-plane geometry and moon placement. Panel motion, Z-order, masks, memory environments and lighting are newly constructed.
+
+detailed_description: {{TH:MEM}}
+STAGE: A fixed frontal view looks through seven flat depth planes. A dark gear rim from the preceding shot turns in the farthest plane. Hard-edged rectangular windows occupy the middle planes. Block smears pass closest to the lens. Window rims catch one cold violet specular line. Fragment colours remain enclosed inside their apertures. All surrounding space is near-black. Every surface stays unmarked; graphic inserts are solid planes, clean lines or image fragments.
+
+CAST COUNT: Shot 1 displays six panel-images of <Subject 1>; one panel briefly displays exactly four people from <Subject 2>. Shot 2 displays six panel-images of <Subject 1>; one panel briefly displays exactly four people from <Subject 2>. Shot 3 displays four panel-images of <Subject 4>. Shot 4 contains exactly one person.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic memory collage. Six overlapping rectangular panels fill the frame; each holds one frozen moment of <Subject 1> falling; the panels slide past each other and smear into one another at their edges (datamosh). Figures are flat black silhouettes on grey. Each panel occupies between one quarter and one half of the frame. The Static Shot holds the frontal Z-order. Different skies, rain planes and broken ground pass behind alternating source-specific guises from <Pictures 1-2>. A dropped bow and slack hands mark separate moments. Each falling silhouette reaches the same lower screen line. At 0.863 seconds one middle panel holds <Subject 2> as four separate silhouette fragments. Its hard frame draws itself, slides into place, settles and LOCKS. The preceding blocks remain visible at its edges.
+
+[Shot 2] At 00:02.330, six rectangular panels occupy the same positions and sizes. Each panel shows <Subject 1> alone in the left lane of a paired walking composition. The right lane is empty grey space with an unused handrail and clean pavement. The Static Shot keeps C61’s exact frontal viewpoint. Panels move with the same velocity, stepping and edge-smear as Shot 1. Only one set of shoes and one shadow cross each paired frame. At 2.590 seconds one panel swaps to a warm everyday fragment containing exactly four people from <Subject 2>. The replacement frame appears, slides, settles and LOCKS at the same speed as the falling fragments. Its edge catches the same violet glint.
+
+[Shot 3] At 00:04.620, four panels each hold the same face — <Subject 4>'s face — at slightly different angles. The panels are separated by hard black gaps. Together they occupy the central two thirds against near-black. The Static Shot keeps every face at equal scale. One panel enters from each screen edge on separate depth planes. Each appears, slides inward, overshoots by a finger-width, settles and LOCKS. At 5.038 seconds all four faces align around one empty central intersection. A hard pale contour follows each face but stops at every gap. Edgeless black smears travel behind the four panels.
+
+[Shot 4] At 00:06.950, one central rectangular window shows a white water surface. Human Madoka in school uniform from <Picture 2> stands alone in its lower third. <Object 1> hangs directly above her against an empty grey-white sky. The Static Shot holds her full figure and the moon together. Four black seams retract toward the frame edges. The central window expands, settles and LOCKS as one full-frame plane. Its rim catches one final white glint before leaving the visible frame. At 7.20 seconds the moon is a complete white disc. <Subject 1> raises her gaze while her body stays still. A hard-edged white semicircular insert fills the missing side from a middle depth plane. At 8.90 seconds its right half is black again. The inserted half retracts behind the remaining left half with a perfectly straight boundary. At 10.830 seconds every plane is fixed. The final composition remains still for 0.700 seconds.
+
+MOSH LAW: Every outgoing image transfers its block pattern into the next image. Shots 1 and 2 use identical speed, texture, geometry and decay.
+
+PANEL LAW: Drawing a hard frame triggers its slide, overshoot, settle and LOCK. Every panel rim catches one specular glint when it locks.
+
+BEAT LAW: {{BEATLAW}} Each snare triggers one hard cut or existing-window swap. Each kick shifts existing panels once, while each cymbal releases light from an existing rim.
+
+{{DP}} {{ST2}} {{LENS}} {{FOCUS}}
+
+overall_soundscape:
+Sliding panels produce short dry paper scrapes and firm locking clicks at their visible edges. Falling fragments carry brief rain, bow-string release and cloth movement; everyday fragments carry footsteps and distant river wind. Shot 4 leaves only thin air above still water and one quiet clothing-settle sound.
+
+non_diegetic_music: N/A

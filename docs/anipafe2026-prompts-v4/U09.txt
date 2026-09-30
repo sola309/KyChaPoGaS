@@ -1,0 +1,27 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{HOMU_ID}}. It contributes her identity, costume, body proportions and covered hand design. The detailed description controls pose, framing, lighting and action.
+<Picture 2> (reference role: object definition only, not a target frame and not a storyboard anchor) defines {{NAME_STONE}}. It contributes the weathered stone material, hard carved contours and the visible universe held inside each carving. The detailed description controls number, scale, spacing and depth.
+<Picture 3> (reference role: world appearance only, not a target frame and not a storyboard anchor) supplies the golden storm, broken dark ground, suspended embers and layered cloud behaviour.
+
+summary: <Subject 1> reluctantly opens one hand. Light between her fingers draws a closed window in her own silhouette, revealing an already-existing field of countless {{NAME_STONE}} beneath the world.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, costume and body proportions; partially_preserved for pose and framing. <Picture 2> fully_preserved for the defining material and carved cosmic interior of each {{NAME_STONE}}; partially_preserved for their scale and arrangement across the field. <Picture 3> weak_reference for atmosphere, palette, cloud structure and ember behaviour only.
+
+detailed_description: {{TH:GOLD}} {{TH:ROOT}}
+STAGE: <Subject 1> stands on the subject plane above broken near-black ground. Her covered hand occupies the sharp lower centre. One out-of-focus wing edge crosses the nearest plane without covering the hand. Her body and falling hair occupy separate middle planes. A closed silhouette window forms behind her body. Inside that boundary, near stones, middle stone rows and an almost motionless far stone horizon form independent depth planes.
+
+[Shot 1] STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot fixed on <Subject 1>'s covered hand. A ruler-straight golden line enters at the same angle and screen position as the preceding half-moon’s cut edge. The line rests between her closed fingers. At 0.253 seconds, the palm opens with visible reluctance. The wrist remains low and heavy. Each finger extends through a small physical recoil. Golden light escapes only through the widening gaps. A hard gold rim defines the hand against near-black space. Detail remains limited to the fingers, their joints and several feather tips.
+
+[Shot 2] At 00:00.823, a small-amplitude slow Pull Out reveals <Subject 1> standing behind the open hand. The released light climbs into the middle plane. Its boundary draws itself around the exact closed outline of her standing silhouette. The edge settles and LOCKS as a thin, hard line. The exterior remains the golden storm over near-black ground. The interior reveals {{NAME_STONE}} already extending beyond sight across the bottom landscape. Interior haze and stone motion begin before the outline finishes closing, showing that the field existed before the aperture uncovered it. Every stone stays behind the locked boundary.
+
+[Shot 3] At 00:01.983, a small-amplitude slow Push In approaches the locked silhouette window. The exterior figure remains dark and readable in front of it. Snare impacts hard-switch only the interior crop between near, middle and far rows while the outer silhouette stays fixed. At 2.563 seconds, massive near stones expose deep geometric carvings. At 3.133 seconds, the view switches to hundreds of separated stone contours receding across the field. Each cymbal makes the universe inside several carvings catch light briefly; only those cosmic interiors bloom. Kick impacts produce restrained tension through <Subject 1>'s fingers and a low settling response in the broken ground. At 3.563 seconds, the camera reaches the nearest readable carving and stops. At 3.713 seconds, the final snare restores the complete silhouette-shaped window. Hair, ribbon streamers and embers overshoot slightly, then settle. The hard contour remains still through the end.
+
+WINDOW LAW: The closed outline belongs to <Subject 1>. The bottom landscape exists only inside that outline. The interior remains behind her body and hand. {{NAME_STONE}} and their cosmic carvings remain contained by the hard edge. The edge represents a name; the revealed field represents preserved names.
+
+BEAT LAW: {{BEATLAW}} Snare impacts cause hard interior mask changes. Kick impacts cause visible finger recoil or ground settling. Cymbal transients make the cosmic carvings catch light. Each response begins at its physical source and leaves the silhouette boundary intact.
+
+NO-TEXT RULE: Show no letters, words, numbers, logos, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All stone markings are unmarked geometric carvings. Reference-sheet frames, panels, swatches and layouts remain outside the depicted world.
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: Close dry glove tension, small finger-joint movement, a restrained cloth pull, low stone settling, faint resonance from illuminated carvings, sparse ember hiss and deep storm wind. Sounds remain attached to their visible sources. <Subject 1> remains silent. The final locked window holds over fading stone resonance.
+
+non_diegetic_music: N/A

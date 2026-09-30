@@ -1,0 +1,30 @@
+subject_definitions: <Picture 1> (reference role: eye-design definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, the observing presence: {{QB_ID}}. It contributes the exact eye design only. The target framing contains one paired eye presence surrounded by uninterrupted darkness.
+
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, the Law of Cycles with restored personhood: {{UM_ID}}. It contributes her exact identity, costume, hair, wings and proportions. Framing, descent, lighting and pose remain controlled by this prompt.
+
+<Picture 3> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 3>, Devil Homura: {{HOMU_ID}}. It contributes her exact identity, costume, hair, wings and proportions. Framing, upward gaze and ground position remain controlled by this prompt.
+
+summary: One pair of red eyes watches a distant upper light descend through its reflections. The light becomes <Subject 2>, descending toward <Subject 3>; its hard-edged bands attempt to draw her outline but cannot reach or close around the nameless figure.
+
+retention_analysis: <Picture 1> partially_preserved for <Subject 1>’s exact paired eyes while the surrounding face and body remain outside the target crop. <Picture 2> fully_preserved for <Subject 2>’s identity, costume, hair, wings and proportions while her pose and downward movement are newly directed. <Picture 3> fully_preserved for <Subject 3>’s identity, costume, hair, wings and proportions while her pose and viewpoint are newly directed. Never merge <Subject 2> and <Subject 3>. Never exchange their hair, eyes, clothing, wings, accessories or facial features.
+
+detailed_description: {{TH:MEM}}
+STAGE: C12 is a fixed frontal extreme crop. <Subject 1> occupies the eye line only. Black haze fills every other depth plane. C13 is a vertical world axis: <Subject 2> above, descending light in the middle, and <Subject 3> on the ground below. Near haze, both subjects, separate light bands and the distant upper opening occupy different depth planes.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Static Shot. One motionless pair of <Subject 1>’s red eyes hangs in near-black space. Both eyes retain identical size, spacing and brightness. Only the irises and their immediate dark surround are visible. A single hair-thin upper light appears solely as a reflection inside both irises. At 0.553 seconds, the reflected line sits at the upper rim. At 1.713 seconds, it advances one hard-edged step toward the pupils. At 2.863 seconds, it reaches their centres. At 4.013 seconds, it lengthens downward beyond the reflected pupils without illuminating the surrounding darkness. The eyes themselves remain perfectly still. This fixed diagram is reserved for its later inversion when the observer changes.
+
+[Shot 2] At 00:04.330, hard cut along the reflected line’s exact vertical axis. Pedestal Down with small amplitude and slow speed. The line is now a narrow opening high above a cold blue-grey ground plane. A vertical sheet of pale rose-white light descends from it. <Subject 2> becomes readable within that light, already upright and moving downward. Her hair, gown and wings trail at successively slower rates. <Subject 3> stands below and looks upward. The camera reaches the ground relationship at 6.9 seconds, with the descending figure still clearly above her.
+
+[Shot 3] At 00:06.900, hard cut to a low eye-level medium view introducing the failed outline. Static Shot. <Subject 3> keeps her face raised toward <Subject 2>. Narrow light bands descend behind her, divide around her shoulders and arms, and stop a small visible distance from every edge of her body. Each band ends as a hard line. The separated ends cannot meet, so no closed contour forms. At 8.05 seconds, the downward light settles. At 8.63 seconds, only <Subject 2>’s hair and wing tips complete a slight downward overshoot. Hold through 8.910 seconds.
+
+CONTOUR LAW: A name creates a closed hard outline. The upper law sends drawing light downward. The light approaches <Subject 3>, yet every endpoint remains open because her name has been discarded.
+
+DIRECTION LAW: Every causal movement enters from above and travels downward. This direction will later oppose the thread rising from below.
+
+BEAT LAW: {{BEATLAW}} Snares advance the reflected light by discrete steps in Shot 1. Later snares compress the descending sheet and seat its open endpoints without creating additional cuts. Kicks create restrained pressure through the visible light bands and trailing cloth. The hard-cut boundaries remain exactly 4.330 and 6.900 seconds.
+
+{{LENS}} {{FOCUS}} {{DP}} {{ST2}}
+
+overall_soundscape: A faint dry electrical pressure surrounds the paired eyes. Each reflected step produces a short glass resonance with little decay. The descending light carries a narrow high tone, soft displaced air and restrained fabric movement. The open light endpoints finish with small brittle clicks. <Subject 3> contributes only quiet breathing and slight cloth tension.
+
+non_diegetic_music: N/A

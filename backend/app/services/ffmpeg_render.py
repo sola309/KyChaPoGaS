@@ -892,6 +892,134 @@ async def _overlay_transform_pass(seg: Path, out: Path, transform: dict,
     await _run(cmd)
 
 
+# ── フィルターレイヤー(2026-09-26) ─────────────────────────────────────────────
+# 素材を持たない(asset_id=None)調整レイヤー。kind で種別を持ち、attrs_json にキーを持つ。
+#   kind='solid': {"color":"#000000","opacity_keys":[{"t":0,"v":0},{"t":N,"v":1}]}
+#       全画面の単色。opacity_keys(0..1) × clip.opacity で重ねる。
+#   kind='blur' : {"blur_keys":[{"t":0,"v":0},{"t":8,"v":7}]}
+#       このレイヤーより下(=ここまでに合成済みの絵)を、区間中だけガウスぼかし。
+#       v = 1920x1080 基準のシグマ(px)。出力解像度に比例してスケールする。
+# t はクリップ先頭からのフレーム。キー間は線形、先頭キー以前/最終キー以降は端の値で保持。
+# プレビュー(PreviewPlayer)と同じ規則。
+FILTER_KINDS = ("solid", "blur")
+
+
+def is_filter_clip(clip) -> bool:
+    return (getattr(clip, "kind", "") or "") in FILTER_KINDS
+
+
+def _filter_attrs(clip) -> dict:
+    try:
+        d = json.loads(getattr(clip, "attrs_json", "") or "{}")
+        return d if isinstance(d, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def parse_filter_keys(raw, default: float, lo: float, hi: float) -> list[tuple[float, float]]:
+    """[{t,v},...] → [(frame, value)] (frame昇順・同一フレームは後勝ち・値はクランプ)"""
+    pts: dict[float, float] = {}
+    if isinstance(raw, list):
+        for k in raw:
+            if not isinstance(k, dict):
+                continue
+            try:
+                t = float(k.get("t", 0)); v = float(k.get("v", default))
+            except (TypeError, ValueError):
+                continue
+            pts[max(0.0, t)] = max(lo, min(hi, v))
+    if not pts:
+        return [(0.0, default)]
+    return sorted(pts.items())
+
+
+def filter_key_value(keys: list[tuple[float, float]], f: float) -> float:
+    """キー列の線形補間(端は保持)。"""
+    if f <= keys[0][0]:
+        return keys[0][1]
+    for (f0, v0), (f1, v1) in zip(keys, keys[1:]):
+        if f < f1:
+            return v0 + (v1 - v0) * (f - f0) / max(1e-6, f1 - f0)
+    return keys[-1][1]
+
+
+def _ffmpeg_color(raw: str) -> str:
+    s = str(raw or "").strip().lstrip("#")
+    if len(s) == 3:
+        s = "".join(ch * 2 for ch in s)
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", s):
+        s = "000000"
+    return "0x" + s.upper()
+
+
+def filter_overlay_entry(clip, fps: float) -> dict:
+    """フィルタークリップ → _composite_one が解釈する overlay エントリ(入力ファイル無し)。"""
+    attrs = _filter_attrs(clip)
+    kind = clip.kind
+    if kind == "solid":
+        keys = parse_filter_keys(attrs.get("opacity_keys"), 1.0, 0.0, 1.0)
+    else:
+        keys = parse_filter_keys(attrs.get("blur_keys"), 0.0, 0.0, 200.0)
+    dur = clip.duration_frames / fps
+    return {
+        "filter": kind,
+        "keys": keys,
+        "color": _ffmpeg_color(attrs.get("color", "#000000")),
+        "opacity": max(0.0, min(1.0, getattr(clip, "opacity", 1.0)
+                                if getattr(clip, "opacity", None) is not None else 1.0)),
+        "start": clip.start_frame / fps,
+        "dur": dur,
+        "full_dur": dur,
+    }
+
+
+def _filter_parts(ov: dict, i: int, prev: str, w: int, h: int, fps: float) -> list[str]:
+    """フィルターレイヤーの filter_complex 断片。入力を消費しない(lavfi 源のみ)。
+
+    start/dur/seek はチャンク(窓)相対の秒。クリップ内フレーム = 窓内フレーム + seek*fps。
+    """
+    start = float(ov["start"]); dur = float(ov["dur"]); seek = float(ov.get("seek", 0.0))
+    half = 0.5 / max(1.0, fps)
+    enable = f"between(t,{start - half:.6f},{start + dur - half:.6f})"
+    keys: list[tuple[float, float]] = ov["keys"]
+    seek_f = round(seek * fps)
+    if ov["filter"] == "solid":
+        op = float(ov.get("opacity", 1.0))
+        a = _piecewise_expr(keys, var=f"(N+{seek_f})")
+        c = ov.get("color", "0x000000")
+        r, g, b = int(c[2:4], 16), int(c[4:6], 16), int(c[6:8], 16)
+        n = max(1, round(dur * fps)) + 1
+        # 小さな色源に geq でフレーム毎の alpha を与えてから拡大(全画素 geq は重い)。
+        # PTS はフレーム番号そのまま(time_base=1/fps)なので、区間の頭と正確に揃う。
+        return [
+            f"color=c={c}:s=16x16:r={fps},trim=end_frame={n},format=rgba,"
+            f"geq=r='{r}':g='{g}':b='{b}':a='clip(255*{op:.6f}*({a}),0,255)',"
+            f"scale={w}:{h}:flags=neighbor,setpts=PTS+{start:.6f}/TB[ov{i}]",
+            f"[{prev}][ov{i}]overlay=0:0:eof_action=pass:enable='{enable}'[v{i}]",
+        ]
+    # blur: 下のレイヤー(=ここまでの合成結果)を gblur。シグマはフレーム毎に sendcmd で送る。
+    scale = h / 1080.0
+    cmds: list[str] = []
+    last = None
+    f0 = seek_f
+    nfr = max(1, round(dur * fps))
+    for k in range(nfr):
+        sig = round(filter_key_value(keys, f0 + k) * scale, 3)
+        if sig != last:
+            tt = max(0.0, start + k / fps - half)
+            # gblur は実行時に sigma だけ送ると横方向しか変わらない(sigmaV は初期化時の値のまま)。
+            # 縦横とも同じ値を送る。
+            cmds.append(f"{tt:.6f} gblur@fb{i} sigma {sig:.3f}, gblur@fb{i} sigmaV {sig:.3f}")
+            last = sig
+    first_sig = round(filter_key_value(keys, f0) * scale, 3)
+    if len(cmds) <= 1:
+        # 一定値: sendcmd 不要
+        return [f"[{prev}]gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'[v{i}]"]
+    cmd_str = ";".join(cmds)
+    return [f"[{prev}]sendcmd=c='{cmd_str}',"
+            f"gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'[v{i}]"]
+
+
 async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h: int,
                          base_ss: float = 0.0, base_t: Optional[float] = None,
                          progress_cb=None, fps: float = 30.0) -> None:
@@ -912,20 +1040,41 @@ async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h:
     inputs += ["-i", str(base)]
     parts: list[str] = []
     prev = "0:v"
+    n_in = 0
     for i, ov in enumerate(overlays):
+        if ov.get("filter"):
+            # フィルターレイヤー(単色/ぼかし): 入力ファイルを持たない
+            parts.extend(_filter_parts(ov, i, prev, w, h, fps))
+            prev = f"v{i}"
+            continue
         seek = float(ov.get("seek", 0.0))
         if seek > 0: inputs += ["-ss", f"{seek:.6f}"]
         inputs += ["-i", str(ov["path"])]
-        idx = i + 1
+        n_in += 1
+        idx = n_in
         start = float(ov["start"]); dur = float(ov["dur"]); end = start + dur
         op = max(0.0, min(1.0, float(ov.get("opacity", 1.0))))
         blend = ov.get("blend", "normal") or "normal"
+        # fade_in/out は「クリップ全体」の時間軸で指定されているので、チャンク分割の
+        # seek 分だけ PTS を戻してから fade を掛け、元に戻す。
+        fi = float(ov.get("fade_in", 0.0) or 0.0); fo = float(ov.get("fade_out", 0.0) or 0.0)
+        if float(ov.get("fade_in_st", 0.0) or 0.0) > 0.0 and fi <= 0.01:
+            fi = 0.02
+        full = float(ov.get("full_dur", dur) or dur)
+        fades = ""
+        if fi > 0.01 or fo > 0.01:
+            fparts = [f"setpts=PTS+{seek:.6f}/TB"]
+            fst = float(ov.get("fade_in_st", 0.0) or 0.0)
+            if fi > 0.01: fparts.append(f"fade=t=in:st={fst:.6f}:d={fi:.6f}:alpha=1")
+            if fo > 0.01: fparts.append(f"fade=t=out:st={max(0.0, full - fo):.6f}:d={fo:.6f}:alpha=1")
+            fparts.append(f"setpts=PTS-{seek:.6f}/TB")
+            fades = ",".join(fparts) + ","
         half = 0.5 / max(1.0, fps)
         enable = f"between(t,{start - half:.6f},{end - half:.6f})"
         if blend in ("screen", "add", "multiply"):
             parts.append(
                 f"[{idx}:v]scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,"
-                f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=gbrp,"
+                f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,format=rgba,{fades}format=gbrp,"
                 f"tpad=start_duration={start:.6f}:start_mode=add:color=black,"
                 f"tpad=stop_duration=3600:stop_mode=add:color=black[ov{i}]")
             parts.append(
@@ -936,7 +1085,7 @@ async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h:
             parts.append(
                 f"[{idx}:v]scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba,"
-                f"colorchannelmixer=aa={op:.3f},setpts=PTS+{start:.6f}/TB[ov{i}]")
+                f"{fades}colorchannelmixer=aa={op:.3f},setpts=PTS+{start:.6f}/TB[ov{i}]")
             parts.append(f"[{prev}][ov{i}]overlay=0:0:enable='{enable}'[v{i}]")
         prev = f"v{i}"
     parts.append(f"[{prev}]format=yuv420p[vout]")
@@ -1243,6 +1392,10 @@ async def render_timeline(
             [c for c in clips if v_track and c.track_id == v_track.id],
             key=lambda c: c.start_frame,
         )
+        # フィルターレイヤー(単色/ぼかし)は素材を持たないので、ベーストラック上にあっても
+        # 連結(concat)には入れず、合成段の最初(=ベースの直上)で適用する。
+        base_filter_clips = [c for c in v_clips if is_filter_clip(c)]
+        v_clips = [c for c in v_clips if not is_filter_clip(c)]
         a_clips = sorted(
             [c for c in clips if a_track and c.track_id == a_track.id],
             key=lambda c: c.start_frame,
@@ -1253,7 +1406,7 @@ async def render_timeline(
                             key=lambda c: c.start_frame)
         ]
 
-        all_clips = v_clips + a_clips + [c for _, c in o_clips]
+        all_clips = v_clips + base_filter_clips + a_clips + [c for _, c in o_clips]
         if not all_clips:
             raise ValueError("タイムラインにクリップがありません")
 
@@ -1383,8 +1536,29 @@ async def render_timeline(
         # in a SINGLE filter_complex pass (see _composite_overlays) — so the base is
         # encoded only once instead of once per overlay (no compounding loss with
         # many 歌詞テロップ). Transparent MGs (alpha .mov) float over the footage.
-        overlays: list[dict] = []
+        overlays: list[dict] = [filter_overlay_entry(c, fps) for c in base_filter_clips]
+        # 同一レイヤーの重なり遷移(2026-09-20): 後続クリップ B が前クリップ A と重なる区間
+        # [B.start, A.end) を遷移とみなし、B の alpha を transition_frames でランプさせる
+        # (A はそのまま下に描かれる)。white/black は色の全面カバーを挟んでから B を出す。
+        overlap_in: dict = {}
+        for t_idx, oc in o_clips:
+            if is_filter_clip(oc):
+                continue
+            tf = int(getattr(oc, "transition_frames", 0) or 0)
+            trans = (getattr(oc, "transition_in", "") or "")
+            if not trans or tf <= 0:
+                continue
+            prev_end = max([p.start_frame + p.duration_frames for (ti, p) in o_clips
+                            if ti == t_idx and p is not oc and p.start_frame < oc.start_frame
+                            and not is_filter_clip(p)], default=None)
+            if prev_end is not None and prev_end > oc.start_frame:
+                overlap_in[oc.id] = (min(tf, prev_end - oc.start_frame), trans,
+                                     float(getattr(oc, "transition_hold", 0.5) or 0.5))
         for oi, (t_idx, oc) in enumerate(o_clips):
+            if is_filter_clip(oc):
+                # 単色/ぼかし: トラック順(下→上)のこの位置で、ここまでの合成結果に掛ける
+                overlays.append(filter_overlay_entry(oc, fps))
+                continue
             asset = _pick(asset_map.get(oc.asset_id))
             if not asset or not Path(asset.file_path).exists():
                 continue
@@ -1439,7 +1613,33 @@ async def render_timeline(
                 "dur": oc_dur,
                 "opacity": max(0.0, min(1.0, getattr(oc, "opacity", 1.0) or 1.0)),
                 "blend": (getattr(oc, "blend", "normal") or "normal"),
+                # overlay 同士のクロスディゾルブ: 先行クリップを不透明のまま残し、
+                # 後続クリップの alpha を fade_in_frames でランプさせる(2026-09-18)
+                "fade_in": (getattr(oc, "fade_in_frames", 0) or 0) / fps,
+                "fade_in_st": 0.0,
+                "fade_out": (getattr(oc, "fade_out_frames", 0) or 0) / fps,
+                "full_dur": oc_dur,
             })
+            if oc.id in overlap_in:
+                ov_tf, ov_trans, ov_hold = overlap_in[oc.id]
+                if ov_trans in ("white", "black"):
+                    # 色カバー: 重なり区間の hold までで全面色 → B は hold から出る
+                    cov = tmp_root / f"ovcover_{oi:04d}.png"
+                    await _run([FFMPEG, "-y", "-f", "lavfi", "-i",
+                                f"color=c={'white' if ov_trans == 'white' else 'black'}:s={width}x{height}:d=1",
+                                "-frames:v", "1", str(cov)])
+                    cov_seg = tmp_root / f"ovcover_{oi:04d}.mov"
+                    await _image_segment(str(cov), cov_seg, ov_tf / fps, width, height, fps, keep_alpha=True, fit="cover")
+                    # B の直前(下)に挿入
+                    overlays.insert(len(overlays) - 1, {
+                        "path": cov_seg, "start": oc.start_frame / fps, "dur": ov_tf / fps,
+                        "opacity": 1.0, "blend": "normal",
+                        "fade_in": max(0.02, ov_hold * ov_tf / fps), "fade_in_st": 0.0, "fade_out": 0.0, "full_dur": ov_tf / fps,
+                    })
+                    overlays[-1]["fade_in_st"] = ov_hold * ov_tf / fps
+                    overlays[-1]["fade_in"] = max(overlays[-1]["fade_in"], (1.0 - ov_hold) * ov_tf / fps)
+                else:
+                    overlays[-1]["fade_in"] = max(overlays[-1]["fade_in"], ov_tf / fps)
         if overlays:
             merged_out = tmp_root / "overlaid.mp4"
             await _composite_overlays(

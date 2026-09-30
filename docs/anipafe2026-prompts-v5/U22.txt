@@ -1,0 +1,45 @@
+subject_definitions:
+<Subject 6> is {{BLACK_WAVE}}.
+
+<Picture 1> (reference role: texture definition only for <Subject 6>, not a target frame and not a storyboard anchor) defines the dry dissolution texture associated with {{MAJUU_ID}}. It contributes restrained granular breakup to the surface of <Subject 6>. Its humanoid anatomy, garments, arrangement and source framing remain outside this reference job.
+
+<Subject 1> is current magical-girl Madoka as defined by <Picture 2>. <Picture 2> (reference role: subject definition only for <Subject 1>, not a target frame and not a storyboard anchor) contributes her exact identity, face, magical-girl outfit and body proportions.
+
+<Picture 3> (reference role: subject definition only for <Subject 2>, <Subject 3>, <Subject 4> and <Subject 5>, not a target frame and not a storyboard anchor) defines Sayaka as <Subject 2>, Kyoko as <Subject 3>, Mami as <Subject 4> and Nagisa as <Subject 5>. It contributes their exact identities, faces, current magical-girl outfits, body proportions and relative heights. Target positions and poses come from the detailed description.
+
+<Picture 4> (reference role: weapon definition only for <Subject 2>, not a target frame and not a storyboard anchor) contributes its weapon construction exclusively to <Subject 2>.
+<Picture 5> (reference role: weapon definition only for <Subject 3>, not a target frame and not a storyboard anchor) contributes its weapon construction exclusively to <Subject 3>.
+<Picture 6> (reference role: weapon definition only for <Subject 4>, not a target frame and not a storyboard anchor) contributes its weapon construction and identical summoned copies exclusively to <Subject 4>.
+<Picture 7> (reference role: weapon definition only for <Subject 5>, not a target frame and not a storyboard anchor) contributes its weapon construction exclusively to <Subject 5>.
+
+The target contains only the subjects introduced by its current shot. Every weapon belongs solely to its assigned subject.
+
+summary:
+A featureless black tide divides into an increasing quantity of hard-edged panels, presenting a multitude with no mouth capable of answering. A hard cut replaces that mass with Madoka standing one full step ahead of four individually readable magical girls as their weapons and named contours settle into a single defensive formation.
+
+retention_analysis:
+<Picture 1>: weak_reference for the granular dissolution texture of <Subject 6> only.
+<Picture 2>: fully_preserved for <Subject 1>'s identity, face, outfit and proportions; weak_reference for source background and composition.
+<Picture 3>: fully_preserved for <Subjects 2-5>'s identities, faces, outfits, proportions and relative heights; weak_reference for source background and arrangement.
+<Pictures 4-7>: attribute_transfer for each designated weapon only. Weapon construction and ownership remain exact; target grips, angles and staging follow the detailed description.
+Never merge the five characters. Never exchange their hair, eyes, clothing, accessories, facial features or weapons.
+
+detailed_description: {{TH:ROOT}}
+{{LENS}}
+{{FOCUS}}
+STAGE: The first space is a near-black vertical field above a simplified dark floor. <Subject 6> occupies near, middle and far planes as overlapping sheets of fluid. Cold violet light enters from frame-left and strikes only raised edges. After the cut, a shallow stone plane supports five separated figures. <Subject 1> occupies the forward subject plane. <Subjects 2-5> occupy one plane a full step behind her. Weapons extend through separate depth planes without crossing faces.
+
+[Shot 1] The frame contains no people. A black tide fills it, its surface broken into flat rectangular panels, each panel a different shade of black, edges hard. The nearest panels cover the lower half of the frame while further panels recede into violet-black depth. STYLE: 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual. Use a Static Shot. Each rectangular panel contains a cropped patch of featureless fluid with a smooth unmarked surface. The fluid has soft irregular boundaries inside each rectangle; the surrounding panel border is a rigid material edge. One new rectangle separates from the continuous surface on each snare. It appears flush with the tide, slides less than one panel-width along its own depth plane, settles beside the preceding rectangles, and LOCKS. Its raised border catches one narrow violet specular line. The interiors stay black and absorb the reflection. At 00:03.138, six additional panels are locked across staggered foreground and middle planes, yet every interior still shows the same blank fluid. Tiny waves travel asynchronously inside them while their borders remain fixed. At 00:04.298, the final added panel settles in the centre and its black interior expands until it occupies most of the frame. The surrounding panels hold as different shades of black. The visible field is a multitude of divided surfaces containing only one mute, featureless substance.
+
+[Shot 2] At 00:04.580, the frame contains exactly five people. <Subject 1> stands one full step in front of the other four; her feet are nearer the camera. <Subjects 2-5> form a shallow line behind her, their full faces and both feet visible against a large violet-black background plane. Use a slow Push In with small amplitude. Cold violet light from frame-left gives each face one firm lit side and leaves the opposite side in controlled shadow. A narrow red rim from frame-right touches only existing costume accents and weapon edges. <Subject 1> sets her forward foot flat and holds both hands low and open. Her mouth rests as a narrow closed line; resolve appears through her level chin and steady throat. <Subject 2> angles the weapon from <Picture 4> across her body. <Subject 3> plants the weapon from <Picture 5> beside her forward foot. <Subject 4> raises a shallow rank of the weapons from <Picture 6> behind her shoulders. <Subject 5> braces the weapon from <Picture 7> across her small frame. These four movements form one collective guard and finish together. At 00:06.595, all four weapons have reached readable final angles while <Subject 1> remains the only figure ahead of the line. Each completed guard draws one hard luminous contour from the owner’s grounded foot upward around her outer silhouette. The lines use each subject’s established colour, stay one finger-width outside the body, settle in the subject plane and LOCK. At 00:08.335, the camera has reached a closer frontal position while all five faces, all ten feet and every weapon owner remain visible. The camera stops. Hair tips, ribbons and garment hems make one restrained forward overshoot, return to rest by 00:08.500, and hold through 00:09.200.
+
+PANEL LAW: Each snare separates one hard-edged rectangle from the tide. The rectangle slides, settles and LOCKS while featureless fluid remains inside it.
+CONTOUR LAW: Each completed weapon guard triggers one hard line around its owner. The five separated outlines make individual bodies readable against the black field.
+BEAT LAW: {{BEATLAW}} Each snare triggers one panel addition or one collective posture accent. Each kick lands as panel contact, a planted foot or a weapon brace; each cymbal releases a brief glint from a visible panel border or weapon edge.
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermarks. All surfaces remain unmarked.
+{{DP}} {{ST2}}
+
+overall_soundscape:
+Panel borders separate with dry paper-and-stone scrapes, then land with short flat contacts. The black fluid produces low pressure movement beneath those rigid surfaces. The second shot uses five controlled breaths, one planted footfall, a blade guard shift, a spear-butt contact, restrained musket mechanism clicks, a horn-key press and fabric settling. Every sound remains attached to its visible source and decays before the final hold.
+
+non_diegetic_music: N/A

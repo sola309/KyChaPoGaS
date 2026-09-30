@@ -8,7 +8,7 @@
 プレースホルダは 00-conventions.md の規約どおりここで機械展開する。
 名簿(bible)を単一の正とし、記述の揺れを構造的に排除する(憲法37c)。
 """
-import argparse, json, re, sys, glob, urllib.request
+import argparse, json, os, re, sys, glob, urllib.request
 from pathlib import Path
 
 API = "http://localhost:8002/api"
@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PDIR = ROOT / "docs/anipafe2026-prompts"
 PDIR_V2 = ROOT / "docs/anipafe2026-prompts-v2"
 PDIR_V3 = ROOT / "docs/anipafe2026-prompts-v3"
+PDIR_V4 = ROOT / os.environ.get("KYCHA_PROMPT_DIR", "docs/anipafe2026-prompts-v4")   # v4/v5: units.json + U##.txt(連番 U01-U30)
 
 # ── 名簿から展開するキャラ定義 ────────────────────────────────
 BIBLE_KEY = {
@@ -25,6 +26,9 @@ BIBLE_KEY = {
     "QB_ID": ("kyubey", "default"), "EMBLEM_ID": ("emblemstone", "default"),
     "MAJUU_ID": ("majuu", "default"), "WALP_ID": ("walpurgis", "default"),
     "DOLLS_ID": ("claradolls", "card"),
+    # v4(2026-09-04): 廻天キャスト(脇役)。名簿 mg 衣装の逐語記述
+    "SELUMA_ID": ("seluma", "mg"), "CHOKA_ID": ("choka", "mg"),
+    "MADOKA_SCHOOL_ID": ("madoka", "school"),
 }
 # 名簿記述に必ず添える固定文(実害から導いた不変条件)
 ADDENDUM = {
@@ -104,6 +108,15 @@ FRAG = {
   "fingertips and what they reach for stays visible"),
 }
 FRAG["FRAME_B"] = FRAG["FRAME_A"]
+# ── v2(2026-09-04)ストーリー用: 名塚底根・名無しの群・マルグリートの影 ─────
+FRAG["NAME_STONE"] = ("a pale carved stone standing upright like a small grave marker, its carved emblem "
+  "cut clean through so that a deep starfield is visible INSIDE the carving; the stone is one of many")
+FRAG["BURNED_STONE"] = ("the same carved stone but its carving is now black and dead - no starfield "
+  "inside, only matte black, as if the light was drawn out of it")
+FRAG["BLACK_WAVE"] = ("a slow black tide with NO hard edge - a soft, edgeless fluid that spreads as "
+  "branching veins rather than circular ripples, nothing inside it has an outline")
+FRAG["MARG_SHADOW"] = ("one Madoka-shaped shadow cast on the ground by no visible body - the silhouette "
+  "of a girl with twin tails, absolutely no red anywhere in or around it, edges soft; it never moves")
 
 # ── v2: 様式テーゼ(冒頭1行・幕内逐語共有)と短縮ブロック ──────────
 TH = {
@@ -124,6 +137,9 @@ TH = {
   "only on edges and threads, black holding half the frame."),
 "TH:WATER": ("STYLE THESIS: a white-on-white water world - one bright still surface to every edge, "
   "figures as delicate dark shapes, low contrast, soft edges."),
+"TH:ROOT": ("STYLE THESIS: the name-root underworld - a field of pale carved stones on black ground, "
+  "each carving a window onto a starfield, the only light coming from inside the stones, cold and "
+  "white, black holding more than half the frame."),
 }
 V2 = {
 "BEATLAW": ("Every hard cut lands exactly on a snare. Each kick lands as one physical impact of a "
@@ -171,6 +187,22 @@ def parse_units_v3():
         if uid not in base:
             continue
         out[uid] = dict(base[uid], code=f.read_text())
+    return out
+
+
+def parse_units_v4():
+    """v4: units.json(cuts/frames/mode/refs/audio/title) + <unit>.txt(本文)。連番 U01-U30。"""
+    meta = json.load(open(PDIR_V4 / "units.json"))
+    out = {}
+    for uid, u in meta.items():
+        f = PDIR_V4 / f"{uid}.txt"
+        if not f.exists():
+            continue
+        cs = "+".join(f"C{n}" for n in u["cuts"])
+        head = f"{cs} {u.get('title','')} ({u['mode']} / 生成{u['frames']}f)"
+        out[uid] = {"head": head, "code": f.read_text(), "refs": list(u["refs"]),
+                    "frames": int(u["frames"]), "mode": u["mode"], "cuts": list(u["cuts"]),
+                    "audio_role": u.get("audio")}
     return out
 
 
@@ -329,7 +361,7 @@ def packet_cuts():
 
 def _dtag(uid, units, cuts):
     """公式の発話タグ <d>[Language] ...</d>。歌詞は本編の確定文言をそのまま置く。"""
-    ns = [int(x) for x in re.findall(r"C(\d+)", units[uid]["head"].split("(")[0])]
+    ns = units[uid].get("cuts") or [int(x) for x in re.findall(r"C(\d+)", units[uid]["head"].split("(")[0])]
     ly = (cuts[ns[0]].get("lyrics") or "").strip("「」 ")
     if not ly:
         return ""
@@ -357,7 +389,7 @@ def with_audio(prompt: str, role: str, dtag: str = "") -> str:
     return "\n".join(out)
 
 
-def submit(uid, u, prompt, t1, ref_audio=None, seed=-1):
+def submit(uid, u, prompt, quality, ref_audio=None, seed=-1, track=64, auto=False, chain=None):
     """実APIの形式に合わせる。参照画像はモードによらず keyframes[] で渡す。
     I2VA = model 'minimax-h3'(先頭1枚をfirst frameに) / Ref2VA = model 'minimax-h3-ref'(≤9枚)。
     尺は duration_sec で渡し、バックエンド側で h3_snap_length により 17n+5 へ丸められる。"""
@@ -368,20 +400,36 @@ def submit(uid, u, prompt, t1, ref_audio=None, seed=-1):
          "duration_sec": round(u["frames"] / 24.0, 3), "fps": 24, "seed": seed,
          "negative_prompt": "", "scheduler": "simple", "easycache": False,
          "note": f"AniPAFE2026 {uid} {u['head'][:60]}"}
+    if chain:
+        # 362f超の長尺: 継続生成(latent=Motion Context潜在継続 / guide=公式AddGuide)。362f以下なら無視される
+        p["chain"] = {"mode": chain}
     if ref_audio:
         p["ref_audio_asset_ids"] = ref_audio[:3]
         p["note"] += f" +audio{ref_audio[:3]}"
     # 🗂テイク履歴はこの place.start_frame でカットへ紐付く。
     # auto=false = タイムラインへ自動配置せずテイクとして蓄積する(運用規約)。
-    ns = [int(x) for x in re.findall(r"C(\d+)", u["head"].split("(")[0])]
+    ns = u.get("cuts") or [int(x) for x in re.findall(r"C(\d+)", u["head"].split("(")[0])]
     if ns:
         cuts = cut_ranges()
         st, en = cuts[ns[0]][0], cuts[ns[-1]][1]
-        p["place"] = {"track_id": 64, "start_frame": st,
-                      "duration_frames": en - st + 1, "auto": False}
-    if t1:
-        p["quality"] = "t1"
-    else:
+        p["place"] = {"track_id": int(track), "start_frame": st,
+                      "duration_frames": en - st + 1, "auto": bool(auto)}
+    if quality == "vdn":
+        # VDN-H3 8step(2026-09-04ベンチ: 本番の1.5〜1.8倍速・構図は本番から離れる)。本番と対で比較用
+        p.update({"width": 1344, "height": 768, "steps": 8, "ref_image_size": "max",
+                  "vdn": {"branch_weights": "stream", "attention_backend": "grouped", "fast_kernels": False},
+                  "easycache": False})
+    elif quality == "t2":
+        # T2: lightx2v Ref2V Turbo 8step v1.0 768p(2026-09-04ベンチ: 本番の2.9倍速・構図は本番寄り)。
+        # 配布元レシピ: 8 NFE / shift 6,3 / euler。I2VA(FL2V)は fl2v 8step 768p を使う。
+        lora = ("minimax_h3_fl2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors" if u["mode"] == "I2VA"
+                else "minimax_h3_ref2v_turbo_8step_v1.0_768p_comfyui_bf16.safetensors")
+        p.update({"width": 1344, "height": 768, "steps": 8, "ref_image_size": "max",
+                  "turbo_lora": 1.0, "turbo_lora_name": lora, "shift_video": 6.0, "shift_audio": 3.0,
+                  "sampler": "euler", "easycache": False})
+    elif quality:                     # "t0"(超速プレビュー) / "t1"(下見)
+        p["quality"] = quality
+    else:                             # 本番
         p.update({"width": 1344, "height": 768, "steps": 25, "ref_image_size": "max"})
     r = urllib.request.Request(API + "/jobs/",
         data=json.dumps({"project_id": PROJECT, "job_type": "generate_video_i2v", "params": p}).encode(),
@@ -392,14 +440,25 @@ def submit(uid, u, prompt, t1, ref_audio=None, seed=-1):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("units", nargs="+")
-    ap.add_argument("--t1", action="store_true", help="T1検証(960x544/step4/turbo)")
+    ap.add_argument("--t1", action="store_true", help="T1下見(960x544/step4/turbo)")
+    ap.add_argument("--t0", action="store_true",
+                    help="T0超速プレビュー(T1の先頭1段だけ=構図確認用・最速)")
     ap.add_argument("--dry", action="store_true", help="展開結果を表示するだけ")
     ap.add_argument("--v2", action="store_true", help="v2ディレクトリを使う")
     ap.add_argument("--v3", action="store_true", help="v3(Codex執筆)を使う")
+    ap.add_argument("--v4", action="store_true", help="v4(ストーリーv2・連番U01-U30)を使う")
+    ap.add_argument("--t2", action="store_true", help="T2: 1344x768 / Turbo 8step 768p / shift 6,3 / euler")
+    ap.add_argument("--vdn", action="store_true", help="VDN-H3 8step / 1344x768(本番との対比較用)")
+    ap.add_argument("--track", type=int, default=64, help="配置先トラック(place.track_id)")
+    ap.add_argument("--auto", action="store_true", help="place.auto=true(タイムラインへ自動配置)")
+    ap.add_argument("--auto-audio", action="store_true",
+                    help="v4: units.json の audio ロール(beat/lipsync)で参照音声を自動付与")
     ap.add_argument("--audio", choices=["lipsync", "beat", "full"],
                     help="参照音声を渡す。lipsync=歌唱ステム / beat=伴奏ステム / full=元音源。"
                          "該当区間を自動で切り出し、<Audio 1>としてプロンプトに宣言する")
     ap.add_argument("--seed", type=int, default=-1, help="A/B比較用に固定する")
+    ap.add_argument("--chain", choices=["latent", "guide"], default="latent",
+                    help="362f超の長尺の継続方式(latent=Motion Context潜在継続[既定] / guide=公式AddGuide)")
     a = ap.parse_args()
     global PDIR
     if a.v2:
@@ -407,7 +466,7 @@ def main():
     if a.v3:
         PDIR = PDIR_V3
     D = build_dict()
-    units = parse_units_v3() if a.v3 else parse_units()
+    units = parse_units_v4() if a.v4 else (parse_units_v3() if a.v3 else parse_units())
     jobs = {}
     for uid in a.units:
         if uid not in units:
@@ -415,7 +474,8 @@ def main():
         u = units[uid]
         prompt = expand(u["code"], uid, D)
         ra = None
-        if a.audio:
+        audio_role = a.audio or (u.get("audio_role") if (a.v4 and a.auto_audio) else None)
+        if audio_role:
             # I2VA(FL2VA)は参照音声を取れない。渡しても静かに無視される一方、
             # プロンプトには <Audio 1> の宣言だけが残り、存在しない参照を指す。
             if u["mode"] != "Ref2VA":
@@ -423,19 +483,24 @@ def main():
                          f"音声を使うならモードを変える必要がある")
             import ref_audio as RA
             # 公式: 参照音声は1本2〜15秒・合計15秒以内
-            total = u["frames"] / 24.0 * len(AUDIO_STEM[a.audio])
+            total = u["frames"] / 24.0 * len(AUDIO_STEM[audio_role])
             if u["frames"] / 24.0 < 2.0 or total > 15.0:
-                sys.exit(f"✗ {uid}: 参照音声 {len(AUDIO_STEM[a.audio])}本×"
+                sys.exit(f"✗ {uid}: 参照音声 {len(AUDIO_STEM[audio_role])}本×"
                          f"{u['frames']/24:.2f}秒 = 合計{total:.2f}秒 — 公式上限(1本2〜15秒/"
                          f"合計15秒)を外れる")
-            ra = [RA.make(uid, s) for s in AUDIO_STEM[a.audio]]
-            dtag = _dtag(uid, units, packet_cuts()) if a.audio in ("lipsync", "full") else ""
-            prompt = with_audio(prompt, a.audio, dtag)
+            if a.v4:
+                st0 = cut_ranges()[u["cuts"][0]][0] / 24.0
+                ra = [RA.make_v4(uid, s, st0, u["frames"] / 24.0) for s in AUDIO_STEM[audio_role]]
+            else:
+                ra = [RA.make(uid, s) for s in AUDIO_STEM[audio_role]]
+            dtag = _dtag(uid, units, packet_cuts()) if audio_role in ("lipsync", "full") else ""
+            prompt = with_audio(prompt, audio_role, dtag)
         if a.dry:
             print(f"===== {uid} ({u['mode']} / {u['frames']}f / refs={u['refs'][:9]}) "
                   f"{len(prompt.split())}語 =====\n{prompt}\n")
             continue
-        jid = submit(uid, u, prompt, a.t1, ref_audio=ra, seed=a.seed)
+        quality = "t0" if a.t0 else ("t1" if a.t1 else ("t2" if a.t2 else ("vdn" if a.vdn else "")))
+        jid = submit(uid, u, prompt, quality, ref_audio=ra, seed=a.seed, track=a.track, auto=a.auto, chain=a.chain)
         jobs[uid] = jid
         print(f"{uid} → job {jid} ({u['mode']} / {u['frames']}f / {len(prompt.split())}語)")
     if jobs:

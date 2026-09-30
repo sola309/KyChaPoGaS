@@ -1,0 +1,40 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame, not a storyboard anchor and not a first-frame keyframe) defines <Subject 1>: {{HALF_MOON}}. <Picture 2> (reference role: object definition only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{ORB_ID}}. <Picture 3> (reference role: hand definition only, not a target frame and not a storyboard anchor) defines <Subject 3>: {{REACH_HAND}}, cropped tightly at the wrist. <Picture 4> (reference role: material and prop definition only, not a target frame and not a storyboard anchor) defines the pink causal threads and their wooden spools. <Subject 4> is {{SOURCELESS_SHADOW}}; it is visible only as a broad featureless shadow projected across <Subject 1>, and nothing about its shape reveals who casts it.
+
+summary: A source-less shadow crosses an immutable half-moon. A hard geometric match cut reveals an empty dark orb bound by causal threads; an approaching hand is hidden by light before the sole impact releases the threads.
+
+retention_analysis: <Picture 1> is fully_preserved for <Subject 1>'s canonical surface, exact missing right half and perfectly straight cut edge; framing follows the description. <Picture 2> is fully_preserved for <Subject 2>'s vessel geometry, fins, crystal settings and ornament, while its internal illumination changes to an empty, unlit state. <Picture 3> is partially_preserved for <Subject 3>'s covering, finger silhouette and wrist crop. <Picture 4> is weak_reference for thread material, spool construction and restrained paper grain. <Subject 4> remains a featureless projected shadow whose casting body stays beyond the frame. <Subject 1> and <Subject 4> exist only in Shot 1. <Subject 2> and <Subject 3> exist only in Shot 2. Their identities remain discrete across the hard cut.
+
+detailed_description: {{TH:PRO}}
+[Shot 1] 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. Every frame reads as a theatrical key visual.
+
+STAGE: Empty near-black sky surrounds <Subject 1>. Only its left half exists. Its inner boundary is a perfectly straight vertical edge with a hair-thin cold-white burn. The absent right half is uninterrupted sky-black. Sky and moon are the entire frame.
+
+The camera is a Static Shot. <Subject 1> holds one screen size and one position throughout. Cold violet exposure barely reveals its surface. The straight white edge is the sole blooming element. <Subject 4> crosses slowly from the curved outer rim toward the straight boundary. The visible projection is a broad, featureless soft mass clipped precisely to the lunar surface. The white cut edge remains hard and unobscured. The shadow's trailing edge reaches the straight boundary immediately before the cut.
+
+[Shot 2] At 00:05.210, make one hard geometric match cut. <Subject 2>'s central body occupies the circle implied by <Subject 1>. The former straight lunar edge becomes a hard highlight on one taut pink thread at the same screen coordinate.
+
+The camera is a Static Shot. <Subject 2> occupies the sharp subject plane. One thick foreground thread crosses close to the lens and stays softly out of focus. Finer threads occupy separate middle planes. Sparse wooden spools remain far behind. Cold violet light strikes downward from high above. Cold gold is confined to reflected edges of <Subject 2>. Pink is confined to the causal threads. Near-black fills more than half the frame.
+
+A narrow internal glow lifts out through <Subject 2>'s crystal openings and drains upward. The openings settle into dark transparent depth with only reflected rim light. The central vessel reads as hollow and empty.
+
+The highlighted foreground thread slides aside. <Subject 3> enters from the right edge. Separated fingers advance through successive thread planes. Each crossed thread bends around the fingers and returns to tension. A narrow black interval remains between the fingertips and <Subject 2>.
+
+At 8.667 seconds, spool rotation begins one continuous acceleration. Loose fibres rise. Thread vibration grows tighter. A porcelain-white veil expands inside the unresolved interval and covers the approaching fingers while the last readable hand position remains separated from the vessel. The veil keeps that separation occluded through the release.
+
+At 10.952 seconds, the sole kick triggers simultaneous loss of tension. Every thread forms one slack curve and recoils toward its assigned spool. The sole cymbal creates one hard white crest across the veil. The empty interior of <Subject 2> remains dark. In the generated tail, near threads recoil fastest, middle threads follow, and distant spools complete the pull.
+
+CIRCLE MATCH LAW: the half-moon ends on the hard cut; the separate vessel begins aligned to its implied circle.
+SHADOW LAW: <Subject 4> is Shot 1's only moving layer.
+EMPTY-VESSEL LAW: internal light exits upward; reflected edges remain around an unlit hollow.
+REACH LAW: the white veil occupies the unresolved gap and preserves visible separation.
+THREAD LAW: every released thread returns only to its assigned spool.
+BEAT LAW: {{BEATLAW}} The numerical checkpoint at 10.952 is the sole release. Kick creates slack. Cymbal creates the white crest. The accompaniment does not independently drive visual timing.
+DEPTH APPLICATION: {{DP}} Multi-plane motion applies to Shot 2. Shot 1 keeps every visible plane fixed except the clipped shadow.
+{{LENS}}
+{{FOCUS}}
+NO-TEXT RULE: Every surface remains unmarked. Show no letters, words, numbers, logos, captions, subtitles, signs, interface labels, pseudo-writing or watermarks.
+{{ST2}}
+
+overall_soundscape: Shot 1 carries a thin cold-air tone at constant level; the passing shadow produces no local sound. The hard cut narrows that tone into dry fibre tension. Thread crossings make faint creaks. From 8.667 seconds, spool axles rise from isolated wooden ticks into a tight mechanical rattle. At 10.952 seconds, one deep impact, one thin metallic crest and one collective fibre snap occur together, followed by accelerating thread hiss and spinning wood.
+
+non_diegetic_music: N/A

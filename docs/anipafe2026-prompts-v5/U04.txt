@@ -1,0 +1,28 @@
+subject_definitions: <Picture 1> (reference role: protected source artwork for the two girls’ whole-body identities, costumes, direct-overhead crop geometry, one-body-width separation and untouching fingertip gap only, not a target frame and not a storyboard anchor) defines <Subject 1> as human Madoka in school uniform and <Subject 2> as earliest-loop Homura with braided hair and red-rimmed glasses. <Subject 3> is {{BLACK_WAVE}}. The frame contains exactly two people and one nonhuman fluid element. Never merge the characters. Never exchange their hair, eyes, clothing, accessories or facial features.
+
+summary: Two girls lie separated on white water while a faint wing-shaped window forms behind <Subject 2> and contains <Subject 3>. The wing window is Marguerite’s portrait: the hard outline gives the shape of a saviour, while the nameless multitude she could not save moves inside it.
+
+retention_analysis: <Picture 1> is fully_preserved for both identities, costumes, whole-body scale, earliest-loop hairstyle and glasses, relative body placement and fingertip distance; partially_preserved for the water texture. The direct-overhead viewpoint and full-body crop remain fixed throughout. <Subject 3> occupies only the graphic layer defined inside the wing.
+
+detailed_description: {{TH:WATER}}
+STAGE: An endless flat white water surface fills the frame. <Subject 1> lies on the left and <Subject 2> lies on the right. They face each other across one body-width of empty water. Their reaching hands meet near frame centre, with a gap equal to one hand’s width between their fingertips. Their lips rest in one closed shape. Their shoulders rise slightly with separate quiet breaths.
+
+Z-ORDER: The plain white water occupies the far background plane. <Subject 3> occupies a separate mask plane immediately above the water. A hard-edged grey wing contour occupies the next plane and catches a pale specular line along its upper edge. <Subject 1> and <Subject 2> remain on the protected subject plane above the fluid and contour. The near plane contains only a few soft, out-of-focus points of reflected white light.
+
+[Shot 1] Overhead view. Two girls lie on white water: the pink-haired girl on the left, the black-haired girl on the right, one body-width apart, their fingertips a hand's width apart at frame centre. Their whole bodies are in frame and keep the same size throughout. Static Shot. <Subject 1> and <Subject 2> remain parallel, with their heads, shoes and outstretched hands all visible. The surrounding water is a broad unmarked white plane with pale-grey shadows beneath their bodies.
+
+A wing-shaped outline, hair-thin and grey, is drawn on the water behind the black-haired girl; only inside that outline a black tide moves. The first grey point appears one hand’s width behind <Subject 2>’s shoulder. A hard line extends outward across the mask plane. Its stroke width is one two-hundredth of <Subject 2>’s head width. Each feather contour slides into its final position, settles against the preceding contour and LOCKS. The rim remains behind both girls and picks up a narrow pale specular edge. The visible wing consists entirely of this faint contour, while white water remains visible across most of its interior.
+
+At 2.322 seconds the camera is still directly overhead, both whole bodies retain their opening size, and the upper third of the feather outline is closed. As the remaining contour closes, <Subject 3> appears inside the completed wing near the shoulder root. It slides laterally through the enclosed area as one borderless black tide. Its leading edge branches like spilled ink across wet paper. The fluid slows near each feather boundary, settles into a narrow moving band, and the enclosing mask LOCKS while the tide continues behind it.
+
+At 5.790 seconds the occupied black area begins one continuous increase from one feather-width to less than one third of the wing interior. The rest of the interior stays pale. At 6.932 seconds the camera remains fixed, the fingertips still hold their hand-width gap, and the dark leading edge has reached the outermost feather boundary. The contour catches one final grey-white specular stroke, then the complete arrangement becomes still through 6.957 seconds.
+
+WING LAW: A closing feather contour creates the bounded area in which <Subject 3> can move. The hard grey line divides the borderless fluid into one readable wing without giving the fluid a face.
+
+BEAT LAW: {{BEATLAW}} The coincident snare and kick at 2.322 complete the upper contour; the snare at 3.472 releases <Subject 3> across the enclosed mask. The kick at 6.932 lands at the outer feather boundary and arrests every layer while both bodies keep their opening scale.
+
+{{DP}} {{ST2}}
+
+overall_soundscape: Two close breaths sit above nearly motionless water. The wing contour produces a dry line-drawing sound across wet paper, followed by a short glass-like settling click when each section locks. <Subject 3> produces a low distant surge confined to the wing-shaped area. The final boundary contact ends with one muted wet impact.
+
+non_diegetic_music: N/A

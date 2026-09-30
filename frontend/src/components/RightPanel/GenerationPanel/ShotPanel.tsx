@@ -58,7 +58,10 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
   const [h3Steps, setH3Steps] = useState(15)   // 15+EasyCacheが現行スイートスポット
   const [h3EasyCache, setH3EasyCache] = useState(true)
   const [refImgIds, setRefImgIds] = useState<number[]>([])   // Ref2V参照画像(≤9, サムネ選択)
-  const h3Snap = (n: number) => { const m = Math.max(124, Math.min(362, n)); return Math.min(362, m + (5 - (m % 17)) % 17) }   // 訓練域124-362(5.2-15.1秒)   // 既定=横16:9
+  // 17n+5グリッド。1本は124-362(5.2-15.1秒)。362超は継続生成(22f重複の連結)で最大3段=1042f(43.4秒)まで。
+  // 正味尺も 17n+5 に乗る(各段の正味が 17 の倍数)ので、スナップ式は上限が変わるだけ
+  const h3Snap = (n: number) => { const m = Math.max(124, Math.min(1042, n)); return Math.min(1042, m + (5 - (m % 17)) % 17) }
+  const [h3Chain, setH3Chain] = useState<'latent' | 'guide'>('latent')   // 362f超の継続方式
   const watchedJobs = useRef<Set<number>>(new Set())
 
   const imgAssets = useMemo(() => assets.filter(a => assetKind(a) === 'image'), [assets])
@@ -228,7 +231,8 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
         const srcEnd = (Math.min(outFrame - 1, c.start_frame + c.duration_frames - 1)
           - c.start_frame + c.asset_in_frame) / fps
         // 2秒未満のカットは最終フレームフリーズで自動延長(H3参照クリップの公式最小2秒)
-        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcEnd - srcStart + 1 / fps, srcEnd, 2.2)
+        // h3Grid: 17k+5 へ後ろに実フレームを伸ばして切る(参照フレームを1枚も捨てない規則, 2026-09-08)
+        const seg = await assetsApi.extractClip(c.asset_id!, srcStart, srcEnd - srcStart + 1 / fps, srcEnd, 2.2, true)
         refVideoIds = [seg.id]
         window.dispatchEvent(new Event('kychapogas:assets-changed'))
       }
@@ -244,7 +248,7 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
         model: vidModel,
         prompt: vidPrompt.trim(),
         width: sz.w, height: sz.h, seed: -1, use_lightning: true,
-        ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache } : {}),
+        ...(useH3 ? { steps: h3Steps, easycache: h3EasyCache, ...(h3DurSec * 24 > 362 ? { chain: { mode: h3Chain } } : {}) } : {}),
         ...(engine === 'h3ref' ? { ref_video_asset_ids: refVideoIds, scheduler: 'beta' } : {}),
         place: { track_id: shots.id, start_frame: inFrame,
                  duration_frames: Math.round(durSec * fps) },
@@ -422,6 +426,16 @@ export function ShotPanel({ assets }: { assets: Asset[] }) {
                 <input type="checkbox" checked={h3EasyCache} onChange={e => setH3EasyCache(e.target.checked)} />
                 ⚡EasyCache
               </label>
+              {h3DurSec * 24 > 362 && (
+                <label className="flex items-center gap-1 text-[10px] text-amber-300"
+                       title="15.08秒(362f)超は、前セグメント末尾22fを次の先頭に固定して連続生成し連結する。潜在=Motion Context(再エンコード無し・継ぎ目が出にくい・推奨) / ガイド=公式AddGuide(画像経由・追加ノード不要)">
+                  🔗継続{Math.ceil((h3DurSec * 24 - 362) / 340) + 1}段
+                  <select value={h3Chain} onChange={e => setH3Chain(e.target.value as 'latent' | 'guide')} className={inputCls + ' w-20'}>
+                    <option value="latent">潜在</option>
+                    <option value="guide">ガイド</option>
+                  </select>
+                </label>
+              )}
             </>
           )}
           <button onClick={handleGenVideo}

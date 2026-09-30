@@ -37,11 +37,8 @@ export function ProjectView() {
   const closeShotEditor = useUIStore(st => st.closeShotEditor)
   const [timelineH, setTimelineH] = useState(DEFAULT_TIMELINE_H)
 
-  useEffect(() => {
-    if (!activeProject) return
-    assetsApi.list(activeProject.id).then(setAssets)
-  }, [activeProject?.id])
-
+  // アセット一覧は AssetPanel が読み、onAssetsChange でここへ届く(以前はここでも
+  // 同じ一覧を取得しており、起動時に同一の5MB応答を3回受けていた)。
   // 別プロジェクト所属の素材(複製プロジェクトのクリップが参照)は一覧に来ないため、
   // クリップの参照から不足分を個別取得して合流する。これが無いとプレビューが
   // 素材の種別を判定できず、動画が永遠に「読込中」になる(AniPAFE 24fps の clip840)。

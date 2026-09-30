@@ -41,6 +41,17 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   const sourceFrames = asset?.duration_sec ? Math.max(1, Math.floor(asset.duration_sec * fps)) : clip.duration_frames
   const usedSrc = Math.round(clip.duration_frames * speed)     // カットが消費するソース量
   const maxIn = Math.max(0, sourceFrames - usedSrc)
+  // 速度変更のモード: fixed=尺固定(遅く→カットに載るソース範囲が短くなる) /
+  // stretch=内容固定(遅く→クリップが長くなる。タイムラインの速度セレクタと同じ)
+  const [speedMode, setSpeedMode] = useState<'fixed' | 'stretch'>(() => {
+    try { return localStorage.getItem('shotTune.speedMode') === 'stretch' ? 'stretch' : 'fixed' } catch { return 'fixed' }
+  })
+  const spanRef = useRef(usedSrc)   // 内容固定モードで保つソース範囲(丸め誤差の累積防止)
+  const chooseMode = (m: 'fixed' | 'stretch') => {
+    setSpeedMode(m)
+    spanRef.current = usedSrc
+    try { localStorage.setItem('shotTune.speedMode', m) } catch { /* ignore */ }
+  }
 
   // このクリップが属するカット(Imageピンのペアリングから導出)
   const cut = useMemo(() => {
@@ -104,22 +115,66 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   // タイムラインと同じ操作系:
   //  - 窓(紫ブロック)をドラッグ = クリップ移動と同様に窓を動かす
   //  - 窓の外をクリック/ドラッグ = 再生ヘッドのシーク(スクラブ)
-  const dragWinRef = useRef<{ grabOffset: number } | null>(null)
+  // 窓の操作: move=中を掴んで移動 / L・R=端を掴んで範囲を変える(尺は固定のまま速度を自動計算)
+  const dragWinRef = useRef<{ mode: 'move' | 'L' | 'R'; grabOffset: number; end: number } | null>(null)
+  const [stripCursor, setStripCursor] = useState('pointer')
+  const EDGE_PX = 8
+  const edgeAt = (clientX: number): 'L' | 'R' | null => {
+    const el = stripRef.current
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    const lx = r.left + (assetIn / sourceFrames) * r.width
+    const rx = r.left + ((assetIn + usedSrc) / sourceFrames) * r.width
+    if (Math.abs(clientX - rx) <= EDGE_PX) return 'R'
+    if (Math.abs(clientX - lx) <= EDGE_PX) return 'L'
+    return null
+  }
+  // 窓の範囲 [inF, endF) を尺(duration_frames)にちょうど収める速度にする
+  const applyRange = (inF: number, endF: number) => {
+    const len = Math.max(1, endF - inF)
+    const nsp = Math.max(0.05, Math.min(8, len / clip.duration_frames))
+    setAssetIn(inF)
+    setSpeed(nsp)
+    spanRef.current = len
+    liveUpdateClip(clip.id, {
+      asset_in_frame: inF, speed: Number(nsp.toFixed(4)),
+      ...((clip.remap_json ?? '') !== '' ? { remap_json: '' } : {}),
+    })
+  }
   const stripDown = (e: React.PointerEvent) => {
     ;(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId)
     const f = stripFrameAt(e.clientX)
-    if (f >= assetIn && f < assetIn + usedSrc) {
-      dragWinRef.current = { grabOffset: f - assetIn }   // 窓ドラッグ開始
+    const edge = edgeAt(e.clientX)
+    if (edge) {
+      dragWinRef.current = { mode: edge, grabOffset: 0, end: assetIn + usedSrc }
+    } else if (f >= assetIn && f < assetIn + usedSrc) {
+      dragWinRef.current = { mode: 'move', grabOffset: f - assetIn, end: 0 }   // 窓ドラッグ開始
     } else {
       dragWinRef.current = null
       scrubTo(f)
     }
   }
   const stripMove = (e: React.PointerEvent) => {
-    if (!(e.buttons & 1)) return
+    if (!(e.buttons & 1)) {
+      const edge = edgeAt(e.clientX)
+      const f = stripFrameAt(e.clientX)
+      setStripCursor(edge ? 'ew-resize' : (f >= assetIn && f < assetIn + usedSrc ? 'grab' : 'pointer'))
+      return
+    }
     const f = stripFrameAt(e.clientX)
-    if (dragWinRef.current) applyIn(f - dragWinRef.current.grabOffset)
-    else scrubTo(f)
+    const d = dragWinRef.current
+    if (!d) { scrubTo(f); return }
+    if (d.mode === 'move') applyIn(f - d.grabOffset)
+    else if (d.mode === 'L') {
+      const end = d.end
+      const minIn = Math.max(0, Math.ceil(end - clip.duration_frames * 8))
+      const maxIn2 = Math.max(0, end - Math.max(1, Math.ceil(clip.duration_frames * 0.05)))
+      applyRange(Math.max(minIn, Math.min(maxIn2, f)), end)
+    } else {
+      const minEnd = assetIn + Math.max(1, Math.ceil(clip.duration_frames * 0.05))
+      const maxEnd = Math.min(sourceFrames, assetIn + Math.floor(clip.duration_frames * 8))
+      applyRange(assetIn, Math.max(minEnd, Math.min(maxEnd, f)))
+    }
   }
   const stripUp = () => { dragWinRef.current = null }
 
@@ -154,10 +209,25 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
   const applySpeed = (sp: number) => {
     const nsp = Math.max(0.05, Math.min(8, sp))
     setSpeed(nsp)
+    if (speedMode === 'stretch') {
+      const span = Math.max(1, spanRef.current)
+      liveUpdateClip(clip.id, { speed: nsp, duration_frames: Math.max(1, Math.round(span / nsp)) })
+      return
+    }
     const newUsed = Math.round(clip.duration_frames * nsp)
     const clampedIn = Math.min(assetIn, Math.max(0, sourceFrames - newUsed))
     if (clampedIn !== assetIn) setAssetIn(clampedIn)
+    spanRef.current = newUsed
     liveUpdateClip(clip.id, { speed: nsp, asset_in_frame: clampedIn })
+  }
+  // 窓開始から生成の最後までを、今の尺にちょうど収める(尺固定・速度を自動計算)
+  const fitWholeShot = () => {
+    const rest = Math.max(1, sourceFrames - assetIn)
+    const nsp = Math.max(0.05, Math.min(8, rest / clip.duration_frames))
+    setSpeed(nsp)
+    spanRef.current = rest
+    // リマップが残っていると速度が効かないので、全体を収めるときは解除する
+    liveUpdateClip(clip.id, { speed: Number(nsp.toFixed(4)), ...((clip.remap_json ?? '') !== '' ? { remap_json: '' } : {}) })
   }
 
   const inputCls = 'bg-zinc-800 text-xs text-zinc-100 rounded px-2 py-1 outline-none border border-zinc-700 focus:border-purple-500'
@@ -226,28 +296,56 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
           </div>
           <div ref={stripRef}
                className="relative h-14 bg-zinc-950 rounded overflow-hidden select-none"
-               style={{ touchAction: 'none' }}
+               style={{ touchAction: 'none', cursor: stripCursor }}
                onPointerDown={stripDown} onPointerMove={stripMove} onPointerUp={stripUp}>
             {clip.asset_id != null && (
               <img src={`/api/assets/${clip.asset_id}/filmstrip?count=12`} alt=""
                    className="absolute inset-0 w-full h-full object-fill opacity-70 pointer-events-none" />
             )}
             {/* ソース窓 = タイムラインのクリップと同じ「掴んでドラッグで移動」 */}
-            <div className="absolute top-0 bottom-0 border-2 border-purple-400 bg-purple-500/20 pointer-events-none cursor-grab"
-                 style={{ left: `${(assetIn / sourceFrames) * 100}%`, width: `${(usedSrc / sourceFrames) * 100}%` }} />
+            <div className="absolute top-0 bottom-0 border-2 border-purple-400 bg-purple-500/20 pointer-events-none"
+                 style={{ left: `${(assetIn / sourceFrames) * 100}%`, width: `${(usedSrc / sourceFrames) * 100}%` }}>
+              {/* 端つまみ: ドラッグで範囲を変える(尺固定・速度自動) */}
+              <div className="absolute -left-1 top-0 bottom-0 w-2 bg-purple-300/80 rounded-sm" />
+              <div className="absolute -right-1 top-0 bottom-0 w-2 bg-purple-300/80 rounded-sm" />
+            </div>
             {/* 再生ヘッド */}
             <div className="absolute top-0 bottom-0 w-px bg-amber-300 pointer-events-none"
                  style={{ left: `${(scrubSrc / sourceFrames) * 100}%` }} />
           </div>
           <div className="flex gap-1 items-center flex-wrap text-[10px] text-zinc-600">
-            <span>窓ドラッグ=移動 / 外クリック=シーク / Space=再生 / ←→=±1f(Shiftで±10f)</span>
+            <span>窓の中ドラッグ=移動 / 窓の端ドラッグ=範囲変更(尺はそのまま・速度 ×{speed.toFixed(3)} を自動計算) / 外クリック=シーク / Space=再生 / ←→=±1f(Shiftで±10f)</span>
             <button onClick={() => applyIn(scrubSrc)} className={chipCls(false) + ' ml-auto'} title="再生ヘッド位置を窓の開始フレームにする">
               ▶ ヘッド位置を窓開始に
             </button>
           </div>
         </div>
 
-        {/* 速度(尺は固定・消費ソース範囲が変わる) */}
+        {/* 速度: 尺固定(消費ソース範囲が変わる) / 内容固定(尺が伸縮) */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] text-zinc-500">速度を変えると</span>
+          <button onClick={() => chooseMode('fixed')} className={chipCls(speedMode === 'fixed')}
+                  title="カットの尺と位置はそのまま。遅くするとカットに載るソース範囲(紫の窓)が短くなる=スロー再生">
+            尺を固定
+          </button>
+          <button onClick={() => chooseMode('stretch')} className={chipCls(speedMode === 'stretch')}
+                  title="使うソース範囲はそのまま。遅くするとクリップが長くなる(後ろのカットとの境界がずれる)">
+            内容を固定(尺が伸縮)
+          </button>
+          <button onClick={fitWholeShot} className={chipCls(false) + ' ml-auto'}
+                  title="窓開始から生成の最後までを今の尺にちょうど収める速度にする(尺は変えない)">
+            ⇔ 生成全体をこの尺に収める(×{Math.max(0.05, (sourceFrames - assetIn) / clip.duration_frames).toFixed(3)})
+          </button>
+        </div>
+        {(clip.remap_json ?? '') !== '' && (
+          <div className="flex items-center gap-2 text-[11px] px-2 py-1.5 rounded bg-amber-950/70 border border-amber-800 text-amber-200">
+            <span>⚠ ⏱時間リマップのキーが設定されているため、速度・加減速カーブは無視されます(最後のキー以降は等倍で進みます)。</span>
+            <button onClick={() => { void updateClip(clip.id, { remap_json: '' }) }}
+                    className="ml-auto shrink-0 px-2 py-0.5 rounded bg-amber-800 hover:bg-amber-700 text-white">
+              リマップを解除
+            </button>
+          </div>
+        )}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] text-zinc-500">速度</span>
           {[0.25, 0.5, 1, 1.5, 2, 4].map(sp => (
@@ -263,7 +361,11 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
                   title="⏱時間リマップ — キーを打ってシーンチェンジ位置や打点タイミングをフレーム単位で補正">
             ⏱ 時間リマップ{(clip.remap_json ?? '') !== '' ? '(設定済)' : ''}
           </button>
-          <span className="text-[10px] text-zinc-600">尺({(clip.duration_frames / fps).toFixed(2)}s)は固定</span>
+          <span className="text-[10px] text-zinc-600">
+            {speedMode === 'fixed'
+              ? `尺(${(clip.duration_frames / fps).toFixed(2)}s)は固定・遅く→使う範囲が短く`
+              : `使う範囲(${spanRef.current}f)は固定・遅く→尺が長く`}
+          </span>
         </div>
         {showCurve && (
           <SpeedCurveEditor
@@ -302,7 +404,7 @@ export function ShotTunePopover({ clip, asset, fps, onClose }: Props) {
           </button>
         )}
         <p className="text-[9px] text-zinc-600">
-          変更は即タイムラインへ反映(アンドゥ可)。速度・カーブは尺を変えず「どのソース区間をどう再生するか」だけを変えます。
+          変更は即タイムラインへ反映(アンドゥ可)。「尺を固定」では速度・カーブは尺を変えず「どのソース区間をどう再生するか」だけを変えます。「内容を固定」では遅くするほどクリップが伸びます(加減速カーブは常に尺固定)。
         </p>
       </div>
     </div>,

@@ -1,0 +1,26 @@
+subject_definitions: <Picture 1> (reference role: subject identity and eye design only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{QB_ID}}. <Picture 2> (reference role: reflection-layer grammar and the relationship between the red eye and the carved stone only, not a target frame and not a storyboard anchor) defines <Object 1>: {{BURNED_STONE}}. <Picture 3> (reference role: subject identity only, not a target frame and not a storyboard anchor) defines <Subject 2>: human Madoka in school uniform.
+
+summary: In silence, <Subject 1>'s motionless red eye displays <Object 1> after its carved inner cosmos has been consumed. A hard cut reveals only <Subject 2>'s mouth forming three restrained morae—ho, mu, ra—while the addressee and every answer remain outside the frame.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s identity, red eye, gold ring, fixed expression and permanently closed mouth; its original composition is weak_reference. <Picture 2> weak_reference for the corneal reflection arrangement and fully_preserved for <Object 1>'s burned state: the carved grooves contain extinguished darkness instead of stars or violet nebulae. <Picture 3> fully_preserved for <Subject 2>'s identity and school uniform; its original composition and background do not control the video. The two subjects occupy separate shots and retain separate identities.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers. Light and acting carry the sequence. The corneal reflection is the only graphic window.
+
+STAGE: The first shot contains only an extreme macro red eye and the reflected stone. The second shot uses the same ground-level lower-face size and angle as C14. The crop contains <Subject 2>'s mouth, chin and a small part of her cheek. Her eyes, the listener and the surrounding world remain beyond the frame.
+
+[Shot 1] Static Shot. One red eye fills the frame edge to edge. The eyelids retain one settled aperture. The pupil and gold ring retain the same position and diameter. A small hard-edged corneal reflection contains <Object 1>, distant and sharply outlined. The reflection sits behind the glossy surface of the eye and LOCKS. Inside it, the weathered stone remains intact. Its carved grooves contain flat, lightless darkness. The former field of stars and violet nebulae has already vanished. A last cold glint travels across the outer stone face, reaches one carved edge, and expires there. The darkness stays enclosed by every hard groove. The red eye gives no reaction. Its fixed surface and the extinguished carving present the result without showing the act that caused it. Near-black occupies more than half the image. Red belongs only to the eye. By 4.20 seconds, the glint is gone and all visible elements have settled.
+
+[Shot 2] At 00:04.620, hard cut to a Static Shot at ground level. Match C14's lower-face scale and viewing angle. <Subject 2>'s mouth begins at rest. Her jaw remains composed and her throat carries the effort. She silently shapes three separate morae with one restrained articulation each. First, her lips make a small rounded opening for “ho.” Second, they meet gently for “mu.” Third, they part by one syllable-width for “ra.” Each shape reaches a clear endpoint before the next begins. Her head retains the same on-screen size. Only the lips, jaw and throat move. After the third shape, her lips return to a soft resting position. A slight breath settles the lower lip. The frame holds only her mouth through 7.83 seconds. The addressed space remains outside the crop.
+
+SILENT UNIT: there are no drums in this cut. The sound field remains at zero amplitude from the first frame through the last frame.
+REFLECTION LAW: the corneal highlight encloses <Object 1> as a protected spatial layer; its hard boundary settles and LOCKS before the final glint expires.
+MORAE LAW: rounded lips become closed lips, then become a restrained open shape; each articulation completes once and leaves no visible reply.
+NO-TEXT RULE: Show no letters, words, numbers, logos, credits, captions, subtitles, signs, interface labels, pseudo-writing or watermark. All surfaces remain unmarked.
+{{LENS}}
+{{FOCUS}}
+{{ST2}}
+
+overall_soundscape: a continuous zero-amplitude sound field from beginning to end, perceived as complete vacuum-like silence. The three mouth movements produce no voice, breath sound or foley.
+
+non_diegetic_music: N/A

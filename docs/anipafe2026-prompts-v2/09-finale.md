@@ -49,7 +49,14 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U39 — C61+C62+C63 走馬灯 (Ref2VA / 生成175f / 実尺6.95s / 6ショット / 境界2.33s, 4.62s / ス20 = 最密)
+## U39 — C61+C62+C63+C64 走馬灯→着地 (Ref2VA / 生成277f / 実尺11.50s / 融合4カット)
+
+参照: <Picture 1> #953 / <Picture 2> #936 / <Picture 3> #2605 / <Picture 4> #2627 / <Picture 5> #2943
+⚠ U39+U40 を融合(apply_merges.py)。音声=inst。融合前は _superseded/。
+
+```
+(本文は v3/U39.txt。この見出しは尺・モード・参照の台帳)
+```
 
 参照(理想): <Picture 1> #953 / <Picture 2> #936 (identity) / <Picture 3> #2605 人形 /
 <Picture 4> #2627 / <Picture 5> 【要素材】走馬灯断片プレート(過去カットのサムネイル群・weak)
@@ -96,7 +103,7 @@ non_diegetic_music: N/A
 ```
 
 ---
-## U40 — C64 着地 (Ref2VA / 生成124f / 実尺4.58s / 2ショット / ス3・急落)
+## U40old — C64 着地 (Ref2VA / 生成124f / 実尺4.58s / 2ショット / ス3・急落) 〔U39へ融合により停止〕
 
 参照(理想): <Picture 1> #2943 (identity: 制服・三つ編み・翼なし)
 MG: なし。減速の着地(密度9.9→2.2)

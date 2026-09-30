@@ -1,0 +1,41 @@
+subject_definitions: <Picture 1> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 1>, the completed Walpurgis form bearing Homura’s face. The reference contributes only the exact composite body, face, feather structure and gear design to <Subject 1>. Scale, placement, descent, black tide and surrounding space are controlled by this prompt.
+
+<Picture 2> (reference role: subject definition only, not a target frame and not a storyboard anchor) defines <Subject 2>, human Madoka in school uniform. The reference contributes only her identity and clothing. Her small rear-view pose and upper-edge placement are newly composed.
+
+<Subject 3> is {{BLACK_WAVE}}.
+
+<Picture 3> (reference role: thread material only, not a target frame and not a storyboard anchor) supplies the fibre, twist and blood-red colour of the causal thread. The prompt controls its straight orientation, thickness, tension, endpoints and motion.
+
+Global visual definitions: {{TH:A3}} {{DP}} {{ST2}} {{LENS}} {{FOCUS}}
+
+summary: The completed Walpurgis form returns downward to the root with the burned nameless wave, while Madoka remains as a small figure above. A hard cut removes both figures and shows their increasing distance through one continuous red thread joining the upper and lower edges.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>’s composite identity, Homura face, feather structure and gear. <Picture 2> fully_preserved for <Subject 2>’s identity and school uniform; partially_preserved for the rear-view scale. <Picture 3> weak_reference for thread material and colour only. The prompt controls all framing, depth, lighting and movement. <Subject 1> and <Subject 2> remain separate, with their faces, hair and clothing assigned to their respective bodies.
+
+detailed_description:
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers. Flat anime line art remains distinct from photographic and three-dimensional rendering.
+COLOR PALETTE: near-black, cold violet, porcelain white, and blood red on the thread only.
+LIGHT: A cold violet source shines from high above. It rims upward-facing feathers and the top edge of <Subject 2>. The lower half receives almost entirely black shadow. Thin pale haze separates the figures. Only the highest white light blooms.
+STAGE: Five vertical depth planes form a vast shaft between a pale upper opening and the black root below. Near haze moves fastest. <Subject 1> and <Subject 3> occupy the central descending plane. <Subject 2> occupies the remote upper plane.
+
+[Shot 1] The frame already contains exactly two figures inside the vertical shaft. <Subject 1> fills the lower two-thirds as a giant inverted figure, with the preserved Homura face visible beneath the turning gear. <Subject 2> stands small at the top edge, seen from behind, occupying less than one-tenth of the frame height. Use a Static Shot from a distant frontal viewpoint. The giant inverted figure sinks toward the bottom edge at slow speed. The black tide sinks with it as one broad, edgeless mass, trailing behind the feathered body like heavy liquid pulled by gravity. The descent carries <Subject 1> deeper into black rather than sideways across the frame.
+
+Three enormous hard-edged slabs of sky occupy the near, middle and far planes. Each slab is wider than <Subject 1>. The sinking weight draws a straight hinge through each slab. One slab folds downward across the lens at very close range, thick and softly out of focus. Its violet edge catches a narrow specular line, settles over the lower space, and LOCKS. The next slab repeats farther behind it, making the upper opening visibly smaller while <Subject 2> stays fixed above the fold.
+
+At 1.147 seconds the camera is still in the same frontal position, and the first sky slab is LOCKED below <Subject 2>. At 1.427 seconds the camera remains fixed, and <Subject 1> has crossed deeper into the lower black while the second folded slab has settled behind the first. The final fold covers the lower frame as a world-scale physical wipe. <Subject 1> and the entire black tide pass through the bottom edge together. <Subject 2> remains small at the upper edge in cold light. Her lowered arms and still shoulders carry the farewell.
+
+[Shot 2] At 00:02.290, hard cut to one red thread, as thick as a finger, running straight from the top edge to the bottom edge of the frame against black. Nothing else is in the frame. The thread’s woven fibres are sharp while pure black fills every surrounding area. Use a Static Shot with a fixed frontal composition. Both endpoints remain secured beyond the visible upper and lower boundaries. The thread’s twist tightens and its length between the two edges visibly grows.
+
+The black field extends vertically like a telescoping shaft. Additional twisted fibre feeds into the visible span while the line stays straight. Each increase exposes another short sequence of tightly wound strands. The upper endpoint retains a cold pinpoint reflection. The lower endpoint sinks into dense black. These two light conditions move farther apart while the same physical thread continues through both edges.
+
+At 3.595 seconds the camera is still fixed, and the visible span contains more twists than at the cut while both endpoints remain attached. The final extension slows. By 3.920 seconds the thread reaches full tension, settles, and LOCKS in the central vertical position. Its fibres keep a faint residual torsion while its screen position remains still through the final 0.7 seconds.
+
+RETURN LAW: The downward pull of <Subject 1> carries <Subject 3> and folds each sky slab toward the root. <Subject 2> stays at the upper boundary as the distance grows.
+
+THREAD LAW: Greater distance feeds more twisted fibre into the visible span. The thread remains continuous from the upper edge to the lower edge.
+
+BEAT LAW: Each snare triggers one completed sky fold or one discrete increase in thread tension. Each kick adds one visible turn to the thread’s twist, and each cymbal produces a brief specular glint from the visible folded edge or fibre.
+
+overall_soundscape: The turning gear produces a distant weighted groan while the visible black tide makes a low viscous drag. Each sky slab closes with a broad paper-and-metal crease from its visible hinge. In Shot 2, the thread produces close dry fibre strain and a tightening cord creak that decelerates into a sustained tension tone.
+
+non_diegetic_music: N/A

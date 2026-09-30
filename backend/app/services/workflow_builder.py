@@ -1196,6 +1196,87 @@ def h3_snap_length(frames: int) -> int:
     return min(362, n + (5 - (n % 17)) % 17)
 
 
+# ── H3 長尺の継続生成(chain) ─────────────────────────────────────────────
+# 1本の上限は362f(15.08秒)。それを超える尺は「前セグメント末尾22fを次セグメントの先頭に
+# 固定して連続生成→重複を捨てて連結」で伸ばす。2方式:
+#   guide : 公式ノード MiniMaxH3AddGuide に前セグメント動画の末尾22fを画像として固定。
+#           デコード→再エンコードを1回挟むので継ぎ目で僅かな色ズレが出うる。重複22fは
+#           バックエンド側(ffmpeg)で捨てる。追加インストール不要。
+#   latent: custom_nodes/ComfyUI-H3-Motion-Context。前セグメントのサンプラー出力ラテントを
+#           そのまま固定(再エンコード無し)、音声も末尾1秒を逆向きに固定して継続。重複は
+#           同パックの Trim ノードが ComfyUI 内で落とす(出力はすでに正味尺)。
+H3_CHAIN_OVERLAP = 22        # 継続で固定する末尾フレーム数(17k+5 の k=1。22=ほぼ継ぎ目なし)
+H3_CHAIN_MAX_SEGMENTS = 3    # 3段(≈43秒)まで。それ以上は同一性ドリフトが目立つ(コミュニティ実測)
+
+
+def h3_plan_segments(total_frames: int, overlap: int = H3_CHAIN_OVERLAP) -> list[int]:
+    """総尺(24fps・正味)を、各362f以下の生成長リストに割る。i>0 の各セグメントは先頭
+    overlap フレームが前セグメントの複製なので、正味は len-overlap。返すのは生成長。
+    正味合計 = L0 + Σ(Li-overlap) ≥ total_frames(超過分は最後に切り捨てる)。"""
+    total = max(124, int(total_frames))
+    total = total + (5 - (total % 17)) % 17          # 正味も 17k+5 グリッドへ
+    if total <= 362:
+        return [h3_snap_length(total)]
+    per = 362 - overlap
+    n = 1 + -(-(total - 362) // per)
+    if n > H3_CHAIN_MAX_SEGMENTS:
+        raise ValueError(f"H3継続生成は{H3_CHAIN_MAX_SEGMENTS}段(正味{362 + per * (H3_CHAIN_MAX_SEGMENTS - 1)}f)まで: 要求{total}f")
+    plan: list[int] = []
+    remaining = total
+    for i in range(n):
+        ov = overlap if i > 0 else 0
+        need = -(-remaining // (n - i))
+        L = h3_snap_length(need + ov)
+        plan.append(L)
+        remaining -= L - ov
+    return plan
+
+
+def _h3_apply_chain(wf: dict, chain: dict) -> None:
+    """継続生成の配線。chain = {
+         mode: "guide"|"latent", index: 1始まりのセグメント番号, count: 総段数,
+         prev_video: (guide) 前セグメント動画の ComfyUI input 名,
+         latent_prefix: (latent) SaveLatent の filename_prefix(出力フォルダ相対),
+       }
+    guider は既に ["cond",0] を見ている前提。"""
+    mode = chain.get("mode", "latent")
+    idx = int(chain.get("index", 1))
+    ov = int(chain.get("overlap", H3_CHAIN_OVERLAP))
+    if mode == "guide":
+        if idx <= 1:
+            return
+        wf["pvid"] = {"class_type": "LoadVideo", "inputs": {"file": chain["prev_video"]}}
+        wf["pvc"] = {"class_type": "GetVideoComponents", "inputs": {"video": ["pvid", 0]}}
+        wf["ptail"] = {"class_type": "ImageFromBatch",
+                       "inputs": {"image": ["pvc", 0], "batch_index": -ov, "length": ov}}
+        wf["guide"] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
+            "positive": ["cond", 0], "vae": ["vvae", 0], "latent": ["cond", 1],
+            "image": ["ptail", 0], "frame_idx": 0}}
+        wf["guider"]["inputs"]["conditioning"] = ["guide", 0]
+        return
+    if mode != "latent":
+        raise ValueError(f"未知の chain.mode: {mode}")
+    prefix = chain.get("latent_prefix") or "h3_context/kychapogas"
+    # 毎セグメント保存(次セグメントが読む)。clip_index>0 で固定スロット名 *_%05d.safetensors
+    wf["msave"] = {"class_type": "MiniMaxH3MotionContextSaveLatent", "inputs": {
+        "latent": ["ks", 0], "filename_prefix": prefix, "clip_index": idx}}
+    if idx <= 1:
+        return
+    base = prefix.rsplit("/", 1)[-1]
+    folder = prefix.rsplit("/", 1)[0] + "/" if "/" in prefix else ""
+    wf["mload"] = {"class_type": "MiniMaxH3MotionContextLoadLatent", "inputs": {
+        "latent_path": f"{folder}{base}_{idx - 1:05d}.safetensors", "clip_index": idx - 1}}
+    wf["mctx"] = {"class_type": "MiniMaxH3MotionContext", "inputs": {
+        "conditioning": ["cond", 0], "vae": ["vvae", 0], "latent": ["cond", 1],
+        "context_length": str(ov), "audio_context_length": 24, "context_latent": ["mload", 0]}}
+    wf["guider"]["inputs"]["conditioning"] = ["mctx", 0]
+    wf["mtrim"] = {"class_type": "MiniMaxH3MotionContextTrim", "inputs": {
+        "images": wf["vid"]["inputs"]["images"], "trim_frames": ["mctx", 1],
+        "audio": wf["vid"]["inputs"]["audio"], "fps": float(H3_FPS), "match_tail": True}}
+    wf["vid"]["inputs"]["images"] = ["mtrim", 0]
+    wf["vid"]["inputs"]["audio"] = ["mtrim", 1]
+
+
 def _h3_apply_easycache(wf: dict, src: str = "unet") -> None:
     """EasyCacheノードを src と guider/scheduler の間に挿入。
     ステップ間の特徴再利用で約1.5〜2倍(内容依存)。副作用はわずかな甘さ/動きの平滑化。
@@ -1216,6 +1297,178 @@ def _h3_apply_easycache(wf: dict, src: str = "unet") -> None:
                 ins[k] = ["ecache", 0]
 
 
+# ── First Block Cache (NVIDIA Sol Engine のキャッシュ系、単GPU移植) ────────────
+# custom_nodes/ComfyUI-H3-FBC (drowzeys の Single-DGX-Spark 移植を同梱, 2026-09-08)。
+# 毎ステップ block0 だけ計算し、残差の変化が threshold 以下なら残りブロックを飛ばして
+# 前ステップの尾部残差を再適用する。20step 向けの安全域は threshold 0.08 / start 3 /
+# end_dense 2 / max_consecutive 2(移植元の実測)。蒸留系(Turbo/VDN)と併用可。
+H3_FBC_DEFAULT = {"threshold": 0.08, "start_step": 3, "end_dense_steps": 2, "max_consecutive_skips": 2}
+
+
+# ── MiniMax-H3 Fun ControlNet Union (Alibaba PAI, Comfy-Org pruned) ─────────────
+# models/model_patches/minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors。
+# 公式ノード MiniMaxH3FunControlNetApply(ComfyUI 0.34) をモデルパッチとして挿す。
+# control_video = Pose/Depth/Canny/HED/MLSD の制御動画(24fps、生成尺に合わせて切詰め/末尾保持)。
+# mask + source_video を渡すとマスク領域だけ再生成するインペイント。fl2va/ref2va 両対応(公式は ref2va 例)。
+# コミュニティ知見: 単独 0.6〜1.0、pose>depth、併用は depth0.3+pose0.7、end_percent≈0.6 で質感回復。
+H3_FUN_CONTROL_PATCH = "minimax_h3_fun_controlnet_union_pruned_int8_convrot.safetensors"
+
+
+def _h3_apply_fun_control(wf: dict, src: str, cfg: dict, idx: int = 0) -> str:
+    """Fun ControlNet を src と guider/scheduler の間に挿入し、新しい src 名を返す。
+    cfg = {control_video: input名 | None, mask_video: input名 | None, source_video: input名 | None,
+           strength: 1.0, start_percent: 0.0, end_percent: 1.0, patch_name: ...}"""
+    tag = f"fun{idx}"
+    if f"funpatch{idx}" not in wf:
+        wf[f"funpatch{idx}"] = {"class_type": "ModelPatchLoader",
+                                "inputs": {"name": cfg.get("patch_name") or H3_FUN_CONTROL_PATCH}}
+    inputs: dict = {"model": [src, 0], "model_patch": [f"funpatch{idx}", 0], "vae": ["vvae", 0],
+                    "strength": float(cfg.get("strength", 1.0)),
+                    "start_percent": float(cfg.get("start_percent", 0.0)),
+                    "end_percent": float(cfg.get("end_percent", 1.0))}
+    if cfg.get("control_video"):
+        wf[f"ctlvid{idx}"] = {"class_type": "LoadVideo", "inputs": {"file": cfg["control_video"]}}
+        wf[f"ctlvc{idx}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"ctlvid{idx}", 0]}}
+        inputs["control_video"] = [f"ctlvc{idx}", 0]
+    if cfg.get("mask_video"):
+        # マスク動画(白=再生成)を IMAGE→MASK へ。source_video は元動画(マスク外はそのまま残る)
+        wf[f"mskvid{idx}"] = {"class_type": "LoadVideo", "inputs": {"file": cfg["mask_video"]}}
+        wf[f"mskvc{idx}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"mskvid{idx}", 0]}}
+        wf[f"msk{idx}"] = {"class_type": "ImageToMask", "inputs": {"image": [f"mskvc{idx}", 0], "channel": "red"}}
+        inputs["mask"] = [f"msk{idx}", 0]
+        if cfg.get("source_video"):
+            wf[f"srcvid{idx}"] = {"class_type": "LoadVideo", "inputs": {"file": cfg["source_video"]}}
+            wf[f"srcvc{idx}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"srcvid{idx}", 0]}}
+            inputs["source_video"] = [f"srcvc{idx}", 0]
+    wf[tag] = {"class_type": "MiniMaxH3FunControlNetApply", "inputs": inputs}
+    for node in wf.values():
+        ins = node.get("inputs", {})
+        for k, v in ins.items():
+            if node is not wf[tag] and isinstance(v, list) and v and v[0] == src:
+                ins[k] = [tag, 0]
+    return tag
+
+
+def _h3_apply_fbc(wf: dict, src: str, fbc: dict) -> str:
+    """H3FirstBlockCache を src と guider/scheduler の間に挿入し、新しい src 名を返す。"""
+    cfg = {**H3_FBC_DEFAULT, **{k: v for k, v in (fbc or {}).items() if k in H3_FBC_DEFAULT}}
+    wf["fbc"] = {"class_type": "H3FirstBlockCache", "inputs": {"model": [src, 0], **cfg}}
+    for node in wf.values():
+        ins = node.get("inputs", {})
+        for k, v in ins.items():
+            if node is not wf["fbc"] and isinstance(v, list) and v and v[0] == src:
+                ins[k] = ["fbc", 0]
+    return "fbc"
+
+
+# ── VDN-H3 (Video Delta Net): 近傍フレームは厳密softmax、遠方は線形デルタ注意へ置換 ──
+# custom_nodes/ComfyUI-VDN-H3 (Saganaki22) + models/vdn/stage-dmd-step-250 (OpenVDN)。
+# 8step蒸留(turboアダプタ内蔵)。**Turbo LoRAとは排他**(同じ役割を置き換える)。
+# ComfyUI 0.34+ が前提(AttentionTensorContainer)。2026-09-04 導入。
+H3_VDN_CHECKPOINT = "stage-dmd-step-250"
+H3_VDN_SAMPLER = "euler"      # 配布元のベンチ構成(euler/simple)。er_sde/betaも動作報告あり
+H3_VDN_STEPS = 8              # turboアダプタON=8step / OFF=約50step(混ぜると劣化)
+
+
+def _h3_apply_turbo(wf: dict, lora_name: str, strength: float,
+                    shift_video: float | None = None, shift_audio: float | None = None,
+                    sampler: str | None = None) -> str:
+    """Turbo LoRA を unet の直後に挿入し、必要なら MiniMaxH3SigmaShift も続けて挿す。
+    戻り値は「モデルを供給する最後のノードID」(EasyCache の src に渡す)。
+    lightx2v の指示: LoRA・steps・shift_video/shift_audio は組で設定(768p系は 6/3、544p系は 12/3)。
+    """
+    wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
+                       "inputs": {"lora_name": lora_name, "strength_model": float(strength),
+                                  "model": ["unet", 0]}}
+    last = "turbolora"
+    if shift_video is not None or shift_audio is not None:
+        wf["shift"] = {"class_type": "MiniMaxH3SigmaShift", "inputs": {
+            "model": ["turbolora", 0],
+            "shift_video": float(shift_video if shift_video is not None else 12.0),
+            "shift_audio": float(shift_audio if shift_audio is not None else 3.0)}}
+        last = "shift"
+    for nid, node in wf.items():
+        if nid in ("unet", "turbolora", "shift"):
+            continue
+        m = node.get("inputs", {}).get("model")
+        if isinstance(m, list) and m[0] == "unet":
+            node["inputs"]["model"] = [last, 0]
+    wf["smp"]["inputs"]["sampler_name"] = sampler or H3_TURBO_SAMPLER
+    return last
+
+
+def _h3_apply_sol(wf: dict, src: str, sol: dict) -> str:
+    """NVIDIA Sol-Attn(スパース注意, custom_nodes/ComfyUI-sol-attn)を src の後ろに挿す。
+    Scheduled 版(tau を高ノイズ→低ノイズで下げる)+ Fused Modulation(ビット一致の融合)。
+    GB10(SM121)は TMA カーネル。VDN とは同じ注意経路を奪い合うため併用不可。
+    sol dict: tau_start(1.3) / tau_end(0.8) / curve / dense_percent(0.0, 論文は0.2) /
+              int8_qk(False) / int8_pv(False) / sink_conditioning(exact_kv) / dense_blocks("") /
+              fused_modulation(True) / chunk_ff(0=無効)
+    戻り値: モデルを供給する最後のノードID。"""
+    wf["sol"] = {"class_type": "MiniMaxH3ScheduledSolAttentionPatch", "inputs": {
+        "model": [src, 0], "enabled": True,
+        "tau_start": float(sol.get("tau_start", 1.3)), "tau_end": float(sol.get("tau_end", 0.8)),
+        "curve": sol.get("curve") or "linear", "min_tokens": int(sol.get("min_tokens", 4096)),
+        "strict": bool(sol.get("strict", False)), "dense_percent": float(sol.get("dense_percent", 0.0)),
+        "thresh_type": sol.get("thresh_type") or "diag",
+        "int8_qk": bool(sol.get("int8_qk", False)), "int8_pv": bool(sol.get("int8_pv", False)),
+        "sink_conditioning": sol.get("sink_conditioning") or "exact_kv",
+        "dense_blocks": str(sol.get("dense_blocks") or ""),
+    }}
+    last = "sol"
+    if sol.get("fused_modulation", True):
+        wf["solfm"] = {"class_type": "MiniMaxH3FusedModulation", "inputs": {"model": [last, 0], "enabled": True}}
+        last = "solfm"
+    if int(sol.get("chunk_ff", 0) or 0) > 1:
+        wf["solff"] = {"class_type": "MiniMaxH3ChunkFeedForward", "inputs": {
+            "model": [last, 0], "enabled": True, "chunks": int(sol["chunk_ff"]), "min_tokens": 8192}}
+        last = "solff"
+    for nid, node in wf.items():
+        if nid in ("unet", "turbolora", "shift", "sol", "solfm", "solff"):
+            continue
+        m = node.get("inputs", {}).get("model")
+        if isinstance(m, list) and m[0] == src:
+            node["inputs"]["model"] = [last, 0]
+    return last
+
+
+def _h3_apply_vdn(wf: dict, vdn: dict) -> None:
+    """ApplyVDNH3Advanced を unet と guider/sched の間に挿入(Turbo LoRA挿入と同じ付け替え)。
+
+    vdn dict のキー(全て任意):
+      checkpoint / turbo(bool, 既定True) / strength / turbo_strength / lora_mode(bypass|merge)
+      branch_weights(stream|cache_gpu) / attention_backend(grouped|flex) / fast_kernels(bool)
+      sampler / scheduler
+    EasyCache を併用する場合はこの後に _h3_apply_easycache(wf, src="vdn") を呼ぶこと。
+    """
+    strength = float(vdn.get("strength", 1.0))
+    wf["vdn"] = {"class_type": "ApplyVDNH3Advanced", "inputs": {
+        "model": ["unet", 0],
+        "vdn_checkpoint": vdn.get("checkpoint") or H3_VDN_CHECKPOINT,
+        "apply_turbo_adapter": vdn.get("turbo", True) is not False,
+        "stage_b_strength": strength,
+        "turbo_strength": float(vdn.get("turbo_strength", strength)),
+        "lora_mode": vdn.get("lora_mode") or "bypass",
+        # GB10(128GBユニファイド)は分岐重み4.3GBを常駐させて損がない。小VRAM機は "stream"
+        "branch_weights": vdn.get("branch_weights") or "cache_gpu",
+        "verbose": True,
+        "attention_backend": vdn.get("attention_backend") or "grouped",
+        # 以下は学習時スペック(変えると警告+劣化)。固定値で渡す
+        "window_radius": 1, "window_chunk": 5, "anchor_frames": "both",
+        "text_state": True, "linear_branch": True,
+        "fast_kernels": bool(vdn.get("fast_kernels", False)),
+    }}
+    for nid, node in wf.items():
+        if nid in ("unet", "vdn"):
+            continue
+        m = node.get("inputs", {}).get("model")
+        if isinstance(m, list) and m[0] == "unet":
+            node["inputs"]["model"] = ["vdn", 0]
+    wf["smp"]["inputs"]["sampler_name"] = vdn.get("sampler") or H3_VDN_SAMPLER
+    if vdn.get("scheduler"):
+        wf["sched"]["inputs"]["scheduler"] = vdn["scheduler"]
+
+
 def build_minimax_h3_video(
     prompt: str,
     width: int = 1280,
@@ -1228,7 +1481,17 @@ def build_minimax_h3_video(
     easycache: bool = True,
     turbo_lora: float | None = None,    # Turbo LoRA強度(FL2V用v1.1 768p)。指定時はサンプラーも切替
     preview_steps: int | None = None,   # 🎬予告編(Ref2VAと同じ仕組み。詳細はbuild_minimax_h3_ref_video参照)
+    vdn: dict | None = None,            # VDN-H3ハイブリッド注意(_h3_apply_vdn参照)。turbo_loraと排他
+    turbo_lora_name: str | None = None, # Turbo LoRAファイル名の上書き(既定 H3_TURBO_LORA_FL2V)
+    shift_video: float | None = None,   # シグマシフト上書き(768p系Turboは 6/3)
+    shift_audio: float | None = None,
+    sampler: str | None = None,         # サンプラー上書き
+    sol: dict | None = None,            # NVIDIA Sol-Attn(_h3_apply_sol参照)。vdnと排他
+    chain: dict | None = None,          # 長尺の継続生成(_h3_apply_chain参照)
+    fbc: dict | None = None,            # First Block Cache(_h3_apply_fbc参照)。{} で既定値
 ) -> dict:
+    if vdn is not None and turbo_lora:
+        raise ValueError("VDN-H3 と Turbo LoRA は併用できません(VDNのturboアダプタが同じ役割)")
     s = _seed(seed)
     width = max(32, (width // 32) * 32)
     height = max(32, (height // 32) * 32)
@@ -1268,6 +1531,8 @@ def build_minimax_h3_video(
     if last_image_name:
         wf["img_l"] = {"class_type": "LoadImage", "inputs": {"image": last_image_name}}
         wf["cond"]["inputs"]["last_frame"] = ["img_l", 0]
+    if chain:
+        _h3_apply_chain(wf, chain)
     if preview_steps and 0 < preview_steps < steps:
         # Ref2VAと同一の予告編: シグマ列の先頭N段だけ走らせ、denoised_output(x0予測)から描く
         wf["split"] = {"class_type": "SplitSigmas",
@@ -1275,20 +1540,24 @@ def build_minimax_h3_video(
         wf["ks"]["inputs"]["sigmas"] = ["split", 0]
         wf["vdec"]["inputs"]["samples"] = ["ks", 1]
         wf["adec"]["inputs"]["samples"] = ["ks", 1]
+    src = "unet"
     if turbo_lora:
         # Ref2VA側と同じ付け替え(LoRA挿入→EasyCacheの順を守る)
-        wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
-                           "inputs": {"lora_name": H3_TURBO_LORA_FL2V,
-                                      "strength_model": float(turbo_lora), "model": ["unet", 0]}}
-        for nid, node in wf.items():
-            if nid in ("unet", "turbolora"):
-                continue
-            m = node.get("inputs", {}).get("model")
-            if isinstance(m, list) and m[0] == "unet":
-                node["inputs"]["model"] = ["turbolora", 0]
-        wf["smp"]["inputs"]["sampler_name"] = H3_TURBO_SAMPLER
+        src = _h3_apply_turbo(wf, turbo_lora_name or H3_TURBO_LORA_FL2V, turbo_lora,
+                              shift_video, shift_audio, sampler)
+    elif sampler:
+        wf["smp"]["inputs"]["sampler_name"] = sampler
+    if vdn is not None:   # {} でも適用(空dict=既定設定)
+        if sol is not None:
+            raise ValueError("Sol-Attn と VDN-H3 は併用できません(同じ注意経路を置き換える)")
+        _h3_apply_vdn(wf, vdn)
+        src = "vdn"
+    if sol is not None:   # {} でも適用(既定: tau 1.3→0.8 + Fused Modulation)
+        src = _h3_apply_sol(wf, src, sol)
+    if fbc is not None:   # {} でも適用(既定 H3_FBC_DEFAULT)
+        src = _h3_apply_fbc(wf, src, fbc)
     if easycache:
-        _h3_apply_easycache(wf, src="turbolora" if turbo_lora else "unet")
+        _h3_apply_easycache(wf, src=src)
     return wf
 
 
@@ -1322,6 +1591,16 @@ def build_minimax_h3_ref_video(
     use_ref_video_audio: bool = False,    # 参照動画の音声を添付するか(既定OFF)
     turbo_lora: float | None = None,      # Turbo LoRA強度(0.75推奨)。指定時はサンプラーも切替
     preview_steps: int | None = None,     # 🎬予告編: stepsのスケジュールのうち先頭N段だけ実行
+    vdn: dict | None = None,              # VDN-H3ハイブリッド注意(_h3_apply_vdn参照)。turbo_loraと排他
+    turbo_lora_name: str | None = None,   # Turbo LoRAファイル名の上書き(既定 H3_TURBO_LORA_REF2V)
+    shift_video: float | None = None,     # シグマシフト上書き(768p系Turboは 6/3)
+    shift_audio: float | None = None,
+    sampler: str | None = None,           # サンプラー上書き
+    sol: dict | None = None,            # NVIDIA Sol-Attn(_h3_apply_sol参照)。vdnと排他
+    chain: dict | None = None,          # 長尺の継続生成(_h3_apply_chain参照)
+    guides: list[dict] | None = None,   # 任意フレームへの画像アンカー [{"image": input名, "frame_idx": int}]
+    fun_controls: list[dict] | None = None,  # Fun ControlNet(_h3_apply_fun_control参照)。複数可(強度は合算)
+    fbc: dict | None = None,            # First Block Cache(_h3_apply_fbc参照)。{} で既定値
 ) -> dict:
     """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。
 
@@ -1334,6 +1613,8 @@ def build_minimax_h3_ref_video(
     """
     if not (ref_image_names or ref_video_names or ref_audio_names):
         raise ValueError("Ref2VAには参照が最低1つ必要です")
+    if vdn is not None and turbo_lora:
+        raise ValueError("VDN-H3 と Turbo LoRA は併用できません(VDNのturboアダプタが同じ役割)")
     s_ = _seed(seed)
     width = max(32, (width // 32) * 32)
     height = max(32, (height // 32) * 32)
@@ -1386,6 +1667,28 @@ def build_minimax_h3_ref_video(
         wf[f"raud{i}"] = {"class_type": "LoadAudio", "inputs": {"audio": name}}
         cond_inputs[f"ref_audios.ref_audio_{i}"] = [f"raud{i}", 0]
     wf["cond"] = {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": cond_inputs}
+    if guides:
+        # 公式 MiniMaxH3AddGuide: 画像を任意の frame_idx に固定(先頭が白フラッシュで
+        # 第1フレームが使えないカットで「再現画像」をキーフレームとして効かせる)。
+        # AddGuide を数珠つなぎにし、guider は最後の positive を見る。
+        prev = "cond"
+        for i, g in enumerate(guides):
+            if g.get("video"):
+                # 動画の連続フレーム(batch_index から length 枚)をガイド画像バッチにする
+                wf[f"gvid{i}"] = {"class_type": "LoadVideo", "inputs": {"file": g["video"]}}
+                wf[f"gvc{i}"] = {"class_type": "GetVideoComponents", "inputs": {"video": [f"gvid{i}", 0]}}
+                wf[f"gimg{i}"] = {"class_type": "ImageFromBatch", "inputs": {
+                    "image": [f"gvc{i}", 0], "batch_index": int(g.get("batch_index", 0)),
+                    "length": int(g.get("length", 22))}}
+            else:
+                wf[f"gimg{i}"] = {"class_type": "LoadImage", "inputs": {"image": g["image"]}}
+            wf[f"guide{i}"] = {"class_type": "MiniMaxH3AddGuide", "inputs": {
+                "positive": [prev, 0], "vae": ["vvae", 0], "latent": ["cond", 1],
+                "image": [f"gimg{i}", 0], "frame_idx": int(g.get("frame_idx", 0))}}
+            prev = f"guide{i}"
+        wf["guider"]["inputs"]["conditioning"] = [prev, 0]
+    if chain:
+        _h3_apply_chain(wf, chain)
     if preview_steps and 0 < preview_steps < steps:
         # 先頭 preview_steps 段のシグマだけを取り出す(high_sigmas=前半)。
         # ここで止めたラテントにはまだノイズが残るので、そのままデコードすると砂嵐になる。
@@ -1396,19 +1699,25 @@ def build_minimax_h3_ref_video(
         wf["ks"]["inputs"]["sigmas"] = ["split", 0]
         wf["vdec"]["inputs"]["samples"] = ["ks", 1]
         wf["adec"]["inputs"]["samples"] = ["ks", 1]
+    src = "unet"
     if turbo_lora:
         # UNETを直接参照している全ノード(guider/sched)をLoRA経由に付け替える。
         # EasyCache挿入より先に行うこと(挿入後はguiderのmodelがEasyCache出力を指すため)。
-        wf["turbolora"] = {"class_type": "LoraLoaderModelOnly",
-                           "inputs": {"lora_name": H3_TURBO_LORA_REF2V,
-                                      "strength_model": float(turbo_lora), "model": ["unet", 0]}}
-        for nid, node in wf.items():
-            if nid in ("unet", "turbolora"):
-                continue
-            m = node.get("inputs", {}).get("model")
-            if isinstance(m, list) and m[0] == "unet":
-                node["inputs"]["model"] = ["turbolora", 0]
-        wf["smp"]["inputs"]["sampler_name"] = H3_TURBO_SAMPLER
+        src = _h3_apply_turbo(wf, turbo_lora_name or H3_TURBO_LORA_REF2V, turbo_lora,
+                              shift_video, shift_audio, sampler)
+    elif sampler:
+        wf["smp"]["inputs"]["sampler_name"] = sampler
+    if vdn is not None:   # {} でも適用(空dict=既定設定)
+        if sol is not None:
+            raise ValueError("Sol-Attn と VDN-H3 は併用できません(同じ注意経路を置き換える)")
+        _h3_apply_vdn(wf, vdn)
+        src = "vdn"
+    if sol is not None:   # {} でも適用(既定: tau 1.3→0.8 + Fused Modulation)
+        src = _h3_apply_sol(wf, src, sol)
+    for i, fc in enumerate(fun_controls or []):
+        src = _h3_apply_fun_control(wf, src, fc, i)
+    if fbc is not None:   # {} でも適用(既定 H3_FBC_DEFAULT)
+        src = _h3_apply_fbc(wf, src, fbc)
     if easycache:
-        _h3_apply_easycache(wf, src="turbolora" if turbo_lora else "unet")
+        _h3_apply_easycache(wf, src=src)
     return wf

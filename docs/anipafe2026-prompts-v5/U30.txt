@@ -1,0 +1,29 @@
+Create a video from this image. Create a 243-frame 16:9 video. Preserve the supplied image as the exact initial visual state. Use one continuous Static Shot. The supplied image defines the initial crop geometry, camera position and half-moon design only.
+
+detailed_description: {{TH:PRO}}
+STAGE: An empty night sky fills the frame. {{HALF_MOON}} occupies the same screen position, height and on-screen size shown in the supplied image. Layered grey clouds form broad, sparse planes far behind it. The human count is zero throughout. The complete visible inventory is the sky, the cloud planes, {{HALF_MOON}} and {{SOURCELESS_SHADOW}}.
+
+[Shot 1] 2D Japanese cel animation × editorial motion-graphic composition. Hard-edge cel shading, 1-2 shadow layers. {{HALF_MOON}} is already suspended against the near-black sky. Its remaining left half ends at one perfectly straight vertical edge, while the absent right half reads as uninterrupted black sky. A hair-thin white light rests along the straight edge.
+
+The camera is locked in a Static Shot. Its framing, focal length, horizon and optical centre stay fixed for all 9.58 seconds. {{HALF_MOON}} retains exactly the same on-screen diameter and position. The sky is divided into six depth planes: one almost-black near haze, two sparse middle cloud wisps, two broad far cloud sheets and the nearly motionless deep sky. The near haze travels by less than one twentieth of the moon’s width. Each farther plane travels more slowly than the plane before it. Their slight speed differences supply depth while leaving the composition almost still. {{LENS}} {{FOCUS}}
+
+{{SOURCELESS_SHADOW}} is already touching the outer edge of the surviving lunar face at the opening frame. It has a soft boundary and carries neither rim light nor a corresponding visible object. It moves horizontally across the lunar surface at one constant, extremely slow rate. Its darkness lies on the moon’s pale face while the surrounding cloud layers keep their own independent drift. The shadow’s passage changes only the local value of the lunar surface; the perfectly straight cut edge keeps its thin white light.
+
+At 00:03.400, {{SOURCELESS_SHADOW}} has advanced one third of the way across the lit lunar face, while the camera and moon hold the opening composition.
+
+The shadow continues without acceleration. A far cloud sheet passes behind the moon by a distance smaller than the width of the white cut edge. The nearest haze lags behind it, producing a restrained separation between planes. The moon remains the sharpest object. The cloud planes stay broad and nearly featureless. Near-black occupies more than half of the frame. Cold violet light from high above touches only upward-facing cloud edges. The single white line on the moon is the brightest element and carries a narrow restrained bloom.
+
+At 00:08.880, {{SOURCELESS_SHADOW}} has crossed the lit lunar face and its trailing edge is still touching the outer rim, while the camera and moon hold the opening composition.
+
+The shadow, clouds and haze settle into their final positions at that checkpoint. From 00:08.880 through 00:09.580, the complete frame holds still for 0.70 seconds. The last image matches the opening composition closely enough to close the visual cycle, but the shadow now rests at the opposite edge. The final weight belongs to the empty sky.
+
+RETURN LAW: The supplied half-moon composition stays physically intact for the full shot. The opposite placement of {{SOURCELESS_SHADOW}} is the sole visible change between the opening and final holds.
+
+SHADOW LAW: Constant horizontal travel carries {{SOURCELESS_SHADOW}} from one lunar edge to the other. Reaching the opposite rim triggers the 0.70-second locked hold.
+
+SILENT UNIT: there are no drums in this cut. Motion is continuous, unaccented and independent of musical beats.
+{{ST2}}
+
+overall_soundscape: Near-total silence with a thin high-altitude wind placed far behind the image. The broad cloud planes carry one faint, steady air movement with a long decay. The shadow crossing is acoustically weightless. The final 0.70-second hold retains only the distant wind.
+
+non_diegetic_music: N/A

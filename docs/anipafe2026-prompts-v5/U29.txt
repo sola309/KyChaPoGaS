@@ -1,0 +1,30 @@
+subject_definitions: <Picture 1> (reference role: subject identity and extreme-macro eye anatomy only, not a target frame and not a storyboard anchor) defines <Subject 1>: {{QB_ID}}. <Picture 2> (reference role: burned-stone design and eye-reflection crop geometry only, not a target frame and not a storyboard anchor) defines <Subject 2>: {{BURNED_STONE}}. <Picture 3> (reference role: subject identity and lower-face crop geometry only, not a target frame and not a storyboard anchor) defines <Subject 3>, human Madoka in school uniform.
+
+summary: A fixed red eye displays the final state of a burned name as a reflected stone whose carved universe has become matte black. A hard cut reveals only <Subject 3>'s mouth silently forming three mora shapes, while both the addressee and the response remain beyond the frame.
+
+retention_analysis: <Picture 1> fully_preserved for <Subject 1>'s eye anatomy, fixed aperture, unchanging expression and closed mouth; its surrounding composition contributes nothing beyond the extreme-macro crop. <Picture 2> fully_preserved for <Subject 2>'s stone surface, carving and extinguished interior; partially_preserved for its placement as a small reflection inside <Subject 1>'s eye. <Picture 3> fully_preserved for <Subject 3>'s identity and mouth; partially_preserved for the exact lower-face crop matching C14, while its original environment is released. Each shot keeps its listed subjects visually separate and assigns every referenced attribute only to its defined subject.
+
+detailed_description: {{TH:PRO}}
+STYLE: 2D Japanese cel animation × restrained editorial motion-graphic composition. Hard-edge cel shading with one or two shadow layers. Light and minute acting carry the sequence.
+
+NO-TEXT RULE: All visible surfaces remain unmarked. The image consists entirely of an eye, a reflected stone, a lower face, light and empty colour fields.
+
+STAGE: The first shot contains one eye and one reflected stone. <Subject 1>'s red eye occupies the subject plane edge to edge. <Subject 2> sits behind the corneal surface as a small reflected image directly below the pupil. The second shot contains exactly one person, represented only by <Subject 3>'s lower face. The crop matches C14: the viewpoint looks upward from below, and the frame extends from beneath the nose to the chin. The surrounding space is a broad near-black field without a visible location. Saturated red belongs to <Subject 1>'s eye alone.
+
+[Shot 1] One red eye already fills the frame from edge to edge. A matte-black stone occupies about one fifth of the iris height inside the lower corneal reflection. Its weathered carving faces the camera and remains readable against the red reflected light. Static Shot. The eyelids hold one aperture. The pupil and annular ring hold one position. A hard-edged oval reflection sits on the corneal subject plane, with <Subject 2> optically behind it. Within 0.50 seconds, the reflection brightens into visibility, slides inward by one tenth of the iris width, settles beneath the pupil and LOCKS. Its hard rim catches one narrow red specular line. The reflected stone remains darker than every other visible element. inside the carving there are no stars: the carved channel is matte black, and the red eye's reflection is the only light on the stone. A thin red gleam travels once across the raised stone surface while the carved channel absorbs it completely. At 3.80 seconds the camera is still at the same extreme-macro position, and the empty matte-black channel is clearly visible beneath the pupil. The gleam stops before the carving ends. The eye supplies no physical reaction. For the final 0.70 seconds, the reflection, pupil, eyelids and stone hold one locked composition.
+
+[Shot 2] At 00:04.620, hard cut to <Subject 3>'s lower face filling the central two thirds of the frame. Her mouth lies at the optical centre and measures about one fifth of the frame width. A flat near-black field surrounds the jaw and chin. Static Shot. A narrow soft light from high front-left touches the lip edges and the underside of the nose. The rest of the face falls into a single quiet cel-shadow mass. The following checkpoints are measured from this hard cut. At 0.30 seconds her lips are rounded. At 1.20 seconds her lips are closed and pressed. At 2.10 seconds her mouth is open a finger's width. Nothing else in the frame moves. Each shape settles before the next begins, forming one restrained silent articulation arc: ho, then mu, then ra. Her jaw stays set and her throat carries the emotion. The camera retains the same low viewpoint and screen size as C14. The final open shape relaxes into a small neutral parting, then LOCKS. For the last 0.70 seconds, the frame holds only the unanswered lower-face crop against empty darkness.
+
+SILENT UNIT: there are no drums in this cut. The sound field remains at zero amplitude from the first frame through the last frame.
+
+REFLECTION LAW: the red corneal light reveals the raised stone surface, while the matte-black carved channel returns none of that light. The reflection slides, settles and LOCKS before the stone becomes fully readable.
+
+MORA LAW: each settled lip shape triggers the next visible mouth state. The third shape ends in a held open contour without introducing another subject or viewpoint.
+
+{{LENS}}
+{{FOCUS}}
+{{ST2}}
+
+overall_soundscape: A continuous zero-amplitude sound field extends from beginning to end. The eye, reflected stone and three mouth shapes produce complete vacuum-like silence.
+
+non_diegetic_music: N/A
