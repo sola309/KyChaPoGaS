@@ -154,31 +154,48 @@ def _claim_next(lane: str) -> Job | None:
         return job
 
 
+async def _write_terminal(job_id: int, apply, tries: int = 10) -> None:
+    """完了・失敗の書き込み。接続の口が一時的に埋まっても結果を失わないよう、間を置いて試し直す
+    (2026-10-16 job 7600: 書き込みの TimeoutError でタスクごと落ち、ゾンビ回収で「失われました」になった)。"""
+    for k in range(tries):
+        try:
+            with Session(engine) as session:
+                j = session.get(Job, job_id)
+                if j and apply(j):
+                    session.add(j)
+                    session.commit()
+            return
+        except Exception as e:
+            log.warning(f"Job id={job_id} terminal write retry {k + 1}/{tries}: {e}")
+            await asyncio.sleep(3)
+    log.error(f"Job id={job_id} terminal write gave up")
+
+
 async def _run_job(job: Job) -> None:
     vram_sampler = asyncio.create_task(_sample_vram(job.id))
     try:
         await _dispatch(job)
         vram_sampler.cancel()
-        with Session(engine) as session:
-            j = session.get(Job, job.id)
-            if j and j.status == "running":   # don't overwrite if already cancelled
-                j.status = "completed"
-                j.progress = 1.0
-                j.completed_at = datetime.utcnow()
-                session.add(j)
-                session.commit()
+
+        def _done(j):
+            if j.status != "running":   # don't overwrite if already cancelled
+                return False
+            j.status = "completed"
+            j.progress = 1.0
+            j.completed_at = datetime.utcnow()
+            return True
+        await _write_terminal(job.id, _done)
         log.info(f"Job id={job.id} completed")
     except Exception as e:
         vram_sampler.cancel()
         log.error(f"Job id={job.id} failed: {e}")
-        with Session(engine) as session:
-            j = session.get(Job, job.id)
-            if j:
-                j.status = "failed"
-                j.error_msg = str(e)[:2000]
-                j.completed_at = datetime.utcnow()
-                session.add(j)
-                session.commit()
+
+        def _fail(j):
+            j.status = "failed"
+            j.error_msg = str(e)[:2000]
+            j.completed_at = datetime.utcnow()
+            return True
+        await _write_terminal(job.id, _fail)
 
 
 async def _sample_vram(job_id: int) -> None:
@@ -203,22 +220,29 @@ async def _sample_vram(job_id: int) -> None:
 
 
 def _update_progress(job_id: int, pct: float) -> None:
-    with Session(engine) as session:
-        j = session.get(Job, job_id)
-        if j and j.status == "running":
-            j.progress = round(min(1.0, max(0.0, pct)), 3)
-            session.add(j)
-            session.commit()
+    # 進捗は表示だけ。書き込めなくても(接続の口が埋まっている等)ジョブは止めない(2026-10-16 job 7600)
+    try:
+        with Session(engine) as session:
+            j = session.get(Job, job_id)
+            if j and j.status == "running":
+                j.progress = round(min(1.0, max(0.0, pct)), 3)
+                session.add(j)
+                session.commit()
+    except Exception as e:
+        log.warning(f"Job id={job_id} progress write skipped: {e}")
 
 
 def _update_phase(job_id: int, phase: str) -> None:
-    """実行フェーズ表示(「モデル読み込み中…」等)。頻度が高いので同値スキップ。"""
-    with Session(engine) as session:
-        j = session.get(Job, job_id)
-        if j and j.status == "running" and getattr(j, "phase", "") != phase:
-            j.phase = phase
-            session.add(j)
-            session.commit()
+    """実行フェーズ表示(「モデル読み込み中…」等)。頻度が高いので同値スキップ。書き込めなくてもジョブは止めない。"""
+    try:
+        with Session(engine) as session:
+            j = session.get(Job, job_id)
+            if j and j.status == "running" and getattr(j, "phase", "") != phase:
+                j.phase = phase
+                session.add(j)
+                session.commit()
+    except Exception as e:
+        log.warning(f"Job id={job_id} phase write skipped: {e}")
 
 
 def _update_result_assets(job_id: int, asset_ids: list[int]) -> None:
@@ -277,6 +301,10 @@ async def _dispatch(job: Job) -> None:
             await _render_orbit3d(job, params)
         case "generate_video_3dcam":
             await _generate_video_3dcam(job, params)
+        case "render_rain_layer":
+            # 🌧 雨フィルターの層を作り直す(CPU・軽いレーン。app/services/rain_fx.py)
+            from app.services import rain_fx
+            await rain_fx.run_job(job, params)
         case _:
             raise ValueError(f"Unknown job type: {job.job_type}")
 
@@ -442,6 +470,34 @@ async def _render_final(job: Job, params: dict) -> None:
     except Exception as e:
         log.warning("レビュー版の生成に失敗(本番書き出しは成功している): %s", e)
 
+    # 📤 投稿用(params.upload): YouTube(1440p/50Mbps)とニコニコ(1080p/24Mbps・公式推奨仕様)を
+    # exports/<pid>/upload/ に作る。書き出しダイアログの「投稿用ファイル」に並ぶ。
+    if params.get("upload") and out and Path(out).exists():
+        up_dir = Path(out).parent / "upload"
+        up_dir.mkdir(parents=True, exist_ok=True)
+        tag = f"render{job.id}" + ("_compare" if any((t.layout_json or "").strip() for t in tracks_d) else "")
+        bt709 = ["-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+                 "-movflags", "+faststart"]
+        encodes = []
+        if height >= 1440:
+            encodes.append((f"{tag}_youtube_1440p.mp4", [
+                "-vf", "scale=2560:1440:flags=lanczos", "-c:v", "libx264", "-preset", "slow",
+                "-b:v", "50M", "-maxrate", "60M", "-bufsize", "120M", "-profile:v", "high", "-level", "5.1",
+                "-pix_fmt", "yuv420p", "-g", "12", "-bf", "2", *bt709,
+                "-c:a", "aac", "-b:a", "384k", "-ar", "48000"]))
+        encodes.append((f"{tag}_niconico_1080p.mp4", [
+            "-vf", "scale=1920:1080:flags=lanczos", "-c:v", "libx264", "-preset", "slow",
+            "-b:v", "24M", "-maxrate", "30M", "-bufsize", "60M", "-profile:v", "high", "-level", "4.2",
+            "-pix_fmt", "yuv420p", "-g", "48", "-bf", "2", *bt709,
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]))
+        for k, (name, args) in enumerate(encodes):
+            _update_progress(job.id, 0.95 + 0.04 * k / len(encodes))
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(out), *args, str(up_dir / name))
+            if await proc.wait() != 0:
+                raise RuntimeError(f"投稿用ファイルの作成に失敗: {name}")
+            log.info("投稿用ファイルを作成: %s", name)
+
 
 # ── precompose: flatten the timeline into a single reusable asset ─────────────
 
@@ -594,11 +650,13 @@ def _place_result(params: dict, asset_id: int, fallback_duration: int = 30) -> N
         # scenes-sync が全カットに枠(asset_id=None)を敷く運用。配置先に空枠が
         # あるなら asset を差し替えるだけにする。位置と尺は枠(=ピン束縛)が正で、
         # 生成側の尺で上書きしない — これで「はみ出し」も「短いまま」も起きない。
+        # フィルタークリップ(単色/ぼかし/撮影)も素材を持たないが、枠ではないので埋めない。
+        from app.services.ffmpeg_render import FILTER_KINDS
         slot = next((c for c in session.exec(
             select(Clip).where(Clip.track_id == int(place["track_id"]),
                                Clip.start_frame == start)).all()
             if c.asset_id is None and not c.locked
-            and (c.kind or "media") not in ("solid", "blur")), None)
+            and (c.kind or "media") not in FILTER_KINDS), None)
         if slot is not None:
             slot.asset_id = asset_id
             session.add(slot)
@@ -814,15 +872,9 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
     # 品質は下見用(構図・配置・キャラ判別は読める。質感とディテールは崩れる)。
     # TurboLoRAは重み自体が変わるため、同じseedでも本番構成では再現しない
     # (シード選抜には使えない — 使うのはプロンプトと構成の検証)。
-    if str(params.get("quality", "")).lower() == "t1":
-        params = dict(params)
-        # 2026-09-27: ユーザー指示で T1 もネイティブ 1344x768 に。960x544 の T1 素材が採用後に
-        # タイムラインへ多数残り、書き出しの解像度不足になったため(縦長は縦横を入れ替える)。
-        portrait = int(params.get("height", 768) or 768) > int(params.get("width", 1344) or 1344)
-        params.update({"width": 768 if portrait else 1344, "height": 1344 if portrait else 768, "steps": 4,
-                       "turbo_lora": 0.75, "easycache": True,
-                       "ref_image_size": "match"})
-        log.info("T1プリセット適用: 1344x768(ネイティブ)/step4/turbo0.75(ref2v)/easycache")
+    # 2026-09-27: ユーザー指示で T1 もネイティブ 1344x768 に。960x544 の T1 素材が採用後に
+    # タイムラインへ多数残り、書き出しの解像度不足になったため(縦長は縦横を入れ替える)。
+    # (展開の中身は h3_guard.apply_quality_preset へ移設。投入時の系列長の見積りと同じ値を使うため)
 
     # ── T0超速プレビュープリセット ────────────────────────────────
     # params["quality"]="t0" で「予告編モード」を最速構成に展開する。
@@ -832,12 +884,10 @@ async def _generate_video_i2v(job: Job, params: dict) -> None:
     # 用途はプロンプト検討の初期反復に絞る — 構図・配置・キャラ判別が読めれば十分な段階。
     # 質感・ディテール・最終的な破綻は分からない(それはT1/T3で見る)。
     # step4の1/4段+attention1回ぶんなので、T1のおよそ1/3〜1/4の時間で出る。
-    if str(params.get("quality", "")).lower() == "t0":
-        params = dict(params)
-        params.update({"width": 960, "height": 544, "steps": 4,
-                       "turbo_lora": 0.75, "easycache": True,
-                       "ref_image_size": "match", "preview_steps": 1})
-        log.info("T0超速プレビュー適用: 960x544/step4→先頭1段のx0予測/turbo0.75")
+    from app.services.h3_guard import apply_quality_preset
+    params, _preset_msg = apply_quality_preset(params)
+    if _preset_msg:
+        log.info(_preset_msg)
 
     model_id = params.get("model", "wan2.2-flf2v")
     if model_id.startswith("wan2.2") or model_id.startswith("minimax-h3"):
@@ -1012,6 +1062,27 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
     if not keyframes and not (mode == "minimax-h3-ref" and (params.get("ref_video_asset_ids") or params.get("ref_audio_asset_ids"))):
         raise ValueError("Wan2.2 I2V には最低1つのキーフレーム（開始フレーム）が必要です")
 
+    # MiniMax H3 の事前検査(投入時と同じ。夜間バッチ等の別経路や投入後の変化もここで止める)。
+    # ComfyUI へのアップロードより前に行う=GPU を一切使わずに失敗させる。
+    h3_strict = False
+    if mode in ("minimax-h3-ref", "minimax-h3"):
+        from app.services import h3_guard
+
+        def _asset_row(aid: int):
+            with Session(engine) as session:
+                a = session.get(Asset, aid)
+                return None if a is None else {"file_path": a.file_path, "width": a.width,
+                                               "height": a.height, "duration_sec": a.duration_sec}
+        try:
+            # ffprobe/画像ヘッダ/トークン数えはブロッキングなのでスレッドで(イベントループを止めない)
+            problems = await asyncio.to_thread(h3_guard.check_job, params, _asset_row)
+        except Exception as e:   # 検査の不具合では止めない(T3 の明示チェックだけは行う)
+            log.exception(f"Job id={job.id}: H3 事前検査が例外: {e}")
+            problems = h3_guard.tier_problems(params)
+        if problems:
+            raise ValueError("H3 事前検査で停止(GPU 未使用): " + " / ".join(problems))
+        h3_strict = h3_guard.is_t3(params)
+
     def _asset_path(asset_id: int) -> Path:
         with Session(engine) as session:
             asset = session.get(Asset, asset_id)
@@ -1067,6 +1138,10 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
     vdn_cfg: dict | None = None
     if mode.startswith("minimax-h3") and params.get("vdn"):
         vdn_cfg = dict(params["vdn"]) if isinstance(params["vdn"], dict) else {}
+        if h3_strict:
+            # T3: 明示した sampler/scheduler を VDN の既定(euler)で黙って上書きしない
+            vdn_cfg.setdefault("sampler", params["sampler"])
+            vdn_cfg.setdefault("scheduler", params["scheduler"])
         if params.get("turbo_lora"):
             log.warning(f"Job id={job.id}: VDN-H3指定のため turbo_lora を無効化(排他)")
     def _h3_steps(default: int) -> int:
@@ -1094,6 +1169,9 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
         if params.get("fbc") is not None and params.get("fbc") is not False:
             # First Block Cache(Sol Engine キャッシュ系)。{} / true で既定値
             out["fbc"] = dict(params["fbc"]) if isinstance(params["fbc"], dict) else {}
+        if params.get("style_loras"):
+            # 画風 LoRA [[ファイル名, 強度], ...](例: 2D Anime↔Realism スライダー)
+            out["style_loras"] = [(str(l[0]), float(l[1])) for l in params["style_loras"]]
         return out
 
     # ── MiniMax H3(FL2VA / Ref2VA)。362f(15.08秒)超は継続生成で複数セグメントに分けて連結する。
@@ -1153,6 +1231,7 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
                 _update_phase(job.id, f"継続生成 {i}/{n_seg}({chain_mode})")
             if is_ref:
                 wf = build_minimax_h3_ref_video(
+                    # [:9] は最後の安全網(上限超えは上の h3_guard で止まるので正しいジョブでは届かない)
                     prompt=prompt, ref_image_names=names[:9],
                     ref_video_names=rv_names or None, ref_audio_names=ra_names or None,
                     width=width, height=height, length=seg_len,
@@ -1163,7 +1242,8 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
                     use_ref_video_audio=bool(params.get("use_ref_video_audio")),
                     turbo_lora=_h3_turbo(),
                     preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
-                    vdn=vdn_cfg, chain=chain, guides=(guides or None), fun_controls=(fun_controls or None), **_h3_extra(),
+                    vdn=vdn_cfg, chain=chain, guides=(guides or None), fun_controls=(fun_controls or None),
+                    shift_always=h3_strict, **_h3_extra(),
                 )
             else:
                 # FL2VA: 先頭画像は第1セグメントだけ、末尾画像は最終セグメントだけに付ける
@@ -1175,7 +1255,10 @@ async def _generate_video_wan22(job: Job, params: dict) -> None:
                     seed=seed, steps=_h3_steps(15),
                     easycache=_h3_easycache(),
                     preview_steps=(int(params["preview_steps"]) if params.get("preview_steps") else None),
-                    vdn=vdn_cfg, chain=chain, **_h3_extra(),
+                    vdn=vdn_cfg, chain=chain,
+                    # T3 は明示した scheduler を使う(従来の FL2VA は simple 固定)
+                    scheduler=(str(params["scheduler"]) if h3_strict else "simple"),
+                    shift_always=h3_strict, **_h3_extra(),
                 )
             prompt_id = await comfyui.submit(wf)
             base, span = 0.05 + (i - 1) / n_seg * 0.85, 0.85 / n_seg
@@ -1597,6 +1680,17 @@ def _register_asset(project_id: int, file_path: Path, source: str, gen_params: d
             generate_image_thumbnail(file_path, asset_id)
     except Exception as e:
         log.warning(f"Thumbnail generation failed for asset {asset_id}: {e}")
+
+    # 生成動画にもプレビュー用プロキシを作る(2026-10-10): 無いとプレビューが毎回原本を読み直し、
+    # 遠隔(Tailscale)では読み込みが止まる/最初からやり直しに見えていた。
+    if info.asset_type == "video" and file_path.suffix.lower() in (".mp4", ".mov", ".webm", ".mkv"):
+        try:
+            with Session(engine) as session:
+                session.add(Job(project_id=project_id, job_type="create_proxy",
+                                params=json.dumps({"asset_id": asset_id, "project_id": project_id})))
+                session.commit()
+        except Exception as e:
+            log.warning(f"Proxy queue failed for asset {asset_id}: {e}")
 
     return asset_id
 

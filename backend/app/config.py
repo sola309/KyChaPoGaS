@@ -61,3 +61,15 @@ EN_TTS_MODEL: str      = os.getenv("EN_TTS_MODEL", "tts-1")
 # Local native English TTS (Kokoro-82M) — used as the "native example" voice for the
 # English-tutor mode (杏子=JA teacher via Irodori, examples in native EN via Kokoro).
 KOKORO_API_URL: str    = os.getenv("KOKORO_API_URL", "http://localhost:8090")
+
+# ── MiniMax H3 の系列長の上限(app/services/h3_guard.py) ─────────────────────
+# 1 回の H3 生成が詰め込む DiT 系列長(テキスト+参照+ガイド+生成映像/音声)の上限。
+# 超えるジョブは投入時に 422 で止める。既定 198,000 = 実際に走って崩れたジョブの最小(204,395 = 4771)と
+# 無事だった最大(197,959)の間。SageAttention の修正後に引き上げるならここ(環境変数)か、
+# 再起動なしで PUT /api/settings {"values": {"H3_MAX_SEQ_TOKENS": "260000"}}
+# ("" を送ると上書きが消えてこの値に戻る。上限を外す指定ではない)。
+# 数値でない環境変数で起動できなくならないよう、読めないときは既定値にする。
+try:
+    H3_MAX_SEQ_TOKENS: int = int(os.getenv("H3_MAX_SEQ_TOKENS") or "198000")
+except ValueError:
+    H3_MAX_SEQ_TOKENS = 198000

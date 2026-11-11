@@ -1,5 +1,7 @@
 import axios from 'axios'
+import type { AxiosRequestConfig } from 'axios'
 import { useUIStore } from '../store/uiStore'
+import type { SatsueiMeta } from '../components/Preview/satsueiLook'
 
 export const api = axios.create({
   baseURL: '/api',
@@ -188,6 +190,87 @@ export const clipsApi = {
   scatterBeatEffects: (projectId: number, effect: 'flash' | 'punch', every: 'downbeat' | 'beat' = 'downbeat') =>
     api.post<{ count: number; applied_at_frames?: number[]; error?: string }>(
       '/clips/scatter-beat-effects', null, { params: { project_id: projectId, effect, every } }).then(r => r.data),
+}
+
+// ── 🎬 撮影レイヤー(backend app/routers/satsuei.py。式は app/services/satsuei_fx.py) ─────────
+// 失敗は撮影パネルの中で知らせるので、共通のエラートーストは出さない(__silent)
+
+const silentCfg = { __silent: true } as unknown as AxiosRequestConfig
+
+/** 下の絵の中の切り替わり(タイムラインのコマ)。hard = パッと替わる / dissolve = 溶けて替わる / wipe = 一部から替わる */
+export type SatsueiTransition =
+  | { kind: 'hard'; at: number; clip_id?: number }
+  | { kind: 'dissolve' | 'wipe'; t0: number; t1: number; fit?: number | null; clip_id?: number }
+
+export interface SatsueiDetectBody { track_id: number; start_frame: number; duration_frames: number; k?: number }
+export interface SatsueiDetectResult {
+  transitions: SatsueiTransition[]
+  /** 下の絵のクリップが替わるコマ(範囲の内側だけ) */
+  clip_bounds: number[]
+  range?: [number, number]
+  pieces?: { start_frame: number; end_frame: number; clip_id: number; asset_id: number }[]
+}
+export interface SatsueiLayBody {
+  track_id: number
+  start_frame?: number          // 省けば下の絵のクリップ全体
+  duration_frames?: number
+  preset: string
+  auto_fit?: boolean
+  split?: boolean
+  replace?: boolean
+}
+export interface SatsueiLayResult { created: Clip[]; deleted: number[]; transitions?: SatsueiTransition[]; range?: [number, number] }
+/** 絵の数値(暗部 5%・中間・明部 95%・彩度・白の面積 %・影の色 B−R) */
+export interface SatsueiStats { y05: number; y50: number; y95: number; sat: number; white: number; shadowBR: number }
+export interface SatsueiAutofitBody { preset?: string; frame?: number; target?: [number, number] }
+export interface SatsueiAutofitResult { params: Record<string, unknown>; before: SatsueiStats; after: SatsueiStats; frame: number }
+export type SatsueiUserPresets = Record<string, Record<string, unknown>>
+
+/** 既定値・範囲・プリセット(プリセットの正はここ) */
+export const getSatsueiMeta = () =>
+  api.get<SatsueiMeta>('/satsuei/meta', silentCfg).then(r => r.data)
+/** 範囲の下の絵の切り替わりを探す(書き込まない) */
+export const detectSatsuei = (body: SatsueiDetectBody) =>
+  api.post<SatsueiDetectResult>('/satsuei/detect', body, silentCfg).then(r => r.data)
+/** 範囲(既定 = 下の絵のクリップ全体)に撮影クリップを敷く */
+export const laySatsuei = (body: SatsueiLayBody) =>
+  api.post<SatsueiLayResult>('/satsuei/lay', body, silentCfg).then(r => r.data)
+/** このクリップを自動で合わせた設定の案(書き込まない) */
+export const autofitSatsuei = (clipId: number, body: SatsueiAutofitBody = {}) =>
+  api.post<SatsueiAutofitResult>(`/satsuei/clips/${clipId}/autofit`, body, silentCfg).then(r => r.data)
+/** 書き出しと同じ計算(Python)の 1 コマ(JPEG)。frame = タイムラインのコマ */
+export const satsueiStillUrl = (clipId: number, frame?: number | null, w = 960) =>
+  `/api/satsuei/clips/${clipId}/still?${frame != null ? `frame=${Math.round(frame)}&` : ''}w=${Math.round(w)}&_=${Date.now()}`
+/** 自分で保存したプリセット(名前 → 設定) */
+export const getSatsueiUserPresets = () =>
+  api.get<{ presets: SatsueiUserPresets }>('/satsuei/user-presets', silentCfg).then(r => r.data.presets ?? {})
+/** 自分で保存したプリセットをまとめて置き換える */
+export const putSatsueiUserPresets = (presets: SatsueiUserPresets) =>
+  api.put<{ presets: SatsueiUserPresets }>('/satsuei/user-presets', { presets }, silentCfg).then(r => r.data.presets ?? {})
+
+/**
+ * クリップの PATCH(撮影パネルのつまみの保存)。消したクリップ(404 = 消した直後に届いた保存)には
+ * エラーのトーストを出さない。ほかの失敗はいつもどおりトーストを出して投げる
+ */
+export async function updateClipQuiet(id: number, data: ClipUpdate): Promise<Clip> {
+  try {
+    return (await api.patch<Clip>(`/clips/${id}`, data, silentCfg)).data
+  } catch (e) {
+    const err = e as { response?: { status?: number; data?: { detail?: unknown } }; message?: string }
+    if (err?.response?.status !== 404) {
+      const detail = err?.response?.data?.detail
+      useUIStore.getState().pushToast(typeof detail === 'string' ? detail : (err?.message ?? '通信エラー'), 'error')
+    }
+    throw e
+  }
+}
+/** ページを閉じる・読み直す最中のクリップの PATCH(keepalive: ページが消えても送り切る。返事は待てない) */
+export function patchClipKeepalive(id: number, data: ClipUpdate) {
+  try {
+    void fetch(`${api.defaults.baseURL ?? '/api'}/clips/${id}`, {
+      method: 'PATCH', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+    }).catch(() => undefined)
+  } catch { /* 送れない端末は諦める */ }
 }
 
 /** 実態ベースの種別: generatedも動画/画像に振り分ける(UI表示・フィルタ用) */
@@ -476,7 +559,7 @@ export interface AudioStructure {
               raw_label?: string
               energy?: number; vocal?: number; repeat?: number }[]
   buildups: { start_sec: number; end_sec: number; target: string
-              slope: number; break: number; kind: '抜き' | '上昇' | '平坦' }[]
+              slope: number; break: number; kind: '上昇' | '下降' | '抜き' | '平坦' }[]
   has_vocal_stem: boolean
   has_inst_stem: boolean
 }

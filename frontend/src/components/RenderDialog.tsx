@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useProjectStore } from '../store/projectStore'
 import { useJobStore } from '../store/jobStore'
+import { useTimelineStore } from '../store/timelineStore'
 import { jobsApi, type RenderFile, type UploadFile } from '../api/client'
 
 interface Props {
@@ -19,25 +20,35 @@ const fmtWhen = (iso: string) => {
 export function RenderDialog({ onClose }: Props) {
   const { activeProject } = useProjectStore()
   const { jobs } = useJobStore()
+  const tracks = useTimelineStore(s => s.tracks)
+  const clips = useTimelineStore(s => s.clips)
+  // 書き出しに入る音源 = チェックした(非表示でない)音声トラックのうち、素材のクリップがあるもの。プレビューで鳴るものと同じ
+  const audioOn = tracks
+    .filter(t => t.track_type === 'audio' && !t.hidden && clips.some(c => c.track_id === t.id && c.asset_id != null))
+    .sort((a, b) => a.order - b.order)
 
   const [width,  setWidth]  = useState(activeProject?.width  ?? 1920)
   const [height, setHeight] = useState(activeProject?.height ?? 1080)
   const [fps,    setFps]    = useState(activeProject?.fps    ?? 30)
   const [review, setReview] = useState(false)   // 720pレビュー(高速エンコード)
+  const [upload, setUpload] = useState(false)   // 📤 投稿用: 1440p 書き出し+YouTube/ニコニコ用を自動作成
   const [busy,   setBusy]   = useState(false)
   const [error,  setError]  = useState<string | null>(null)
 
   if (!activeProject) return null
 
-  const applyPreset = (p: 'review' | 'final' | 'native' | '1080p') => {
+  // 旧「本番品質」はプロジェクト解像度を使うだけで、1344×768 のプロジェクトでは
+  // ネイティブと同じ設定になり押せないように見えた → 📤 投稿用に置き換え(2026-10-01)
+  const applyPreset = (p: 'review' | 'upload' | 'native' | '1080p') => {
+    setUpload(p === 'upload')
     if (p === 'review') { setWidth(1280); setHeight(720); setReview(true) }
     // ネイティブ: 生成素材(H3)と同じ 1344×768 のまま。拡大しないので最も素直な画質
     else if (p === 'native') { setWidth(1344); setHeight(768); setReview(false) }
     else if (p === '1080p') { setWidth(1920); setHeight(1080); setReview(false) }
-    else { setWidth(activeProject.width ?? 1920); setHeight(activeProject.height ?? 1080); setReview(false) }
+    else { setWidth(2560); setHeight(1440); setReview(false) }
   }
-  const isNative = !review && width === 1344 && height === 768
-  const is1080 = !review && width === 1920 && height === 1080
+  const isNative = !review && !upload && width === 1344 && height === 768
+  const is1080 = !review && !upload && width === 1920 && height === 1080
 
   const handleRender = async () => {
     setBusy(true)
@@ -47,6 +58,7 @@ export function RenderDialog({ onClose }: Props) {
         project_id: activeProject.id,
         width, height, fps,
         ...(review ? { encoder: 'x264_fast' } : {}),
+        ...(upload ? { upload: true } : {}),
       })
       onClose()
     } catch (e: unknown) {
@@ -104,9 +116,10 @@ export function RenderDialog({ onClose }: Props) {
             className={`flex-1 py-1.5 rounded text-xs border ${review ? 'bg-amber-800/50 border-amber-600 text-amber-200' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}>
             📱 720pレビュー(速い)
           </button>
-          <button onClick={() => applyPreset('final')}
-            className={`flex-1 py-1.5 rounded text-xs border ${!review && !isNative && !is1080 ? 'bg-purple-800/50 border-purple-600 text-purple-200' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}>
-            🎬 本番品質
+          <button onClick={() => applyPreset('upload')}
+            title="2560×1440 で書き出し、YouTube 用(1440p/50Mbps)とニコニコ用(1080p/24Mbps)を自動で作る。下の「投稿用ファイル」に並ぶ"
+            className={`flex-1 py-1.5 rounded text-xs border ${upload ? 'bg-purple-800/50 border-purple-600 text-purple-200' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}>
+            📤 投稿用
           </button>
         </div>
         <div className="flex gap-2 mb-3 -mt-1">
@@ -129,6 +142,7 @@ export function RenderDialog({ onClose }: Props) {
               <span className="text-[10px] text-zinc-500">幅</span>
               <select value={width} onChange={e => setWidth(Number(e.target.value))}
                 className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 border border-zinc-700 outline-none">
+                <option value={2560}>2560</option>
                 <option value={1920}>1920</option>
                 <option value={1344}>1344</option>
                 <option value={1280}>1280</option>
@@ -139,6 +153,7 @@ export function RenderDialog({ onClose }: Props) {
               <span className="text-[10px] text-zinc-500">高さ</span>
               <select value={height} onChange={e => setHeight(Number(e.target.value))}
                 className="bg-zinc-800 text-xs text-zinc-200 rounded px-2 py-1.5 border border-zinc-700 outline-none">
+                <option value={1440}>1440</option>
                 <option value={1080}>1080</option>
                 <option value={768}>768</option>
                 <option value={720}>720</option>
@@ -159,6 +174,10 @@ export function RenderDialog({ onClose }: Props) {
           <div className="text-[10px] text-zinc-600 bg-zinc-800/50 rounded px-2 py-1.5">
             コーデック: H.264 MP4　&nbsp;|&nbsp;
             {width}×{height} @ {fps}fps
+            {upload && <><br />📤 書き出し後に YouTube 用・ニコニコ用を作成</>}
+            <br />{audioOn.length > 0
+              ? <>🔊 音源: {audioOn.map(t => t.name).join(' + ')}{audioOn.length > 1 && '(重ねて鳴らします)'}</>
+              : <span className="text-amber-500/80">🔇 音源なし(音声トラックにチェックがありません)</span>}
           </div>
         </div>
 

@@ -30,6 +30,7 @@ KEYS = {
     "COMPANION_GEN_SCENE": False,     # scene/quality tail (editable, decomposition-friendly)
     "COMPANION_GEN_NEGATIVE": False,  # negative prompt for generation
     "RENDER_ENCODER": False,          # auto|nvenc|x264 — video render encoder
+    "H3_MAX_SEQ_TOKENS": False,       # H3 の系列長の上限(h3_guard)。再起動なしで変えられる
 }
 SECRET = {k for k, sec in KEYS.items() if sec}
 

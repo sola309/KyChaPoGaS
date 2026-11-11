@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { CAPTURE } from '../../capture'
 
 interface Props {
   pixelsPerFrame: number
@@ -89,7 +90,12 @@ export function TimeRuler({ pixelsPerFrame, fps, totalWidth, currentFrame, onSee
       <div
         className="absolute top-0 w-px h-full bg-purple-400 pointer-events-none"
         style={{ left: currentFrame * pixelsPerFrame }}
-      />
+      >
+        {/* 通しフレーム番号の札(比較版の「1600f」と同じ数。🎥 撮影用では出さない) */}
+        {!CAPTURE && <span className="absolute top-0 left-px px-0.5 rounded-sm bg-purple-500/90 text-white text-[9px] leading-tight font-mono tabular-nums whitespace-nowrap">
+          {currentFrame}f
+        </span>}
+      </div>
     </div>
   )
 }

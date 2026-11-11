@@ -66,6 +66,17 @@ def create_job(data: JobCreate, session: Session = Depends(get_session)):
                 "hint": "docs/anipafe2026-prompt-constitution.md を参照。"
                         "意図的に通す場合は params.skip_validation=true を明示",
             })
+        # MiniMax H3 の事前検査(全プロジェクト): 参照の上限・系列長・T3 の明示設定。
+        # skip_validation では外れない(上限超えは黙って切り捨てられる/崩れるため)。
+        from app.services.h3_guard import check_submission
+        h3_problems = check_submission(data.project_id, data.job_type, data.params or {}, session)
+        if h3_problems:
+            raise HTTPException(status_code=422, detail={
+                "error": "MiniMax H3 ジョブの事前検査で止めました",
+                "problems": h3_problems,
+                "hint": "app/services/h3_guard.py を参照。系列長の上限は H3_MAX_SEQ_TOKENS"
+                        "(1 本だけ試すなら params.h3_max_seq_tokens)",
+            })
     job = Job(
         project_id=data.project_id,
         job_type=data.job_type,
@@ -186,6 +197,25 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
     return _to_read(job)
 
 
+# 取り消しても ComfyUI を止めないジョブ(ComfyUI を使わず CPU だけで動く)。
+# ComfyUI の /interrupt は相手を選ばず「いま ComfyUI で実行中のプロンプト」を止めるので、
+# これらを取り消すと、別レーンで走っている GPU ジョブ(H3 など)が巻き添えで止まる。
+_NO_COMFYUI_JOB_TYPES = frozenset({"render_rain_layer"})   # 🌧 雨フィルターの層(app/services/rain_fx.py)
+
+
+def _interrupt_comfyui() -> None:
+    """ComfyUI の実行中プロンプトを止める。宛先は ComfyUI クライアントと同じ設定
+    (app.config.COMFYUI_URL → app.services.comfyui.comfyui.base_url)。
+    以前は http://localhost:8188 を決め打ちしていたため、COMFYUI_URL を別の宛先にした
+    バックエンドのコピーで取り消しても、本物の ComfyUI を止めてしまった(2026-10-15、7512)。"""
+    try:
+        import httpx
+        from app.services.comfyui import comfyui
+        httpx.post(f"{comfyui.base_url}/interrupt", timeout=5.0)
+    except Exception:
+        pass
+
+
 @router.post("/{job_id}/cancel", response_model=JobRead)
 def cancel_job(job_id: int, session: Session = Depends(get_session)):
     job = session.get(Job, job_id)
@@ -197,15 +227,11 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
         session.add(job)
         session.commit()
         session.refresh(job)
-    if was_running:
+    if was_running and job.job_type not in _NO_COMFYUI_JOB_TYPES:
         # 実行中ジョブはComfyUI側の推論も中断する(しないとゾンビ実行がGPUレーンを塞ぐ)。
         # interruptは「現在実行中のプロンプト」を止める。対象特定はできないが、
         # 実行中ジョブのキャンセル時はそれが自ジョブである可能性が高い。
-        try:
-            import httpx
-            httpx.post("http://localhost:8188/interrupt", timeout=5.0)
-        except Exception:
-            pass
+        _interrupt_comfyui()
     return _to_read(job)
 
 

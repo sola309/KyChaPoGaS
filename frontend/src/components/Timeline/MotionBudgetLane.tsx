@@ -59,7 +59,7 @@ interface Props {
 }
 
 type Buildup = { start_sec: number; end_sec: number; target: string
-                 kind: string; slope: number; break: number }
+                 kind: typeof BUILDUP_KINDS[number]; slope: number; break: number }
 
 /** ドラッグ中の状態。掴んだ場所で意味が変わる */
 type Drag =
@@ -346,8 +346,6 @@ export function MotionBudgetLane({ songAssetId, cuts, pixelsPerFrame, totalWidth
     <div ref={wrapRef} className="relative" style={{ width: totalWidth, height: H }}>
     <canvas
       ref={ref}
-      className="cursor-pointer"
-      style={{ height: H }}
       onPointerDown={e => {
         const r = (e.target as HTMLCanvasElement).getBoundingClientRect()
         const px = e.clientX - r.left + view.x, py = e.clientY - r.top

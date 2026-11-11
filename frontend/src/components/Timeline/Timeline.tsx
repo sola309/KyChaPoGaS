@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback, useMemo } from 'react'
-import type { Asset, TransitionType, BeatMatchResult } from '../../api/client'
+import type { Asset, Clip, TransitionType, BeatMatchResult, AudioStructure } from '../../api/client'
 import { clipsApi, jobsApi, analysisApi, assetsApi, tracksApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useShallow } from 'zustand/react/shallow'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { useCollabStore } from '../../store/collabStore'
 import { useUIStore } from '../../store/uiStore'
+import { CAPTURE, captureState } from '../../capture'
 import { TimeRuler } from './TimeRuler'
 import { BeatRuler } from './BeatGrid'
 import { TrackLane } from './TrackLane'
@@ -24,6 +25,8 @@ import { RegenPanel } from './RegenPanel'
 import { ShotTunePopover } from './ShotTunePopover'
 import { FilterLayerPopover, FilterAddPopover } from './FilterLayerPopover'
 import { isFilterClip } from './filterLayers'
+import { isCreditClip } from '../Preview/creditLook'
+import { isRainClip } from './rainFx'
 import { PinSwapModal } from './PinSwapModal'
 import { NightBatchPanel } from './NightBatchPanel'
 import { I2VSelPopover } from './I2VSelPopover'
@@ -45,7 +48,10 @@ function Playhead({ pixelsPerFrame }: { pixelsPerFrame: number }) {
   const currentFrame = useTimelineStore(s => s.currentFrame)
   return (
     <div
-      className="absolute top-0 bottom-0 w-px bg-purple-500/60 pointer-events-none"
+      // 🎥 撮影用モードは動画で追えるよう太く明るく(1px の半透明は圧縮で消える)
+      className={CAPTURE
+        ? 'absolute top-0 bottom-0 w-[2px] -ml-px bg-fuchsia-300 shadow-[0_0_6px_1px_rgba(240,171,252,0.85)] pointer-events-none z-20'
+        : 'absolute top-0 bottom-0 w-px bg-purple-500/60 pointer-events-none'}
       style={{ left: LABEL_WIDTH + currentFrame * pixelsPerFrame }}
     />
   )
@@ -54,11 +60,12 @@ function Playhead({ pixelsPerFrame }: { pixelsPerFrame: number }) {
 function TimeDisplay({ fps }: { fps: number }) {
   const currentFrame = useTimelineStore(s => s.currentFrame)
   return (
-    <span className="text-[11px] text-zinc-400 font-mono ml-2">
+    // 横に流れるツールバーの右端に張りつけて、いつでも見えるように(通しフレーム番号 = 比較版の「1600f」)
+    <span className="sticky right-0 z-10 ml-2 pl-2 bg-zinc-900 text-[11px] text-zinc-400 font-mono tabular-nums">
+      <span className="text-yellow-300 font-semibold mr-1.5">{currentFrame}f</span>
       {String(Math.floor(currentFrame / fps / 60)).padStart(2, '0')}:
       {String(Math.floor(currentFrame / fps) % 60).padStart(2, '0')}:
       {String(currentFrame % fps).padStart(2, '0')}
-      <span className="text-zinc-600"> f{currentFrame}</span>
     </span>
   )
 }
@@ -76,13 +83,13 @@ export function Timeline({ projectId, fps, assets }: Props) {
     tracks, clips, pixelsPerFrame,
     canUndo, canRedo, undoStack, redoStack,
     loadTimeline, addTrack, addClip, placeClip, splitClip,
-    deleteClip, deletePin, setCurrentFrame, setZoom, undo, redo, setClipSpeed, applySpeedEnvelope, updateClip, liveUpdateClip,
+    deletePin, setCurrentFrame, setZoom, undo, redo, setClipSpeed, applySpeedEnvelope, updateClip, liveUpdateClip,
     selectedClipId, setSelectedClipId, syncFromServer,
   } = useTimelineStore(useShallow(s => ({
     tracks: s.tracks, clips: s.clips, pixelsPerFrame: s.pixelsPerFrame,
     canUndo: s.canUndo, canRedo: s.canRedo, undoStack: s.undoStack, redoStack: s.redoStack,
     loadTimeline: s.loadTimeline, addTrack: s.addTrack, addClip: s.addClip, placeClip: s.placeClip, splitClip: s.splitClip,
-    deleteClip: s.deleteClip, deletePin: s.deletePin, setCurrentFrame: s.setCurrentFrame, setZoom: s.setZoom, undo: s.undo, redo: s.redo,
+    deletePin: s.deletePin, setCurrentFrame: s.setCurrentFrame, setZoom: s.setZoom, undo: s.undo, redo: s.redo,
     setClipSpeed: s.setClipSpeed, applySpeedEnvelope: s.applySpeedEnvelope, updateClip: s.updateClip, liveUpdateClip: s.liveUpdateClip,
     selectedClipId: s.selectedClipId, setSelectedClipId: s.setSelectedClipId, syncFromServer: s.syncFromServer,
   })))
@@ -94,6 +101,7 @@ export function Timeline({ projectId, fps, assets }: Props) {
   // 再生ヘッド追従スクロール。ズーム(pixelsPerFrame変更)では発動させない —
   // ズーム時はカーソル位置アンカーが優先で、ここが動くと表示領域が飛ぶ。
   useEffect(() => useTimelineStore.subscribe((s, prev) => {
+    if (CAPTURE) return                       // 🎥 全尺表示なので追従スクロールしない
     if (s.currentFrame === prev.currentFrame) return
     const sc = scrollRef.current
     if (!sc) return
@@ -137,6 +145,33 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
     }
     window.addEventListener('kychapogas:open-filter', onOpen)
     return () => window.removeEventListener('kychapogas:open-filter', onOpen)
+  }, [])
+  // 🌧 雨クリップのダブルクリック → 選んで雨の調整を開く
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ clipId: number }>).detail?.clipId
+      if (typeof id === 'number') { useTimelineStore.getState().setSelectedClipId(id); setShowInspector(true) }
+    }
+    window.addEventListener('kychapogas:open-rain', onOpen)
+    return () => window.removeEventListener('kychapogas:open-rain', onOpen)
+  }, [])
+  // 🎬 撮影クリップのダブルクリック → 選んで撮影の調整パネルを開く(雨と同じ ClipInspector 経由)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ clipId: number }>).detail?.clipId
+      if (typeof id === 'number') { useTimelineStore.getState().setSelectedClipId(id); setShowInspector(true) }
+    }
+    window.addEventListener('kychapogas:open-satsuei', onOpen)
+    return () => window.removeEventListener('kychapogas:open-satsuei', onOpen)
+  }, [])
+  // 🔤 字幕クリップのダブルクリック → 選んで字幕の調整パネルを開く(撮影と同じ ClipInspector 経由)
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const id = (e as CustomEvent<{ clipId: number }>).detail?.clipId
+      if (typeof id === 'number') { useTimelineStore.getState().setSelectedClipId(id); setShowInspector(true) }
+    }
+    window.addEventListener('kychapogas:open-credit', onOpen)
+    return () => window.removeEventListener('kychapogas:open-credit', onOpen)
   }, [])
   const [showPinSwap, setShowPinSwap] = useState(false)
   const [showNightBatch, setShowNightBatch] = useState(false)
@@ -319,9 +354,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   // 盛り上げの手動編集。レーン側でドラッグ操作を解決し、確定した配列がここに来る。
   // 自動判定は当てにならない場面があるので(実測: allin1の境界では5箇所すべて「平坦」)、
   // 音楽的な「ここは溜め/ここは引き」の判断は人が置けるようにしている。
-  const saveBuildups = useCallback(async (next: Array<{ start_sec: number; end_sec: number
-                                                        target: string; kind: string
-                                                        slope: number; break: number }>) => {
+  const saveBuildups = useCallback(async (next: AudioStructure['buildups']) => {
     const songId = beatInfo?.clip.asset_id
     if (songId == null) return
     // 楽観更新してから保存(戻り待ちだと連続操作で取りこぼす)
@@ -390,6 +423,9 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   const selTrack = selectedClip ? tracks.find(t => t.id === selectedClip.track_id) : null
   const selAsset = selectedClip ? assets.find(a => a.id === selectedClip.asset_id) : null
   const selIsFilter = isFilterClip(selectedClip)
+  const selIsRain = isRainClip(selectedClip)
+  const selIsSatsuei = selectedClip?.kind === 'satsuei'
+  const selIsCredit = isCreditClip(selectedClip)
   const isVideoClip = selTrack?.track_type === 'video'
     && (selAsset?.asset_type === 'video'
         || (selAsset?.asset_type === 'generated' && selAsset?.duration_sec != null))
@@ -408,9 +444,18 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   const totalFrames = Math.max(
     MIN_TIMELINE_SECS * fps,
     ...clips.map(c => c.start_frame + c.duration_frames),
-  ) + fps * 10
+  ) + (CAPTURE ? 0 : fps * 10)              // 🎥 撮影用は末尾の余白なし(全尺ぴったり)
 
   const totalWidth = Math.ceil(totalFrames * pixelsPerFrame)
+
+  // 🎥 撮影用モード: 拡大率を全尺がちょうど収まる値に合わせる
+  useEffect(() => {
+    if (!CAPTURE || !captureState.autoFit) return
+    const sc = scrollRef.current
+    if (!sc || clips.length === 0) return
+    const fit = Math.floor((sc.clientWidth - LABEL_WIDTH) / totalFrames * 1e4) / 1e4
+    if (fit > 0 && Math.abs(fit - pixelsPerFrame) > 1e-4) setZoom(fit)
+  }, [clips.length, totalFrames, pixelsPerFrame, setZoom])
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -421,12 +466,14 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return
     const ctrl = e.ctrlKey || e.metaKey
 
-    if (ctrl && e.key === 'z' && !e.shiftKey) {
+    // Shift を押すと e.key は大文字 'Z' になる(Caps Lock でも)。小文字にそろえて比べる(Ctrl+Shift+Z のやり直しが効かなかった)
+    const lk = e.key.length === 1 ? e.key.toLowerCase() : e.key
+    if (ctrl && lk === 'z' && !e.shiftKey) {
       e.preventDefault()
       undo()
       return
     }
-    if ((ctrl && e.key === 'y') || (ctrl && e.shiftKey && e.key === 'z')) {
+    if ((ctrl && lk === 'y') || (ctrl && e.shiftKey && lk === 'z')) {
       e.preventDefault()
       redo()
       return
@@ -572,7 +619,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   return (
     <div
       ref={containerRef}
-      className="flex flex-col h-full bg-zinc-950 select-none outline-none"
+      className={`flex flex-col ${CAPTURE ? '' : 'h-full'} bg-zinc-950 select-none outline-none`}
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
@@ -596,11 +643,15 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
         <button
           onClick={() => setShowFilterAdd(true)}
           className="text-[11px] px-2 py-0.5 rounded bg-purple-900 hover:bg-purple-800 text-purple-200"
-          title="🎚 フィルターレイヤー追加 — 単色(黒/白/任意色・不透明度キー)/ぼかし(下のレイヤー全体・強さキー)"
+          title="🎚 フィルターレイヤー追加 — 単色(黒/白/任意色・不透明度キー)/ぼかし(下のレイヤー全体・強さキー)/🎬 撮影(色・光・レンズ・粒子)"
         >🎚 フィルター</button>
         {showFilterAdd && (
           <FilterAddPopover projectId={projectId} fps={fps} onClose={() => setShowFilterAdd(false)}
-                            onCreated={c => { setSelectedClipId(c.id); setFilterEditId(c.id) }} />
+                            onCreated={c => {
+                              setSelectedClipId(c.id)
+                              // 🎬 撮影は調整パネル(色・光…)を開く。単色・ぼかしはキーの編集
+                              if (c.kind === 'satsuei' || isCreditClip(c)) setShowInspector(true); else setFilterEditId(c.id)
+                            }} />
         )}
         {filterEditId != null && (
           <FilterLayerPopover clipId={filterEditId} fps={fps} onClose={() => setFilterEditId(null)} />
@@ -711,17 +762,66 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
               >🎵 ビートで分割</button>
             )}
 
-            {/* 🎚 フィルターレイヤー(単色/ぼかし)の編集 */}
+            {/* 🎚 フィルターレイヤー(単色/ぼかし/撮影の効き)の編集 */}
             {selIsFilter && selectedClip && (
               <button onClick={() => setFilterEditId(selectedClip.id)}
                       className="text-[11px] px-2 py-0.5 rounded border bg-purple-950/60 text-purple-300 border-purple-700 hover:bg-purple-900/60"
-                      title="不透明度/ぼかし強さのキーと色を編集">
-                🎚 {selectedClip.kind === 'solid' ? '単色' : 'ぼかし'}を編集
+                      title={selIsSatsuei ? '撮影の効きを時間で変えるキーを編集' : '不透明度/ぼかし強さのキーと色を編集'}>
+                🎚 {selIsSatsuei ? '効きのキー' : `${selectedClip.kind === 'solid' ? '単色' : 'ぼかし'}を編集`}
               </button>
+            )}
+            {/* 🎬 撮影クリップ: 色・パラ・ライトリーク・レンズ・粒子の調整(ClipInspector → SatsueiPanel) */}
+            {selectedClip && selIsSatsuei && (
+              <span className="relative">
+                <button
+                  onClick={() => setShowInspector(v => !v)}
+                  className={`text-[11px] px-2 py-0.5 rounded border ${
+                    showInspector
+                      ? 'bg-amber-900/60 text-amber-200 border-amber-600'
+                      : 'bg-zinc-800 text-amber-300 border-amber-800 hover:bg-zinc-700'
+                  }`}
+                  title="撮影の色・パラ・ライトリーク・レンズ・粒子を調整(すぐプレビューに出ます)"
+                >🎬 撮影を調整</button>
+                {showInspector && (
+                  <ClipInspector
+                    clip={selectedClip}
+                    isOverlay
+                    localT={0}
+                    beatTs={[]}
+                    onChange={patch => liveUpdateClip(selectedClip.id, patch)}
+                    onClose={() => setShowInspector(false)}
+                  />
+                )}
+              </span>
+            )}
+
+            {/* 🔤 字幕クリップ: 文字・位置・大きさ・出現/消失・屈折の調整(ClipInspector → CreditPanel) */}
+            {selectedClip && selIsCredit && (
+              <span className="relative">
+                <button
+                  onClick={() => setShowInspector(v => !v)}
+                  className={`text-[11px] px-2 py-0.5 rounded border ${
+                    showInspector
+                      ? 'bg-cyan-900/60 text-cyan-100 border-cyan-500'
+                      : 'bg-zinc-800 text-cyan-300 border-cyan-800 hover:bg-zinc-700'
+                  }`}
+                  title="字幕の文字・位置・大きさ・出現/消失・屈折を調整(すぐプレビューに出ます)"
+                >🔤 字幕を調整</button>
+                {showInspector && (
+                  <ClipInspector
+                    clip={selectedClip}
+                    isOverlay
+                    localT={0}
+                    beatTs={[]}
+                    onChange={patch => liveUpdateClip(selectedClip.id, patch)}
+                    onClose={() => setShowInspector(false)}
+                  />
+                )}
+              </span>
             )}
 
             {/* Transition into this clip (rendered on the primary video track) */}
-            {selTrack?.track_type === 'video' && selectedClip && !selIsFilter && (
+            {selTrack?.track_type === 'video' && selectedClip && !selIsFilter && !selIsCredit && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
                 <span className="text-[10px] text-zinc-500">遷移</span>
@@ -817,7 +917,31 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
 
             {/* Layer transform inspector: scale/pos/rotation + keyframes + opacity/blend.
                 Quick presets stay one click away; the inspector is for precise authoring. */}
-            {selectedClip && selTrack?.track_type === 'video' && !selIsFilter && (
+            {/* 🌧 雨クリップ: 変形の代わりに雨の調整(強さ・粒の細さ・長さ・量・ぼかし・きらめき…) */}
+            {selectedClip && selIsRain && (
+              <span className="relative">
+                <button
+                  onClick={() => setShowInspector(v => !v)}
+                  className={`text-[11px] px-2 py-0.5 rounded border ${
+                    showInspector
+                      ? 'bg-sky-900/60 text-sky-200 border-sky-600'
+                      : 'bg-zinc-800 text-sky-300 border-sky-800 hover:bg-zinc-700'
+                  }`}
+                  title="雨の強さ・粒の細さ・長さ・量・ぼかし・きらめきを調整(強さはすぐ反映、ほかは作り直し)"
+                >🌧 雨を調整</button>
+                {showInspector && (
+                  <ClipInspector
+                    clip={selectedClip}
+                    isOverlay
+                    localT={0}
+                    beatTs={[]}
+                    onChange={patch => liveUpdateClip(selectedClip.id, patch)}
+                    onClose={() => setShowInspector(false)}
+                  />
+                )}
+              </span>
+            )}
+            {selectedClip && selTrack?.track_type === 'video' && !selIsFilter && !selIsRain && !selIsCredit && (
               <>
                 <div className="w-px h-4 bg-zinc-700 mx-1" />
                 <span className="text-[10px] text-zinc-500">動き</span>
@@ -1082,7 +1206,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
       </div>
 
       {/* Scrollable area */}
-      <div className="flex-1 overflow-auto" ref={scrollRef}
+      <div className={CAPTURE ? 'overflow-hidden' : 'flex-1 overflow-auto'} ref={scrollRef}
         onPointerDown={handlePinchDown} onPointerMove={handlePinchMove}
         onPointerUp={handlePinchUp} onPointerCancel={handlePinchUp}
         style={{ touchAction: 'pan-x pan-y' }}>
@@ -1216,7 +1340,9 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
           <CutLane tracks={tracks} clips={clips} assets={assets} pixelsPerFrame={pixelsPerFrame} fps={fps} totalWidth={totalWidth} />
 
           {/* Track lanes */}
-          {[...tracks].sort((a, b) => a.order - b.order).map(track => (
+          {/* 🎥 撮影用モードでは空のトラックを省く(中身のある層を一画面に収めるため) */}
+          {[...tracks].filter(t => !CAPTURE || clips.some(c => c.track_id === t.id))
+            .sort((a, b) => a.order - b.order).map(track => (
             <TrackLane
               key={track.id}
               track={track}

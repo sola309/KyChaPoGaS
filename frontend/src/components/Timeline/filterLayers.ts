@@ -6,23 +6,30 @@
  *   kind='blur' : attrs {"blur_keys":[{"t":0,"v":0},{"t":8,"v":7}]}
  *       このレイヤーより下(先に合成された絵)を区間中だけガウスぼかし。
  *       v = 1920x1080 基準のシグマ(px)。出力解像度に比例してスケール。
+ *   kind='satsuei': attrs {"strength_keys":[{"t":0,"v":1}], "satsuei":{...}}
+ *       🎬 撮影(色・パラ・ライトリーク・レンズ・粒子)を下の絵にかける。効き(0..1) = キー補間 × clip.opacity。
+ *       中身の式とプレビューは ../Preview/satsueiLook.ts・satsueiGL.ts(書き出しは backend satsuei_fx.py)。
  *
  * t = クリップ先頭からのフレーム。キー間は線形、先頭キー以前/最終キー以降は端の値を保持。
  * 書き出し側(backend ffmpeg_render.filter_key_value / _filter_parts)と同じ規則。
  */
 import type { Clip } from '../../api/client'
+import { shiftRainAttrs } from './rainFx'
+import { sliceRingAttrs } from './ringMarks'
+import { shiftSatsueiAttrs, satsueiOf, presetLabel } from '../Preview/satsueiLook'
 
-export type FilterKind = 'solid' | 'blur'
+export type FilterKind = 'solid' | 'blur' | 'satsuei'
 export interface FKey { t: number; v: number }
 export interface FilterAttrs {
   color?: string
   opacity_keys?: FKey[]
   blur_keys?: FKey[]
+  strength_keys?: FKey[]
   [k: string]: unknown
 }
 
 export const isFilterClip = (c: Pick<Clip, 'kind'> | null | undefined): boolean =>
-  !!c && (c.kind === 'solid' || c.kind === 'blur')
+  !!c && (c.kind === 'solid' || c.kind === 'blur' || c.kind === 'satsuei')
 
 /** ぼかしの既定の強さ(1080p基準シグマ) — 元ネタのぼかし相当 */
 export const BLUR_DEFAULT = 7
@@ -36,9 +43,11 @@ export function parseFilterAttrs(raw: string | null | undefined): FilterAttrs {
   } catch { return {} }
 }
 
-export const keysField = (kind: FilterKind) => kind === 'solid' ? 'opacity_keys' : 'blur_keys'
-export const valueRange = (kind: FilterKind): [number, number] => kind === 'solid' ? [0, 1] : [0, BLUR_MAX]
-export const defaultValue = (kind: FilterKind) => kind === 'solid' ? 1 : 0
+export const keysField = (kind: FilterKind) =>
+  kind === 'solid' ? 'opacity_keys' : kind === 'satsuei' ? 'strength_keys' : 'blur_keys'
+export const valueRange = (kind: FilterKind): [number, number] => kind === 'blur' ? [0, BLUR_MAX] : [0, 1]
+/** キーが無いときの値(単色 = 不透明、撮影 = 全部効く、ぼかし = なし) */
+export const defaultValue = (kind: FilterKind) => kind === 'blur' ? 0 : 1
 
 /** キー列を正規化(数値化・クランプ・t昇順・同一tは後勝ち) */
 export function normKeys(raw: unknown, kind: FilterKind): FKey[] {
@@ -100,11 +109,49 @@ export function sliceKeys(keys: FKey[], off: number, len: number, fallback: numb
 
 /** 分割/復元時に引き継ぐフィールド。フィルタークリップ以外は空 */
 export function filterCarry(clip: Clip, off = 0, len = clip.duration_frames): Partial<Clip> {
-  if (!isFilterClip(clip)) return {}
+  // 🌧 雨クリップ(黒地の雨の層を screen で重ねる): 分割しても重ね方と設定を引き継ぐ。
+  // 引き継がないと半分ずつが「通常」合成の黒い層になり、画面が真っ暗になる
+  // (「寄りでのぼかし」の開始コマはクリップ先頭基準なので、後半はずらす)
+  if (clip.kind === 'rain') return { kind: clip.kind, attrs_json: shiftRainAttrs(clip.attrs_json, off, len) ?? clip.attrs_json, opacity: clip.opacity, blend: clip.blend }
+  if (!isFilterClip(clip)) {
+    // 💍 指輪の位置の印(映像クリップの ring_marks): 分割しても半分ずつに引き継ぐ(右側は先頭基準のコマをずらす)。
+    // 後ろ半分(= 元の終わりまで)は、右端を詰めて隠れていた印もそのまま持つ。分割の右側の頭出しは +off(splitClip と同じ)
+    const tail = off + len >= clip.duration_frames
+    const ra = sliceRingAttrs(clip.attrs_json, off, len, off, { asset_id: clip.asset_id, asset_in_frame: clip.asset_in_frame + off }, tail)
+    return ra != null ? { attrs_json: ra } : {}
+  }
   const kind = clip.kind as FilterKind
   const keys = getKeys(clip)
-  const attrs = keys.length ? withKeys(clip.attrs_json, kind, sliceKeys(keys, off, len, defaultValue(kind))) : clip.attrs_json
+  let attrs = keys.length ? withKeys(clip.attrs_json, kind, sliceKeys(keys, off, len, defaultValue(kind))) : clip.attrs_json
+  if (kind === 'satsuei') {
+    // 🎬 撮影: ライトリークの始まりはクリップ先頭基準なので、後ろ半分はずらす(前に光り終わるものは捨てる)。
+    // 前半分は前のクリップからの溶け(transition_in)も引き継ぐ(境目で分けた撮影の溶けが消えないように)
+    attrs = shiftSatsueiAttrs(attrs, off) ?? attrs
+    const tr = off === 0 && clip.transition_in
+      ? { transition_in: clip.transition_in, transition_frames: clip.transition_frames, transition_ease: clip.transition_ease } : {}
+    return { kind: clip.kind, attrs_json: attrs, opacity: clip.opacity, blend: clip.blend, ...tr }
+  }
   return { kind: clip.kind, attrs_json: attrs, opacity: clip.opacity, blend: clip.blend }
+}
+
+/**
+ * 左端のトリムで先頭が moved コマ動いたときのフィルタークリップの attrs_json(絶対時刻が変わらないようにずらす)。
+ * キー: 詰めた分は先頭キーにその時点の値を置く(ClipBlock の左トリムと同じ)。🎬 撮影はライトリークの始まりもずらす。
+ * 変わらなければ null
+ */
+export function shiftFilterHead(clip: Pick<Clip, 'kind' | 'attrs_json'>, moved: number): string | null {
+  if (!moved || !isFilterClip(clip)) return null
+  const kind = clip.kind as FilterKind
+  const ks = getKeys(clip)
+  let attrs = clip.attrs_json
+  if (ks.length) {
+    const shifted = moved > 0
+      ? [{ t: 0, v: keyValueAt(ks, moved, defaultValue(kind)) }, ...ks.filter(k => k.t > moved).map(k => ({ t: k.t - moved, v: k.v }))]
+      : ks.map(k => ({ t: k.t - moved, v: k.v }))
+    attrs = withKeys(attrs, kind, shifted)
+  }
+  if (kind === 'satsuei') attrs = shiftSatsueiAttrs(attrs, moved) ?? attrs
+  return attrs !== clip.attrs_json ? attrs : null
 }
 
 /** プリセット。dur=クリップ尺、ramp=ランプのフレーム数、peak=到達値 */
@@ -155,6 +202,12 @@ export const filterLabel = (clip: Clip): string => {
     const ks = getKeys(clip)
     const mx = ks.length ? Math.max(...ks.map(k => k.v)) : 0
     return `◌ ぼかし σ${fmtV(mx)}`
+  }
+  if (clip.kind === 'satsuei') {
+    // 🎬 プリセットの名前(手で変えた後も最後に当てたプリセット)。効きのキーがあれば範囲も
+    const ks = getKeys(clip)
+    const r = ks.length > 1 ? ` ${fmtV(ks[0].v)}→${fmtV(ks[ks.length - 1].v)}` : ks.length && ks[0].v < 1 ? ` ${fmtV(ks[0].v)}` : ''
+    return `🎬 ${presetLabel(satsueiOf(clip.attrs_json).preset) || '撮影'}${r}`
   }
   return clip.kind
 }

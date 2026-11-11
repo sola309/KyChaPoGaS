@@ -9,6 +9,7 @@ import { BrandLogo } from './components/BrandLogo'
 import { SettingsModal } from './components/SettingsModal'
 import { InspectOverlay } from './components/InspectOverlay'
 import { useUIStore } from './store/uiStore'
+import { CAPTURE } from './capture'
 
 // 編集以外の画面は開いた時に読み込む(コード分割)。既定の編集画面が最初に必要とするJSから
 // pixi.js(コンパニオン)や xterm(ターミナル)を外し、初期ロードを軽くする。
@@ -51,6 +52,7 @@ function App() {
   // Auto-apply UI updates: poll the build id and soft-reload when it changes
   // (so improvements appear without a manual hard reload).
   useEffect(() => {
+    if (CAPTURE) return          // 🎥 撮影中に新しいビルドで読み直されると絵が飛ぶ
     let initial: string | null = null
     let reloading = false
     const check = async () => {
@@ -167,7 +169,7 @@ function App() {
       <InspectOverlay />
 
       {/* Collaboration join/leave toasts */}
-      <CollabToasts />
+      {!CAPTURE && <CollabToasts />}
 
       {/* Small-screen guidance */}
       <MobileNotice />
@@ -264,7 +266,7 @@ function App() {
           </div>
         </>
       )}
-      <JobProgressPill />
+      {!CAPTURE && <JobProgressPill />}
     </div>
   )
 }

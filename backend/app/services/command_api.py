@@ -300,6 +300,8 @@ def auto_cut_to_beats(project_id: int, clip_id: int, session: Session) -> dict:
     clip = session.get(Clip, clip_id)
     if not clip:
         return {"error": f"Clip {clip_id} not found"}
+    if (clip.kind or "") == "credit":
+        return {"error": "字幕クリップは分割できません(長さはトリムで変えてください)"}
     track = session.get(Track, clip.track_id)
     if not track or track.project_id != project_id:
         return {"error": f"Clip {clip_id} not in project"}
@@ -325,6 +327,7 @@ def auto_cut_to_beats(project_id: int, clip_id: int, session: Session) -> dict:
             start_frame=s0, duration_frames=s1 - s0,
             asset_in_frame=clip.asset_in_frame + round((s0 - start) * speed),
             speed=speed, speed_ease=ease,
+            **_filter_piece(clip, s0 - start),
         )
         session.add(seg)
         new_clips.append(seg)
@@ -452,10 +455,46 @@ def delete_clip(clip_id: int, session: Session) -> dict:
     return {"deleted_clip_id": clip_id}
 
 
+def _shift_filter_keys(raw, d_head: int, default: float, lo: float, hi: float) -> list:
+    """opacity_keys / blur_keys を、頭が d_head コマ後ろへずれたクリップ用にずらす(0 の値は補間で残す)。"""
+    from app.services.ffmpeg_render import filter_key_value, parse_filter_keys
+    keys = parse_filter_keys(raw, default, lo, hi)
+    return ([{"t": 0, "v": round(filter_key_value(keys, d_head), 6)}]
+            + [{"t": round(t - d_head, 6), "v": v} for t, v in keys if t - d_head > 0])
+
+
+def _filter_piece(clip: Clip, d_head: int) -> dict:
+    """フィルタークリップ(単色/ぼかし/撮影)を分けたときに各片へ引き継ぐ項目(ふつうのクリップは {})。
+    素材を持たないので、kind と attrs_json を引き継がないと空の枠になり、生成の自動配置に埋められてしまう。
+    d_head = 元の頭からのずれ(後ろの片)。キーと撮影のライトリーク(leaks[].t0)はそのぶんずらす。"""
+    from app.services.ffmpeg_render import FILTER_KINDS
+    kind = clip.kind or "media"
+    if kind not in FILTER_KINDS:
+        return {}
+    try:
+        attrs = json.loads(clip.attrs_json or "{}")
+        attrs = attrs if isinstance(attrs, dict) else {}
+    except (ValueError, TypeError):
+        attrs = {}
+    if d_head:
+        if attrs.get("opacity_keys"):
+            attrs["opacity_keys"] = _shift_filter_keys(attrs["opacity_keys"], d_head, 1.0, 0.0, 1.0)
+        if attrs.get("blur_keys"):
+            attrs["blur_keys"] = _shift_filter_keys(attrs["blur_keys"], d_head, 0.0, 0.0, 200.0)
+        if kind == "satsuei":
+            from app.services.satsuei_fx import shift_attrs
+            attrs = shift_attrs(attrs, d_head)       # strength_keys と leaks[].t0
+    return {"kind": kind, "attrs_json": json.dumps(attrs, ensure_ascii=False) if attrs else (clip.attrs_json or ""),
+            "opacity": clip.opacity, "blend": clip.blend, "transition_ease": clip.transition_ease}
+
+
 def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
     clip = session.get(Clip, clip_id)
     if not clip:
         return {"error": f"Clip {clip_id} not found"}
+    if (clip.kind or "") == "credit":
+        # 🔤 字幕は出現・消失をクリップの端から測るので、分けると完全な字幕が 2 枚になる(長さはトリムで)
+        return {"error": "字幕クリップは分割できません(長さはトリムで変えてください)"}
     if split_frame <= clip.start_frame or split_frame >= clip.start_frame + clip.duration_frames:
         return {"error": "split_frame is outside the clip's range"}
 
@@ -471,12 +510,14 @@ def split_clip(clip_id: int, split_frame: int, session: Session) -> dict:
                  asset_in_frame=clip.asset_in_frame,
                  speed=speed, speed_ease="linear",
                  transition_in=clip.transition_in, transition_frames=clip.transition_frames,
-                 fade_in_frames=clip.fade_in_frames, fade_out_frames=0)
+                 fade_in_frames=clip.fade_in_frames, fade_out_frames=0,
+                 **_filter_piece(clip, 0))
     right = Clip(track_id=clip.track_id, asset_id=clip.asset_id,
                  start_frame=split_frame, duration_frames=right_dur,
                  asset_in_frame=clip.asset_in_frame + round(left_dur * speed),
                  speed=speed, speed_ease="linear",
-                 fade_in_frames=0, fade_out_frames=clip.fade_out_frames)
+                 fade_in_frames=0, fade_out_frames=clip.fade_out_frames,
+                 **_filter_piece(clip, left_dur))
     session.add(left)
     session.add(right)
     session.delete(clip)
@@ -812,6 +853,10 @@ def set_audio_fade(clip_id: int, fade_in_frames: int, fade_out_frames: int, sess
 def create_job(project_id: int, job_type: str, params: dict, session: Session) -> dict:
     import json
     from app.models.job import Job
+    from app.services.h3_guard import check_submission
+    h3_problems = check_submission(project_id, job_type, params or {}, session)
+    if h3_problems:
+        return {"error": "MiniMax H3 ジョブの事前検査で止めました", "problems": h3_problems}
     job = Job(project_id=project_id, job_type=job_type, params=json.dumps(params))
     session.add(job)
     session.commit()

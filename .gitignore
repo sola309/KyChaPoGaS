@@ -100,3 +100,11 @@ backend/demix/
 backend/spec/
 # 外部リポジトリの作業コピー(独自の .git を持つ)
 tools/h3-spark-sol/
+# NVIDIA Open-H3-Regenerate-2K の作業コピー(独自の .git・モデル込みで約 160GB、2026-10-29)
+tools/open-h3-regen/
+
+# セッション中のコード控え(戻し用・2026-10)と調査の一時出力
+/backups/
+backend/q[0-9]*.err
+backend/q[0-9]*_*.txt
+*.bak_[0-9]*

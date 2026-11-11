@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../api/client'
 import { assetsApi, assetKind } from '../api/client'
 import { useAnalysisStore } from '../store/analysisStore'
 import { useJobStore } from '../store/jobStore'
+
+// 📚 共有素材ライブラリ(開いたときだけ読み込む)
+const LibraryBrowser = lazy(() => import('./Library/LibraryBrowser').then(m => ({ default: m.LibraryBrowser })))
 
 const TYPE_BADGE: Record<string, string> = {
   video: 'bg-blue-900 text-blue-300',
@@ -46,6 +49,7 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
   // 数が本編素材を圧倒するため(検索時は常に対象に含める)。
   const [showIntermediate, setShowIntermediate] = useState(false)
   const isIntermediate = (name: string) => name.startsWith('ref_') || name.startsWith('frame_')
+  const [libOpen, setLibOpen] = useState(false)
 
   const counts = useMemo(() => {
     const c = { all: assets.length, video: 0, image: 0, audio: 0 }
@@ -137,13 +141,26 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* 📚 共有素材ライブラリ(長尺素材のカット一覧・どのプロジェクトからでも) */}
+      <div className="mx-3 mt-3 flex">
+        <button onClick={() => setLibOpen(true)} data-library-open
+                className="flex-1 text-xs px-2 py-1.5 rounded border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-zinc-200"
+                title="プロジェクトをまたいで使う長尺素材(劇場版など)のカット一覧。選んでタイムラインに置ける">
+          📚 ライブラリ
+        </button>
+      </div>
+      {libOpen && (
+        <Suspense fallback={null}>
+          <LibraryBrowser projectId={projectId} onClose={() => setLibOpen(false)} />
+        </Suspense>
+      )}
       {/* Upload zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`mx-3 mt-3 mb-2 rounded-lg border-2 border-dashed cursor-pointer flex items-center justify-center py-4 text-sm transition-colors ${
+        className={`mx-3 mt-2 mb-2 rounded-lg border-2 border-dashed cursor-pointer flex items-center justify-center py-4 text-sm transition-colors ${
           dragOver
             ? 'border-purple-400 bg-purple-900/20 text-purple-300'
             : 'border-zinc-700 hover:border-zinc-500 text-zinc-500 hover:text-zinc-400'

@@ -94,10 +94,11 @@ start() {
       node server.js
   fi
 
+  # 2026-10-20 ユーザー了承: --disable-comfy-compiler(compiler 有効だと H3 の 25 万トークン級 = C32 が通らない。Spark 2 と同じ設定で同じシードならビット一致)
   if ! $CORE_ONLY; then
     if [ -d "$ROOT/tools/comfyui/.venv" ]; then
       spawn comfyui 8188 "$ROOT/tools/comfyui" \
-        "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention
+        "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention --disable-comfy-compiler
     fi
     if [ -d "$ROOT/tools/ace-step" ] && command -v uv >/dev/null 2>&1; then
       spawn acestep 7867 "$ROOT/tools/ace-step" \
@@ -162,7 +163,7 @@ status() {
 start_one() {
   case "$1" in
     comfyui) spawn comfyui 8188 "$ROOT/tools/comfyui" \
-               "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention ;;
+               "$ROOT/tools/comfyui/.venv/bin/python" main.py --listen 127.0.0.1 --port 8188 --use-sage-attention --disable-comfy-compiler ;;
     acestep) spawn acestep 7867 "$ROOT/tools/ace-step" \
                env OPENROUTER_PORT=7867 "$(command -v uv)" run acestep-openrouter --host 0.0.0.0 --port 7867 ;;
     tts)     spawn tts 8088 "$ROOT/tools/irodori-tts" \

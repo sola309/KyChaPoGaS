@@ -133,6 +133,17 @@ async def _loop() -> None:
                 place.pop("replace_clip_id", None)
                 params["place"] = place
 
+                # MiniMax H3 の事前検査(投入 API と同じ)。通らない雛形は投入せず次のカットへ
+                from app.services.h3_guard import check_submission
+                h3_problems = check_submission(project_id, "generate_video_i2v", params, session)
+                if h3_problems:
+                    log.warning(f"night_batch: f{nxt} の雛形が H3 事前検査で不合格 → 投入しない: {h3_problems}")
+                    counts[str(nxt)] = counts.get(str(nxt), 0) + 1
+                    st["counts"] = counts
+                    set_state(st)
+                    await asyncio.sleep(POLL_S)
+                    continue
+
                 job = Job(project_id=project_id, job_type="generate_video_i2v",
                           params=json.dumps(params, ensure_ascii=False))
                 session.add(job)

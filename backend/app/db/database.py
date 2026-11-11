@@ -10,7 +10,11 @@ DB_PATH = Path(__file__).parent.parent.parent / "data" / "kychapogas.db"
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 # timeout: 書き込みロック待ち(ジョブランナーの進捗更新と一覧取得が競合する)
-engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, connect_args={"timeout": 30})
+# 接続の口: 既定(5 + 10)だと、遠隔のブラウザがサムネイル等を一度に数十件読むと埋まり、
+# 生成中ジョブの進捗書き込みが 30 秒で TimeoutError → ジョブごと落ちた(2026-10-16 job 7600)。
+# WAL なので読み取りは並行できる。口を広げ、待ち時間も少し長くする。
+engine = create_engine(f"sqlite:///{DB_PATH}", echo=False, connect_args={"timeout": 30},
+                       pool_size=20, max_overflow=40, pool_timeout=60)
 
 
 @event.listens_for(engine, "connect")
@@ -36,6 +40,7 @@ INDEXES = [
     ("ix_clip_track_id",     "clip",  "track_id"),
     ("ix_clip_asset_id",     "clip",  "asset_id"),
     ("ix_track_project_id",  "track", "project_id"),
+    ("ix_librarycut_asset_start", "librarycut", "asset_id, start_frame"),
 ]
 
 
@@ -147,6 +152,7 @@ def create_db_and_tables() -> None:
     )
     from app.models.analysis import AnalysisResult  # noqa: F401
     from app.models.oplog import OperationLog  # noqa: F401
+    from app.models.library import LibraryItem, LibraryCut  # noqa: F401
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
         _migrate(conn)

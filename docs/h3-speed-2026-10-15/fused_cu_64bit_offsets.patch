@@ -1,0 +1,37 @@
+--- fused.cu.orig	2026-10-15 17:03:11.326068744 +0900
++++ fused.cu	2026-10-15 17:03:11.339120471 +0900
+@@ -87,9 +87,9 @@
+   uint32_t thread_id = threadIdx.x;
+ 
+   uint32_t thread_base_token = bx * BLOCK_SIZE + thread_id / num_threads_per_token;
+-  T *input_ptr_base = input + batch_id * stride_bz_input + head_id * stride_h_input + thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
++  T *input_ptr_base = input + (size_t)batch_id * stride_bz_input + (size_t)head_id * stride_h_input + (size_t)thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
+   T *mean_ptr_base = mean + batch_id * stride_bz_mean + head_id * stride_h_mean + thread_id % num_threads_per_token * pack_size;
+-  int8_t *output_ptr_base = output + batch_id * stride_bz_output + head_id * stride_h_output + thread_base_token * stride_seq_output + thread_id % num_threads_per_token * pack_size;
++  int8_t *output_ptr_base = output + (size_t)batch_id * stride_bz_output + (size_t)head_id * stride_h_output + (size_t)thread_base_token * stride_seq_output + thread_id % num_threads_per_token * pack_size;
+   float *scale_ptr_base = scale + batch_id * stride_bz_scale + head_id * stride_h_scale + bx;
+ 
+   if constexpr (sub_mean)
+@@ -222,9 +222,9 @@
+   uint32_t thread_id = threadIdx.x;
+ 
+   uint32_t thread_base_token = bx * BLOCK_SIZE + thread_id / num_threads_per_token;
+-  T *input_ptr_base = input + batch_id * stride_bz_input + head_id * stride_h_input + thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
++  T *input_ptr_base = input + (size_t)batch_id * stride_bz_input + (size_t)head_id * stride_h_input + (size_t)thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
+   T *mean_ptr_base = mean + batch_id * stride_bz_mean + head_id * stride_h_mean + thread_id % num_threads_per_token * pack_size;
+-  half *output_ptr_base = output + batch_id * stride_bz_output + head_id * stride_h_output + thread_base_token * stride_seq_output + thread_id % num_threads_per_token * pack_size;
++  half *output_ptr_base = output + (size_t)batch_id * stride_bz_output + (size_t)head_id * stride_h_output + (size_t)thread_base_token * stride_seq_output + thread_id % num_threads_per_token * pack_size;
+ 
+   *(float4*)(&mean_val[0]) = *(float4*)(mean_ptr_base);
+ 
+@@ -278,8 +278,8 @@
+ 
+   uint32_t thread_base_token = bx * CTA_SIZE + thread_id / num_threads_per_token;
+ 
+-  T *input_ptr_base = input + batch_id * stride_bz_input + head_id * stride_h_input + thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
+-  T* output_ptr_base = output + batch_id * stride_bz_output + head_id * stride_h_output + bx * CTA_SIZE + thread_id % num_threads_per_cta * pack_size + thread_id / num_threads_per_cta * stride_d_output;
++  T *input_ptr_base = input + (size_t)batch_id * stride_bz_input + (size_t)head_id * stride_h_input + (size_t)thread_base_token * stride_seq_input + thread_id % num_threads_per_token * pack_size;
++  T* output_ptr_base = output + (size_t)batch_id * stride_bz_output + (size_t)head_id * stride_h_output + (size_t)bx * CTA_SIZE + thread_id % num_threads_per_cta * pack_size + (size_t)(thread_id / num_threads_per_cta) * stride_d_output;
+ 
+   __shared__ T shared_load[CTA_SIZE][head_dim];
+   __shared__ T shared_store[head_dim][CTA_SIZE];

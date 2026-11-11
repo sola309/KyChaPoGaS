@@ -197,6 +197,7 @@ _VRAM_ESTIMATES: dict[str, int] = {
     "generate_3d":           10240,  # Hunyuan3D-2 DiT fp16 / MoGe-2 vitl
     "generate_video_3dcam":  24576,  # Wan2.2 Fun Control 14B fp8 ×2
     "render_orbit3d":          512,  # headless Chromium (swiftshader, CPU)
+    "render_rain_layer":       128,  # 🌧 雨フィルターの層(CPU・OpenCV)。既定の 4096 だと GPU 使用中に軽いレーンごと待たされる
 }
 
 _MODEL_VRAM_HINTS: list[tuple[str, int]] = [

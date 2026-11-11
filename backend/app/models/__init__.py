@@ -4,6 +4,7 @@ from .track import Track, TrackCreate, TrackRead
 from .clip import Clip, ClipCreate, ClipUpdate, ClipRead
 from .job import Job, JobCreate, JobRead
 from .analysis import AnalysisResult, AnalysisResultRead
+from .library import LibraryItem, LibraryCut
 
 __all__ = [
     "Project", "ProjectCreate", "ProjectRead",
@@ -12,4 +13,5 @@ __all__ = [
     "Clip", "ClipCreate", "ClipUpdate", "ClipRead",
     "Job", "JobCreate", "JobRead",
     "AnalysisResult", "AnalysisResultRead",
+    "LibraryItem", "LibraryCut",
 ]

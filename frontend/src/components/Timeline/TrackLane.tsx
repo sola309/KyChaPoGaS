@@ -8,6 +8,7 @@ import { useCollabStore } from '../../store/collabStore'
 import { ClipBlock } from './ClipBlock'
 import { RefClipBlock } from './RefClipBlock'
 import { WaveformCanvas } from './WaveformCanvas'
+import { dropLibraryCuts, hasLibraryCuts } from '../Library/dragData'
 
 export const TRACK_HEIGHT    = 48
 export const REF_TRACK_HEIGHT = 36  // thinner for reference tracks
@@ -116,6 +117,12 @@ export function TrackLane({
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
+    // 📚 ライブラリのカット(複数可): 落とした位置から続けて置く(元に戻す 1 回で消える)
+    if (hasLibraryCuts(e.dataTransfer)) {
+      const r = e.currentTarget.getBoundingClientRect()
+      void dropLibraryCuts(e.dataTransfer, track, Math.max(0, Math.round((e.clientX - r.left) / pixelsPerFrame)))
+      return
+    }
     const assetId = Number(e.dataTransfer.getData('assetId'))
     if (!assetId) return
     const rect = e.currentTarget.getBoundingClientRect()
@@ -146,12 +153,30 @@ export function TrackLane({
         title="ドラッグで順序変更"
       >
         <span className="text-zinc-700 text-[9px] leading-none select-none">⠿</span>
+        {/* 音源トラックはチェック式: チェックしたトラックだけをプレビューで鳴らし、書き出しにも入れる(中身は hidden の逆) */}
+        {isAudio && (
+          <input
+            type="checkbox"
+            checked={!track.hidden}
+            onChange={e => {
+              setTrackHidden(track.id, !e.target.checked)
+              e.currentTarget.blur()   // フォーカスを残すとスペース(再生)でチェックが切り替わり、タイムラインのショートカットも効かなくなる
+            }}
+            className="w-3 h-3 flex-shrink-0 accent-purple-400 cursor-pointer"
+            aria-label={`${track.name} を使う`}
+            title={track.hidden
+              ? 'この音源を使う(チェックするとプレビューで鳴り、書き出しにも入ります)'
+              : 'この音源を使っています(外すとプレビューでも書き出しでも鳴りません)'}
+          />
+        )}
         <span className={`text-[11px] truncate flex-1 ${typeColor}`}>{track.name}</span>
-        <button
-          onClick={() => setTrackHidden(track.id, !track.hidden)}
-          className={`text-xs leading-none ${track.hidden ? 'text-zinc-600' : 'text-zinc-400 hover:text-zinc-200'}`}
-          title={track.hidden ? '表示する(現在プレビュー/書き出しから除外中)' : '非表示にする'}
-        >{track.hidden ? '🚫' : '👁'}</button>
+        {!isAudio && (
+          <button
+            onClick={() => setTrackHidden(track.id, !track.hidden)}
+            className={`text-xs leading-none ${track.hidden ? 'text-zinc-600' : 'text-zinc-400 hover:text-zinc-200'}`}
+            title={track.hidden ? '表示する(現在プレビュー/書き出しから除外中)' : '非表示にする'}
+          >{track.hidden ? '🚫' : '👁'}</button>
+        )}
         {isRef && (
           <button
             onClick={e => { e.stopPropagation(); setPickerOpen(v => !v) }}
@@ -188,6 +213,7 @@ export function TrackLane({
         className={`relative border-b border-zinc-800 flex-shrink-0
           ${isRef ? 'bg-amber-950/10' : 'bg-zinc-950'}`}
         style={{ width: totalWidth, height }}
+        data-track-lane={track.id}
         onDragOver={e => e.preventDefault()}
         onDrop={handleDrop}
         onClick={e => {

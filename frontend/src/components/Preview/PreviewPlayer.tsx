@@ -32,6 +32,18 @@ import { parseRemapKeys, remapSrcFrame } from '../Timeline/remap'
 import { parsePreviz, drawPrevizBase, drawPrevizFx, type Previz } from '../Timeline/previz'
 import { useAnalysisStore } from '../../store/analysisStore'
 import { isFilterClip, filterValueAt, solidColor } from '../Timeline/filterLayers'
+import { isSatsueiClip, resolveLayer, layerSpecOf, satsueiOf, type SatsueiParams } from './satsueiLook'
+import { SatsueiRenderer } from './satsueiGL'
+import { getSatsueiCompare, subscribeSatsueiCompare } from './satsueiCompare'
+import { isCreditClip, creditOf, frameScalars } from './creditLook'
+import { CreditRenderer } from './creditGL'
+import { creditMapsFor, prefetchCreditMaps, subscribeCreditMaps, loadCreditMeta, pruneCreditClips } from './creditFields'
+import { creditPanelClipId, subscribeCreditUi, CREDIT_DEBUG, installCreditDebug, creditDebugState, takeCreditSnapshot } from './creditUi'
+import { CreditOverlay } from './CreditOverlay'
+import './creditDebug'
+import { CAPTURE, captureState } from '../../capture'
+import { RingOverlay, RingToggleButton } from './RingTool'
+import { FrameJump, VolumeControl } from './PlayheadControls'
 
 interface Props {
   assets: Asset[]
@@ -218,6 +230,25 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const compareMode = tracks.some(t => t.track_type === 'video' && (t.layout_json ?? '') !== '')
   // 比較表示を切り替えたら保持フレームは捨てる(古い再生位置の絵が一瞬出るのを防ぐ)
   useEffect(() => { layerCacheRef.current.clear() }, [compareMode])
+  // 表示範囲(比率 0..1)。比較表示ではレイヤー配置の外接矩形だけを見せる — 左右に並べると
+  // 16:9 の出力の上下に黒帯が出るが、プレビューでは帯の分だけ絵が小さくなるので切り落とす。
+  // 書き出し(16:9)は変えない。canvas は全画面のまま描き、表示側で切り抜く。
+  const view = useMemo(() => {
+    const full = { x: 0, y: 0, w: 1, h: 1 }
+    if (!compareMode) return full
+    let x0 = 1, y0 = 1, x1 = 0, y1 = 0
+    for (const t of tracks) {
+      if (t.track_type !== 'video' || t.hidden || !(t.layout_json ?? '').trim()) continue
+      try {
+        const d = JSON.parse(t.layout_json!) as { x?: number; y?: number; w?: number; h?: number }
+        const x = d.x ?? 0, y = d.y ?? 0, w = d.w ?? 1, h = d.h ?? 1
+        if (w < 0.05 || h < 0.05) continue       // 実質非表示の配置(比較の対象外)
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h)
+      } catch { /* 壊れた配置は無視 */ }
+    }
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(1, x1); y1 = Math.min(1, y1)
+    return x1 - x0 > 0.05 && y1 - y0 > 0.05 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : full
+  }, [compareMode, tracks])
   const layerVidsRef = useRef<Map<number, HTMLVideoElement>>(new Map())
   // レイヤーごとの直前確定フレーム(読み込み中の黒点滅を防ぐ)
   const layerCacheRef = useRef<Map<number, HTMLCanvasElement>>(new Map())
@@ -241,6 +272,23 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // 🎤歌詞オーバーレイ。設計の確認時に使い、撮影確認のときは切る
   const [showLyrics, setShowLyrics] = useState(() => localStorage.getItem('kychapogas:lyrics') === 'on')
   useEffect(() => { localStorage.setItem('kychapogas:grade', gradeOn ? 'film' : 'off') }, [gradeOn])
+  // 🔊 プレビューの音量(このブラウザだけ。書き出しの音は変わらない)。0〜1
+  const [previewVolume, setPreviewVolume] = useState(() => {
+    try {
+      const raw = localStorage.getItem('kychapogas:previewVolume')
+      const v = raw === null ? 1 : Number(raw)
+      return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1
+    } catch { return 1 }
+  })
+  const [previewMuted, setPreviewMuted] = useState(() => {
+    try { return localStorage.getItem('kychapogas:previewMuted') === '1' } catch { return false }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('kychapogas:previewVolume', String(previewVolume))
+      localStorage.setItem('kychapogas:previewMuted', previewMuted ? '1' : '0')
+    } catch { /* noop */ }
+  }, [previewVolume, previewMuted])
   const [lightPreview, setLightPreview] = useState(true)   // cap backing-store res
   // 🎞プレビズ: ベース映像の代わりに、カットごとの previz 設定(移動/フラッシュ/暗転)を
   // 手続きノイズで描く。絵柄が無くても動きのリズムを試行錯誤するためのモード。
@@ -290,8 +338,10 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       // asset_id が null の「空枠」(scenes-sync が敷くカット台座)は飛ばす。
       // ここで空枠を拾うと主<video>が解放され、後ろのトラックの実素材が
       // 再生されなくなる。空枠は描画上も存在しない扱いが正しい。
+      // 🌧 雨クリップ(黒地の雨の層を screen で重ねる)は本体<video>に載せない。本体は下の絵(Shots)を
+      // 担当し続け、雨の層は専用の<video>(下の LayerVideo、-clip.id)で描く
       const hit = clips
-        .filter(c => c.track_id === t.id && c.asset_id != null)
+        .filter(c => c.track_id === t.id && c.asset_id != null && c.kind !== 'rain')
         .find(c => c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
       if (hit) return hit
     }
@@ -315,7 +365,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   // Load video when the asset changes — prefer the low-res proxy for light preview
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || CAPTURE) return          // 🎥 撮影用: 動画は読み込まない(絵は撮影側が差し込む)
     if (!activeClip || activeClip.asset_id == null) {
       video.src = ''
       setLoadedAssetId(null)
@@ -430,6 +480,19 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const wavMetaRef = useRef<Map<number, WavMeta | null>>(new Map())   // null = wavではない(要フォールバック)
   const wavHeaderPendingRef = useRef<Set<number>>(new Set())
   const audioSrcRef = useRef<Map<number, PlayEntry>>(new Map())
+  // 全クリップの GainNode はこのマスターを通して出す(🔊 プレビューの音量)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const masterLevelRef = useRef(1)
+  const masterOut = (ctx: AudioContext) => {
+    let g = masterGainRef.current
+    if (!g || g.context !== ctx) {
+      g = ctx.createGain()
+      g.gain.value = masterLevelRef.current
+      g.connect(ctx.destination)
+      masterGainRef.current = g
+    }
+    return g
+  }
   const unlockAudioPool = () => {
     if (!audioCtxRef.current) {
       const AC = window.AudioContext || (window as any).webkitAudioContext
@@ -731,7 +794,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       if (!entry) {
         const gain = ctx.createGain()
         gain.gain.value = clipGainAt(c, currentFrame)
-        gain.connect(ctx.destination)
+        gain.connect(masterOut(ctx))
         entry = {
           assetId: aid, gain, kind: meta ? 'stream' : 'full',
           anchorCtx: ctx.currentTime, anchorPos: pos, segSrcs: new Map(),
@@ -796,11 +859,22 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     setAudioBuffering(pending)
   }, [playing, currentFrame, activeAudioClips, projectFps])
 
+  // 🔊 プレビューの音量: WebAudio のマスターと、<video> の内蔵音声の両方に効かせる
+  useEffect(() => {
+    const level = previewMuted ? 0 : previewVolume
+    masterLevelRef.current = level
+    const g = masterGainRef.current
+    if (g) g.gain.setTargetAtTime(level, g.context.currentTime, 0.02)
+    const v = videoRef.current
+    if (v) v.volume = Math.min(1, Math.max(0, level))
+  }, [previewVolume, previewMuted])
+
   // Audioトラックが鳴っている間はVideoの内蔵音声をミュート(二重再生防止)
   useEffect(() => {
     const v = videoRef.current
-    if (v) v.muted = activeAudioClips.length > 0
-  }, [activeAudioClips.length])
+    // 🔊 ミュート・音量 0 も .muted で(iOS Safari は .volume を無視する)
+    if (v) v.muted = activeAudioClips.length > 0 || previewMuted || previewVolume === 0
+  }, [activeAudioClips.length, previewMuted, previewVolume])
 
   useEffect(() => () => {
     for (const id of [...audioSrcRef.current.keys()]) {
@@ -810,6 +884,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       for (const s of e?.segSrcs.values() ?? []) { try { s.stop() } catch { /* noop */ } }
     }
     audioCtxRef.current?.close().catch(() => {})
+    masterGainRef.current = null
   }, [])
 
   // クリップごとの読み込み済み範囲を集計してストアへ(タイムラインのバッファバー用)。
@@ -908,7 +983,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const VID_CACHE_MAX = 400e6   // Blob合計の上限(超過時は再生ヘッドから遠い順に破棄)
   useEffect(() => {
     const iv = setInterval(() => {
-      if (document.hidden) return
+      if (document.hidden || CAPTURE) return
       const { clips: cs, tracks: ts, currentFrame: f } = useTimelineStore.getState()
       const all = assetsRef.current
 
@@ -1149,53 +1224,177 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   //         シグマは 1080p 基準 → キャンバスの実ピクセル高さに比例させる。
   const blurTmpRef = useRef<HTMLCanvasElement | null>(null)
   const blurSmallRef = useRef<HTMLCanvasElement | null>(null)
-  const drawFilterClip = (ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, clip: typeof clips[number]) => {
+  // 🎬 撮影レイヤーの WebGL 描画(初めて撮影クリップを描くときに作る)。比べる(左右・素の絵)が変わったら描き直す
+  const satsueiRef = useRef<SatsueiRenderer | null>(null)
+  // このコマで「比べる」の右側を描いた範囲ごとの境目の白線(キャンバスの px。⇔ 比較表示ではその枠の中だけ)
+  const satsueiSplitRef = useRef<{ x: number; y: number; h: number }[]>([])
+  useEffect(() => subscribeSatsueiCompare(() => setRedraw(n => n + 1)), [])
+  useEffect(() => () => { satsueiRef.current?.dispose(); satsueiRef.current = null }, [])
+  //  lay: フィルタートラックの配置矩形(⇔比較表示)。指定があればその範囲にだけ作用させる。
+  //       比較表示では右(参照動画)に効かせない — 参照は元から撮影処理済みで二重掛けになる。
+  const drawFilterClip = (ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, clip: typeof clips[number],
+                          lay: { x: number; y: number; w: number; h: number } | null) => {
     const v = filterValueAt(clip, currentFrame)
+    const r = lay ?? { x: 0, y: 0, w: projW, h: projH }        // 作用範囲(プロジェクト座標)
     if (clip.kind === 'solid') {
       const a = Math.max(0, Math.min(1, v * (clip.opacity ?? 1)))
       if (a <= 0.001) return
       ctx.save()
       ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a
-      ctx.fillStyle = solidColor(clip); ctx.fillRect(0, 0, projW, projH)
+      ctx.fillStyle = solidColor(clip); ctx.fillRect(r.x, r.y, r.w, r.h)
       ctx.restore()
       return
     }
-    const sigma = v * cv.height / 1080
+    // 作用範囲をキャンバスの実ピクセルへ。シグマは範囲の高さに比例(全画面なら従来どおり)。
+    const ps = cv.width / projW
+    const px = Math.round(r.x * ps), py = Math.round(r.y * ps)
+    const pw = Math.max(1, Math.min(cv.width - px, Math.round(r.w * ps)))
+    const ph = Math.max(1, Math.min(cv.height - py, Math.round(r.h * ps)))
+    const sigma = v * ph / 1080
     if (sigma < 0.05) return
     let tmp = blurTmpRef.current
     if (!tmp) { tmp = document.createElement('canvas'); blurTmpRef.current = tmp }
-    if (tmp.width !== cv.width || tmp.height !== cv.height) { tmp.width = cv.width; tmp.height = cv.height }
+    if (tmp.width !== pw || tmp.height !== ph) { tmp.width = pw; tmp.height = ph }
     const tctx = tmp.getContext('2d'); if (!tctx) return
     tctx.setTransform(1, 0, 0, 1, 0, 0); tctx.globalCompositeOperation = 'copy'; tctx.globalAlpha = 1
-    tctx.drawImage(cv, 0, 0)
+    tctx.drawImage(cv, px, py, pw, ph, 0, 0, pw, ph)
     ctx.save()
     ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip()    // 範囲の外(比較の右側など)へ滲ませない
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
     if (typeof ctx.filter === 'string' && !/^((?!chrome|android).)*safari/i.test(navigator.userAgent)) {
       // 端は透明と混ざって薄くなるので、元の(鮮明な)絵の上に重ねる=端だけ僅かに鮮明寄り
       ctx.filter = `blur(${sigma.toFixed(2)}px)`
-      ctx.drawImage(tmp, 0, 0)
+      ctx.drawImage(tmp, px, py)
     } else {
       // ctx.filter 非対応(Safari): 縮小→拡大の近似ぼかし
       const k = Math.max(1, sigma * 0.9)
       let sm = blurSmallRef.current
       if (!sm) { sm = document.createElement('canvas'); blurSmallRef.current = sm }
-      const sw = Math.max(1, Math.round(cv.width / k)), sh = Math.max(1, Math.round(cv.height / k))
+      const sw = Math.max(1, Math.round(pw / k)), sh = Math.max(1, Math.round(ph / k))
       if (sm.width !== sw || sm.height !== sh) { sm.width = sw; sm.height = sh }
       const sctx = sm.getContext('2d')
       if (sctx) {
         sctx.imageSmoothingQuality = 'high'
         sctx.drawImage(tmp, 0, 0, sw, sh)
         ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(sm, 0, 0, cv.width, cv.height)
+        ctx.drawImage(sm, px, py, pw, ph)
       }
     }
     ctx.restore()
   }
 
+  // 🎬 撮影レイヤー(調整レイヤー): このトラックで再生位置にかかる撮影クリップをまとめて解き(重なりは溶け A→B)、
+  // ここまでに合成した絵へ WebGL で 1 回だけかける。式は satsueiLook / 書き出しの satsuei_fx と同じ。
+  //  lay: 配置矩形(⇔比較表示)があればその範囲にだけ。比べる: bypass = かけない / enabled = split より右だけ描き戻す。
+  //  WebGL が使えないときは何もしない(素の絵のまま)
+  const drawSatsuei = (ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, laneClips: typeof clips,
+                       lay: { x: number; y: number; w: number; h: number } | null, trackId: number) => {
+    const cmp = getSatsueiCompare()
+    if (cmp.bypass) return
+    const spec = layerSpecOf(resolveLayer(laneClips, currentFrame), currentFrame)
+    if (!spec) return
+    const r = lay ?? { x: 0, y: 0, w: projW, h: projH }
+    const ps = cv.width / projW
+    const px = Math.round(r.x * ps), py = Math.round(r.y * ps)
+    const pw = Math.max(1, Math.min(cv.width - px, Math.round(r.w * ps)))
+    const ph = Math.max(1, Math.min(cv.height - py, Math.round(r.h * ps)))
+    let R = satsueiRef.current
+    if (!R) {
+      R = new SatsueiRenderer(); satsueiRef.current = R
+      R.onRestored = () => setRedraw(n => n + 1)      // WebGL が戻ったら、止めている絵も撮影つきで描き直す
+    }
+    // 比べるの境目は撮影がかかる範囲の幅に対する割合(⇔ 比較表示ではその枠の中で左右に分ける)
+    const splitX = cmp.enabled ? Math.round(cmp.split * pw) : 0
+    if (R.apply(ctx, cv, { x: px, y: py, w: pw, h: ph }, spec, currentFrame, cmp.enabled ? { splitX } : undefined) && cmp.enabled) {
+      satsueiSplitRef.current.push({ x: px + splitX, y: py, h: ph })
+    }
+    // 次のカットの LUT は手の空いたときに先に作る(カットの替わり目のコマで 65³ を作ると、そのコマが遅れる)
+    const near: SatsueiParams[] = []
+    const onTrack = clips.filter(c => c.track_id === trackId && isSatsueiClip(c))
+    const next = onTrack.filter(c => c.start_frame > currentFrame && c.start_frame - currentFrame <= projectFps * 20)
+      .sort((a, b) => a.start_frame - b.start_frame).slice(0, 3)
+    const prev = onTrack.filter(c => c.start_frame + c.duration_frames <= currentFrame && currentFrame - (c.start_frame + c.duration_frames) < projectFps * 10)
+      .sort((a, b) => b.start_frame + b.duration_frames - (a.start_frame + a.duration_frames)).slice(0, 2)
+    for (const c of [...next, ...prev]) near.push(satsueiOf(c.attrs_json))
+    if (near.length) R.prefetch(near)
+  }
+
+  // 🔤 字幕(kind='credit'): ここまでに合成した絵(下のトラック全部)を、字幕の文字の形の中だけ屈折させてガラスの文字を描く。
+  // 地図(文字の形・屈折の向き)は backend が作る(creditFields)。コマごとの数は creditLook.frameScalars、画素は creditGL。
+  // 枠 = キャンバス全体(⚡軽量 1280×731 / 高画質 1344×768)か、トラックの配置矩形(⇔比較表示。丸めは撮影と同じ)
+  const creditRef = useRef<CreditRenderer | null>(null)
+  useEffect(() => subscribeCreditMaps(() => setRedraw(n => n + 1)), [])
+  useEffect(() => subscribeCreditUi(() => setRedraw(n => n + 1)), [])
+  useEffect(() => { void loadCreditMeta() }, [])
+  useEffect(() => () => { creditRef.current?.dispose(); creditRef.current = null }, [])
+  const creditBoxOf = (cv: HTMLCanvasElement, lay: { x: number; y: number; w: number; h: number } | null) => {
+    if (!lay) return { x: 0, y: 0, w: cv.width, h: cv.height }
+    const ps = cv.width / projW
+    const px = Math.round(lay.x * ps), py = Math.round(lay.y * ps)
+    const pw = Math.max(1, Math.min(cv.width - px, Math.round(lay.w * ps)))
+    const ph = Math.max(1, Math.min(cv.height - py, Math.round(lay.h * ps)))
+    return { x: px, y: py, w: pw, h: ph }
+  }
+  const drawCredit = (ctx: CanvasRenderingContext2D, cv: HTMLCanvasElement, clip: typeof clips[number],
+                      lay: { x: number; y: number; w: number; h: number } | null) => {
+    const credit = creditOf(clip.attrs_json)
+    if (!credit.name) return
+    const b = creditBoxOf(cv, lay)
+    // 取れるまでは前の地図(位置だけの変更なら動かして)。何も無ければ描かない(再生は待たない)
+    const use = creditMapsFor(clip.id, credit, [b.w, b.h], [projW, projH], { debounce: true })
+    if (!use) return
+    const sc = frameScalars(credit, use.maps.header, clip, currentFrame, projectFps)
+    if (!sc.active) return
+    let R = creditRef.current
+    if (!R) {
+      R = new CreditRenderer(); creditRef.current = R
+      R.onRestored = () => setRedraw(n => n + 1)
+    }
+    // 「書き出しと同じ計算」を頼まれていれば、字幕を描く前と後の枠の絵を写す
+    const snap = use.stale ? null : takeCreditSnapshot(clip.id)      // 前の地図の代わりで描いている間は写さない
+    const grab = () => {
+      const t = document.createElement('canvas'); t.width = b.w; t.height = b.h
+      t.getContext('2d')!.drawImage(cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h)
+      return t.toDataURL('image/png')
+    }
+    const below = snap ? grab() : ''
+    R.apply(ctx, cv, b, use, sc, credit.refract, credit.style.sheen)
+    if (snap) snap({ below, preview: grab(), frame: currentFrame, box: [b.w, b.h] })
+    creditDebugState.lastMs = R.lastMs
+    if (CREDIT_DEBUG) { const cm = creditDebugState.creditMs; cm.push(R.lastMs); if (cm.length > 600) cm.splice(0, cm.length - 600) }
+  }
+  // 再生で字幕に入るとき地図を待たないように、10 秒以内に始まる字幕の地図を先に取る(パネルを開いている間は全部、近い順)
+  const prefetchCredits = (cv: HTMLCanvasElement) => {
+    const all = creditPanelClipId() != null
+    const horizon = projectFps * 10
+    const list: Parameters<typeof prefetchCreditMaps>[0] = []
+    const alive = new Set<number>()
+    for (const c of clips) {
+      if (!isCreditClip(c)) continue
+      alive.add(c.id)
+      const end = c.start_frame + c.duration_frames
+      const dist = c.start_frame > currentFrame ? c.start_frame - currentFrame : end <= currentFrame ? currentFrame - end + 1 : 0
+      if (!all && (dist > horizon || end <= currentFrame)) continue
+      const tr = tracks.find(t => t.id === c.track_id)
+      if (!tr || tr.track_type !== 'video' || tr.hidden) continue
+      const b = creditBoxOf(cv, trackLayout(tr.layout_json))
+      list.push({ credit: creditOf(c.attrs_json), box: [b.w, b.h], content: [projW, projH], prio: dist })
+    }
+    if (list.length) prefetchCreditMaps(list)
+    pruneCreditClips(alive)                         // 消した字幕の「前の地図」(大きな配列)を握り続けない
+  }
+  // ▶ 出現から再生(字幕パネル): from から再生して to の手前で止める
+  const stopAtRef = useRef<number | null>(null)
+
   const drawComposite = () => {
     const cv = compRef.current; if (!cv) return
     const ctx = cv.getContext('2d'); if (!ctx) return
+    if (CAPTURE) {                          // 🎥 撮影用: 絵は撮影側が <img> で差し込む
+      if (cv.width !== 320) { cv.width = 320; cv.height = Math.round(320 * projH / projW) }
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, cv.width, cv.height)
+      return
+    }
     // 軽量プレビュー: cap the backing-store resolution (fill cost ∝ pixels). All
     // draw code stays in project-frame coordinates; a base transform scales down.
     const capW = lightPreview ? 1280 : 3840
@@ -1205,6 +1404,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     ctx.setTransform(s, 0, 0, s, 0, 0)                 // draw in projW×projH space
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, projW, projH)
+    // 🔤 debug(?debug=credit だけ): 下の絵の代わりに差し込んだ静止画を敷き、字幕だけを描く(ヘッドレスは H.264 を読めない)
+    const dbgUnder = CREDIT_DEBUG ? creditDebugState.underlay : null
+    const dbgT0 = CREDIT_DEBUG ? performance.now() : 0
     // ── 境界フリーズ判定 ──────────────────────────────────────────
     // 主動画が担当するクリップがこのフレームを覆っているのに、<video>がまだ
     // その素材を表示できる状態でない(読み込み/シーク中)なら、部分的に合成せず
@@ -1220,7 +1422,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       const videoReady = (!!vv && loadedAssetId === activeClip?.asset_id
         && vv.readyState >= 2 && !vv.seeking)
         || (!!lvA && lvA.readyState >= 2 && !lvA.seeking && lvA.videoWidth > 0)   // 遷移直後: 補助<video>が担当中
-      if (!compareMode && !diffMode && !previzMode && needVideo && !videoReady) {
+      if (!compareMode && !diffMode && !previzMode && needVideo && !videoReady && !dbgUnder) {
         const lg = lastGoodRef.current.canvas
         if (lg && lg.width) {
           ctx.setTransform(1, 0, 0, 1, 0, 0)
@@ -1311,19 +1513,41 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     // 🎞プレビズ中はベース(最背面)の映像トラックをノイズで置き換えるので描かない
     const vtsAll = tracks.filter(t => t.track_type === 'video' && !t.hidden).sort((a, b) => b.order - a.order)
     const vts = previzMode ? vtsAll.slice(1) : vtsAll
+    satsueiSplitRef.current = []
+    if (dbgUnder) { ctx.drawImage(dbgUnder, 0, 0, projW, projH) }
     for (const tr of vts) {
       if (previewHidden.includes(tr.id)) continue   // hidden in preview (not render)
       // 同一レイヤーで重なるクリップは開始順に全て描く(後のクリップが上、重なり区間は遷移として alpha ランプ)
-      const laneClips = clips.filter(c => c.track_id === tr.id && c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
-        .sort((a, b) => a.start_frame - b.start_frame)
+      // 🔤 字幕どうしは (開始, id) の順(書き出しと同じ。後の字幕は前の字幕を描いた絵を屈折させる)
+      let laneClips = clips.filter(c => c.track_id === tr.id && c.start_frame <= currentFrame && c.start_frame + c.duration_frames > currentFrame)
+        .sort((a, b) => a.start_frame - b.start_frame || (isCreditClip(a) && isCreditClip(b) ? a.id - b.id : 0))
       if (laneClips.length === 0) continue
+      // 🎬 いちばん下のトラック(書き出しのベース)に撮影があるときは、フィルターを素材のあとにまとめて掛ける。
+      // 書き出しはベースの素材をつないでから、ベースのフィルターを開始順に掛ける(後から始まる素材にも撮影がかかる)
+      if (tr === vtsAll[0] && laneClips.some(isSatsueiClip)) {
+        laneClips = [...laneClips.filter(c => !isFilterClip(c)), ...laneClips.filter(c => isFilterClip(c))]
+      }
       // 直前(下)のクリップの絵が描けたか。描けていない重なり区間では後クリップのランプを
       // 止めて不透明で描く(半透明の下に更に下のレイヤーが透けるのを防ぐ)。
       let prevDrawn = true
+      let satsueiDone = false
       for (const clip of laneClips) {
+      // 🔤 字幕: ここまでの絵(下のトラック全部 + このトラックで先に描いたもの)を屈折させてガラスの文字を描く
+      if (isCreditClip(clip)) {
+        drawCredit(ctx, cv, clip, trackLayout(tr.layout_json))
+        prevDrawn = true
+        continue
+      }
+      if (dbgUnder) continue
+      // 🎬 撮影: このレイヤーの撮影クリップはまとめて 1 回(重なりの溶けも中で解く)。順番は最初の撮影クリップの位置
+      if (isSatsueiClip(clip)) {
+        if (!satsueiDone) { satsueiDone = true; drawSatsuei(ctx, cv, laneClips, trackLayout(tr.layout_json), tr.id) }
+        prevDrawn = true
+        continue
+      }
       // ■単色 / ◌ぼかし(フィルターレイヤー): 素材を持たず、ここまでの合成結果に作用する
       if (isFilterClip(clip)) {
-        drawFilterClip(ctx, cv, clip)
+        drawFilterClip(ctx, cv, clip, trackLayout(tr.layout_json))
         prevDrawn = true
         continue
       }
@@ -1488,6 +1712,21 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       prevDrawn = drawn || clip.asset_id == null
       }
     }
+    prefetchCredits(cv)
+    if (CREDIT_DEBUG) {
+      const fm = creditDebugState.frameMs
+      fm.push(performance.now() - dbgT0)
+      if (fm.length > 600) fm.splice(0, fm.length - 600)
+    }
+    // 🎬 比べる: 撮影なし(左)と撮影あり(右)の境目に細い白線(撮影をかけた範囲ごと)
+    if (satsueiSplitRef.current.length) {
+      ctx.save()
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 0.9
+      ctx.fillStyle = '#fff'
+      for (const ln of satsueiSplitRef.current) ctx.fillRect(ln.x - (cv.width > 1600 ? 1 : 0), ln.y, cv.width > 1600 ? 2 : 1, ln.h)
+      ctx.restore()
+    }
 
     // Image(Ref)ピン選択中はその画像をcontainでフル表示(小サムネ確認の代替)。
     // 最後に選択したピンを優先。選択解除で通常の合成表示に戻る。
@@ -1606,7 +1845,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   useEffect(() => {
     const el = canvasRef.current
     if (!el) return
-    const ar = projW / projH
+    const ar = (projW * view.w) / (projH * view.h)     // 比較表示は帯の縦横比
     const update = () => {
       const cw = el.clientWidth, ch = el.clientHeight
       let w = cw, h = cw / ar
@@ -1617,7 +1856,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [projW, projH])
+  }, [projW, projH, view.w, view.h])
+
+  // 🎥 撮影用モード: 撮影スクリプトから再生位置を動かす口
+  useEffect(() => {
+    if (!CAPTURE) return
+    ;(window as unknown as { __kycha?: unknown }).__kycha = {
+      setFrame: (f: number) => useTimelineStore.getState().setCurrentFrame(f),
+      store: useTimelineStore,                                   // クリップ選択・拡大率など
+      setAutoFit: (v: boolean) => { captureState.autoFit = v },   // false で全尺合わせを止める
+    }
+  }, [])
 
   const cycleGuide = () =>
     setGuideMode(m => (m === 'off' ? 'thirds' : m === 'thirds' ? 'safe' : 'off'))
@@ -1632,7 +1881,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   lastEndRef.current = lastClipEnd
 
   useEffect(() => {
-    if (!playing) return
+    if (!playing) { stopAtRef.current = null; return }
     let raf: number
     let last = performance.now()
     let acc = 0   // fractional-frame accumulator
@@ -1643,6 +1892,13 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       if (adv > 0) {
         acc -= adv
         const next = useTimelineStore.getState().currentFrame + adv
+        const stopAt = stopAtRef.current
+        if (stopAt != null && next >= stopAt) {     // 🔤 ▶ 出現から再生: 字幕の終わりで止める
+          setCurrentFrame(Math.max(0, stopAt - 1))
+          stopAtRef.current = null
+          setPlaying(false)
+          return
+        }
         if (next >= lastEndRef.current) {           // end of timeline → stop
           setCurrentFrame(Math.max(0, lastEndRef.current - 1))
           setPlaying(false)
@@ -1661,7 +1917,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return
       const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      // 文字を打つ欄だけ除く(🔊 音量のスライダー = range にフォーカスがあっても再生/停止できるように)
+      if (t && ((t.tagName === 'INPUT' && (t as HTMLInputElement).type !== 'range') || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       e.preventDefault()
       unlockAudioPool()
       setPlaying(p => !p)
@@ -1671,6 +1928,34 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   }, [])
 
   const togglePlay = () => { unlockAudioPool(); setPlaying(p => !p) }
+
+  // 🔤 字幕パネルの「▶ 出現から再生」: from から再生して to(含まない)の手前で止める
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ from: number; to: number }>).detail
+      if (!d || !Number.isFinite(d.from)) return
+      setCurrentFrame(Math.max(0, Math.round(d.from)))
+      stopAtRef.current = Number.isFinite(d.to) ? Math.round(d.to) : null
+      unlockAudioPool()
+      setPlaying(true)
+    }
+    window.addEventListener('kychapogas:play-range', on)
+    return () => window.removeEventListener('kychapogas:play-range', on)
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 🔤 debug(?debug=credit): ヘッドレスの確かめ用の口(静止画の差し込み・再生・描画時間)
+  useEffect(() => {
+    if (!CREDIT_DEBUG) return
+    installCreditDebug({
+      store: useTimelineStore,
+      projects: useProjectStore,
+      setUnderlay: (img: CanvasImageSource | null) => { creditDebugState.underlay = img; setRedraw(n => n + 1) },
+      play: (v: boolean) => setPlaying(v),
+      canvas: () => compRef.current,
+      redraw: () => setRedraw(n => n + 1),
+      setLight: (v: boolean) => setLightPreview(v),
+    })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const goToStart = () => {
     setPlaying(false)
@@ -1699,7 +1984,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         {/* HTML5 video — hidden frame-source; the compositor draws its frame */}
         <video ref={videoRef} className="hidden" playsInline preload="auto" />
         {/* 比較表示中は映像レイヤーごとに<video>を持たせる(本体1本だと全レイヤーが同じ絵になる) */}
-        {compareMode && tracks
+        {compareMode && !CAPTURE && tracks
           .filter(t => t.track_type === 'video' && !t.hidden && !previewHidden.includes(t.id))
           .map(t => {
             const c = clips.find(c2 => c2.track_id === t.id
@@ -1724,9 +2009,10 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
 
         {/* 同一レイヤーの重なり遷移: 本体<video>が担当しない側のクリップにも再生追従する
             <video>を持たせる(-clip.id で登録)。少し手前(12f)から用意して読み込みを済ませる */}
-        {clips
+        {!CAPTURE && clips
           .filter(c => {
             if (c.asset_id == null) return false
+            if (c.kind === 'rain') return false        // 🌧 雨クリップは下の専用ブロックで持つ(同じ key を作らない)
             const t = tracks.find(x => x.id === c.track_id)
             if (!t || t.track_type !== 'video' || t.hidden || previewHidden.includes(t.id)) return false
             const cEnd = c.start_frame + c.duration_frames
@@ -1758,16 +2044,48 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
             )
           })}
 
+        {/* 🌧 雨クリップ: 雨の層(黒地に雨だけ)を再生に追従する専用の<video>で持つ(-clip.id で登録)。
+            合成は drawComposite の screen + globalAlpha(=不透明度)。書き出しの blend=screen:all_opacity と同じ式。
+            原本を使う: 640px のプロキシでは 1〜2px の雨筋が消え、書き出しと見た目が合わなくなる。48f 手前から用意する */}
+        {!CAPTURE && clips
+          .filter(c => c.kind === 'rain' && c.asset_id != null
+            && currentFrame >= c.start_frame - 48 && currentFrame < c.start_frame + c.duration_frames)
+          .filter(c => {
+            const t = tracks.find(x => x.id === c.track_id)
+            return !!t && t.track_type === 'video' && !t.hidden && !previewHidden.includes(t.id)
+          })
+          .map(c => (
+            <LayerVideo
+              key={-c.id}
+              trackId={-c.id}
+              clip={c}
+              proxy={false}
+              projectFps={projectFps}
+              currentFrame={currentFrame}
+              playing={playing}
+              reg={regLayerVid}
+              onFrame={bumpRedraw}
+            />
+          ))}
+
         {/* WYSIWYG compositor: all video tracks composited at the playhead
             (transforms / opacity / blend / text) so the timeline is what-you-see. */}
-        <canvas ref={compRef} className="max-w-full max-h-full object-contain"
-                style={gradeOn ? {
-                  // 撮影パス近似: gblur0.35→blur / 黒締め→contrast+brightness
-                  filter: 'blur(0.35px) contrast(1.035) brightness(0.985)',
-                } : undefined} />
+        {/* 表示範囲(view)の枠。canvas は全画面の比率のまま大きく置き、枠で切り抜く
+            (比較表示では上下の黒帯が枠の外に出る)。通常表示では枠=全画面 */}
+        <div className="relative overflow-hidden flex-shrink-0" style={{ width: box.w, height: box.h }}>
+          <canvas ref={compRef} className="absolute max-w-none"
+                  style={{
+                    width: box.w / view.w, height: box.h / view.h,
+                    left: -view.x * box.w / view.w, top: -view.y * box.h / view.h,
+                    // 撮影パス近似: gblur0.35→blur / 黒締め→contrast+brightness
+                    ...(gradeOn && !CAPTURE ? { filter: 'blur(0.35px) contrast(1.035) brightness(0.985)' } : {}),
+                  }} />
+          {/* 🎥 撮影用: 書き出し済みの映像のフレームをここへ差し込む(capture.mjs) */}
+          {CAPTURE && <img data-capture-frame="" alt="" className="absolute inset-0 w-full h-full" />}
+        </div>
         {/* 撮影パス近似の残り2段: 弱ビネット + 静的グレイン(SVG feTurbulence)。
             書き出しのグレインは時間変化するが、プレビューは負荷を避け100%静止。 */}
-        {gradeOn && box.w > 1 && (
+        {gradeOn && !CAPTURE && box.w > 1 && (
           <div className="absolute pointer-events-none"
                style={{
                  width: box.w, height: box.h, left: '50%', top: '50%',
@@ -1809,6 +2127,11 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           </div>
         )}
 
+        {/* 💍 指輪の位置: ON の間だけ、プレビュー全体を受け口で覆って印を付ける(クリックはほかへ漏らさない) */}
+        {!CAPTURE && box.w > 1 && <RingOverlay box={box} view={view} assets={assets} projH={projH} />}
+        {/* 🔤 字幕パネルを開いている間: 字幕の枠(ドラッグで位置・ホイールで大きさ) */}
+        {!CAPTURE && box.w > 1 && <CreditOverlay box={box} view={view} projW={projW} projH={projH} canvasRef={compRef} />}
+
         {/* Empty state */}
         {!activeClip && (
           <span className="text-zinc-700 text-sm">再生ヘッドにクリップがありません</span>
@@ -1816,7 +2139,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
 
         {/* Timecode overlay */}
         {/* 読み込み状態バッジ: 無音/黒画面がロード中かどうかを見分ける */}
-        {(videoBuffering || audioBuffering) && (
+        {!CAPTURE && (videoBuffering || audioBuffering) && (
           <div className="absolute top-2 left-2 flex gap-1.5 pointer-events-none">
             {videoBuffering && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-sky-300 animate-pulse">⏳ 映像読込中</span>
@@ -1842,6 +2165,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           </span>
         )}
         <div className="absolute bottom-2 right-2 font-mono text-[10px] text-white/50 bg-black/40 px-1.5 py-0.5 rounded pointer-events-none">
+          {/* 通しフレーム番号(比較版に焼き込む「1600f」と同じ数) */}
+          {!CAPTURE && <span className="text-yellow-300 text-[12px] font-semibold mr-1.5">{currentFrame}f</span>}
           {String(Math.floor(currentFrame / projectFps / 60)).padStart(2, '0')}:
           {String(Math.floor(currentFrame / projectFps) % 60).padStart(2, '0')}:
           {String(currentFrame % projectFps).padStart(2, '0')}
@@ -1849,7 +2174,7 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-zinc-800 flex-shrink-0 max-sm:overflow-x-auto max-sm:px-2 max-sm:[&>button]:flex-shrink-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 max-sm:[&>span]:flex-shrink-0">
+      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-zinc-800 flex-shrink-0 overflow-x-auto max-sm:px-2 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 [&>span]:flex-shrink-0">
         <button
           onClick={goToStart}
           className="text-zinc-400 hover:text-white text-sm w-6 text-center"
@@ -1862,6 +2187,17 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
         >
           {playing ? '⏸' : '▶'}
         </button>
+        <FrameJump
+          currentFrame={currentFrame}
+          maxFrame={Math.max(0, lastClipEnd - 1)}
+          onJump={f => setCurrentFrame(f)}
+        />
+        <VolumeControl
+          volume={previewVolume}
+          muted={previewMuted}
+          onVolume={setPreviewVolume}
+          onMuted={setPreviewMuted}
+        />
 
         {activeAsset && (
           <span className="text-zinc-500 text-[10px] truncate ml-2 max-w-[120px]">
@@ -1910,6 +2246,25 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
           title="現在の合成フレームを画像としてクリップボードへコピー"
         >📋 コピー</button>
+        <button
+          onClick={async () => {
+            const cv = compRef.current
+            if (!cv) return
+            const blob: Blob | null = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.95))
+            if (!blob) return
+            const f = useTimelineStore.getState().currentFrame
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `frame_${String(f).padStart(5, '0')}.jpg`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 10000)
+          }}
+          className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+          title="現在の合成フレームを JPEG として保存(ダウンロード)"
+        >💾 保存</button>
 
         <button
           onClick={() => setLightPreview(v => !v)}
@@ -1940,13 +2295,16 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           title="歌詞オーバーレイ: 再生位置のカットの歌詞を字幕位置に重ねる(ピンのattrs_jsonが唯一の正)。撮影確認時は切る"
         >🎤 {showLyrics ? '歌詞' : '歌詞'}</button>
 
+        {!CAPTURE && <RingToggleButton />}
+
         <button
           onClick={cycleGuide}
           className={`text-[10px] px-2 py-0.5 rounded ${guideMode !== 'off' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
           title="フレーム枠ガイド: なし → 三分割 → セーフエリア"
         >⊞ {guideMode === 'off' ? 'ガイド' : guideMode === 'thirds' ? '三分割' : 'セーフ'}</button>
 
-        <span className="text-[10px] text-zinc-600 max-sm:hidden">
+        {/* 解像度は見出しにも出ているので、広い画面だけ(番号・音量の欄のぶん場所をあける) */}
+        <span className="text-[10px] text-zinc-600 max-2xl:hidden">
           {projW}×{projH}
         </span>
       </div>

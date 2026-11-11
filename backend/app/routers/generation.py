@@ -9,7 +9,7 @@ import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlmodel import Session
 
 from app.db.database import get_session
@@ -114,6 +114,10 @@ class I2VKeyframe(BaseModel):
 
 
 class VideoI2VRequest(BaseModel):
+    # 未定義のキーは受け取るが、T3(tier="t3")のときだけ params に残す(下の generate_video_i2v)。
+    # それ以外は従来どおり捨てる(UI の quality:"t0" や昇格元の quality:"t1" が効き出さないように)。
+    model_config = ConfigDict(extra="allow")
+
     project_id: int
     keyframes: list[I2VKeyframe]   # sorted by time_sec; frame[0]=start, frame[-1]=end
     duration_sec: float = 3.0
@@ -147,9 +151,24 @@ class VideoI2VRequest(BaseModel):
 
 @router.post("/video/i2v", response_model=JobRead, status_code=201)
 def generate_video_i2v(req: VideoI2VRequest, session: Session = Depends(get_session)):
+    from app.services import h3_guard
     req.validate_keyframes()
-    params = req.model_dump()
+    extras = dict(req.model_extra or {})
+    params = req.model_dump(exclude=set(extras))      # 従来どおり(未定義キーは捨てる)
     params["keyframes"] = [kf.model_dump() for kf in req.keyframes]
+    provided = None
+    if h3_guard.is_t3({**params, **extras}):
+        # T3 は送られた設定をそのまま使う(ガイド・shift・sampler 等を黙って落とさない)。
+        # 必須キーの有無は「実際に送られたキー」で見る(pydantic の既定値で埋まった分は数えない)。
+        params.update(extras)
+        provided = set(req.model_fields_set) | set(extras)
+    problems = h3_guard.check_submission(req.project_id, "generate_video_i2v", params, session, provided)
+    if problems:
+        raise HTTPException(status_code=422, detail={
+            "error": "MiniMax H3 ジョブの事前検査で止めました",
+            "problems": problems,
+            "hint": "app/services/h3_guard.py を参照。系列長の上限は H3_MAX_SEQ_TOKENS",
+        })
     return _create_job(session, req.project_id, "generate_video_i2v", params)
 
 

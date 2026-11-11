@@ -7,6 +7,7 @@
 import { useTimelineStore } from '../../store/timelineStore'
 import { parseTransform } from '../Preview/transformEval'
 import type { Asset } from '../../api/client'
+import { isCreditClip, creditOf, creditLabel } from '../Preview/creditLook'
 
 interface Props { assets: Asset[] }
 
@@ -67,7 +68,7 @@ export function LayerPanel({ assets }: Props) {
             <div className="flex-1 min-w-0">
               <div className="text-[11px] text-zinc-200 truncate leading-tight">{tr.name}</div>
               <div className="text-[9px] text-zinc-500 truncate leading-tight">
-                {clip ? (asset?.name ?? 'クリップ') : '空'}
+                {clip ? (isCreditClip(clip) ? creditLabel(creditOf(clip.attrs_json)) : (asset?.name ?? 'クリップ')) : '空'}
               </div>
             </div>
             {/* badges */}

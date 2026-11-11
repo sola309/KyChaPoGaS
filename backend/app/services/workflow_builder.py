@@ -1397,6 +1397,43 @@ def _h3_apply_turbo(wf: dict, lora_name: str, strength: float,
     return last
 
 
+def _h3_apply_shift(wf: dict, src: str, shift_video: float | None, shift_audio: float | None) -> str:
+    """Turbo LoRA なしで MiniMaxH3SigmaShift だけを src の直後に挿す(T3 で shift を明示したとき)。
+    従来は shift_video/shift_audio が Turbo LoRA 使用時にしか効かず、なしでは黙って無視されていた。
+    None はモデル既定(12/3)。戻り値は新しい src。"""
+    wf["shift"] = {"class_type": "MiniMaxH3SigmaShift", "inputs": {
+        "model": [src, 0],
+        "shift_video": float(shift_video if shift_video is not None else 12.0),
+        "shift_audio": float(shift_audio if shift_audio is not None else 3.0)}}
+    for nid, node in wf.items():
+        if nid == "shift":
+            continue
+        m = node.get("inputs", {}).get("model")
+        if isinstance(m, list) and m[0] == src:
+            node["inputs"]["model"] = ["shift", 0]
+    return "shift"
+
+
+def _h3_apply_style_loras(wf: dict, src: str, loras: list) -> str:
+    """画風用 LoRA(例: 2D Anime↔Realism スライダー)を、モデル供給の最後 src の後ろに連鎖で挿す。
+    src を model として参照していたノードは最後の LoRA を見るよう付け替える。戻り値は新しい src。"""
+    names = []
+    prev = src
+    for i, (lname, strength) in enumerate(loras):
+        nid = f"stylelora{i}"
+        wf[nid] = {"class_type": "LoraLoaderModelOnly",
+                   "inputs": {"lora_name": str(lname), "strength_model": float(strength), "model": [prev, 0]}}
+        names.append(nid)
+        prev = nid
+    for nid, node in wf.items():
+        if nid in names:
+            continue
+        m = node.get("inputs", {}).get("model")
+        if isinstance(m, list) and m[0] == src:
+            node["inputs"]["model"] = [prev, 0]
+    return prev
+
+
 def _h3_apply_sol(wf: dict, src: str, sol: dict) -> str:
     """NVIDIA Sol-Attn(スパース注意, custom_nodes/ComfyUI-sol-attn)を src の後ろに挿す。
     Scheduled 版(tau を高ノイズ→低ノイズで下げる)+ Fused Modulation(ビット一致の融合)。
@@ -1488,7 +1525,10 @@ def build_minimax_h3_video(
     sampler: str | None = None,         # サンプラー上書き
     sol: dict | None = None,            # NVIDIA Sol-Attn(_h3_apply_sol参照)。vdnと排他
     chain: dict | None = None,          # 長尺の継続生成(_h3_apply_chain参照)
+    style_loras: list | None = None,    # 画風 LoRA [(ファイル名, 強度)](_h3_apply_style_loras)
     fbc: dict | None = None,            # First Block Cache(_h3_apply_fbc参照)。{} で既定値
+    scheduler: str = "simple",          # BasicScheduler(従来は simple 固定。T3 は明示値を渡す)
+    shift_always: bool = False,         # True: Turbo なしでも shift_video/shift_audio を効かせる(T3)
 ) -> dict:
     if vdn is not None and turbo_lora:
         raise ValueError("VDN-H3 と Turbo LoRA は併用できません(VDNのturboアダプタが同じ役割)")
@@ -1510,7 +1550,7 @@ def build_minimax_h3_video(
         "guider": {"class_type": "BasicGuider",
                    "inputs": {"model": ["unet", 0], "conditioning": ["cond", 0]}},
         "sched": {"class_type": "BasicScheduler",
-                  "inputs": {"model": ["unet", 0], "scheduler": "simple",
+                  "inputs": {"model": ["unet", 0], "scheduler": scheduler,
                              "steps": steps, "denoise": 1.0}},
         "smp": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "res_multistep"}},
         "noise": {"class_type": "RandomNoise", "inputs": {"noise_seed": s}},
@@ -1547,6 +1587,10 @@ def build_minimax_h3_video(
                               shift_video, shift_audio, sampler)
     elif sampler:
         wf["smp"]["inputs"]["sampler_name"] = sampler
+    if shift_always and not turbo_lora and (shift_video is not None or shift_audio is not None):
+        src = _h3_apply_shift(wf, src, shift_video, shift_audio)
+    if style_loras:
+        src = _h3_apply_style_loras(wf, src, style_loras)
     if vdn is not None:   # {} でも適用(空dict=既定設定)
         if sol is not None:
             raise ValueError("Sol-Attn と VDN-H3 は併用できません(同じ注意経路を置き換える)")
@@ -1598,9 +1642,11 @@ def build_minimax_h3_ref_video(
     sampler: str | None = None,           # サンプラー上書き
     sol: dict | None = None,            # NVIDIA Sol-Attn(_h3_apply_sol参照)。vdnと排他
     chain: dict | None = None,          # 長尺の継続生成(_h3_apply_chain参照)
+    style_loras: list | None = None,    # 画風 LoRA [(ファイル名, 強度)](_h3_apply_style_loras)
     guides: list[dict] | None = None,   # 任意フレームへの画像アンカー [{"image": input名, "frame_idx": int}]
     fun_controls: list[dict] | None = None,  # Fun ControlNet(_h3_apply_fun_control参照)。複数可(強度は合算)
     fbc: dict | None = None,            # First Block Cache(_h3_apply_fbc参照)。{} で既定値
+    shift_always: bool = False,         # True: Turbo なしでも shift_video/shift_audio を効かせる(T3)
 ) -> dict:
     """MiniMax H3 Ref2VA: 参照(画像≤9/動画≤3/音声≤3)+指示文→映像+音声。
 
@@ -1652,6 +1698,7 @@ def build_minimax_h3_ref_video(
     }
     # Autogrowのスロット名は range(max) 由来の0始まり(ref_image_0..8)。
     # 1始まりで書くと8枚までは偶然通り、9枚目のref_image_9だけが存在せず落ちる。
+    # [:9]/[:3] は最後の安全網。上限超えは h3_guard が投入時/実行開始時に止めるので、正しいジョブでは届かない。
     for i, name in enumerate((ref_image_names or [])[:9]):
         wf[f"rimg{i}"] = {"class_type": "LoadImage", "inputs": {"image": name}}
         cond_inputs[f"ref_images.ref_image_{i}"] = [f"rimg{i}", 0]
@@ -1707,6 +1754,10 @@ def build_minimax_h3_ref_video(
                               shift_video, shift_audio, sampler)
     elif sampler:
         wf["smp"]["inputs"]["sampler_name"] = sampler
+    if shift_always and not turbo_lora and (shift_video is not None or shift_audio is not None):
+        src = _h3_apply_shift(wf, src, shift_video, shift_audio)
+    if style_loras:
+        src = _h3_apply_style_loras(wf, src, style_loras)
     if vdn is not None:   # {} でも適用(空dict=既定設定)
         if sol is not None:
             raise ValueError("Sol-Attn と VDN-H3 は併用できません(同じ注意経路を置き換える)")

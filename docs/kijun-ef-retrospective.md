@@ -125,6 +125,10 @@ project 32「帰巡の物語ef」(元ネタ sm25396663 のパロディ再現、1
   手順: ぼかしトラックを hidden にしてネイティブ書き出し → SeedVR2 → 1440p 上で gblur(σ × h/1080)→ グレイン。
   単色フェードはぼかしと順序を入れ替えても結果が同じなので焼き込んだままでよい。
 - **グレイン(film grade)は最後。** 高精細化の前に乗せると粒が拡大・強調される。
+- **RGB→YUV は BT.709 を明示する。** PNG(RGB)を ffmpeg で動画にするとき、指定がないと BT.601 の式で変換される。
+  BT.709 のタグを付けると再生時に赤・緑がずれる(最初の SeedVR2 版で発生し、`finalize_709.py` で作り直した)。
+  `scale=out_color_matrix=bt709:out_range=tv,format=yuv420p` と `-colorspace bt709` 等のタグを必ず付ける。
+  逆方向(動画→PNG)も `scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=rgb24` を明示する。
 - 実装: `outputs/kijun-ef/seedvr2_full/pipeline.py <render_job>`(途中再開可)、ぼかし対応版 `pipeline_blurfix.py`。
 
 ### 投稿用エンコード
@@ -141,6 +145,20 @@ project 32「帰巡の物語ef」(元ネタ sm25396663 のパロディ再現、1
   YouTube 版(1440p)をニコニコに上げるのは仕様外。
 - Google ドライブへの送信は rclone(`gdrive:` リモート、scope=drive.file)。リモート操作中でも、
   認証 URL をスマホで開き、リダイレクト先 URL を貼ってもらえば PC に触らず認証できる。
+
+### 制作風景動画(UI 込み)
+
+- `?capture=1` を付けて開くと撮影用モードになる(`frontend/src/capture.ts`)。タイムラインは全レーン・全尺を一画面に出し、
+  空トラックを省き、再生ヘッドを太くする。自動リロード・共同編集への参加・通知は止まる。
+- ヘッドレスの Chromium は H.264 を再生できない → プレビューには書き出し済みの映像のフレームを差し込む
+  (`outputs/kijun-ef/making/capture.mjs`。Playwright の route で `/__capframe/NNNNN.png` を返す。Service Worker は止める)。
+- 2304×1296(CSS)× 拡大率 1.111 で撮ると 2560×1440 になり、文字の読みやすさとプレビューの大きさの釣り合いがよい。1 フレーム約 0.35 秒。
+- 比較表示のプレビューは、レイヤー配置の外接矩形だけを表示する(上下の黒帯を出さない)。書き出しは 16:9 のまま。
+- 解説付きの全体版(約 7〜9 分)は `outputs/kijun-ef/making2/`: UI の各画面(キャスト名簿・テイク履歴・ショット調整・
+  フィルター・書き出し)を `tour.mjs` で 2 倍解像度で撮り、`build.py` が台本 `script_data.py` から場面を合成、
+  `assemble.py` が UI 込み比較版とつないで書き出す。紹介するカットは**タイムラインで採用中のテイク**を基準にする
+  (採用されていない実験テイクを見せると視聴者が混乱する)。
+- ナレーションに実在の声優の声を学習した声は公開版では使わない(公開版はテロップのみ、杏子ボイスは非公開版だけ)。
 
 ---
 

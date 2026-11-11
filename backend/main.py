@@ -15,6 +15,10 @@ from app.routers import (projects, assets, tracks, clips, jobs, generation, llm,
                          analysis, puppet, companion, settings as settings_router, engines as engines_router,
                          mad as mad_router, inspect as inspect_router, comments as comments_router,
                          music as music_router, lora as lora_router)
+from app.routers import rain as rain_router   # 🌧 雨フィルター(app/services/rain_fx.py)
+from app.routers import satsuei as satsuei_router   # 🎬 撮影レイヤー(app/services/satsuei_fx.py)
+from app.routers import library as library_router   # 📚 共有素材ライブラリ(app/services/library_cuts.py)
+from app.routers import credits as credits_router   # 🔤 字幕クリップ(app/services/credit_fx.py)
 from app.services import job_runner
 
 logging.basicConfig(level=logging.INFO)
@@ -136,6 +140,10 @@ app.include_router(inspect_router.router, prefix="/api")
 app.include_router(comments_router.router, prefix="/api")
 app.include_router(music_router.router, prefix="/api")
 app.include_router(lora_router.router, prefix="/api")
+app.include_router(rain_router.router, prefix="/api")
+app.include_router(satsuei_router.router, prefix="/api")
+app.include_router(library_router.router, prefix="/api")
+app.include_router(credits_router.router, prefix="/api")
 
 
 @app.get("/api/build-id")

@@ -11,6 +11,7 @@ import { assetsApi, api } from '../api/client'
 import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
 import { useCollab } from '../hooks/useCollab'
 import { CollabBar } from '../components/CollabBar'
+import { CAPTURE } from '../capture'
 
 const MIN_TIMELINE_H  = 120
 const MAX_TIMELINE_H  = 600
@@ -97,7 +98,8 @@ export function ProjectView() {
   }, [activeProject?.id])
 
   // Realtime collaboration presence
-  useCollab(activeProject?.id)
+  // 🎥 撮影用モードでは参加しない(他の人の画面に撮影用ブラウザが現れないように)
+  useCollab(CAPTURE ? undefined : activeProject?.id)
 
   // Resizable split between preview and timeline (Pointer Events → touch + mouse)
   const handleDividerPointerDown = useCallback((e: React.PointerEvent) => {
@@ -153,7 +155,7 @@ export function ProjectView() {
               }}
             >📦 書き出し</button>
             <span className="max-sm:hidden"><SaveIndicator /></span>
-            <CollabBar />
+            {!CAPTURE && <CollabBar />}
           </div>
         </div>
 
@@ -171,7 +173,8 @@ export function ProjectView() {
         />
 
         {/* Timeline */}
-        <div className="flex-shrink-0 border-t border-zinc-800" style={{ height: timelineH }}>
+        {/* 🎥 撮影用モード: タイムラインは中身の高さ(全レーン・全トラック)。残りをプレビューに */}
+        <div className="flex-shrink-0 border-t border-zinc-800" style={{ height: CAPTURE ? 'auto' : timelineH }}>
           <Timeline
             projectId={activeProject.id}
             fps={activeProject.fps}

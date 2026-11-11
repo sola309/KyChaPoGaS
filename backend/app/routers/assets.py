@@ -322,19 +322,60 @@ def get_filmstrip(asset_id: int, count: int = 10, session: Session = Depends(get
     dest_dir = FILMSTRIP_DIR / str(asset.project_id)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{asset_id}_strip96_{n}.jpg"
-    if not dest.exists():
-        fps = n / max(0.1, asset.duration_sec)
-        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-        proc = subprocess.run(
-            [ffmpeg, "-y", "-i", str(src),
-             "-vf", f"fps={fps:.4f},scale=96:54:force_original_aspect_ratio=increase,crop=96:54,tile={n}x1",
-             "-frames:v", "1", str(dest)],
-            capture_output=True,
-        )
-        if proc.returncode != 0 or not dest.exists():
-            raise HTTPException(status_code=400, detail="Filmstrip generation failed")
+    # 同じ (素材, n) の要求が同時に来ても ffmpeg は 1 本だけ(残りは待って出来たものを返す)。
+    # 長い素材(劇場版など)は全体をデコードしない: プロキシ(無ければ原本)から n 枚をシークで取る、nice で 1 本ずつ
+    with _strip_lock(asset_id, n):
+        if not dest.exists():
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+            tmp = dest.with_name(f".{dest.name}.tmp.jpg")
+            if (asset.duration_sec or 0) >= LONG_STRIP_SEC:
+                ok = _strip_by_seek(ffmpeg, asset, src, n, tmp)
+            else:
+                fps = n / max(0.1, asset.duration_sec)
+                proc = subprocess.run(
+                    [ffmpeg, "-y", "-i", str(src),
+                     "-vf", f"fps={fps:.4f},scale=96:54:force_original_aspect_ratio=increase,crop=96:54,tile={n}x1",
+                     "-frames:v", "1", str(tmp)],
+                    capture_output=True,
+                )
+                ok = proc.returncode == 0 and tmp.exists()
+            if not ok:
+                tmp.unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="Filmstrip generation failed")
+            tmp.replace(dest)
     return FileResponse(dest, media_type="image/jpeg",
                         headers={"Cache-Control": "public, max-age=86400"})
+
+
+LONG_STRIP_SEC = 600.0
+_strip_locks: dict = {}
+_strip_locks_guard = __import__("threading").Lock()
+_long_strip_sem = __import__("threading").Semaphore(1)
+
+
+def _strip_lock(asset_id: int, n: int):
+    with _strip_locks_guard:
+        return _strip_locks.setdefault((asset_id, n), __import__("threading").Lock())
+
+
+def _strip_by_seek(ffmpeg: str, asset, src: Path, n: int, out: Path) -> bool:
+    """長い素材のフィルムストリップ: fps フィルタと同じ時刻 ((k + 0.5) / r) のコマを 1 枚ずつシークで取り、横に並べる。"""
+    import numpy as np
+    import cv2
+    path = Path(asset.proxy_path) if asset.proxy_path and Path(asset.proxy_path).exists() else src
+    r = float(f"{n / max(0.1, asset.duration_sec):.4f}") or n / max(0.1, asset.duration_sec)
+    cells = []
+    with _long_strip_sem:
+        for k in range(n):
+            t = min(max(0.0, (k + 0.5) / r - 0.02), max(0.0, asset.duration_sec - 0.1))
+            p = subprocess.run(["nice", "-n", "10", ffmpeg, "-nostdin", "-v", "error", "-ss", f"{t:.3f}", "-i", str(path),
+                                "-frames:v", "1", "-vf", "scale=96:54:force_original_aspect_ratio=increase,crop=96:54",
+                                "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1"], capture_output=True, timeout=60)
+            if p.returncode != 0 or len(p.stdout) < 96 * 54 * 3:
+                cells.append(np.zeros((54, 96, 3), np.uint8))
+            else:
+                cells.append(np.frombuffer(p.stdout[:96 * 54 * 3], np.uint8).reshape(54, 96, 3))
+    return bool(cv2.imwrite(str(out), np.concatenate(cells, axis=1), [cv2.IMWRITE_JPEG_QUALITY, 85]))
 
 
 @router.get("/{asset_id}/thumbnail")
@@ -371,7 +412,10 @@ def get_asset_file(asset_id: int, proxy: bool = False, download: bool = False,
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
     media_type, _ = mimetypes.guess_type(str(path))
-    headers = {}
+    # プレビューの<video>はカット切替のたびに付け替えられる。キャッシュ指示が無いと再取得になり、
+    # 遠隔では読み込みが止まる/最初からに見えていた(2026-10-10)。素材ファイルは生成後ほぼ不変なので
+    # 一定時間はキャッシュを使い、ETag で更新を検出する。
+    headers = {"Cache-Control": "private, max-age=600" if path == Path(asset.proxy_path or "") else "private, max-age=3600"}
     if download:
         # download=true のときだけ添付扱いにする。既定はインライン(プレビュー再生用)。
         name = asset.name or path.name
@@ -627,6 +671,10 @@ def delete_asset(asset_id: int, session: Session = Depends(get_session)):
     asset = session.get(Asset, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
+    # 📚 共有素材ライブラリの元素材(劇場版の本編など)はここで消さない(ファイルごと消え、カットの一覧だけが残る)
+    from app.models.library import LibraryItem
+    if session.get(LibraryItem, asset_id):
+        raise HTTPException(status_code=409, detail="📚 ライブラリの素材です。先にライブラリから外してください")
     dest = Path(asset.file_path)
     if dest.exists():
         dest.unlink()

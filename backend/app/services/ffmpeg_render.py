@@ -3,7 +3,7 @@ FFmpeg render service.
 
 Phase 3 MVP scope:
   - Primary video track (first 'video' track): clips concatenated with black gaps
-  - Primary audio track (first 'audio' track): mixed in
+  - Audio: every checked (non-hidden) 'audio' track, mixed in
   - Resolution / FPS from project settings (overridable)
   - Output: H.264 MP4
 
@@ -548,7 +548,8 @@ async def _black_segment(out: Path, dur_sec: float, w: int, h: int, fps: float) 
     await _run(cmd)
 
 
-async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> None:
+async def _concat(segment_files: list[Path], out: Path, progress_cb=None, venc: list[str] | None = None,
+                  ff: str | None = None) -> None:
     """
     Concatenate pre-encoded segments via the FFmpeg concat demuxer.
 
@@ -562,11 +563,11 @@ async def _concat(segment_files: list[Path], out: Path, progress_cb=None) -> Non
             # FFmpeg requires forward slashes in concat lists
             f.write(f"file '{seg.as_posix()}'\n")
     cmd = [
-        FFMPEG, "-y",
+        ff or FFMPEG, "-y",
         "-f", "concat", "-safe", "0",
         "-i", str(list_file),
         "-fps_mode", "cfr",
-        *_VENC,
+        *(venc or _VENC),
         "-an",
         str(out),
     ]
@@ -899,9 +900,19 @@ async def _overlay_transform_pass(seg: Path, out: Path, transform: dict,
 #   kind='blur' : {"blur_keys":[{"t":0,"v":0},{"t":8,"v":7}]}
 #       このレイヤーより下(=ここまでに合成済みの絵)を、区間中だけガウスぼかし。
 #       v = 1920x1080 基準のシグマ(px)。出力解像度に比例してスケールする。
+#   kind='satsuei': {"satsuei":{...},"strength_keys":[{"t":0,"v":1}]}(🎬 撮影レイヤー、2026-10-16)
+#       このレイヤーより下に色・パラ・ライトリーク・レンズ・粒子を掛ける(app/services/satsuei_fx.py)。
+#       ffmpeg のフィルターでは書けないので、合成の途中で撮影パス(サブプロセス)を挟む(_composite_with_passes)。
+#   kind='credit': {"credit":{...}}(🔤 字幕クリップ、2026-11-01。屈折で現れる字幕を書き出しで計算する)
+#       このレイヤーより下の絵を文字のガラスで屈折させる(app/services/credit_fx.py)。撮影と同じく合成の途中で
+#       字幕パス(サブプロセス、yuv420p のまま・字幕の画素だけ書き換え)を挟む。出現・消失はクリップの端から測る。
 # t はクリップ先頭からのフレーム。キー間は線形、先頭キー以前/最終キー以降は端の値で保持。
 # プレビュー(PreviewPlayer)と同じ規則。
-FILTER_KINDS = ("solid", "blur")
+FILTER_KINDS = ("solid", "blur", "satsuei", "credit")
+PASS_KINDS = ("satsuei", "credit")      # ffmpeg のフィルターで書けず、合成の途中で Python のパスを挟む種別
+# 字幕パスの直前のふつうの合成はロスレスで書く(字幕で圧縮の世代を 1 つ増やさないように)。qp 0 に -profile:v high は付けない
+_LOSSLESS_420 = ["-c:v", "libx264", "-qp", "0", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                 "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
 
 
 def is_filter_clip(clip) -> bool:
@@ -952,10 +963,18 @@ def _ffmpeg_color(raw: str) -> str:
     return "0x" + s.upper()
 
 
-def filter_overlay_entry(clip, fps: float) -> dict:
-    """フィルタークリップ → _composite_one が解釈する overlay エントリ(入力ファイル無し)。"""
+def filter_overlay_entry(clip, fps: float, layout: dict | None = None, track_key=None) -> dict:
+    """フィルタークリップ → _composite_one が解釈する overlay エントリ(入力ファイル無し)。
+
+    layout: フィルタートラックの配置(parse_layout の結果)。⇔比較表示ではその矩形にだけ作用させ、
+    右に並べた参照動画へは掛けない(参照は撮影処理済みなので二重掛けになる)。
+    track_key: どのトラックのクリップか(撮影レイヤーはトラックごとに重なりの遷移を解くので使う。ベースは "base")。"""
     attrs = _filter_attrs(clip)
     kind = clip.kind
+    if kind == "satsuei":
+        return _satsuei_overlay_entry(clip, attrs, fps, layout, track_key)
+    if kind == "credit":
+        return _credit_overlay_entry(clip, attrs, fps, layout, track_key)
     if kind == "solid":
         keys = parse_filter_keys(attrs.get("opacity_keys"), 1.0, 0.0, 1.0)
     else:
@@ -970,7 +989,310 @@ def filter_overlay_entry(clip, fps: float) -> dict:
         "start": clip.start_frame / fps,
         "dur": dur,
         "full_dur": dur,
+        "rect": (layout["x"], layout["y"], layout["w"], layout["h"]) if layout else None,
     }
+
+
+def _satsuei_overlay_entry(clip, attrs: dict, fps: float, layout: dict | None, track_key) -> dict:
+    """撮影クリップ → 撮影パスの計画に入れるエントリ。_composite_one / _composite_overlays には渡さない。
+    計算はタイムラインのコマ(整数)で行うので start_frame / dur_frames を持たせる(秒に直した丸めでずれないように)。"""
+    from app.services import satsuei_fx
+    dur = clip.duration_frames / fps
+    op = getattr(clip, "opacity", None)
+    return {
+        "filter": "satsuei",
+        "clip_id": int(getattr(clip, "id", 0) or 0),
+        "track_key": "base" if track_key is None else track_key,
+        "start": clip.start_frame / fps,
+        "dur": dur,
+        "full_dur": dur,
+        "opacity": max(0.0, min(1.0, 1.0 if op is None else float(op))),
+        "keys": [[t, v] for t, v in satsuei_fx.parse_keys(attrs.get("strength_keys"))],
+        "params": satsuei_fx.normalize(attrs.get("satsuei")),
+        "transition_in": getattr(clip, "transition_in", "") or "",
+        "transition_frames": int(getattr(clip, "transition_frames", 0) or 0),
+        "transition_ease": getattr(clip, "transition_ease", "linear") or "linear",
+        "start_frame": int(clip.start_frame),
+        "dur_frames": int(clip.duration_frames),
+        "rect": (layout["x"], layout["y"], layout["w"], layout["h"]) if layout else None,
+    }
+
+
+def _satsuei_spec(ov: dict) -> dict:
+    """撮影エントリ → satsuei_fx の clip_spec(コマはタイムライン)。"""
+    return {"id": ov["clip_id"], "start": ov["start_frame"], "dur": ov["dur_frames"], "opacity": ov["opacity"],
+            "keys": ov["keys"], "params": ov["params"], "transition_in": ov["transition_in"],
+            "transition_frames": ov["transition_frames"], "transition_ease": ov["transition_ease"]}
+
+
+def _credit_overlay_entry(clip, attrs: dict, fps: float, layout: dict | None, track_key) -> dict:
+    """🔤 字幕クリップ → 字幕パスの計画に入れるエントリ(_composite_one には渡さない)。コマはタイムラインの整数。"""
+    from app.services import credit_fx
+    dur = clip.duration_frames / fps
+    op = getattr(clip, "opacity", None)
+    return {
+        "filter": "credit",
+        "clip_id": int(getattr(clip, "id", 0) or 0),
+        "track_key": "base" if track_key is None else track_key,
+        "start": clip.start_frame / fps,
+        "dur": dur,
+        "full_dur": dur,
+        "start_frame": int(clip.start_frame),
+        "dur_frames": int(clip.duration_frames),
+        "opacity": max(0.0, min(1.0, 1.0 if op is None else float(op))),
+        "credit": credit_fx.normalize(attrs.get("credit")),
+        "rect": (layout["x"], layout["y"], layout["w"], layout["h"]) if layout else None,
+    }
+
+
+def _credit_live(ov: dict, n_bound: int) -> bool:
+    """字幕エントリが何かを描くか(長さ・効き・名前があり、[0, n_bound) にかかる)。"""
+    return (int(ov["dur_frames"]) > 0 and float(ov["opacity"]) > 0
+            and int(ov["start_frame"]) < n_bound and int(ov["start_frame"]) + int(ov["dur_frames"]) > 0
+            and any(ch.strip() for ch in (ov["credit"].get("name") or "")))
+
+
+def _probe_frames(path: Path) -> int:
+    """動画のコマ数。ffprobe があれば mp4 の見出しの nb_frames(すぐ返る)。無い・読めない(webm など)ときは
+    同梱の ffmpeg で映像のパケットを数える(デコードしないので速い)。どちらも駄目なら 0。"""
+    if shutil.which("ffprobe"):
+        try:
+            r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=nb_frames",
+                                "-of", "csv=p=0", str(path)], capture_output=True, text=True, timeout=30)
+            n = int((r.stdout or "").strip().splitlines()[0])
+            if n > 0:
+                return n
+        except Exception:
+            pass
+    try:
+        r = subprocess.run([_BUNDLED_FFMPEG, "-nostdin", "-v", "error", "-i", str(path), "-map", "0:v:0", "-c", "copy",
+                            "-f", "framecrc", "-"], capture_output=True, text=True, timeout=300)
+        if r.returncode != 0:
+            return 0
+        return sum(1 for ln in (r.stdout or "").splitlines() if ln.strip() and not ln.startswith("#"))
+    except Exception:
+        return 0
+
+
+async def _satsuei_pass(src: Path, out: Path, layers: list[list[dict]], rects: list, w: int, h: int,
+                        fps: float, frames: int, progress_cb=None, spans: list | None = None) -> None:
+    """撮影パス: python -m app.services.satsuei_fx render <plan.json> をサブプロセスで回す。
+    src を rgb24(BT.709)で読み、撮影クリップのかかるコマだけ計算して、ロスレス(yuv444p・qp0)で out に書く。
+    spans = レイヤーごとに計算するコマの区間([[頭, 終わり], ...] / None = どこでも)。
+    進み具合は PROGRESS 行(0..1)を progress_cb へ。失敗したら stderr の末尾つきで RuntimeError。"""
+    import sys
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    plan = {"src": str(src), "out": str(out), "w": int(w), "h": int(h), "fps": float(fps), "frames": int(frames),
+            "layers": layers, "rects": [list(r) if r else None for r in rects], "f0": 0,
+            "ffmpeg": _BUNDLED_FFMPEG}   # libx264 の入った同梱版(nvenc 用のシステム版に切り替わっていても)
+    if spans is not None:
+        plan["spans"] = spans
+    plan_file = out.with_name(out.stem + "_plan.json")
+    plan_file.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(backend_dir) + os.pathsep + os.environ.get("PYTHONPATH", "")}
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "app.services.satsuei_fx", "render", str(plan_file), cwd=str(backend_dir), env=env,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    err_task = asyncio.create_task(proc.stderr.read())   # stderr も読み続ける(管が詰まって止まらないように)
+    try:
+        async for raw in proc.stdout:
+            line = raw.decode(errors="replace").strip()
+            if progress_cb and line.startswith("PROGRESS "):
+                try:
+                    progress_cb(min(1.0, max(0.0, float(line[9:]))))
+                except ValueError:
+                    pass
+        rc = await proc.wait()
+        err = (await err_task).decode(errors="replace")
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
+        if not err_task.done():
+            err_task.cancel()
+        plan_file.unlink(missing_ok=True)
+    if rc != 0 or not out.exists():
+        raise RuntimeError(f"撮影レイヤーの書き出しに失敗しました(exit {rc}): {err.strip()[-600:]}")
+
+
+async def _credit_pass(src: Path, out: Path, layers: list[dict], w: int, h: int, fps: float, frames: int,
+                       content: tuple[int, int], progress_cb=None) -> None:
+    """字幕パス: python -m app.services.credit_fx render <plan.json> をサブプロセスで回す。
+    src を yuv420p のまま読み、字幕のかかるコマの、字幕の画素(と、その 2x2 の色差)だけ書き換えて、ロスレス(yuv420p・qp0)で
+    out に書く。字幕の無いコマはそのままのバイト列。layers = [{track_key, rect, clips: [{id, start, dur, opacity, credit}]}]
+    (下のトラックから)。進み具合は PROGRESS 行(0..1)を progress_cb へ。失敗したら stderr の末尾つきで RuntimeError。"""
+    import sys
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    plan = {"src": str(src), "out": str(out), "w": int(w), "h": int(h), "fps": float(fps), "frames": int(frames),
+            "f0": 0, "ffmpeg": _BUNDLED_FFMPEG, "content": [int(content[0]), int(content[1])],
+            "layers": [{"track_key": L["track_key"], "rect": list(L["rect"]) if L.get("rect") else None,
+                        "clips": L["clips"]} for L in layers]}
+    plan_file = out.with_name(out.stem + "_plan.json")
+    plan_file.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(backend_dir) + os.pathsep + os.environ.get("PYTHONPATH", "")}
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, "-m", "app.services.credit_fx", "render", str(plan_file), cwd=str(backend_dir), env=env,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    err_task = asyncio.create_task(proc.stderr.read())
+    try:
+        async for raw in proc.stdout:
+            line = raw.decode(errors="replace").strip()
+            if progress_cb and line.startswith("PROGRESS "):
+                try:
+                    progress_cb(min(1.0, max(0.0, float(line[9:]))))
+                except ValueError:
+                    pass
+            elif line.startswith("DONE "):
+                import logging as _lg
+                _lg.getLogger(__name__).info(f"credit pass: {line[5:]}")
+                if '"skipped": [{' in line:            # a card too large to build was left out (the preview draws none)
+                    _lg.getLogger(__name__).warning(f"字幕を書き出しに入れられませんでした(大きすぎる字幕): {line[5:][-600:]}")
+        rc = await proc.wait()
+        err = (await err_task).decode(errors="replace")
+    finally:
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
+        if not err_task.done():
+            err_task.cancel()
+        plan_file.unlink(missing_ok=True)
+    if rc != 0 or not out.exists():
+        raise RuntimeError(f"字幕の書き出しに失敗しました(exit {rc}): {err.strip()[-600:]}")
+
+
+def _mask_spans(mask) -> list[list[int]]:
+    """真偽の列 → 真の続く区間 [[頭, 終わり(含まない)], ...]。"""
+    import numpy as np
+    m = np.asarray(mask, bool)
+    if not m.any():
+        return []
+    d = np.diff(np.r_[0, m.astype(np.int8), 0])
+    return [[int(a), int(b)] for a, b in zip(np.flatnonzero(d == 1), np.flatnonzero(d == -1))]
+
+
+async def _composite_with_passes(base: Path, overlays: list[dict], tmp_root: Path, w: int, h: int,
+                                 total_dur: float, fps: float, base_frames: int,
+                                 progress_cb=None, content_size: tuple[int, int] | None = None) -> tuple[Path, bool]:
+    """撮影・字幕クリップ(PASS_KINDS)を含む重ね合わせ。overlays を [ふつう…][撮影…][ふつう…][字幕…]… の続きに分け、
+    ふつうの続きはこれまでどおり _composite_overlays で、撮影の続きは撮影パスで、字幕の続きは字幕パスで、下から順に重ねる
+    (前の結果が次の下の絵)。
+    撮影(これまでと同じ): 撮影レイヤーはトラックごとに、そのトラックの撮影クリップ全部で解く(重なりの遷移も、効き 0 の
+    クリップが後から重なって勝つコマも、プレビューの resolveLayer と同じ)。同じトラックに撮影以外のクリップ(単色など)が
+    混ざって続きが分かれるときは、各コマを「そのコマにかかる、そのトラックで頭がいちばん早い撮影クリップ」の段で
+    1 回だけ掛ける。効くコマが 1 つも無い撮影の段は飛ばし、前後のふつうの続きは 1 回の合成にまとめる。
+    字幕: 字幕の続き = そのトラック(下から順)の字幕クリップ(頭・id の順)。何も描かない段(長さ 0・効き 0・名前なし・
+    範囲外)は飛ばし、前後のふつうの続きはまとめる。字幕パスの直前のふつうの続きはロスレス(yuv420p・qp0)で書く。
+    パスのコマ数はその段の入力のコマ数。→ (結果のファイル, 最後がパスか)。パスの出力はロスレスなので、最後なら呼び出し側で
+    1 回だけ圧縮する。"""
+    import numpy as np
+    from app.services import satsuei_fx
+    content = tuple(content_size) if content_size else (w, h)
+    sat_idx = [i for i, ov in enumerate(overlays) if ov.get("filter") == "satsuei"]
+    by_track: dict = {}
+    for i in sat_idx:
+        by_track.setdefault(overlays[i].get("track_key"), []).append(i)
+    n_all = max([int(overlays[i]["start_frame"]) + int(overlays[i]["dur_frames"]) for i in sat_idx] + [1])
+    # コマごとの受け持ち: そのトラックで、そのコマにかかる撮影クリップのうち並び(= 頭の順)が最初のもの
+    owner: dict = {}
+    for tk, idxs in by_track.items():
+        o = np.full(n_all, -1, np.int64)
+        for i in idxs:
+            s0 = max(0, int(overlays[i]["start_frame"]))
+            seg = o[s0:max(s0, int(overlays[i]["start_frame"]) + int(overlays[i]["dur_frames"]))]
+            seg[seg < 0] = i
+        owner[tk] = o
+    specs = {tk: [_satsuei_spec(overlays[i]) for i in idxs] for tk, idxs in by_track.items()}
+    prepared = {tk: satsuei_fx.prepare_layer(v) for tk, v in specs.items()}
+
+    def live(tk, mask) -> bool:
+        """受け持つコマのどこかで、そのトラックの撮影クリップのどれかが効くか(効き 0 だけなら段ごと飛ばせる)。"""
+        for c in prepared[tk]:
+            a, b = max(0, c["start"]), min(n_all, c["start"] + c["dur"])
+            if b <= a:
+                continue
+            if any(satsuei_fx.mix_at(c, int(f)) > satsuei_fx.MIX_EPS for f in np.flatnonzero(mask[a:b]) + a):
+                return True
+        return False
+
+    n_bound = max(int(base_frames), int(round(total_dur * fps)))
+    raw: list[tuple[object, list[int]]] = []
+    for i, ov in enumerate(overlays):
+        kind = ov.get("filter") if ov.get("filter") in PASS_KINDS else None
+        if raw and raw[-1][0] == kind:
+            raw[-1][1].append(i)
+        else:
+            raw.append((kind, [i]))
+    runs: list[tuple[object, object]] = []   # (None, [ふつうのエントリ]) / ("satsuei", [(トラック, 区間)]) / ("credit", [層])
+    for kind, idxs in raw:
+        if kind is None:
+            items = [overlays[i] for i in idxs]
+            if runs and runs[-1][0] is None:
+                runs[-1][1].extend(items)          # 間のパスの段を飛ばしたら、前後のふつうは 1 回でまとめて合成
+            else:
+                runs.append((None, items))
+            continue
+        if kind == "satsuei":
+            layers = []
+            for tk in dict.fromkeys(overlays[i].get("track_key") for i in idxs):
+                mine = [i for i in idxs if overlays[i].get("track_key") == tk]
+                mask = np.isin(owner[tk], mine)
+                if live(tk, mask):
+                    layers.append((tk, _mask_spans(mask)))
+            if layers:
+                runs.append(("satsuei", layers))
+            continue
+        clayers = []
+        for tk in dict.fromkeys(overlays[i].get("track_key") for i in idxs):
+            mine = sorted((overlays[i] for i in idxs if overlays[i].get("track_key") == tk),
+                          key=lambda ov: (int(ov["start_frame"]), int(ov["clip_id"])))
+            clips = [{"id": ov["clip_id"], "start": int(ov["start_frame"]), "dur": int(ov["dur_frames"]),
+                      "opacity": float(ov["opacity"]), "credit": ov["credit"]} for ov in mine if _credit_live(ov, n_bound)]
+            if clips:
+                clayers.append({"track_key": tk, "rect": mine[0].get("rect"), "clips": clips})
+        if clayers:
+            runs.append(("credit", clayers))
+
+    cur, cur_n, tail, cur_lossless = base, int(base_frames), False, False
+    n_runs = len(runs)
+    for k, (kind, items) in enumerate(runs):
+        # 進み具合: 連結の後(0.65)〜共通グレードの前(0.78)を段の数で分ける(パスが長いので幅を広めに)
+        sub = (lambda p, k=k: progress_cb(0.65 + 0.13 * (k + p) / n_runs)) if progress_cb else None
+        if kind is None:
+            out = tmp_root / f"overlaid_{k:02d}.mp4"
+            lossless = k + 1 < n_runs and runs[k + 1][0] == "credit"
+            # 撮影・字幕パスのロスレスの上に重ねるときは、ふだんと同じ yuv420p にしてから(色の丸めをそろえる)
+            await _composite_overlays(cur, items, out, w, h, total_dur=total_dur, fps=fps, progress_cb=sub,
+                                      base_pre="format=yuv420p" if tail else "",
+                                      venc=_LOSSLESS_420 if lossless else None,
+                                      ff=_BUNDLED_FFMPEG if lossless else None)
+            # ロスレスで書いた続き: 次の字幕の段が(コマ数の都合で)飛んだら、そのまま最後になりうるので tail 扱いにする(下)
+            cur, cur_n, tail, cur_lossless = out, (_probe_frames(out) or cur_n), False, lossless
+            continue
+        if kind == "satsuei":
+            out = tmp_root / f"satsuei_{k:02d}.mp4"
+            tks = [tk for tk, _sp in items]
+            await _satsuei_pass(cur, out, [specs[tk] for tk in tks], [overlays[by_track[tk][0]].get("rect") for tk in tks],
+                                w, h, fps, cur_n, progress_cb=sub, spans=[sp for _tk, sp in items])
+            cur, tail, cur_lossless = out, True, True      # 撮影パスは入力と同じコマ数を書く
+            continue
+        layers = []
+        for L in items:
+            cl = [c for c in L["clips"] if c["start"] < cur_n and c["start"] + c["dur"] > 0]
+            if cl:
+                layers.append({**L, "clips": cl})
+        if not layers:
+            # 字幕が 1 枚も入らない(例: 絵の終わりより後ろに置いた字幕)。直前をロスレスで書いていたら、そのファイルを
+            # 最後の書き出しにしないよう tail にする(呼び出し側が 1 回だけふだんの圧縮をかける。qp0 のまま mux しない)
+            if cur_lossless:
+                tail = True
+            continue
+        out = tmp_root / f"credit_{k:02d}.mp4"
+        await _credit_pass(cur, out, layers, w, h, fps, cur_n, content, progress_cb=sub)
+        cur, tail, cur_lossless = out, True, True      # 字幕パスも入力と同じコマ数を書く(ロスレス yuv420p)
+    return cur, tail
+
+
+_composite_with_satsuei = _composite_with_passes     # 旧名(外のスクリプト向け)
 
 
 def _filter_parts(ov: dict, i: int, prev: str, w: int, h: int, fps: float) -> list[str]:
@@ -983,6 +1305,19 @@ def _filter_parts(ov: dict, i: int, prev: str, w: int, h: int, fps: float) -> li
     enable = f"between(t,{start - half:.6f},{start + dur - half:.6f})"
     keys: list[tuple[float, float]] = ov["keys"]
     seek_f = round(seek * fps)
+    # 作用範囲(画素)。比較表示の配置が無ければ全画面。yuv420p の crop/overlay 用に偶数へ丸める。
+    rect = ov.get("rect")
+    if rect:
+        rx = min(w - 2, max(0, int(round(rect[0] * w / 2)) * 2))
+        ry = min(h - 2, max(0, int(round(rect[1] * h / 2)) * 2))
+        rw = max(2, min(w - rx, int(round(rect[2] * w / 2)) * 2))
+        rh = max(2, min(h - ry, int(round(rect[3] * h / 2)) * 2))
+    else:
+        rx, ry, rw, rh = 0, 0, w, h
+    full = (rx, ry, rw, rh) == (0, 0, w, h)
+    if ov["filter"] not in ("solid", "blur"):
+        # 撮影・字幕などのパスの種別はここに来てはいけない(来ると以前は σ 0 のぼかし = 何もしない、に化けた)
+        raise ValueError(f"filter_complex で書けないフィルターです: {ov['filter']!r}")
     if ov["filter"] == "solid":
         op = float(ov.get("opacity", 1.0))
         a = _piecewise_expr(keys, var=f"(N+{seek_f})")
@@ -994,11 +1329,11 @@ def _filter_parts(ov: dict, i: int, prev: str, w: int, h: int, fps: float) -> li
         return [
             f"color=c={c}:s=16x16:r={fps},trim=end_frame={n},format=rgba,"
             f"geq=r='{r}':g='{g}':b='{b}':a='clip(255*{op:.6f}*({a}),0,255)',"
-            f"scale={w}:{h}:flags=neighbor,setpts=PTS+{start:.6f}/TB[ov{i}]",
-            f"[{prev}][ov{i}]overlay=0:0:eof_action=pass:enable='{enable}'[v{i}]",
+            f"scale={rw}:{rh}:flags=neighbor,setpts=PTS+{start:.6f}/TB[ov{i}]",
+            f"[{prev}][ov{i}]overlay={rx}:{ry}:eof_action=pass:enable='{enable}'[v{i}]",
         ]
     # blur: 下のレイヤー(=ここまでの合成結果)を gblur。シグマはフレーム毎に sendcmd で送る。
-    scale = h / 1080.0
+    scale = rh / 1080.0
     cmds: list[str] = []
     last = None
     f0 = seek_f
@@ -1012,34 +1347,43 @@ def _filter_parts(ov: dict, i: int, prev: str, w: int, h: int, fps: float) -> li
             cmds.append(f"{tt:.6f} gblur@fb{i} sigma {sig:.3f}, gblur@fb{i} sigmaV {sig:.3f}")
             last = sig
     first_sig = round(filter_key_value(keys, f0) * scale, 3)
-    if len(cmds) <= 1:
-        # 一定値: sendcmd 不要
-        return [f"[{prev}]gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'[v{i}]"]
-    cmd_str = ";".join(cmds)
-    return [f"[{prev}]sendcmd=c='{cmd_str}',"
-            f"gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'[v{i}]"]
+    blur = (f"gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'" if len(cmds) <= 1
+            else f"sendcmd=c='{';'.join(cmds)}',gblur@fb{i}=sigma={first_sig:.3f}:steps=2:enable='{enable}'")
+    if full:
+        return [f"[{prev}]{blur}[v{i}]"]
+    # 矩形だけ切り出してぼかし、元の位置へ戻す(範囲の外は触らない)
+    return [f"[{prev}]split[fa{i}][fb{i}]",
+            f"[fb{i}]crop={rw}:{rh}:{rx}:{ry},{blur}[fc{i}]",
+            f"[fa{i}][fc{i}]overlay={rx}:{ry}:enable='{enable}'[v{i}]"]
 
 
 async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h: int,
                          base_ss: float = 0.0, base_t: Optional[float] = None,
-                         progress_cb=None, fps: float = 30.0) -> None:
+                         progress_cb=None, fps: float = 30.0, base_pre: str = "",
+                         venc: list[str] | None = None, ff: str | None = None) -> None:
     """Composite overlays onto base in ONE filter_complex pass. Optionally over a
     time WINDOW of the base ([base_ss, base_ss+base_t]) with per-overlay input seek
     — this is what lets the dispatcher run independent time-chunks in parallel.
-    Overlay start/dur/enable are window-relative (the caller adjusts them)."""
+    Overlay start/dur/enable are window-relative (the caller adjusts them).
+    venc/ff: encoder args / binary override (the lossless pre-pass before a credit pass; default _VENC/FFMPEG)."""
+    ffb, vargs = (ff or FFMPEG), (venc or _VENC)
     if not overlays:
         # still honour the window (trim) if requested
-        cmd = [FFMPEG, "-y"]
+        cmd = [ffb, "-y"]
         if base_ss > 0: cmd += ["-ss", f"{base_ss:.6f}"]
         cmd += ["-i", str(base)]
         if base_t is not None: cmd += ["-t", f"{base_t:.6f}"]
-        cmd += [*_VENC, "-an", str(out)]
+        cmd += [*vargs, "-an", str(out)]
         await _run(cmd); return
     inputs: list[str] = []
     if base_ss > 0: inputs += ["-ss", f"{base_ss:.6f}"]
     inputs += ["-i", str(base)]
     parts: list[str] = []
     prev = "0:v"
+    if base_pre:
+        # 撮影パスの出力(ロスレス yuv444p)の上に重ねるとき: ふだんの下の絵と同じ形(yuv420p)にそろえてから
+        parts.append(f"[0:v]{base_pre}[bpre]")
+        prev = "bpre"
     n_in = 0
     for i, ov in enumerate(overlays):
         if ov.get("filter"):
@@ -1089,9 +1433,9 @@ async def _composite_one(base: Path, overlays: list[dict], out: Path, w: int, h:
             parts.append(f"[{prev}][ov{i}]overlay=0:0:enable='{enable}'[v{i}]")
         prev = f"v{i}"
     parts.append(f"[{prev}]format=yuv420p[vout]")
-    cmd = [FFMPEG, "-y", *inputs, "-filter_complex", ";".join(parts), "-map", "[vout]"]
+    cmd = [ffb, "-y", *inputs, "-filter_complex", ";".join(parts), "-map", "[vout]"]
     if base_t is not None: cmd += ["-t", f"{base_t:.6f}"]
-    cmd += [*_VENC, "-an", str(out)]
+    cmd += [*vargs, "-an", str(out)]
     await _run(cmd, progress_cb)
 
 
@@ -1142,7 +1486,8 @@ async def _layout_pass(src: Path, out: Path, lay: dict, w: int, h: int,
 
 async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
                               w: int, h: int, total_dur: float = 0.0, fps: float = 30.0,
-                              progress_cb=None) -> None:
+                              progress_cb=None, base_pre: str = "",
+                              venc: list[str] | None = None, ff: str | None = None) -> None:
     """Composite ALL overlays onto the base — the heaviest render stage (one chained
     filter_complex over the whole timeline is ~single-threaded, dominating render time
     with many overlays). So split the timeline into time-CHUNKS and composite them in
@@ -1158,7 +1503,8 @@ async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
     total_frames = max(1, round(total_dur * fps)) if total_dur > 0 else 0
     n = min(cores, max(1, math.ceil(total_dur / 4.0))) if total_dur > 0 else 1
     if n <= 1 or len(overlays) < 3 or cores < 2 or total_frames < 2 * n:
-        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps)
+        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps, base_pre=base_pre,
+                             venc=venc, ff=ff)
         return
     try:
         chunk_frames = math.ceil(total_frames / n)
@@ -1178,12 +1524,14 @@ async def _composite_overlays(base: Path, overlays: list[dict], out: Path,
                 if s < c0 + clen and e > c0:                 # overlaps this chunk
                     a0, a1 = max(s, c0), min(e, c0 + clen)
                     ovs.append({**ov, "start": a0 - c0, "dur": a1 - a0, "seek": max(0.0, c0 - s)})
-            tasks.append(_composite_one(base, ovs, cf, w, h, base_ss=c0, base_t=clen, fps=fps))
+            tasks.append(_composite_one(base, ovs, cf, w, h, base_ss=c0, base_t=clen, fps=fps, base_pre=base_pre,
+                                        venc=venc, ff=ff))
         await asyncio.gather(*tasks)
-        await _concat(chunk_files, out, progress_cb)
+        await _concat(chunk_files, out, progress_cb, venc=venc, ff=ff)
     except Exception:
         # any issue with chunking → safe single-pass fallback
-        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps)
+        await _composite_one(base, overlays, out, w, h, progress_cb=progress_cb, fps=fps, base_pre=base_pre,
+                             venc=venc, ff=ff)
 
 
 async def _extract_audio_segment(src: str, out: Path,
@@ -1191,9 +1539,11 @@ async def _extract_audio_segment(src: str, out: Path,
                                   timeline_start: float,
                                   fade_in_sec: float = 0.0,
                                   fade_out_sec: float = 0.0) -> None:
-    """Extract audio, apply fades, pad with silence to match timeline position."""
+    """Extract audio, apply fades, pad with silence to match timeline position.
+    途中のファイルは PCM(WAV 48kHz・24bit)。AAC は最後の mux で 1 回だけ圧縮する。
+    (以前は途中を生の .aac にしていたため、AAC の頭の無音 1024 サンプル(約 23ms)が差し引かれず音が遅れ、圧縮も 2〜3 回重なっていた)"""
     # First extract the clip audio (with optional fade in/out)
-    raw = out.parent / f"{out.stem}_raw.aac"
+    raw = out.parent / f"{out.stem}_raw.wav"
     afilters = []
     if fade_in_sec > 0.01:
         afilters.append(f"afade=t=in:st=0:d={fade_in_sec:.3f}")
@@ -1208,7 +1558,7 @@ async def _extract_audio_segment(src: str, out: Path,
     if afilters:
         cmd += ["-af", ",".join(afilters)]
     cmd += [
-        "-vn", "-c:a", "aac", "-b:a", "320k",
+        "-vn", "-c:a", "pcm_s24le", "-ar", "48000", "-ac", "2",
         str(raw),
     ]
     await _run(cmd)
@@ -1220,7 +1570,7 @@ async def _extract_audio_segment(src: str, out: Path,
             "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={timeline_start}",
             "-i", str(raw),
             "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[outa]",
-            "-map", "[outa]", "-c:a", "aac", "-b:a", "320k",
+            "-map", "[outa]", "-c:a", "pcm_s24le",
             str(out),
         ]
         await _run(cmd2)
@@ -1244,11 +1594,35 @@ _GRADE_CHAINS = {
 }
 
 
-async def _grade_pass(src: Path, out: Path, chain: str, progress_cb=None) -> None:
+async def _grade_pass(src: Path, out: Path, chain: str, progress_cb=None, pre: str = "") -> None:
     """全尺への一括グレード。1回だけの追加再エンコードなので crf16 系の
-    _VENC で視覚ロスなしに保つ(多段再エンコ対策の原則と同じ)。"""
-    cmd = [FFMPEG, "-y", "-i", str(src), "-vf", chain,
+    _VENC で視覚ロスなしに保つ(多段再エンコ対策の原則と同じ)。
+    pre: チェーンの前に足すフィルター(撮影パスのロスレス yuv444p の後は "format=yuv420p" で、ふだんと同じ形にしてから掛ける)。"""
+    cmd = [FFMPEG, "-y", "-i", str(src), "-vf", f"{pre},{chain}" if pre else chain,
            *_VENC, "-an", str(out)]
+    await _run(cmd, progress_cb)
+
+
+async def _grade_pass_rects(src: Path, out: Path, chain: str, rects: list[tuple],
+                            w: int, h: int, progress_cb=None, pre: str = "") -> None:
+    """⇔比較表示用: グレードを制作側の矩形(比率)にだけ掛ける。参照側(右)は撮影処理済みの
+    元映像なので、粒子・周辺減光を二重に乗せない。矩形ごとに切り出して掛け、元の位置へ戻す。
+    pre: 先に全体へ掛けるフィルター(_grade_pass と同じ)。"""
+    parts, prev = [], "0:v"
+    if pre:
+        parts.append(f"[0:v]{pre}[gpre]")
+        prev = "gpre"
+    for i, (x, y, rw, rh) in enumerate(rects):
+        px = min(w - 2, max(0, int(round(x * w / 2)) * 2))
+        py = min(h - 2, max(0, int(round(y * h / 2)) * 2))
+        pw = max(2, min(w - px, int(round(rw * w / 2)) * 2))
+        ph = max(2, min(h - py, int(round(rh * h / 2)) * 2))
+        parts += [f"[{prev}]split[ga{i}][gb{i}]",
+                  f"[gb{i}]crop={pw}:{ph}:{px}:{py},{chain}[gc{i}]",
+                  f"[ga{i}][gc{i}]overlay={px}:{py}[gv{i}]"]
+        prev = f"gv{i}"
+    cmd = [FFMPEG, "-y", "-i", str(src), "-filter_complex", ";".join(parts),
+           "-map", f"[{prev}]", *_VENC, "-an", str(out)]
     await _run(cmd, progress_cb)
 
 
@@ -1304,6 +1678,7 @@ async def render_timeline(
     progress_cb=None,
     encoder: str | None = None,
     grade: str | None = None,
+    content_size: tuple[int, int] | None = None,
 ) -> Path:
     """
     Render the timeline to an MP4 file.
@@ -1312,6 +1687,8 @@ async def render_timeline(
     grade: 撮影パスの選択。None=設定(RENDER_GRADE, 既定"film") / "off"=無効。
     precompose のように「後で最終レンダを通る」出力は必ず "off" を渡すこと
     (でないとグレードが二重掛けになる)。
+    content_size: プロジェクトの大きさ(🔤 字幕の配置の基準。2560x1440 の設計画面を絵と同じ cover で載せる)。
+    None なら Project(project_id) の width/height、読めなければ出力の大きさ。
     """
     # Pick CPU (x264) or GPU (nvenc) encoder for this render.
     # encoder引数(ジョブ単位の上書き — 720pレビュー等) > 設定 > config の順。
@@ -1382,7 +1759,9 @@ async def render_timeline(
                         if t.track_type == "audio" and not getattr(t, "hidden", False)]
 
         v_track = video_tracks[0] if video_tracks else None
-        a_track = audio_tracks[0] if audio_tracks else None
+        # 音: チェックした(=非表示でない)音声トラックをすべて混ぜる。プレビュー(WebAudio)と同じ。
+        # 以前は先頭の 1 本だけで、2 本目以降はプレビューでは鳴るのに書き出しに入らなかった(2026-10-22)
+        a_track_ids = {t.id for t in audio_tracks}
         overlay_tracks = video_tracks[1:]
         base_layout = parse_layout(getattr(v_track, "layout_json", "") or "") if v_track else None
         overlay_layouts = [parse_layout(getattr(t, "layout_json", "") or "")
@@ -1397,7 +1776,7 @@ async def render_timeline(
         base_filter_clips = [c for c in v_clips if is_filter_clip(c)]
         v_clips = [c for c in v_clips if not is_filter_clip(c)]
         a_clips = sorted(
-            [c for c in clips if a_track and c.track_id == a_track.id],
+            [c for c in clips if c.track_id in a_track_ids],
             key=lambda c: c.start_frame,
         )
         o_clips = [
@@ -1407,10 +1786,17 @@ async def render_timeline(
         ]
 
         all_clips = v_clips + base_filter_clips + a_clips + [c for _, c in o_clips]
+        # 🎬 撮影・🔤 字幕レイヤーがあると合成の段(パス)がいちばん長いので、進み具合の幅を連結から分けてもらう
+        has_satsuei = any((getattr(c, "kind", "") or "") in PASS_KINDS
+                          for c in base_filter_clips + [c for _, c in o_clips])
         if not all_clips:
             raise ValueError("タイムラインにクリップがありません")
 
-        total_frames = max(c.start_frame + c.duration_frames for c in all_clips)
+        # 長さは以前どおり「映像 + 先頭の音声トラック」で決める。2 本目以降の音声トラックが長くても
+        # 書き出しは延ばさない(はみ出た分は -t で切る。延ばすと映像の後ろに音だけの区間ができる)
+        len_tracks = {audio_tracks[0].id} if audio_tracks else set()
+        len_clips = [c for c in all_clips if c.track_id not in a_track_ids or c.track_id in len_tracks]
+        total_frames = max(c.start_frame + c.duration_frames for c in (len_clips or all_clips))
         total_dur = total_frames / fps
 
         # ── Video segments ────────────────────────────────────────────────────
@@ -1529,14 +1915,14 @@ async def render_timeline(
             shutil.copy(seg_files[0], video_only)
         else:
             await _concat(seg_files, video_only,
-                          progress_cb=lambda p: progress_cb(0.6 + 0.15 * p) if progress_cb else None)
+                          progress_cb=lambda p: progress_cb(0.6 + (0.05 if has_satsuei else 0.15) * p) if progress_cb else None)
 
         # ── Overlay tracks (video tracks above the first) ─────────────────────
         # Each overlay clip is extracted once, then ALL are composited onto the base
         # in a SINGLE filter_complex pass (see _composite_overlays) — so the base is
         # encoded only once instead of once per overlay (no compounding loss with
         # many 歌詞テロップ). Transparent MGs (alpha .mov) float over the footage.
-        overlays: list[dict] = [filter_overlay_entry(c, fps) for c in base_filter_clips]
+        overlays: list[dict] = [filter_overlay_entry(c, fps, base_layout, "base") for c in base_filter_clips]
         # 同一レイヤーの重なり遷移(2026-09-20): 後続クリップ B が前クリップ A と重なる区間
         # [B.start, A.end) を遷移とみなし、B の alpha を transition_frames でランプさせる
         # (A はそのまま下に描かれる)。white/black は色の全面カバーを挟んでから B を出す。
@@ -1556,8 +1942,9 @@ async def render_timeline(
                                      float(getattr(oc, "transition_hold", 0.5) or 0.5))
         for oi, (t_idx, oc) in enumerate(o_clips):
             if is_filter_clip(oc):
-                # 単色/ぼかし: トラック順(下→上)のこの位置で、ここまでの合成結果に掛ける
-                overlays.append(filter_overlay_entry(oc, fps))
+                # 単色/ぼかし/撮影: トラック順(下→上)のこの位置で、ここまでの合成結果に掛ける
+                overlays.append(filter_overlay_entry(
+                    oc, fps, overlay_layouts[t_idx] if t_idx < len(overlay_layouts) else None, t_idx))
                 continue
             asset = _pick(asset_map.get(oc.asset_id))
             if not asset or not Path(asset.file_path).exists():
@@ -1640,7 +2027,17 @@ async def render_timeline(
                     overlays[-1]["fade_in"] = max(overlays[-1]["fade_in"], (1.0 - ov_hold) * ov_tf / fps)
                 else:
                     overlays[-1]["fade_in"] = max(overlays[-1]["fade_in"], ov_tf / fps)
-        if overlays:
+        # 🎬 撮影(kind='satsuei')・🔤 字幕(kind='credit')レイヤーがあるときだけ、合成をその位置で区切ってパスを挟む。
+        # 無ければ下の elif(これまでと同じ 1 回の合成)を通る。
+        satsuei_tail = False
+        if overlays and any(ov.get("filter") in PASS_KINDS for ov in overlays):
+            base_frames = _probe_frames(video_only) or (current_frame if v_clips else total_frames)
+            if content_size is None and any(ov.get("filter") == "credit" for ov in overlays):
+                content_size = _project_size(project_id) or (width, height)
+            video_only, satsuei_tail = await _composite_with_passes(
+                video_only, overlays, tmp_root, width, height, total_dur, fps, base_frames,
+                progress_cb=progress_cb, content_size=content_size)
+        elif overlays:
             merged_out = tmp_root / "overlaid.mp4"
             await _composite_overlays(
                 video_only, overlays, merged_out, width, height,
@@ -1661,11 +2058,31 @@ async def render_timeline(
         chain = _GRADE_CHAINS.get(grade or "")
         if chain:
             graded = tmp_root / "graded.mp4"
-            await _grade_pass(
-                video_only, graded, chain,
-                progress_cb=lambda p: progress_cb(0.78 + 0.05 * p) if progress_cb else None)
+            gcb = (lambda p: progress_cb(0.78 + 0.05 * p)) if progress_cb else None
+            # ⇔比較表示(ベース=参照に配置あり)では、制作側の矩形にだけ掛ける
+            grade_rects = []
+            if base_layout:
+                bk = (base_layout["x"], base_layout["y"], base_layout["w"], base_layout["h"])
+                for ly in overlay_layouts:
+                    if not ly or ly["w"] < 0.05 or ly["h"] < 0.05:
+                        continue
+                    k = (ly["x"], ly["y"], ly["w"], ly["h"])
+                    if k != bk and k not in grade_rects:
+                        grade_rects.append(k)
+            # 撮影パスの出力(ロスレス yuv444p)のままグレードすると、色の変換の丸めが変わって全体の色が少しずれる
+            # (撮影の無いコマまで)。ふだんと同じ yuv420p にしてから掛ける
+            gpre = "format=yuv420p" if satsuei_tail else ""
+            if grade_rects:
+                await _grade_pass_rects(video_only, graded, chain, grade_rects, width, height, gcb, pre=gpre)
+            else:
+                await _grade_pass(video_only, graded, chain, progress_cb=gcb, pre=gpre)
             video_only = graded
             _lg.getLogger(__name__).info(f"grade pass applied: {grade}")
+        elif satsuei_tail:
+            # 撮影パスの出力はロスレス(yuv444p)のまま。ふだんの書き出しと同じ形(_VENC・yuv420p)に 1 回だけ圧縮する
+            final = tmp_root / "satsuei_final.mp4"
+            await _run([FFMPEG, "-y", "-i", str(video_only), *_VENC, "-an", str(final)])
+            video_only = final
 
         if progress_cb:
             progress_cb(0.83)
@@ -1676,7 +2093,7 @@ async def render_timeline(
             asset = _pick(asset_map.get(clip.asset_id))
             if not asset or not Path(asset.file_path).exists():
                 continue
-            seg_file = tmp_root / f"audio_{i:04d}.aac"
+            seg_file = tmp_root / f"audio_{i:04d}.wav"
             await _extract_audio_segment(
                 asset.file_path, seg_file,
                 clip.asset_in_frame / fps,
@@ -1704,6 +2121,21 @@ async def render_timeline(
 
     finally:
         shutil.rmtree(tmp_root, ignore_errors=True)
+
+
+def _project_size(project_id: int) -> tuple[int, int] | None:
+    """プロジェクトの大きさ(短く DB を開いて閉じる)。読めなければ None。"""
+    try:
+        from sqlmodel import Session
+        from app.db.database import engine
+        from app.models import Project
+        with Session(engine) as s:
+            p = s.get(Project, project_id)
+            if p and p.width and p.height:
+                return int(p.width), int(p.height)
+    except Exception:
+        pass
+    return None
 
 
 def export_path(project_id: int, job_id: int) -> Path:

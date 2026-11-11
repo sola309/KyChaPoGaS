@@ -28,9 +28,26 @@ def list_clips(track_id: int | None = None, project_id: int | None = None,
     return session.exec(query).all()
 
 
+def _check_credit(kind, asset_id, attrs_json) -> None:
+    """🔤 字幕クリップ(kind='credit')は素材を持たない。attrs_json は JSON のオブジェクトで、credit はオブジェクト。
+    値の範囲は書き出し・プレビューで credit_fx.normalize が直すので、ここでは形だけ見る(書き換えない)。"""
+    if (kind or "") != "credit":
+        return
+    if asset_id is not None:
+        raise HTTPException(status_code=422, detail="字幕クリップには素材(asset_id)を付けられません")
+    import json as _json
+    try:
+        a = _json.loads(attrs_json or "{}")
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="字幕クリップの attrs_json が JSON として読めません")
+    if not isinstance(a, dict) or ("credit" in a and not isinstance(a["credit"], dict)):
+        raise HTTPException(status_code=422, detail="字幕クリップの attrs_json は {\"credit\": {...}} の形にしてください")
+
+
 @router.post("/", response_model=ClipRead, status_code=201)
 def create_clip(data: ClipCreate, session: Session = Depends(get_session)):
     clip = Clip.model_validate(data)
+    _check_credit(clip.kind, clip.asset_id, clip.attrs_json)
     # 新規作成でもカット境界で尺を抑える。PATCH側だけに入れていたため、
     # POST経由の配置(Sequencesの226f等)がC20の先へ5fはみ出す事故が起きた(実測)。
     clip.duration_frames = _clamp_duration_to_cut(
@@ -56,9 +73,10 @@ def _clamp_duration_to_cut(session, clip: Clip, start: int, dur: int) -> int:
     カット1個分へ一律に切ってはいけない。
     """
     from app.models import Track
-    # フィルターレイヤー(単色/ぼかし)は素材の尺スナップと無関係。カット境界で切らない
-    # (暗転やぼかしは複数カットにまたがって掛けるのが普通)。
-    if (getattr(clip, "kind", "") or "") in ("solid", "blur"):
+    from app.services.ffmpeg_render import FILTER_KINDS
+    # フィルターレイヤー(単色/ぼかし/撮影)は素材の尺スナップと無関係。カット境界で切らない
+    # (暗転やぼかしは複数カットにまたがって掛けるのが普通。撮影は生成の 1 本の中の切り替わりで分ける)。
+    if (getattr(clip, "kind", "") or "") in FILTER_KINDS:
         return dur
     track = session.get(Track, clip.track_id)
     if not track or track.track_type != "video":
@@ -116,6 +134,8 @@ def update_clip(clip_id: int, data: ClipUpdate, session: Session = Depends(get_s
     # 🔒ロック中はロック解除以外の変更を拒否(再生成スクリプト等の誤上書きも防ぐ)
     if clip.locked and set(changed) - {"locked"}:
         raise HTTPException(status_code=409, detail="このクリップは🔒ロックされています(解除してから編集してください)")
+    _check_credit(changed.get("kind", clip.kind), changed.get("asset_id", clip.asset_id),
+                  changed.get("attrs_json", clip.attrs_json))
     for field, value in changed.items():
         setattr(clip, field, value)
     session.add(clip)

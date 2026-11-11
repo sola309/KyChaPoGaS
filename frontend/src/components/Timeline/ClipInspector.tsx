@@ -12,6 +12,13 @@ import {
 } from '../Preview/transformEval'
 import { EASE_OPTIONS } from '../Preview/easing'
 import type { Clip } from '../../api/client'
+import { isRainClip } from './rainFx'
+import { RainPanel } from './RainPanel'
+import { SatsueiPanel } from './SatsueiPanel'
+import { CreditPanel } from './CreditPanel'
+import { isCreditClip } from '../Preview/creditLook'
+import { useRingTool } from '../Preview/ringTool'
+import { parseRingMarks } from './ringMarks'
 
 interface Props {
   clip: Clip
@@ -49,6 +56,14 @@ const ANCHORS: [number, number][] = [
 export function ClipInspector({ clip, isOverlay, localT, beatTs, onChange, onClose }: Props) {
   const raw = clip.transform_json ?? ''
   const [snap, setSnap] = useState(true)                     // snap keyframes to beats
+  const ringOn = useRingTool(s => s.on)
+  const ringTrack = useRingTool(s => s.trackId)
+  // 🌧 雨クリップは変形ではなく雨の調整(強さ・粒・ぼかし…)を出す
+  if (isRainClip(clip)) return <RainPanel key={clip.id} clip={clip} onChange={onChange} onClose={onClose} />
+  // 🎬 撮影クリップは色・パラ・ライトリーク・レンズ・粒子の調整(つまみはすぐプレビューに出る)
+  if (clip.kind === 'satsuei') return <SatsueiPanel key={clip.id} clip={clip} onClose={onClose} />
+  // 🔤 字幕クリップは文字・位置・大きさ・出現/消失・屈折の調整(つまみはすぐプレビューに出る)
+  if (isCreditClip(clip)) return <CreditPanel key={clip.id} clip={clip} onClose={onClose} />
   const rawT = Math.max(0, Math.min(1, localT))
   // keyframe placement time — snapped to the nearest beat when 拍スナップ is on
   const snapTime = (tt: number) => {
@@ -95,6 +110,23 @@ export function ClipInspector({ clip, isOverlay, localT, beatTs, onChange, onClo
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 text-xs leading-none">✕</button>
         </div>
       </div>
+
+      {/* 💍 指輪の位置: このクリップのレイヤーでプレビューに印を付ける(映像のクリップだけ) */}
+      {clip.asset_id != null && (() => {
+        const onHere = ringOn && ringTrack === clip.track_id
+        const n = parseRingMarks(clip.attrs_json).length
+        return (
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => { const t = useRingTool.getState(); if (onHere) t.stop(); else t.start(clip.track_id) }}
+              className={`text-[11px] px-2 py-0.5 rounded border ${onHere
+                ? 'bg-rose-800 border-rose-500 text-rose-100' : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700'}`}
+              title="プレビューをクリックして、コマごとに指輪があるべき位置を付ける(このクリップのレイヤー)"
+            >💍 指輪の位置{onHere ? '(ON)' : ''}</button>
+            <span className="text-[10px] text-zinc-500">{n ? `キー ${n} 個` : '印なし'}</span>
+          </div>
+        )
+      })()}
 
       {ROWS.map(row => {
         const cur = propValue(raw, row.key, rawT)

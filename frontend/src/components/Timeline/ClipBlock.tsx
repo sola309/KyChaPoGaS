@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from 'react'
+import { memo, useRef, useState, useSyncExternalStore } from 'react'
 import type { Clip, Asset, ClipUpdate } from '../../api/client'
 import { assetsApi } from '../../api/client'
 import { useTimelineStore } from '../../store/timelineStore'
@@ -9,7 +9,16 @@ import { MotionCanvas } from './MotionCanvas'
 import { RemapEditor } from './RemapEditor'
 import { resInfo } from './resolutionBadge'
 import { allKeyframeTimes, removeKeyframe, TPROPS } from '../Preview/transformEval'
-import { isFilterClip, getKeys, filterLabel, solidColor, defaultValue, BLUR_MAX, type FilterKind, keyValueAt, withKeys } from './filterLayers'
+import { isFilterClip, getKeys, filterLabel, solidColor, defaultValue, BLUR_MAX, type FilterKind, shiftFilterHead } from './filterLayers'
+import { shiftRainAttrs } from './rainFx'
+import { hasRingMarks, sliceRingAttrs, headShiftFrames } from './ringMarks'
+import { RingTicks } from './RingTicks'
+import { isCreditClip, creditOf, creditLabel, eAt, gOf, holdOf, type CreditV1 } from '../Preview/creditLook'
+import { previewCredit, commitCreditDrag, cancelCreditDrag, settleBeforeDrag, shiftCreditHead } from './creditEdit'
+import { subscribeCreditMaps, creditMapsErrorFor } from '../Preview/creditFields'
+
+const noSub = () => () => {}
+const noErr = () => ''
 
 const CLIP_COLORS: Record<string, string> = {
   video:     'bg-blue-800 border-blue-600',
@@ -55,7 +64,8 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   const isStretchDrag = (ev: { ctrlKey: boolean; metaKey: boolean }) => {
     const base = useTimelineStore.getState().edgeStretch
     const on = (ev.ctrlKey || ev.metaKey) ? !base : base
-    return on && !!asset?.duration_sec && !isFilterClip(clip)
+    // 🌧 雨クリップは伸縮しない(雨の層は元動画・下の絵とコマ単位で対応している。速度を変えるとずれる)
+    return on && !!asset?.duration_sec && !isFilterClip(clip) && clip.kind !== 'rain'
   }
   // 伸縮後の値: 速度は 0.05〜8 に制限し、リマップのキーは尺の比率で時間方向に伸縮する
   const stretchVals = (newDur: number) => {
@@ -124,8 +134,22 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   const showRes = useTimelineStore(s => s.showRes)
   const ri = showRes && !isFilterClip(clip) ? resInfo(asset) : null
   const openFilter = () => window.dispatchEvent(new CustomEvent('kychapogas:open-filter', { detail: { clipId: clip.id } }))
+  const isRain = clip.kind === 'rain'   // 🌧 雨フィルター(黒地の雨の層を screen で重ねる)
+  const openRain = () => window.dispatchEvent(new CustomEvent('kychapogas:open-rain', { detail: { clipId: clip.id } }))
+  // 🎬 撮影(色・パラ・ライトリーク・レンズ・粒子を下の絵にかける調整レイヤー)。ダブルクリックで撮影の調整パネル
+  const isSatsuei = clip.kind === 'satsuei'
+  const openSatsuei = () => window.dispatchEvent(new CustomEvent('kychapogas:open-satsuei', { detail: { clipId: clip.id } }))
+  // 🔤 字幕(素材なし・文字のガラスで下の絵を屈折させる)。ダブルクリックで字幕の調整パネル
+  const isCredit = isCreditClip(clip)
+  const credit = isCredit ? creditOf(clip.attrs_json) : null
+  // 今の字幕で地図を作れない(大きすぎる・フォントが無い)ときの知らせ。プレビューも書き出しもこの字幕を描かないので、
+  // パネルを閉じていても気づけるようにクリップに ⚠ を出す(文字列が変わったときだけ描き直す)
+  const creditErr = useSyncExternalStore(isCredit ? subscribeCreditMaps : noSub, isCredit ? () => creditMapsErrorFor(clip.id) : noErr)
+  const openCredit = () => window.dispatchEvent(new CustomEvent('kychapogas:open-credit', { detail: { clipId: clip.id } }))
   const colorClass = isFilter
-    ? (clip.kind === 'blur' ? 'bg-cyan-950 border-cyan-600' : 'bg-zinc-800 border-zinc-400')
+    ? (clip.kind === 'blur' ? 'bg-cyan-950 border-cyan-600' : isSatsuei ? 'bg-amber-950 border-amber-500' : 'bg-zinc-800 border-zinc-400')
+    : isRain ? 'bg-sky-950 border-sky-500'
+    : isCredit ? (creditErr ? 'bg-red-950 border-red-500' : 'bg-slate-900 border-cyan-300')
     : CLIP_COLORS[asset?.asset_type ?? 'video']
 
   // Interactions use Pointer Events so mouse, touch, and pen all work.
@@ -250,6 +274,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
 
     const origSpeed = clip.speed
     const origRemap = clip.remap_json ?? ''
+    const hasRing = hasRingMarks(clip.attrs_json)   // 💍 指輪の位置の印(クリップ先頭基準のコマ)
     const clamp = (ev: PointerEvent): ClipUpdate => {
       const dx = ev.clientX - startX
       const newStart = Math.max(0, snapEv(origStart + Math.round(dx / pixelsPerFrame), ev))
@@ -260,24 +285,39 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         const d = sv.duration_frames!
         return { ...sv, start_frame: origStart + origDur - d, asset_in_frame: origAssetIn }
       }
-      // フィルター(単色/ぼかし)のキーはクリップ先頭基準なので、左端を動かしたら
-      // 絶対時刻が変わらないようにずらす(詰めた分は先頭キーにその時点の値を置く)
+      // フィルター(単色/ぼかし/撮影)のキーはクリップ先頭基準なので、左端を動かしたら
+      // 絶対時刻が変わらないようにずらす(詰めた分は先頭キーにその時点の値を置く)。
+      // 🎬 撮影はライトリークの始まり(クリップ先頭基準)も同じタイムラインのコマに保つ
       let filterAttrs: ClipUpdate = {}
       if (isFilterClip(clip)) {
-        const kind = clip.kind as FilterKind
-        const ks = getKeys(clip)
-        if (ks.length) {
-          const shifted = moved > 0
-            ? [{ t: 0, v: keyValueAt(ks, moved, defaultValue(kind)) }, ...ks.filter(k => k.t > moved).map(k => ({ t: k.t - moved, v: k.v }))]
-            : ks.map(k => ({ t: k.t - moved, v: k.v }))
-          filterAttrs = { attrs_json: withKeys(clip.attrs_json, kind, shifted) }
-        }
+        const a = shiftFilterHead(clip, moved)
+        if (a != null) filterAttrs = { attrs_json: a }
+      } else if (clip.kind === 'rain') {
+        // 🌧 雨クリップ: 「寄りでのぼかし」の開始コマ(クリップ先頭基準)を同じタイムラインのコマに保つ
+        const a = shiftRainAttrs(clip.attrs_json, moved, Math.max(1, origDur - moved))
+        if (a != null && a !== clip.attrs_json) filterAttrs = { attrs_json: a }
+      } else if (isCredit) {
+        // 🔤 字幕: 決めてあるつやの時刻(クリップ先頭基準)を同じタイムラインのコマに保つ(出現・消失は端から数えるのでそのまま)
+        const a = shiftCreditHead(clip.attrs_json, moved)
+        if (a != null) filterAttrs = { attrs_json: a }
+      }
+      // 💍 指輪の位置の印も同じ理由でずらす。印は素材の絵に付いているので、ずらす量は「同じ絵が何コマ動くか」
+      // = 頭出しの変化(素材のコマ)÷ 速度。頭出しが 0 で止まると(素材の頭より前へは伸ばせない)絵が後ろへずれるので、
+      // 印もそれに合わせてずれる。終わりより後の印(右端を詰めて隠れているもの)は捨てない
+      if (hasRing) {
+        const newIn = Math.max(0, origAssetIn + moved)
+        const dIn = newIn - origAssetIn
+        const off = headShiftFrames(dIn, origSpeed, origRemap)       // 時間リマップは近似(頭出しの変化のまま)
+        const ra = sliceRingAttrs(clip.attrs_json, off, Math.max(1, origDur - moved), dIn,
+                                  { asset_id: clip.asset_id, asset_in_frame: newIn }, true)
+        if (ra != null) filterAttrs = { attrs_json: ra }
       }
       return {
         ...filterAttrs,
         start_frame:     newStart,
         duration_frames: Math.max(1, origDur - moved),
-        asset_in_frame:  Math.max(0, origAssetIn + moved),
+        // 🔤 字幕は素材が無いので頭出しは 0 のまま(出現・消失はクリップの端から数えるので、ずらす物も無い)
+        asset_in_frame:  isCredit ? 0 : Math.max(0, origAssetIn + moved),
       }
     }
 
@@ -300,7 +340,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
       const after = clamp(ev)
       trimClip(clip.id,
         { start_frame: origStart, duration_frames: origDur, asset_in_frame: origAssetIn, speed: origSpeed, remap_json: origRemap,
-          ...(isFilterClip(clip) ? { attrs_json: clip.attrs_json } : {}) },
+          ...(isFilterClip(clip) || clip.kind === 'rain' || isCredit || hasRing ? { attrs_json: clip.attrs_json } : {}) },
         { speed: origSpeed, remap_json: origRemap, ...after },
       )
       setEditingClipId(null)
@@ -364,6 +404,57 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
     window.addEventListener('pointerup', onUp)
   }
 
+  // ── 🔤 字幕の出現・消失のつまみ ─────────────────────────────────────
+  // 出現 = 先頭からのコマ数、消失 = 末尾までのコマ数。0..240 と「出現 + 消失 ≤ 長さ」に収める。すぐプレビューに出て、
+  // 保存は止まってから(元に戻すはつまみごとに 1 回)
+  const creditHandleDown = (which: 'appear' | 'disappear', e: React.PointerEvent) => {
+    e.stopPropagation(); e.preventDefault()
+    if (locked || !credit) return
+    onSelect(clip.id)
+    settleBeforeDrag(clip.id)                         // パネルのつまみの保存待ちを先に送る(ドラッグ中の値を混ぜない)
+    const a0 = credit.timing.appear_frames, d0 = credit.timing.disappear_frames
+    const dur = Math.max(1, clip.duration_frames), start = clip.start_frame
+    const x0 = e.clientX
+    const orig = clip.attrs_json
+    const v0 = which === 'appear' ? a0 : d0
+    let last = v0
+    const setV = (v: number) => (c: CreditV1) => ({ ...c, timing: { ...c.timing, [which === 'appear' ? 'appear_frames' : 'disappear_frames']: v } })
+    const onMove = (ev: PointerEvent) => {
+      const df = Math.round((ev.clientX - x0) / pixelsPerFrame)
+      let v: number
+      if (which === 'appear') {
+        const abs = snapEv(start + a0 + df, ev)
+        v = Math.max(0, Math.min(240, dur - d0, abs - start))
+      } else {
+        const abs = snapEv(start + dur - d0 + df, ev)
+        v = Math.max(0, Math.min(240, dur - a0, start + dur - abs))
+      }
+      if (v === last) return
+      last = v
+      previewCredit(clip.id, setV(v))                 // 動かしている間は手元だけ(プレビューにすぐ出る)
+    }
+    const done = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      setEditingClipId(null)
+    }
+    const onUp = () => {
+      done()
+      // 離したら 1 回だけ保存(元に戻す 1 回)
+      if (last !== v0) commitCreditDrag(clip.id, orig, setV(last), which === 'appear' ? '字幕の出現' : '字幕の消失', `credit.timing.${which}_frames`)
+    }
+    // 指の操作がブラウザ(スクロール・ズーム)に取られた: 動かした分を戻して終わる(保存しない)
+    const onCancel = () => {
+      done()
+      if (last !== v0) cancelCreditDrag(clip.id, orig, setV(last))
+    }
+    setEditingClipId(clip.id)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
   return (
     <div
       data-clip-id={clip.id}
@@ -376,13 +467,21 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           : ri?.low ? { outline: '2px solid rgb(220 38 38)', outlineOffset: '-2px' } : {}),
       }}
       onDoubleClick={() => {
+        if (isCredit) { openCredit(); return }          // 🔤 字幕は消さない(素材なしのクリップは下の「削除」に落ちる)
+        if (isSatsuei) { openSatsuei(); return }
         if (isFilter) { openFilter(); return }
+        if (isRain) { openRain(); return }
         if (locked) return
         if (isMgShot) openEditor()
         else deleteClip(clip.id)
       }}
       title={remoteLock ? `${remoteLock.name} が編集中`
+        : isCredit && credit ? `${creditErr ? `⚠ この字幕は描けません: ${creditErr}(パネルで文字・大きさを直してください)\n` : ''}${creditLabel(credit)} — 出現 ${credit.timing.appear_frames} / 保持 ${holdOf(credit, clip.duration_frames)} / 消失 ${credit.timing.disappear_frames} コマ`
+          + `${credit.label ? `・${credit.label}` : ''}${credit.group ? `・組 ${credit.group}` : ''}`
+          + `${holdOf(credit, clip.duration_frames) < 0 ? '(出現と消失が重なっています)' : ''} — ダブルクリックで字幕の調整`
+        : isSatsuei ? `${filterLabel(clip)}(効き ${Math.round((clip.opacity ?? 1) * 100)}%) — ダブルクリックで撮影の調整 / 🎚で効きのキー`
         : isFilter ? `${filterLabel(clip)} — ダブルクリック/🎚でキー編集`
+        : isRain ? `🌧 雨(元動画の雨筋・強さ ${Math.round((clip.opacity ?? 1) * 100)}%) — ダブルクリックで調整`
         : isMgShot ? `${asset?.name ?? 'shot'} — ダブルクリック/✎でショットエディタ`
         : `${asset?.name ?? 'clip'}${isStretchable ? '（静止画: 自由に引き伸ばし可）' : ''} — ダブルクリックで削除`}
     >
@@ -408,7 +507,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         const ks = getKeys(clip)
         const kind = clip.kind as FilterKind
         const last = Math.max(1, clip.duration_frames - 1)
-        const vmax = kind === 'solid' ? 1 : Math.min(BLUR_MAX, Math.max(10, ...ks.map(k => k.v)))
+        const vmax = kind !== 'blur' ? 1 : Math.min(BLUR_MAX, Math.max(10, ...ks.map(k => k.v)))   // 単色・撮影は 0..1
         const fb = defaultValue(kind)
         const pts: [number, number][] = ks.length
           ? [[0, ks[0].v], ...ks.map(k => [Math.min(last, k.t), k.v] as [number, number]), [last, ks[ks.length - 1].v]]
@@ -419,6 +518,9 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
             {kind === 'solid'
               ? <polygon points={`0,100 ${poly} 100,100`} fill={solidColor(clip)} fillOpacity={0.85}
                          stroke="#a1a1aa" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+              : kind === 'satsuei'
+              ? <polygon points={`0,100 ${poly} 100,100`} fill="#f59e0b" fillOpacity={0.22}
+                         stroke="#fcd34d" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
               : <polygon points={`0,100 ${poly} 100,100`} fill="#22d3ee" fillOpacity={0.25}
                          stroke="#67e8f9" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />}
           </svg>
@@ -433,6 +535,46 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           onClick={e => { e.stopPropagation(); setCurrentFrame(clip.start_frame + k.t) }}
         />
       ))}
+
+      {/* 🔤 字幕: 出現・消失の進み e(コマごと。濃い線)とガラスの見た目 g(薄い線)。出現と消失が重なる長さは赤み */}
+      {isCredit && credit && (() => {
+        const dur = Math.max(1, clip.duration_frames)
+        const a = credit.timing.appear_frames, d = credit.timing.disappear_frames
+        const n = Math.min(dur, 240)
+        const ptsE: string[] = [], ptsG: string[] = []
+        for (let k = 0; k <= n; k++) {
+          const i = Math.min(dur - 1, Math.round(k / n * (dur - 1)))
+          const e = eAt(i, dur, a, d), g = gOf(e, credit.refract.g0)
+          const x = ((i + 0.5) / dur) * 100
+          ptsE.push(`${x},${100 - e * 78}`); ptsG.push(`${x},${100 - g * 78}`)
+        }
+        const over = a + d > dur
+        return (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+            {over && <rect x={0} y={0} width={100} height={100} fill="#ef4444" fillOpacity={0.18} />}
+            <polygon points={`0,100 ${ptsE.join(' ')} 100,100`} fill="#22d3ee" fillOpacity={0.16} />
+            <polyline points={ptsG.join(' ')} fill="none" stroke="#e0f2fe" strokeOpacity={0.45} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            <polyline points={ptsE.join(' ')} fill="none" stroke="#67e8f9" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          </svg>
+        )
+      })()}
+      {/* 🔤 出現・消失のつまみ(選んでいるとき): 横に動かすとコマ数が変わる(Alt で吸着なし)。保持は長さ − 出現 − 消失 */}
+      {isCredit && credit && selected && !locked && (['appear', 'disappear'] as const).map(which => {
+        const dur = Math.max(1, clip.duration_frames)
+        const f = which === 'appear' ? credit.timing.appear_frames : dur - credit.timing.disappear_frames
+        const x = Math.max(0, Math.min(dur, f)) * pixelsPerFrame
+        return (
+          <div key={which} data-credit-handle={which}
+            className="absolute z-[25] top-0 w-3 h-3 -ml-1.5 rotate-45 bg-cyan-200 border border-cyan-700 cursor-ew-resize hover:bg-white"
+            style={{ left: Math.min(Math.max(0, x), width) }}
+            title={which === 'appear'
+              ? `出現 ${credit.timing.appear_frames} コマ(先頭から屈折 → ガラスになるまで)。左右にドラッグ・Alt で吸着なし`
+              : `消失 ${credit.timing.disappear_frames} コマ(ガラス → 屈折 → 消えるまで)。左右にドラッグ・Alt で吸着なし`}
+            onPointerDown={e => touchGate(e, ev => creditHandleDown(which, ev))}
+            onDoubleClick={e => e.stopPropagation()}
+          />
+        )
+      })}
 
       {/* Filmstrip background (video clips) — タイルが常に16:9で表示されるよう
           クリップ表示幅からコマ数を逆算(段階量子化でキャッシュ効率を保つ) */}
@@ -481,6 +623,9 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           }}
         />
       ))}
+
+      {/* 💍 指輪の位置のキー(下辺の刻み・クリックでそのコマへ) */}
+      {!isFilter && !isRain && !isCredit && <RingTicks clip={clip} pixelsPerFrame={pixelsPerFrame} />}
 
       {/* 重なり(遷移)区間: 先頭側=前クリップから溶け込む区間、末尾側=次クリップへ溶け込ませる区間 */}
       {overlapIn > 0 && (
@@ -543,6 +688,8 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           )}
           {isFilter
             ? <span className="px-1 rounded bg-black/55">{filterLabel(clip)}</span>
+            : isCredit && credit ? <span className="px-1 rounded bg-black/55">{creditErr ? '⚠ ' : ''}{creditLabel(credit)}</span>
+            : isRain ? <span className="px-1 rounded bg-black/55">🌧 雨 {Math.round((clip.opacity ?? 1) * 100)}%</span>
             : (asset?.name ?? `clip ${clip.id}`)}
         </span>
       </div>
@@ -570,12 +717,13 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           onClick={e => { e.stopPropagation(); openFilter() }}
           onPointerDown={e => e.stopPropagation()}
           className="absolute top-0 right-6 z-20 text-[11px] leading-none px-1 py-0.5 rounded-bl bg-black/50 text-zinc-300 hover:text-purple-300"
-          title="🎚 キー(不透明度/ぼかし強さ)と色を編集"
+          title={isSatsuei ? '🎚 撮影の効きのキー(時間で効きを変える)を編集' : '🎚 キー(不透明度/ぼかし強さ)と色を編集'}
         >🎚</button>
       )}
 
-      {/* 🗂テイク履歴: このクリップ位置の生成テイクを一覧(選択時に表示) */}
-      {selected && !isFilter && (
+      {/* 🗂テイク履歴: このクリップ位置の生成テイクを一覧(選択時に表示)。
+          🌧 雨クリップには出さない(採用すると雨の層が生成動画に置き換わる。雨の履歴は調整パネルの「これまでの雨」) */}
+      {selected && !isFilter && !isRain && !isCredit && (
         <button
           onClick={e => {
             e.stopPropagation()
