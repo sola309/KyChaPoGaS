@@ -71,6 +71,20 @@ def engine_file(path: str):
     return FileResponse(p, media_type=mt, headers={"Cache-Control": "no-cache"})
 
 
+@router.get("/fonts")
+def fonts():
+    return CR.list_fonts()
+
+
+@router.get("/fonts/{name}")
+def font_file(name: str):
+    p = CR.font_file(name)
+    if not p:
+        raise HTTPException(404, "not found")
+    return FileResponse(p, media_type=mimetypes.guess_type(str(p))[0] or "font/ttf",
+                        headers={"Cache-Control": "public, max-age=86400"})
+
+
 @router.get("/vframe/{asset_id}/{n}")
 def vframe(asset_id: int, n: int, fps: float = 24.0, session: Session = Depends(get_session)):
     """動画素材の n コマ目(fps で数える)。キャプチャのときエンジンが 1 コマずつ取りに来る。"""

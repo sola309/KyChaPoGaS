@@ -61,12 +61,71 @@ def player_html(comp: dict, mode: str, api_base: str = "", frame: int | None = N
     base = api_base.rstrip("/")
     boot = {"comp": comp, "mode": mode, "apiBase": base,
             "engineBase": "/api/comps/engine/"}
+    boot["fonts"] = [{"family": f["family"], "weight": f["weight"],
+                      "url": f"{base}/api/comps/fonts/{f['file']}"} for f in list_fonts()]
     if frame is not None:
         boot["frame"] = frame
     js = "window.__COMP_BOOT = " + json.dumps(boot, ensure_ascii=False).replace("</", "<\\/") + ";"
     if BOOT_MARK not in src:
         raise RuntimeError("player.html に /*__COMP_BOOT__*/ がありません")
     return src.replace(BOOT_MARK, js, 1)
+
+
+FONT_DIRS = [DATA / "fonts", REPO / "tools" / "mad-kit" / "fonts"]
+_font_cache: dict[str, tuple[float, dict]] = {}
+
+
+def list_fonts() -> list[dict]:
+    """エンジンに読ませる追加フォント(data/fonts と mad-kit の同梱分)。family は字体ファイルの名前から。"""
+    out = []
+    for d in FONT_DIRS:
+        if not d.is_dir():
+            continue
+        for f in sorted(d.iterdir()):
+            if f.suffix.lower() not in (".ttf", ".otf", ".woff2", ".woff", ".ttc"):
+                continue
+            mt = f.stat().st_mtime
+            hit = _font_cache.get(str(f))
+            if not hit or hit[0] != mt:
+                fam, style = f.stem, ""
+                try:
+                    from PIL import ImageFont
+                    fam, style = ImageFont.truetype(str(f), 20).getname()
+                except Exception:
+                    pass
+                st = (style or "").lower()
+                w = next((v for k, v in (("thin", 100), ("extralight", 200), ("light", 300), ("medium", 500),
+                                         ("semibold", 600), ("demibold", 600), ("extrabold", 800), ("heavy", 900),
+                                         ("black", 900), ("bold", 700)) if k in st.replace(" ", "")), 400)
+                hit = (mt, {"family": fam, "weight": w, "style": style, "file": f.name})
+                _font_cache[str(f)] = hit
+            out.append(dict(hit[1]))
+    return out
+
+
+def font_file(name: str) -> Path | None:
+    for d in FONT_DIRS:
+        p = (d / name).resolve()
+        if d.is_dir() and d.resolve() in p.parents and p.is_file():
+            return p
+    return None
+
+
+def remap_refs(data: dict, asset_fn=None, comp_fn=None) -> dict:
+    """文書の中の素材 id・コンポジション id を写像した写しを返す(書き出し・取り込み用)。"""
+    d = json.loads(json.dumps(data))
+    for ly in d.get("layers") or []:
+        src = ly.get("source")
+        if not isinstance(src, dict):
+            continue
+        if asset_fn and isinstance(src.get("asset_id"), int):
+            src["asset_id"] = asset_fn(src["asset_id"])
+        seq = src.get("sequence")
+        if asset_fn and isinstance(seq, dict) and isinstance(seq.get("asset_ids"), list):
+            seq["asset_ids"] = [asset_fn(x) if isinstance(x, int) else x for x in seq["asset_ids"]]
+        if comp_fn and isinstance(src.get("comp_id"), int):
+            src["comp_id"] = comp_fn(src["comp_id"])
+    return d
 
 
 def engine_file(path: str) -> Path | None:

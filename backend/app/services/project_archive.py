@@ -110,6 +110,27 @@ def export_project(pid: int, include_mad_media: bool = True) -> Path:
             tl.append(td)
         z.writestr("timeline.json", json.dumps({"tracks": tl}, ensure_ascii=False, indent=1))
 
+        # 🎞 コンポジション(素材は書庫の番号で指す。入れ子・クリップの comp_id は取り込みで付け替える)
+        try:
+            from app.models.composition import Composition
+            from app.services.comp_render import remap_refs
+            with Session(engine) as s2:
+                comps = s2.exec(select(Composition).where(Composition.project_id == pid)).all()
+            if comps:
+                cm = []
+                for c in comps:
+                    cd = _dump(c)
+                    cd["id"] = c.id            # 入れ子・クリップの付け替えに使う(取り込みでは新しい id になる)
+                    for k in ("project_id", "rendered_asset_id", "rendered_rev"):
+                        cd.pop(k, None)
+                    cd["data"] = remap_refs(json.loads(c.data_json or "{}"),
+                                            asset_fn=lambda i: {"$asset_index": asset_index.get(i), "$asset_id": i})
+                    cd.pop("data_json", None)
+                    cm.append(cd)
+                z.writestr("compositions.json", json.dumps(cm, ensure_ascii=False, indent=1))
+        except Exception as e:
+            log.warning(f"compositions export skipped: {e}")
+
         # comments / oplog
         cpath = DATA / "comments" / f"{pid}.jsonl"
         if cpath.exists():
@@ -246,6 +267,61 @@ def import_project(zip_path: Path) -> int:
                                 shot_clip_map[sid] = c.id
                         except Exception:
                             pass
+
+        # 🎞 コンポジション: 新しい id で作り、文書の素材・入れ子と comp クリップの参照を付け替える
+        if "compositions.json" in names:
+            try:
+                from app.models.composition import Composition
+                from app.services.comp_render import remap_refs
+                cm = json.loads(z.read("compositions.json"))
+                with Session(engine) as s:
+                    new_ids: dict[int, int] = {}
+                    rows = []
+                    for cd in cm:
+                        kw = _row_kwargs(Composition, cd)
+                        kw.pop("id", None)
+                        kw["project_id"] = pid
+                        kw["rendered_rev"] = 0
+                        kw["rendered_asset_id"] = None
+                        kw["data_json"] = "{}"
+                        c = Composition(**kw); s.add(c); s.commit(); s.refresh(c)
+                        new_ids[cd.get("id")] = c.id
+                        rows.append((c.id, cd.get("data") or {}))
+
+                    def _asset(ref):
+                        if isinstance(ref, dict):
+                            ai = ref.get("$asset_index")
+                            # 書庫に入っていない素材(別プロジェクトの素材)は元の id のまま
+                            return new_asset_ids[ai] if ai is not None and ai < len(new_asset_ids) else ref.get("$asset_id")
+                        return ref
+                    for cid, data in rows:
+                        d = json.loads(json.dumps(data))
+                        for ly in d.get("layers") or []:
+                            src = ly.get("source") if isinstance(ly.get("source"), dict) else {}
+                            if "asset_id" in src:
+                                src["asset_id"] = _asset(src["asset_id"])
+                            seq = src.get("sequence")
+                            if isinstance(seq, dict) and isinstance(seq.get("asset_ids"), list):
+                                seq["asset_ids"] = [_asset(x) for x in seq["asset_ids"]]
+                            if isinstance(src.get("comp_id"), int):
+                                src["comp_id"] = new_ids.get(src["comp_id"], src["comp_id"])
+                        c = s.get(Composition, cid)
+                        c.data_json = json.dumps(d, ensure_ascii=False)
+                        s.add(c)
+                    tids = [t.id for t in s.exec(select(Track).where(Track.project_id == pid)).all()]
+                    for cl in (s.exec(select(Clip).where(Clip.track_id.in_(tids)).where(Clip.kind == "comp")).all() if tids else []):
+                        try:
+                            at = json.loads(cl.attrs_json or "{}")
+                        except Exception:
+                            continue
+                        if at.get("comp_id") in new_ids:
+                            at["comp_id"] = new_ids[at["comp_id"]]
+                            at["rev"] = 0          # 取り込み先では描き直す
+                            cl.attrs_json = json.dumps(at, ensure_ascii=False)
+                            s.add(cl)
+                    s.commit()
+            except Exception as e:
+                log.warning(f"compositions import skipped: {e}")
 
         # comments
         if "comments.jsonl" in names:
