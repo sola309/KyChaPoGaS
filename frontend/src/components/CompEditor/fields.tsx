@@ -9,7 +9,8 @@ export const iconBtnCls = 'text-[11px] leading-none px-1 py-0.5 rounded text-zin
 
 interface NumProps {
   value: number
-  onChange: (v: number) => void
+  /** how: 'scrub' = 横ドラッグ・↑↓(複数選択では差分として配る)/ 'type' = 入力した値 */
+  onChange: (v: number, how?: 'scrub' | 'type') => void
   /** ドラッグ・入力のひと区切り(取り消し 1 回ぶんの終わり) */
   onEnd?: () => void
   step?: number
@@ -41,7 +42,7 @@ export const NumField = memo(function NumField({ value, onChange, onEnd, step = 
     if (draft == null) return
     const v = parseFloat(draft)
     setDraft(null)
-    if (isFinite(v) && clamp(v) !== safe) onChange(clamp(v))
+    if (isFinite(v) && (clamp(v) !== safe || mixed)) onChange(clamp(v), 'type')
   }
   return (
     <label className={`flex items-center gap-0.5 ${className ?? 'w-[62px]'}`} title={title ?? '横にドラッグで増減(Shift: 10 倍 / Alt: 1/10)・クリックで入力・↑↓'}>
@@ -68,7 +69,7 @@ export const NumField = memo(function NumField({ value, onChange, onEnd, step = 
           d.moved = true
           const mult = e.shiftKey ? 10 : e.altKey ? 0.1 : 1
           const nv = clamp(d.v + dx * step * mult)
-          if (nv !== safe) onChange(nv)
+          if (nv !== safe) onChange(nv, 'scrub')
         }}
         onPointerUp={e => {
           const d = drag.current
@@ -85,7 +86,7 @@ export const NumField = memo(function NumField({ value, onChange, onEnd, step = 
             const base = draft != null && isFinite(parseFloat(draft)) ? parseFloat(draft) : safe
             const mult = e.shiftKey ? 10 : e.altKey ? 0.1 : 1
             setDraft(null)
-            onChange(clamp(base + (e.key === 'ArrowUp' ? 1 : -1) * step * mult))
+            onChange(clamp(base + (e.key === 'ArrowUp' ? 1 : -1) * step * mult), 'scrub')
           } else if (e.key === 'Enter') { commitDraft(); ref.current?.blur() }
           else if (e.key === 'Escape') { setDraft(null); window.setTimeout(() => ref.current?.blur(), 0) }
         }}

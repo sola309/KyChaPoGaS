@@ -6,9 +6,9 @@ import { compsApi, jobsApi, patchCompKeepalive, apiErrorText } from '../../api/c
 import { useUIStore } from '../../store/uiStore'
 import { useTimelineStore } from '../../store/timelineStore'
 import { useCompListStore } from './compList'
-import type { CompDoc, CompSchema, CompSettings, CompSummary, Easing, KeyRef, Layer } from './types'
+import type { CompDoc, CompProblem, CompSchema, CompSettings, CompSummary, Easing, KeyClip, KeyRef, Layer } from './types'
 import {
-  addLayer, clampFrame, cloneLayers, duplicateLayers, evalProp, findLayer, getPath, hasKeyAt, isKeyed, layerIn, layerOut,
+  addDelta, addLayer, clampFrame, isObj, scopeInfo, unsetPath, cloneLayers, duplicateLayers, evalProp, findLayer, getPath, hasKeyAt, isKeyed, layerIn, layerOut,
   moveKeys, normalizeDoc, removeKey, removeLayers, round, sameFrame, setKey, setKeyEase, setPath, setValueAt, splitLayer,
   structuredCloneSafe, toConst, toggleKey, trimLayer, uniqueId, updateLayer, updateLayers,
 } from './docOps'
@@ -35,6 +35,9 @@ let openSeq = 0
 const histories = new Map<number, { undo: Snap[]; redo: Snap[]; rev: number }>()
 /** レイヤーのコピー(コンポジションをまたいで貼れる) */
 let clipboard: Layer[] = []
+/** キーフレームのコピー。最後にコピーしたほう(レイヤーかキー)を貼る */
+let keyClipboard: KeyClip[] = []
+let clipboardKind: 'layers' | 'keys' = 'layers'
 /** この画面で保存し直したコンポジション(親へ戻ったとき iframe に comp:invalidate を送る) */
 export const savedChildComps = new Set<number>()
 
@@ -66,6 +69,19 @@ interface CompEditorState {
   /** 見出しの下に出す知らせ(サーバが断った理由など。✕ で消す) */
   banner: string | null
   setBanner: (t: string | null) => void
+  /** たたんだ group・camera の範囲(id → true) */
+  collapsed: Record<string, boolean>
+  toggleCollapsed: (id: string) => void
+  /** 最後に触った場所(←→ がコマ送りか、レイヤーの移動かを決める) */
+  focusArea: 'preview' | 'timeline' | 'panel'
+  setFocusArea: (a: 'preview' | 'timeline' | 'panel') => void
+  /** 行を見える所までスクロールさせる合図(プレビューで選んだとき・問題の一覧から) */
+  reveal: { id: string; tick: number } | null
+  revealLayer: (id: string) => void
+  /** エンジンからの知らせ(comp:error) */
+  problems: CompProblem[]
+  addProblem: (p: { level?: unknown; message?: unknown; layer_id?: unknown }) => void
+  clearProblems: () => void
 
   open: (projectId: number, compId: number) => Promise<void>
   close: () => Promise<void>
@@ -94,6 +110,15 @@ interface CompEditorState {
   setProp: (ids: string[], path: string, value: unknown, coalesce?: string) => void
   /** 生の値を書く(プロパティ値として解釈しない。undefined で項目を消す) */
   setRaw: (ids: string[], path: string, value: unknown, coalesce?: string) => void
+  /** 項目を消す(optional の「切」)。空になった入れ物も消す */
+  unsetProp: (ids: string[], path: string) => void
+  /** 今の値に差分を足す(複数選択のつまみドラッグ。レイヤーごとの値の差を保つ) */
+  addToProp: (ids: string[], path: string, delta: number | number[], dflt: unknown, coalesce?: string) => void
+  /** 選んだレイヤーを px 単位で動かす(矢印キー) */
+  nudge: (dx: number, dy: number) => void
+  /** 行のスイッチ(表示・ロック・ソロ・3D)。選んだ行の上で押すと、選んだレイヤーすべてに同じ値 */
+  toggleFlag: (id: string, key: 'visible' | 'locked' | 'solo' | 'three_d' | 'guide') => void
+  setFlagAll: (ids: string[], key: 'visible' | 'locked' | 'solo' | 'guide', value: boolean) => void
   toggleKeyAt: (ids: string[], path: string, dflt: unknown) => void
   clearKeys: (ids: string[], path: string, dflt: unknown) => void
   addTransformKeys: () => void
@@ -111,7 +136,8 @@ interface CompEditorState {
   setSettings: (s: Partial<CompSettings>, bg?: string | null) => void
   rename: (name: string) => Promise<void>
   startRender: () => Promise<void>
-  place: () => Promise<void>
+  /** track: 省略 =「Comps」トラック / 番号 = その映像トラック / 'new' = 新しい映像トラックを作って置く */
+  place: (track?: number | 'new') => Promise<void>
 }
 
 const toast = (t: string, k: 'info' | 'success' | 'error' = 'info') => useUIStore.getState().pushToast(t, k)
@@ -230,6 +256,30 @@ export const useCompStore = create<CompEditorState>((set, get) => {
     render: null,
     banner: null,
     setBanner: (banner) => set({ banner }),
+    collapsed: {},
+    toggleCollapsed: (id) => set(s => ({ collapsed: { ...s.collapsed, [id]: !s.collapsed[id] } })),
+    focusArea: 'timeline',
+    setFocusArea: (focusArea) => { if (get().focusArea !== focusArea) set({ focusArea }) },
+    reveal: null,
+    revealLayer: (id) => {
+      // たたんだ範囲の中なら開く
+      const s = get()
+      const own = scopeInfo(s.doc.layers).owners.get(id)
+      if (own?.some(o => s.collapsed[o])) { const c = { ...s.collapsed }; for (const o of own) delete c[o]; set({ collapsed: c }) }
+      set({ reveal: { id, tick: (s.reveal?.tick ?? 0) + 1 } })
+    },
+    problems: [],
+    addProblem: (p) => {
+      const message = String(p.message ?? '').slice(0, 400)
+      if (!message) return
+      const level = typeof p.level === 'string' ? p.level : 'warn'
+      const layer_id = typeof p.layer_id === 'string' ? p.layer_id : undefined
+      const cur = get().problems
+      const i = cur.findIndex(x => x.message === message && x.layer_id === layer_id)
+      if (i >= 0) set({ problems: cur.map((x, j) => (j === i ? { ...x, count: x.count + 1 } : x)) })
+      else set({ problems: [...cur.slice(-99), { level, message, layer_id, count: 1 }] })
+    },
+    clearProblems: () => { if (get().problems.length) set({ problems: [] }) },
 
     open: async (projectId, compId) => {
       const seq = ++openSeq
@@ -250,10 +300,11 @@ export const useCompStore = create<CompEditorState>((set, get) => {
         const keep = h && h.rev === res.rev
         set({
           comp: { ...meta, layer_count: doc.layers.length }, doc, settings, loading: false,
-          sel: [], selKeys: [], frame: 0, expanded: {},
+          sel: [], selKeys: [], frame: 0, expanded: {}, collapsed: {}, problems: [], reveal: null,
           undoStack: keep ? h.undo : [], redoStack: keep ? h.redo : [],
           saveState: 'saved', saveError: null,
-          ppf: Math.max(1, Math.min(24, 900 / Math.max(1, settings.duration_frames))),
+          // 全体が見える幅から始める(長いコンポジションでも帯が画面に入る)
+          ppf: Math.max(0.1, Math.min(24, 1000 / Math.max(1, settings.duration_frames))),
         })
       } catch (e) {
         if (seq !== openSeq) return
@@ -333,7 +384,7 @@ export const useCompStore = create<CompEditorState>((set, get) => {
     },
     setPlaying: (playing) => set({ playing }),
     setLoop: (loop) => set({ loop }),
-    setPpf: (v) => set({ ppf: Math.max(0.5, Math.min(60, v)) }),
+    setPpf: (v) => set({ ppf: Math.max(0.05, Math.min(60, v)) }),
     setSel: (ids) => set({ sel: ids, selKeys: [] }),
     clickSel: (id, mods) => {
       const s = get()
@@ -348,7 +399,13 @@ export const useCompStore = create<CompEditorState>((set, get) => {
         set({ sel: [...rest, ...range.filter(x => x !== id), id], selKeys: [] })
       } else set({ sel: [id], selKeys: [] })
     },
-    setSelKeys: (selKeys) => set({ selKeys }),
+    setSelKeys: (selKeys) => {
+      // キーを選んだら、そのキーのレイヤーも選ぶ(プロパティ欄と、キーの貼り先がそろう)
+      if (!selKeys.length) { set({ selKeys }); return }
+      const ids = [...new Set(selKeys.map(k => k.layerId))]
+      const cur = get().sel
+      set(ids.length === cur.length && ids.every(i => cur.includes(i)) ? { selKeys } : { selKeys, sel: ids })
+    },
     toggleExpanded: (id) => set(s => ({ expanded: { ...s.expanded, [id]: !s.expanded[id] } })),
 
     patchLayer: (id, patch, coalesce) => get().apply(d => updateLayer(d, id, l => ({ ...l, ...patch })), coalesce),
@@ -358,6 +415,51 @@ export const useCompStore = create<CompEditorState>((set, get) => {
       get().apply(d => updateLayers(d, ids, l => setPath(l, path, setValueAt(getPath(l, path), f, value))), coalesce)
     },
     setRaw: (ids, path, value, coalesce) => get().apply(d => updateLayers(d, ids, l => setPath(l, path, value)), coalesce),
+
+    unsetProp: (ids, path) => get().apply(d => updateLayers(d, ids, l => (getPath(l, path) === undefined ? l : unsetPath(l, path)))),
+
+    addToProp: (ids, path, delta, dflt, coalesce) => {
+      const f = get().frame
+      get().apply(d => updateLayers(d, ids, l => {
+        if (l.locked) return l
+        const p = getPath(l, path)
+        const cur = evalProp<unknown>(p, f, dflt)
+        const next = addDelta(cur, delta)
+        return next === cur ? l : setPath(l, path, setValueAt(p, f, next))
+      }), coalesce)
+    },
+
+    nudge: (dx, dy) => {
+      const s = get()
+      if (!s.sel.length) return
+      const f = s.frame
+      const center = [s.settings.width / 2, s.settings.height / 2]
+      s.apply(d => updateLayers(d, s.sel, l => {
+        if (l.locked || l.type === 'adjustment') return l
+        const p = l.transform?.position
+        if (p === undefined && l.type === 'camera') return l
+        // {x, y, z} の分け書き
+        if (isObj(p) && !Array.isArray(p.k) && !('v' in p) && ('x' in p || 'y' in p)) {
+          let n = l
+          if (dx) n = setPath(n, 'transform.position.x', setValueAt(p.x, f, round(evalProp<number>(p.x, f, center[0]) + dx)))
+          if (dy) n = setPath(n, 'transform.position.y', setValueAt(p.y, f, round(evalProp<number>(p.y, f, center[1]) + dy)))
+          return n
+        }
+        const cur = evalProp<unknown>(p, f, center)
+        const arr = Array.isArray(cur) ? cur : center
+        return setPath(l, 'transform.position', setValueAt(p, f, addDelta(arr, [dx, dy])))
+      }), 'nudge')
+    },
+
+    toggleFlag: (id, key) => {
+      const s = get()
+      const l = findLayer(s.doc, id)
+      if (!l) return
+      const cur = key === 'visible' ? l.visible !== false : !!l[key]
+      const ids = s.sel.includes(id) && s.sel.length > 1 ? s.sel : [id]
+      s.apply(d => updateLayers(d, ids, x => ({ ...x, [key]: !cur })))
+    },
+    setFlagAll: (ids, key, value) => get().apply(d => updateLayers(d, ids, x => ((key === 'visible' ? x.visible !== false : !!x[key]) === value ? x : { ...x, [key]: value }))),
 
     toggleKeyAt: (ids, path, dflt) => {
       const f = get().frame
@@ -418,6 +520,18 @@ export const useCompStore = create<CompEditorState>((set, get) => {
 
     copySelection: () => {
       const s = get()
+      if (s.selKeys.length) {
+        const out: KeyClip[] = []
+        for (const k of s.selKeys) {
+          const l = findLayer(s.doc, k.layerId)
+          const p = l ? getPath(l, k.path) : null
+          const key = isKeyed(p) ? p.k.find(x => sameFrame(x.f, k.f)) : null
+          if (key) out.push({ layerId: k.layerId, path: k.path, f: key.f, v: structuredCloneSafe(key.v), ...(key.e !== undefined ? { e: key.e } : {}) })
+        }
+        if (out.length) { keyClipboard = out; clipboardKind = 'keys'; toast(`◆ キーフレーム ${out.length} 個をコピーしました(Ctrl+V で再生位置に貼る)`) }
+        return
+      }
+      clipboardKind = 'layers'
       const set_ = new Set(s.sel)
       clipboard = structuredCloneSafe(s.doc.layers.filter(l => set_.has(l.id)))
       if (clipboard.length) toast(`${clipboard.length} レイヤーをコピーしました`)
@@ -425,6 +539,34 @@ export const useCompStore = create<CompEditorState>((set, get) => {
 
     paste: () => {
       const s = get()
+      if (clipboardKind === 'keys' && keyClipboard.length) {
+        // いちばん早いキーが再生位置に来るように貼る。1 レイヤーぶんのコピーは選んだレイヤーすべてへ、複数レイヤーぶんは元のレイヤーへ
+        const f0 = Math.min(...keyClipboard.map(k => k.f))
+        const srcLayers = [...new Set(keyClipboard.map(k => k.layerId))]
+        const targets = srcLayers.length === 1 && s.sel.length ? s.sel.map(id => ({ from: srcLayers[0], to: id })) : srcLayers.map(id => ({ from: id, to: id }))
+        const made: KeyRef[] = []
+        let doc = s.doc
+        for (const t of targets) {
+          doc = updateLayer(doc, t.to, l => {
+            if (l.locked) return l
+            let n = l
+            for (const k of keyClipboard) {
+              if (k.layerId !== t.from) continue
+              const f = k.f - f0 + s.frame
+              n = setPath(n, k.path, setKey(getPath(n, k.path), f, structuredCloneSafe(k.v), k.e))
+              made.push({ layerId: t.to, path: k.path, f })
+            }
+            return n
+          })
+        }
+        if (doc === s.doc) { toast('貼る先のレイヤーがありません(レイヤーを選んでください)'); return }
+        s.commit(doc)
+        set({ selKeys: made })
+        const ex = { ...get().expanded }
+        for (const t of targets) ex[t.to] = true
+        set({ expanded: ex })
+        return
+      }
       if (!clipboard.length) return
       const copies = cloneLayers(s.doc, clipboard)
       const firstSel = s.doc.layers.findIndex(l => s.sel.includes(l.id))
@@ -543,7 +685,7 @@ export const useCompStore = create<CompEditorState>((set, get) => {
         const res = await compsApi.update(c.id, { name: v })
         const { data: _d, ...meta } = res
         void _d
-        const row = { ...get().comp!, name: meta.name, rev: meta.rev, stale: meta.stale }
+        const row = { ...get().comp!, name: meta.name, rev: meta.rev, stale: meta.stale, stale_deep: meta.stale_deep }
         useCompListStore.getState().upsert(row)
         if (get().comp?.id === c.id) set({ comp: row })
       } catch { /* トーストは client が出す */ }
@@ -560,14 +702,22 @@ export const useCompStore = create<CompEditorState>((set, get) => {
       } catch { /* トーストは client が出す */ }
     },
 
-    place: async () => {
+    place: async (track) => {
       const s = get()
       if (!s.comp) return
       await s.flush()
       if (get().saveState === 'error') { toast('保存できていないので置けません', 'error'); return }
       try {
-        const at = useTimelineStore.getState().currentFrame
-        const r = await compsApi.place(s.comp.id, { start_frame: Math.max(0, Math.round(at)), render: true })
+        const tl = useTimelineStore.getState()
+        const at = tl.currentFrame
+        let track_id: number | undefined = typeof track === 'number' ? track : undefined
+        if (track === 'new') {
+          // いちばん手前(order が最小)に新しい映像トラックを作る
+          const orders = tl.tracks.map(t => t.order)
+          const n = tl.tracks.filter(t => t.track_type === 'video').length + 1
+          track_id = (await tl.addTrackAt(s.projectId, 'video', `Comp ${n}`, orders.length ? Math.min(...orders) - 1 : 0)).id
+        }
+        const r = await compsApi.place(s.comp.id, { start_frame: Math.max(0, Math.round(at)), render: true, ...(track_id != null ? { track_id } : {}) })
         await useTimelineStore.getState().syncFromServer(s.projectId)
         toast(`🎞 タイムラインの ${Math.round(at)} コマ目に置きました${r.job_id ? '(描き出し中…終わると絵が入ります)' : ''}`, 'success')
         if (r.job_id && !get().render) void watchJob(r.job_id, s.comp.id)

@@ -12,17 +12,10 @@ import { groupBy } from './schema'
 
 type AnyPreset = { id: string; label: string; group: string; run: (l: Layer, c: PresetCtx) => Layer }
 
-function mergePresets(builtin: BuiltinPreset[], remote: PresetDesc[]): AnyPreset[] {
-  // スキーマに同じ id があればスキーマの定義を使う。無い id は内蔵のあとに並べる
-  const rmap = new Map(remote.map(p => [p.id, p]))
-  const out: AnyPreset[] = builtin.map(b => {
-    const r = rmap.get(b.id)
-    if (r?.apply) { rmap.delete(b.id); return { id: b.id, label: r.label ?? b.label, group: r.group ?? b.group, run: (l, c) => applySchemaPreset(l, r, c) } }
-    return { id: b.id, label: b.label, group: b.group, run: b.apply }
-  })
-  for (const r of rmap.values()) if (r.apply) out.push({ id: r.id, label: r.label ?? r.id, group: r.group ?? 'そのほか', run: (l, c) => applySchemaPreset(l, r, c) })
-  return out
-}
+const fromSchema = (list: PresetDesc[]): AnyPreset[] =>
+  list.filter(p => p.apply).map(p => ({ id: p.id, label: p.label ?? p.id, group: p.group ?? 'そのほか', run: (l, c) => applySchemaPreset(l, p, c) }))
+const fromBuiltin = (list: BuiltinPreset[]): AnyPreset[] => list.map(b => ({ id: b.id, label: b.label, group: b.group, run: b.apply }))
+const grouped = (list: AnyPreset[]) => groupBy(list.map(p => [p.id, p] as [string, AnyPreset]), p => p.group)
 
 export function PresetsTab() {
   const sel = useCompStore(s => s.sel)
@@ -31,42 +24,49 @@ export function PresetsTab() {
   const hasText = useCompStore(s => s.sel.some(id => s.doc.layers.find(l => l.id === id)?.type === 'text'))
   const [len, setLen] = useState(15)
   const [dist, setDist] = useState(() => Math.round(width / 4))
-  const layerPresets = useMemo(() => groupBy(mergePresets(LAYER_PRESETS, schema.presets.layer).map(p => [p.id, p] as [string, AnyPreset]), p => p.group), [schema.presets.layer])
-  const textPresets = useMemo(() => mergePresets(TEXT_PRESETS, schema.presets.text), [schema.presets.text])
+  const [fromPlayhead, setFromPlayhead] = useState(false)
+  const engineLayer = useMemo(() => grouped(fromSchema(schema.presets.layer)), [schema.presets.layer])
+  const engineText = useMemo(() => grouped(fromSchema(schema.presets.text)), [schema.presets.text])
+  const builtinLayer = useMemo(() => grouped(fromBuiltin(LAYER_PRESETS)), [])
+  const builtinText = useMemo(() => fromBuiltin(TEXT_PRESETS), [])
 
   const run = (p: AnyPreset, onlyText = false) => {
     const s = useCompStore.getState()
     if (!s.sel.length) return
-    const ctx: PresetCtx = { frame: s.frame, len: Math.max(1, Math.round(len)), dist, settings: s.settings }
+    const ctx: PresetCtx = { frame: s.frame, len: Math.max(1, Math.round(len)), dist, settings: s.settings, fromPlayhead }
     s.apply(d => updateLayers(d, s.sel, l => (l.locked || (onlyText && l.type !== 'text') ? l : p.run(l, ctx))))
   }
+  const buttons = (items: [string, AnyPreset][], disabled: boolean, onlyText = false) => (
+    <div className="flex flex-wrap gap-1">
+      {items.map(([, p]) => <button key={p.id} data-preset={p.id} className={btnCls} disabled={disabled} onClick={() => run(p, onlyText)}>{p.label}</button>)}
+    </div>
+  )
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="px-2 py-1.5 text-[10px] text-zinc-400 border-b border-zinc-800 leading-relaxed">
-        選んだレイヤーに、<b className="text-zinc-200">再生位置から</b>ふつうのキーフレームを書きます(あとで自由に直せます)。
+    <div className="flex-1 overflow-y-auto" onPointerDownCapture={() => useCompStore.getState().setFocusArea('panel')}>
+      {!sel.length && <div className="p-3 text-[11px] text-amber-300/80 border-b border-zinc-800">レイヤーを選んでください。</div>}
+      {engineLayer.length > 0 && (<>
+        <div className="px-2 py-1.5 text-[10px] text-zinc-400 border-b border-zinc-800 leading-relaxed bg-zinc-900/60">
+          <b className="text-zinc-200">エンジンのプリセット</b> — 登場・退場・エフェクトの組・複製を足します(「プロパティ」で直せます)。
+          <label className="flex items-center gap-1 mt-1" title="キーフレームつきのプリセット(下から飛び込む・ゆっくり流れる など)の時刻の起点">
+            <input type="checkbox" checked={fromPlayhead} onChange={e => setFromPlayhead(e.target.checked)} data-preset-from-playhead />
+            キーの時刻を再生位置から数える(切 = レイヤーの頭から)
+          </label>
+        </div>
+        {engineLayer.map(([g, items]) => <Section key={`e:${g}`} title={g || 'そのほか'}>{buttons(items, !sel.length)}</Section>)}
+        {engineText.map(([g, items]) => <Section key={`et:${g}`} title={`テキスト: ${g || 'そのほか'}`}>{buttons(items, !hasText, true)}</Section>)}
+      </>)}
+      <div className="px-2 py-1.5 text-[10px] text-zinc-400 border-y border-zinc-800 leading-relaxed bg-zinc-900/60">
+        <b className="text-zinc-200">キーフレームを書くプリセット</b> — 選んだレイヤーの変形に、<b className="text-zinc-200">再生位置から</b>ふつうのキーを書きます。
         <div className="flex items-center gap-2 mt-1">
           <span>長さ</span><NumField value={len} min={1} step={1} onChange={setLen} prefix="f" />
           <span>距離</span><NumField value={dist} min={0} step={5} onChange={setDist} prefix="px" className="w-[72px]" />
         </div>
       </div>
-      {!sel.length && <div className="p-3 text-[11px] text-zinc-500">レイヤーを選んでください。</div>}
-      {layerPresets.map(([g, items]) => (
-        <Section key={g} title={g || 'アニメーション'}>
-          <div className="flex flex-wrap gap-1">
-            {items.map(([, p]) => (
-              <button key={p.id} data-preset={p.id} className={btnCls} disabled={!sel.length} onClick={() => run(p)}>{p.label}</button>
-            ))}
-          </div>
-        </Section>
-      ))}
+      {builtinLayer.map(([g, items]) => <Section key={g} title={g || 'アニメーション'}>{buttons(items, !sel.length)}</Section>)}
       <Section title="テキスト: 1 文字ずつ">
-        <div className="flex flex-wrap gap-1">
-          {textPresets.map(p => (
-            <button key={p.id} data-preset={p.id} className={btnCls} disabled={!hasText} onClick={() => run(p, true)}>{p.label}</button>
-          ))}
-        </div>
-        {!hasText && <div className="text-[10px] text-zinc-600">テキストのレイヤーを選ぶと使えます。細かい値は「プロパティ → 中身 → 1 文字ずつ」で。</div>}
+        {buttons(builtinText.map(p => [p.id, p] as [string, AnyPreset]), !hasText, true)}
+        {!hasText && <div className="text-[10px] text-zinc-600">テキストのレイヤーを選ぶと使えます。細かい値は「プロパティ → 中身 → 文字ごとアニメ」で。</div>}
       </Section>
     </div>
   )

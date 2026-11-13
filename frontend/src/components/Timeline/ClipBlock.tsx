@@ -151,7 +151,8 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   const compAttrs = clip.kind === 'comp' ? compClipAttrs(clip) : null
   const isComp = compAttrs != null
   const compInfo = useCompListStore(s => (compAttrs ? s.byId[compAttrs.comp_id] : undefined))
-  const compStale = isComp && (clip.asset_id == null || (compInfo != null && compInfo.rev !== compAttrs.rev))
+  // stale_deep: 入れ子の子が変わったときも「古い」(サーバが出していれば使う)
+  const compStale = isComp && (clip.asset_id == null || (compInfo != null && (compInfo.rev !== compAttrs.rev || compInfo.stale_deep === true)))
   const colorClass = isComp ? 'bg-purple-950 border-fuchsia-400'
     : isFilter
     ? (clip.kind === 'blur' ? 'bg-cyan-950 border-cyan-600' : isSatsuei ? 'bg-amber-950 border-amber-500' : 'bg-zinc-800 border-zinc-400')

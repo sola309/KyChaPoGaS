@@ -5,15 +5,15 @@ import { createPortal } from 'react-dom'
 import { assetsApi, assetKind, type Asset } from '../../api/client'
 import { useCompStore } from './store'
 import { useCompListStore } from './compList'
-import { SHAPE_KINDS } from './schema'
+import { shapeKinds } from './schema'
 import type { Layer } from './types'
 import { btnCls, inputCls } from './fields'
 
-type AssetKind = 'image' | 'video' | 'model3d'
+type AssetKind = 'image' | 'video' | 'model3d' | 'any'
 interface PickReq { kind: AssetKind; onPick: (a: Asset) => void }
 
 const kindOfType = (type: string, k?: unknown): AssetKind =>
-  k === 'video' || k === 'image' || k === 'model3d' ? k : type === 'video' ? 'video' : type === 'model' ? 'model3d' : 'image'
+  k === 'video' || k === 'image' || k === 'model3d' || k === 'any' ? k : k === 'model' ? 'model3d' : type === 'video' ? 'video' : type === 'model' ? 'model3d' : 'image'
 
 function AssetPicker({ req, onClose }: { req: PickReq; onClose: () => void }) {
   const projectId = useCompStore(s => s.projectId)
@@ -27,12 +27,12 @@ function AssetPicker({ req, onClose }: { req: PickReq; onClose: () => void }) {
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return (assets ?? [])
-      .filter(a => assetKind(a) === req.kind)
+      .filter(a => (req.kind === 'any' ? ['image', 'video'].includes(assetKind(a)) : assetKind(a) === req.kind))
       .filter(a => !needle || a.name.toLowerCase().includes(needle) || `#${a.id}`.includes(needle))
       .sort((a, b) => b.id - a.id)
       .slice(0, 300)
   }, [assets, q, req.kind])
-  const label = req.kind === 'video' ? '動画' : req.kind === 'model3d' ? '3D モデル' : '画像'
+  const label = req.kind === 'video' ? '動画' : req.kind === 'model3d' ? '3D モデル' : req.kind === 'any' ? '画像・動画' : '画像'
   return createPortal(
     <div className="fixed inset-0 z-[210] bg-black/70 flex items-center justify-center p-6" onPointerDown={onClose} data-comp-asset-picker>
       <div className="w-[min(860px,96vw)] max-h-[82vh] flex flex-col rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl" onPointerDown={e => e.stopPropagation()}>
@@ -46,7 +46,7 @@ function AssetPicker({ req, onClose }: { req: PickReq; onClose: () => void }) {
           {assets != null && list.length === 0 && <div className="text-[11px] text-zinc-500 p-4 col-span-full">このプロジェクトに{label}の素材がありません(編集画面の素材パネルから取り込めます)。</div>}
           {list.map(a => (
             <button key={a.id} className="flex flex-col rounded border border-zinc-700 hover:border-purple-400 bg-zinc-950 overflow-hidden text-left"
-                    onClick={() => { req.onPick(a); onClose() }} title={a.name}>
+                    data-asset-card={a.id} onClick={() => { req.onPick(a); onClose() }} title={a.name}>
               <img src={assetsApi.thumbnailUrl(a.id)} loading="lazy" alt="" className="w-full h-[76px] object-contain bg-black" />
               <span className="px-1 py-0.5 text-[10px] text-zinc-300 truncate w-full">#{a.id} {a.name}</span>
             </button>
@@ -113,6 +113,7 @@ export function AddLayerMenu() {
 
   const itemCls = 'w-full text-left px-3 py-1 text-[11px] text-zinc-200 hover:bg-purple-800 flex items-center gap-2'
   const others = comps.filter(c => c.id !== selfId)
+  const shapes = useMemo(() => shapeKinds(schema), [schema])
 
   return (
     <span className="relative" onPointerDown={e => e.stopPropagation()}>
@@ -122,7 +123,7 @@ export function AddLayerMenu() {
         setOpen(o => !o)
       }}>+ レイヤー</button>
       {open && createPortal(
-        <div className="fixed z-[200] w-[190px] py-1 rounded-md border border-zinc-600 bg-zinc-900 shadow-2xl max-h-[60vh] overflow-y-auto" style={pos}
+        <div className="fixed z-[200] w-[200px] py-1 rounded-md border border-zinc-600 bg-zinc-900 shadow-2xl max-h-[70vh] overflow-y-auto" style={pos}
              onPointerDown={e => e.stopPropagation()} data-comp-add-menu>
           {Object.entries(schema.layer_types).map(([type, d]) => {
             const src = d.source ?? {}
@@ -131,7 +132,7 @@ export function AddLayerMenu() {
               return (
                 <div key={type}>
                   <button className={itemCls} data-add-type={type} onClick={() => setSub(sub === type ? null : type)}>{label}<span className="text-zinc-500">{sub === type ? '▾' : '▸'}</span></button>
-                  {sub === type && SHAPE_KINDS.map(k => (
+                  {sub === type && shapes.map(k => (
                     <button key={k.kind} data-add-shape={k.kind} className={`${itemCls} pl-9 text-zinc-300`} onClick={() => add('shape', { name: k.label, source: k.source })}>{k.label}</button>
                   ))}
                 </div>
@@ -148,7 +149,7 @@ export function AddLayerMenu() {
               )
             }
             if (src.asset_id) {
-              return <button key={type} className={itemCls} data-add-type={type} onClick={() => addAsset(type, kindOfType(type, src.asset_id.kind))}>{label}<span className="text-zinc-500">…</span></button>
+              return <button key={type} className={itemCls} data-add-type={type} onClick={() => addAsset(type, kindOfType(type, src.asset_id.asset ?? src.asset_id.kind))}>{label}<span className="text-zinc-500">…</span></button>
             }
             return <button key={type} className={itemCls} data-add-type={type} onClick={() => add(type)}>{label}</button>
           })}

@@ -53,6 +53,7 @@ def comp_dict(c: Composition) -> dict:
         "rendered_asset_id": c.rendered_asset_id,
         "stale": c.rendered_rev != c.rev,
         "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+        "created_at": c.created_at.isoformat() if c.created_at else None,
     }
 
 
@@ -402,7 +403,9 @@ def comp_thumb(comp: dict, frame: int, width: int = 480) -> Path | None:
     """コンポジションの 1 コマを小さい JPEG に。rev ごとにキャッシュ。ヘッドレスのブラウザを 1 回立てる(数秒)。"""
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     frame = max(0, min(int(frame), comp["duration_frames"] - 1))
-    out = THUMB_DIR / f"{comp['id']}_r{comp['rev']}_{frame}_{width}.jpg"
+    # id は消したあと使い回されるので、作成時刻も鍵に入れる
+    tag = "".join(ch for ch in (comp.get("created_at") or "") if ch.isdigit())[-12:]
+    out = THUMB_DIR / f"{comp['id']}_{tag}_r{comp['rev']}_{frame}_{width}.jpg"
     if out.exists():
         return out
     with _thumb_lock:
@@ -431,8 +434,8 @@ def comp_thumb(comp: dict, frame: int, width: int = 480) -> Path | None:
             bg = bg.convert("RGB")
             bg.thumbnail((width, width))
             bg.save(out, "JPEG", quality=82)
-            for old in THUMB_DIR.glob(f"{comp['id']}_r*_*.jpg"):
-                if f"_r{comp['rev']}_" not in old.name:
+            for old in THUMB_DIR.glob(f"{comp['id']}_*.jpg"):
+                if f"_{tag}_r{comp['rev']}_" not in old.name:
                     old.unlink(missing_ok=True)
         except Exception as e:
             log.warning(f"comp thumb failed: {e}")

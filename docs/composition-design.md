@@ -277,3 +277,34 @@ v1 の `blur`(+ `variant: "directional" | "radial"`)`glow` `rgb_shift` `wave` `m
 ### player.html
 
 boot に `fonts` を足した。postMessage に `comp:fonts {fonts}` を足した。ほかは v1 と同じ。
+
+### v1.1 の追加(2 回目・2026-11-14): 順番の決まり・足した書式・player の約束
+
+実装の決めと確かめ方は `tools/comp-kit/README.md`、機械可読な一覧は `tools/comp-kit/schema.json`。v1・v1.1 の文書はそのまま読める。
+
+**エフェクトの順番**(`test/order_test.py` で、順番つきの全部の組を「1 個ずつ RT に描く手本」と比べている)
+
+- `effects` は、軽い・重い・形(flip / repeat)のどの組み合わせでも **書いた順** に掛かる。`flip` / `repeat` のあとの切り抜き・色は、反転・並べたあとの絵の座標で効く。
+- アルファを足す・読むエフェクト(`invert_alpha`・`border`・`overlay_source` の over / under)は、それまでの切り抜きのあとに掛かる。効くのは「いまの絵の範囲」の中だけ
+  (レイヤーの箱 + 線の太さ・縁取りなどのはみ出し。`crop` のあとは切ったあとの箱)。
+- `fill.keep_luma: true` = 輝度(Y)はそのまま、色差だけ指定色のものにする(AviUtl の単色化「輝度を保持する」)。`false` = `amount` % のベタ塗り。`tint` は従来どおり 色 × 輝度。
+- `overlay_source` の `mode: "replace_color"` = 素材のアルファに関係なく、色を丸ごと置き換える(形・アルファはレイヤーのまま)。
+
+**足した書式**
+
+| 書式 | 意味 |
+|---|---|
+| `type: "pattern"` の `cols` `rows` `origin` | 升目の数(箱 = `size × 個数`、模様の原点 = 箱の左上、左上の升 = `colors[0]`)。`origin: "top_left"` だけでも原点を左上にできる。AviUtl の市松模様N |
+| `repeat` の `mode: "random"` | `count` `area_x` `area_y`(ばらまく範囲 px)`seed` `random_rotation`(± 度)`scale_min` `scale_max`(%)。AviUtl のランダム配置 |
+| `vignette_blur`(重い) | `amount`(周辺の暗さ %)`blur`(周辺のぼかし px)`radius`(効き始め %)`softness` `color_shift`(px)`color` `cx` `cy`。AviUtl の周辺ボケ光量。調整レイヤーに付けて使う |
+| `per_char.ranks` / `per_char.sequence` | ranks[i] = i 文字目が何番目に出るか。sequence[k] = k 番目に出る文字の番号(0 始まり)。`order` より優先。AviUtl の TA指定順で登場 |
+| `blend` の追加 | `luminosity`(輝度は上・色は下)`color`(色は上・輝度は下)`hue` `saturation` |
+
+**player.html の約束**(くわしくは README の postMessage の表)
+
+- iframe → 親: `comp:key {key, code, ctrl, shift, alt, meta, repeat}`(iframe の中の keydown をすべて)、
+  `comp:edit {id, path: "transform.position" | "transform.scale" | "transform.rotation", value, final, keyframed?, frame?}`(scale と rotation の value はいつも `[x, y, z]`。複数選択の移動はレイヤーごとに 1 通)、
+  `comp:error {level: "warn" | "error", message, layer_id?}`(同じ内容は 1 回・1 秒に 12 件まで)。
+- 親 → iframe: `comp:guides {show}`(下絵レイヤーの表示)、`comp:overlay {safe, grid}`(セーフフレーム・三分割の線)。
+- 選択枠のつまみ: 四隅 = 縦横比を保って拡大(Shift で自由)、辺 = 1 軸、上辺の外 = 回転(Shift で 15° 刻み)。1 枚だけ選んでいるときに出る。
+- 下絵(`guide: true`)は、書き出しのほか **入れ子の中でも描かない**(プレビューでも。親に置いた子の絵が、書き出しと同じになるように)。

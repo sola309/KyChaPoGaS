@@ -1,13 +1,15 @@
 // 🎞 アニメーションのプリセット。選んだレイヤーに、再生位置からふつうのキーフレームを書く(あとから自由に直せる)。
 
 import type { CompSettings, Easing, Layer, PresetDesc } from './types'
-import { evalProp, getPath, isKeyed, isObj, layerIn, setKey, setPath, toConst } from './docOps'
+import { evalProp, getPath, isKeyed, isObj, layerIn, layerOut, setKey, setPath, toConst } from './docOps'
 
 export interface PresetCtx {
   frame: number        // 再生位置
   len: number          // 長さ(コマ)
   dist: number         // 動く距離(px)
   settings: CompSettings
+  /** スキーマのプリセットの起点: true = 再生位置 / false = レイヤーの頭(in) */
+  fromPlayhead?: boolean
 }
 
 export interface BuiltinPreset {
@@ -129,37 +131,35 @@ export const TEXT_PRESETS: BuiltinPreset[] = [
   } },
 ]
 
-// ── スキーマのプリセット(apply: { パス: プロパティ値のひな形 }) ────────────────
-// ひな形の読み方(エンジン側の schema.json に決まりが書かれるまでの、この編集画面での決め):
-//   ・{k:[{f,v,e}]} の f は「再生位置から何コマ後か」。f が 0〜1 の小数だけなら長さ(len)に対する割合として読む。
-//   ・v の "$cur" は今の値に置き換える。配列の中の "$cur" はその成分の今の値。
-//   ・キーでない値はそのまま書く。パスは "transform.opacity" "source.per_char" などレイヤーの根からの道。
+// ── スキーマのプリセット(schema.json の presets。決まりは schema.notes.presets) ──────────
+//   ・apply のキーはレイヤーの点つきの道。値をそのまま書く(入れ物ごと置き換える)。
+//   ・"effects+" のように + で終わるキーは、その配列の末尾に足す。
+//   ・{"k":[…], "relative": true} のキーフレームは、f をレイヤーの in からの相対コマとして足す("out" = レイヤーの長さ)。
+//     書き込むときに relative の印は外す。fromPlayhead のときは in の代わりに再生位置を起点にする。
 export function applySchemaPreset(l: Layer, p: PresetDesc, c: PresetCtx): Layer {
-  let out = l
-  for (const [path, tpl] of Object.entries(p.apply ?? {})) {
-    const now = evalProp<unknown>(getPath(out, path), c.frame, undefined)
-    const fill = (v: unknown): unknown => {
-      if (v === '$cur') return now
-      if (Array.isArray(v)) return v.map((x, i) => (x === '$cur' ? (Array.isArray(now) ? now[i] : now) : fill(x)))
-      return v
+  const i0 = c.fromPlayhead ? c.frame : layerIn(l)
+  const len = Math.max(1, layerOut(l, c.settings.duration_frames) - i0)
+  const resolve = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(resolve)
+    if (!isObj(v)) return v
+    if (Array.isArray(v.k) && v.relative === true) {
+      const { relative: _r, ...rest } = v
+      void _r
+      const k = v.k.filter(isObj).map(key => ({ ...key, f: (key.f === 'out' ? len : Number(key.f) || 0) + i0 })).sort((a, b) => a.f - b.f)
+      return { ...rest, k }
     }
-    if (isObj(tpl) && Array.isArray(tpl.k)) {
-      const ks = tpl.k.filter(isObj)
-      const frac = ks.length > 1 && ks.every(k => typeof k.f === 'number' && k.f >= 0 && k.f <= 1) && ks.some(k => !Number.isInteger(k.f) || k.f === 1)
-      let prop: unknown = getPath(out, path)
-      for (const k of ks) {
-        const f = c.frame + (frac ? Math.round((k.f as number) * c.len) : Number(k.f) || 0)
-        prop = setKey(prop, f, fill(k.v), k.e as Easing | undefined)
-      }
-      if (isObj(prop)) {
-        if (tpl.loop !== undefined) (prop as Record<string, unknown>).loop = tpl.loop
-        if (tpl.wiggle !== undefined) (prop as Record<string, unknown>).wiggle = tpl.wiggle
-      }
-      out = setPath(out, path, prop)
-    } else if (isObj(tpl) && 'wiggle' in tpl && !('k' in tpl)) {
-      const curProp = getPath(out, path)
-      out = setPath(out, path, isKeyed(curProp) ? { ...curProp, wiggle: tpl.wiggle } : { v: 'v' in tpl ? fill(tpl.v) : now, wiggle: tpl.wiggle })
-    } else out = setPath(out, path, fill(tpl))
+    const o: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(v)) o[k] = resolve(x)
+    return o
+  }
+  let out = l
+  for (const [key, tpl] of Object.entries(p.apply ?? {})) {
+    const val = resolve(JSON.parse(JSON.stringify(tpl ?? null)))
+    if (key.endsWith('+')) {
+      const path = key.slice(0, -1)
+      const cur = getPath(out, path)
+      out = setPath(out, path, [...(Array.isArray(cur) ? cur : []), ...(Array.isArray(val) ? val : [val])])
+    } else out = setPath(out, key, val)
   }
   return out
 }

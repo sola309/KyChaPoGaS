@@ -1,8 +1,8 @@
 // 🎞 コンポジションの一覧(作る・名前を変える・複製・削除・設定)。
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { compsApi, assetsApi, apiErrorText } from '../../api/client'
+import { compsApi, apiErrorText } from '../../api/client'
 import { useProjectStore } from '../../store/projectStore'
 import { useUIStore } from '../../store/uiStore'
 import { useCompListStore } from './compList'
@@ -49,6 +49,72 @@ function SettingsDialog({ title, initial, okLabel, onOk, onClose }: {
     document.body,
   )
 }
+
+// ── 一覧の絵(GET /api/comps/{id}/thumb)。見えたカードから、同時に 2 枚までしか取りに行かない ──
+// (描き出していないコンポジションでも 1 コマ出る。初回は 1 枚 2 秒ほどかかるので、48 枚を一度に頼まない)
+const THUMB_MAX = 2
+let thumbBusy = 0
+const thumbQueue: { run: () => void; alive: () => boolean }[] = []
+function thumbPump() {
+  while (thumbBusy < THUMB_MAX && thumbQueue.length) {
+    const job = thumbQueue.shift()!
+    if (!job.alive()) continue
+    thumbBusy++
+    job.run()
+  }
+}
+const thumbDone = new Set<string>()      // 一度読めた URL(ブラウザのキャッシュにあるので、次からは並ばずに出す)
+
+function CompThumb({ comp }: { comp: CompSummary }) {
+  const url = `/api/comps/${comp.id}/thumb?width=480&r=${comp.rev}`
+  const boxRef = useRef<HTMLDivElement>(null)
+  // 状態は URL ごと(版が変わったら待ちからやり直す)。一度読めた URL はすぐ出す
+  const [got, setGot] = useState<{ url: string; st: 'load' | 'ok' | 'err' } | null>(null)
+  const state: 'wait' | 'load' | 'ok' | 'err' = thumbDone.has(url) ? 'ok' : got?.url === url ? got.st : 'wait'
+  useEffect(() => {
+    if (thumbDone.has(url)) return
+    const setState = (st: 'load' | 'ok' | 'err') => setGot({ url, st })
+    const el = boxRef.current
+    if (!el) return
+    let alive = true, started = false, finished = false
+    const finish = (ok: boolean) => {
+      if (finished) return
+      finished = true
+      thumbBusy = Math.max(0, thumbBusy - 1)
+      if (ok) thumbDone.add(url)
+      if (alive) setState(ok ? 'ok' : 'err')
+      thumbPump()
+    }
+    const io = new IntersectionObserver(es => {
+      if (started || !es.some(e => e.isIntersecting)) return
+      started = true
+      io.disconnect()
+      thumbQueue.push({
+        alive: () => alive,
+        run: () => {
+          if (alive) setState('load')
+          const img = new Image()
+          img.onload = () => finish(true)
+          img.onerror = () => finish(false)
+          img.src = url
+        },
+      })
+      thumbPump()
+    }, { rootMargin: '120px' })
+    io.observe(el)
+    // 途中で外れても、読み込みは最後まで待ってから枠を返す(同時 2 枚を守る)
+    return () => { alive = false; io.disconnect() }
+  }, [url])
+  return (
+    <div ref={boxRef} className="w-full h-full flex items-center justify-center" data-comp-thumb={state}>
+      {state === 'ok'
+        ? <img src={url} alt="" className="max-w-full max-h-full object-contain" style={{ background: 'repeating-conic-gradient(#2a2a2e 0% 25%, #1c1c1f 0% 50%) 50% / 16px 16px' }} />
+        : <span className={`text-3xl opacity-40 ${state === 'load' ? 'animate-pulse' : ''}`}>🎞</span>}
+    </div>
+  )
+}
+
+const isStale = (c: CompSummary) => c.stale_deep ?? c.stale
 
 export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id: number) => void }) {
   const list = useCompListStore(s => s.list)
@@ -97,11 +163,10 @@ export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id
           {list.map(c => (
             <div key={c.id} data-comp-card={c.id} className="rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden flex flex-col hover:border-purple-500">
               <button className="relative h-[124px] bg-black flex items-center justify-center" onClick={() => onOpen(c.id)} title="開いて編集">
-                {c.rendered_asset_id != null
-                  ? <img src={`${assetsApi.thumbnailUrl(c.rendered_asset_id)}?r=${c.rendered_rev}`} alt="" loading="lazy" className="max-w-full max-h-full object-contain" />
-                  : <span className="text-3xl opacity-40">🎞</span>}
-                <span className={`absolute top-1 right-1 text-[9px] px-1.5 py-0.5 rounded ${c.stale ? 'bg-amber-600 text-black' : 'bg-emerald-700 text-white'}`}>
-                  {c.rendered_rev === 0 ? '未描き出し' : c.stale ? '古い' : '描き出し済み'}
+                <CompThumb comp={c} />
+                <span className={`absolute top-1 right-1 text-[9px] px-1.5 py-0.5 rounded ${isStale(c) ? 'bg-amber-600 text-black' : 'bg-emerald-700 text-white'}`} data-comp-badge
+                      title={isStale(c) && c.rendered_rev !== 0 && !c.stale ? '入れ子の子コンポジションが変わった(または描き出したファイルが無い)' : ''}>
+                  {c.rendered_rev === 0 ? '未描き出し' : isStale(c) ? '古い' : '描き出し済み'}
                 </span>
               </button>
               <div className="px-2 py-1.5 flex flex-col gap-1">

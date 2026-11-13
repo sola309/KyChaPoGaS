@@ -189,6 +189,13 @@ export const BUILTIN_SCHEMA: CompSchema = {
   blend_modes: BLEND_LIST,
   easings: EASING_LIST,
   presets: { layer: [], text: [] },
+  effect_aliases: {},
+  mask: {
+    shape: sel('形', 'rect', [['rect', '四角'], ['ellipse', '楕円'], ['polygon', '多角形']]),
+    x: n('X', 0), y: n('Y', 0), w: n('幅', 200, { min: 0 }), h: n('高さ', 200, { min: 0 }),
+    feather: n('ぼかし', 0, { min: 0 }), invert: { type: 'bool', label: '反転', default: false },
+    opacity: n('不透明度', 100, { min: 0, max: 100 }),
+  },
 }
 
 const optList = (v: unknown, fb: Option[]): Option[] => {
@@ -204,21 +211,132 @@ export function mergeSchema(remote: unknown): CompSchema {
   if (!isObj(remote)) return b
   const rec = <T,>(v: unknown, fb: Record<string, T>): Record<string, T> => {
     if (!isObj(v)) return fb
-    const out: Record<string, T> = { ...fb }
+    // 並びはスキーマの順(メニューの組の順になる)。スキーマに無い内蔵の項目は後ろへ
+    const out: Record<string, T> = {}
     for (const [k, d] of Object.entries(v)) if (isObj(d)) out[k] = d as T
+    for (const [k, d] of Object.entries(fb)) if (!(k in out)) out[k] = d
     return out
   }
   const pr = isObj(remote.presets) ? remote.presets : {}
+  const layer_types = rec(remote.layer_types, b.layer_types)
+  // per_char.out(消えるとき)はスキーマに記述が無いので、ここで足す(README の決めどおり)
+  const pc = layer_types.text?.source?.per_char
+  if (pc && isObj(pc.fields) && !pc.fields.out) {
+    const f = pc.fields
+    const out: ParamDesc = { type: 'object', label: '消えるとき(out)', optional: true, animatable: false, default: { stagger: 2, duration: 12, order: 'forward', e: 'easeIn', from: { opacity: 0 } },
+      fields: {
+        ...(f.stagger ? { stagger: f.stagger } : {}), ...(f.duration ? { duration: f.duration } : {}), ...(f.order ? { order: f.order } : {}),
+        e: { type: 'text', label: 'イージング', default: 'easeIn', easing: true },
+        at: { type: 'number', label: '開始(レイヤーの頭から。切 = 最後の文字が out で消え終わる)', default: 0, min: 0, step: 1, optional: true, animatable: false },
+        ...(f.from ? { from: { ...f.from, label: '消えたあとの姿' } } : {}),
+      } }
+    layer_types.text = { ...layer_types.text, source: { ...layer_types.text.source, per_char: { ...pc, fields: { ...f, out } } } }
+  }
   const plist = (v: unknown) => (Array.isArray(v) ? v.filter(p => isObj(p) && typeof p.id === 'string') : []) as CompSchema['presets']['layer']
   return {
     version: typeof remote.version === 'number' ? remote.version : b.version,
     effects: rec(remote.effects, b.effects),
-    layer_types: rec(remote.layer_types, b.layer_types),
+    layer_types,
     layer_common: rec(remote.layer_common, b.layer_common),
     blend_modes: optList(remote.blend_modes, b.blend_modes),
     easings: optList(remote.easings, b.easings),
     presets: { layer: plist(pr.layer), text: plist(pr.text) },
+    effect_aliases: isObj(remote.effect_aliases)
+      ? Object.fromEntries(Object.entries(remote.effect_aliases).filter((e): e is [string, string] => typeof e[1] === 'string')) : b.effect_aliases,
+    mask: rec(remote.mask, b.mask),
   }
+}
+
+// ── スキーマの読み方(v2) ────────────────────────────────────────────────────
+
+/** エフェクトの記述。別名(effect_aliases)は正式な名前の記述を返す(文書の type はそのまま保つ) */
+export function effectInfo(schema: CompSchema, type: string): { desc?: EffectDesc; canonical: string; alias: boolean } {
+  if (schema.effects[type]) return { desc: schema.effects[type], canonical: type, alias: false }
+  const c = schema.effect_aliases[type]
+  if (c && schema.effects[c]) return { desc: schema.effects[c], canonical: c, alias: true }
+  return { canonical: type, alias: false }
+}
+
+/** select の選択肢。options が "blend_modes" のような名前なら、スキーマのその表を引く */
+export function optionsOf(schema: CompSchema, d: ParamDesc): { value: string | number | null; label: string }[] {
+  const o = d.options
+  const src: unknown = typeof o === 'string' ? (schema as unknown as Record<string, unknown>)[o] : o
+  if (!Array.isArray(src)) return []
+  return src.filter(isObj).map(x => ({ value: (x.value ?? null) as string | number | null, label: typeof x.label === 'string' ? x.label : String(x.value) }))
+}
+
+/** layer_common のうち、この種類のレイヤーに出す項目 */
+export function commonFor(schema: CompSchema, type: string): Record<string, ParamDesc> {
+  const out: Record<string, ParamDesc> = {}
+  for (const [k, d] of Object.entries(schema.layer_common)) {
+    if (Array.isArray(d.types) && !d.types.includes(type)) continue
+    out[k] = d
+  }
+  return out
+}
+
+const clone = <T,>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)))
+
+/** optional の項目を「入」にしたときに書く値(default が null のときは型から決める) */
+export function defaultFor(schema: CompSchema, d: ParamDesc): unknown {
+  if (d.default !== undefined && d.default !== null) return clone(d.default)
+  switch (d.type) {
+    case 'number': case 'angle': case 'percent':
+      return d.asset ? null : Math.min(typeof d.max === 'number' ? d.max : Infinity, Math.max(typeof d.min === 'number' ? d.min : -Infinity, d.type === 'percent' ? 100 : 0))
+    case 'vec2': return [0, 0]
+    case 'vec3': return [0, 0, 0]
+    case 'color': return '#ffffff'
+    case 'fill': return '#ffffff'
+    case 'colors': return ['#ffffff', '#000000']
+    case 'bool': return true
+    case 'text': return ''
+    case 'select': { const o = optionsOf(schema, d).find(x => x.value != null); return o ? o.value : '' }
+    case 'points': return [[-100, 0], [100, 0]]
+    case 'list': return []
+    case 'object': return objectDefaults(schema, d.fields ?? {})
+    default: return null
+  }
+}
+
+/** object の初期値: optional でない項目の default を並べる(点つきの名前は入れ子にする) */
+export function objectDefaults(schema: CompSchema, fields: Record<string, ParamDesc>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, d] of Object.entries(fields)) {
+    const nested = d.type === 'object' && isObj(d.fields)
+    if (d.optional || d.default === null || (d.default === undefined && !nested)) continue
+    const segs = k.split('.')
+    let cur = out
+    for (let i = 0; i < segs.length - 1; i++) cur = (isObj(cur[segs[i]]) ? cur[segs[i]] : (cur[segs[i]] = {})) as Record<string, unknown>
+    cur[segs[segs.length - 1]] = nested && d.default === undefined ? objectDefaults(schema, d.fields!) : clone(d.default)
+  }
+  return out
+}
+
+export interface FontOpt { family: string; label: string }
+let fontOptsPromise: Promise<FontOpt[]> | null = null
+/** 書体の一覧(表示名つき)。GET /api/comps/fonts の aliases があれば表示名にする(APJapanesefont →「あんずもじ」) */
+export function loadFontOptions(): Promise<FontOpt[]> {
+  if (!fontOptsPromise) {
+    fontOptsPromise = fetch('/api/comps/fonts')
+      .then(r => (r.ok ? r.json() : []))
+      .then((v: unknown) => {
+        const arr = Array.isArray(v) ? v : isObj(v) && Array.isArray(v.fonts) ? v.fonts : []
+        const fam = new Map<string, { n: number; alias: string | null }>()
+        for (const x of arr) {
+          const f = typeof x === 'string' ? x : isObj(x) ? (x.family ?? x.name ?? x.label) : null
+          if (typeof f !== 'string' || !f) continue
+          const al = isObj(x) && Array.isArray(x.aliases) ? x.aliases.find((a): a is string => typeof a === 'string' && !!a) : undefined
+          const cur = fam.get(f)
+          if (cur) { cur.n++; cur.alias = null } else fam.set(f, { n: 1, alias: al ?? null })
+        }
+        const out: FontOpt[] = FONTS.filter(f => !fam.has(f)).map(f => ({ family: f, label: f }))
+        // 表示名は、その書体のファイルが 1 つだけで、別名が名前の言い換えのとき(太さ違いの別名は出さない)
+        for (const [f, m] of fam) out.push({ family: f, label: m.n === 1 && m.alias && !m.alias.startsWith(f) && !f.startsWith(m.alias) ? `${m.alias}(${f})` : f })
+        return out
+      })
+      .catch(() => FONTS.map(f => ({ family: f, label: f })))
+  }
+  return fontOptsPromise
 }
 
 let schemaPromise: Promise<CompSchema> | null = null
@@ -262,10 +380,29 @@ export const SHAPE_KINDS: { kind: string; label: string; source: Record<string, 
   { kind: 'line', label: '線', source: { kind: 'line', points: [[-250, 0], [250, 0]], stroke: '#ffffff', stroke_width: 8, fill: null, cap: 'round' } },
 ]
 
+const SHAPE_EXTRA: Record<string, Record<string, unknown>> = {
+  polygon: { sides: 6 }, star: { sides: 5, inner: 0.45 },
+  line: { points: [[-250, 0], [250, 0]], stroke: '#ffffff', stroke_width: 8, fill: null, cap: 'round' },
+  path: { points: [[-200, 80], [0, -120], [200, 80]], closed: false, stroke: '#ffffff', stroke_width: 8, fill: null, cap: 'round' },
+  arc: { start: 0, end: 270, stroke: '#ffffff', stroke_width: 12, fill: null, cap: 'round' }, pie: { start: 0, end: 270 }, ring: { start: 0, end: 360, inner: 0.6 },
+  arrow: { width: 400, height: 200, head: 0.4, shaft: 0.4 }, chevron: { thickness: 0.4 }, cross: { thickness: 0.3 },
+  flower: { petals: 5, inner: 0.4 }, burst: { sides: 12, inner: 0.6, jitter: 0.2, seed: 1 }, bubble: { width: 420, height: 240, radius: 40 },
+}
+const SHAPE_FILLS = ['#4f9dff', '#ff6b9d', '#7cff6b', '#ffd23f', '#e65163', '#7fd0d8', '#c59cff']
+/** シェイプの追加メニュー: スキーマの kind の選択肢から作る(無ければ内蔵の 5 種) */
+export function shapeKinds(schema: CompSchema): { kind: string; label: string; source: Record<string, unknown> }[] {
+  const d = schema.layer_types.shape?.source?.kind
+  const opts = d ? optionsOf(schema, d) : []
+  if (!opts.length) return SHAPE_KINDS
+  return opts.filter(o => typeof o.value === 'string').map((o, i) => ({
+    kind: o.value as string, label: o.label,
+    source: { kind: o.value, width: 300, height: 300, fill: SHAPE_FILLS[i % SHAPE_FILLS.length], ...(SHAPE_EXTRA[o.value as string] ?? {}) },
+  }))
+}
+
 /** 新しいレイヤーの初期値。スキーマの default_layer / default_source を使い、位置は画面の中央 */
 export function newLayer(schema: CompSchema, type: string, id: string, s: CompSettings, over: Partial<Layer> = {}): Layer {
   const d = schema.layer_types[type]
-  const clone = <T,>(v: T): T => (v == null ? v : JSON.parse(JSON.stringify(v)))
   const base: Layer = {
     id, name: d?.label ?? type, type, in: 0, out: s.duration_frames,
     visible: true, blend: 'normal',
@@ -274,7 +411,7 @@ export function newLayer(schema: CompSchema, type: string, id: string, s: CompSe
   }
   if (type === 'camera') base.transform = {}                 // 位置を書かない = 既定のカメラの位置
   if (type === 'adjustment' || type === 'null') base.transform = type === 'null' ? base.transform : {}
-  if (type === 'video' || type === 'comp') { base.start = 0; base.speed = 1 }
+  if (type === 'video' || type === 'comp' || type === 'sequence') { base.start = 0; base.speed = 1 }
   const src = clone(d?.default_source)
   if (src && Object.keys(src).length) base.source = src
   const dl = clone(d?.default_layer) ?? {}
@@ -287,8 +424,8 @@ export function newLayer(schema: CompSchema, type: string, id: string, s: CompSe
 /** エフェクトの初期値(スキーマの default を並べる。null の default は書かない) */
 export function newEffect(schema: CompSchema, type: string) {
   const params: Record<string, unknown> = {}
-  for (const [k, d] of Object.entries(schema.effects[type]?.params ?? {})) {
-    if (d.default !== undefined && d.default !== null && !k.includes('.')) params[k] = JSON.parse(JSON.stringify(d.default))
+  for (const [k, d] of Object.entries(effectInfo(schema, type).desc?.params ?? {})) {
+    if (d.default !== undefined && d.default !== null && !d.optional && !k.includes('.')) params[k] = JSON.parse(JSON.stringify(d.default))
   }
   return { type, enabled: true, params }
 }

@@ -99,6 +99,8 @@ export interface CompSummary extends CompSettings {
   rendered_rev: number
   rendered_asset_id: number | null
   stale: boolean
+  /** 自分か、入れ子の子のどれかが描き出しより新しい(または描き出したファイルが無い)。無いサーバでは undefined */
+  stale_deep?: boolean
   updated_at: string | null
   layer_count?: number
 }
@@ -119,13 +121,29 @@ export interface ParamDesc {
   min?: number
   max?: number
   step?: number
-  options?: { value: string | number; label?: string }[]
+  /** 選択肢。文字列のときはスキーマの別の表の名前("blend_modes" "easings") */
+  options?: { value: string | number | null; label?: string }[] | string
   animatable?: boolean
   group?: string
+  /** true = 書かなければ「無し」(機能オフ)。欄に入切のスイッチを出し、切で項目ごと消す */
+  optional?: boolean
+  /** layer_common: この種類のレイヤーにだけ出す */
+  types?: string[]
+  /** object: 入れ子の項目 / list: 1 件ぶんの項目 */
+  fields?: Record<string, ParamDesc>
+  item?: Record<string, ParamDesc>
+  /** fill: 受け付ける形("color" "gradient" "pattern" "none") */
+  accepts?: string[]
+  /** number: 素材の id("image" "video" "any" "model" "comp") / text: レイヤーの id・書体・イージング */
+  asset?: string
+  layer?: boolean
+  font?: boolean
+  easing?: boolean
+  multiline?: boolean
   [k: string]: unknown
 }
 
-export interface EffectDesc { label?: string; group?: string; params?: Record<string, ParamDesc> }
+export interface EffectDesc { label?: string; group?: string; cheap?: boolean; params?: Record<string, ParamDesc> }
 export interface LayerTypeDesc {
   label?: string
   icon?: string
@@ -144,4 +162,14 @@ export interface CompSchema {
   blend_modes: Option[]
   easings: Option[]
   presets: { layer: PresetDesc[]; text: PresetDesc[] }
+  /** 別名 → 正式なエフェクト名(欄は正式な名前の記述で作り、文書の type は書き換えない) */
+  effect_aliases: Record<string, string>
+  /** masks[] の 1 件ぶんの項目 */
+  mask: Record<string, ParamDesc>
 }
+
+/** エンジンからの知らせ(comp:error) */
+export interface CompProblem { level: string; message: string; layer_id?: string; count: number }
+
+/** キーフレームのコピー(1 個ぶん) */
+export interface KeyClip { layerId: string; path: string; f: number; v: unknown; e?: Easing }

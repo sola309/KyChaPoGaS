@@ -13,6 +13,7 @@ import { LayerTimeline } from './LayerTimeline'
 import { Inspector } from './Inspector'
 import { JsonTab, PresetsTab, SettingsTab } from './SidePanels'
 import { btnCls } from './fields'
+import { handleCompKey } from './keys'
 
 type Tab = 'props' | 'presets' | 'settings' | 'json'
 const TABS: { id: Tab; label: string }[] = [
@@ -40,7 +41,7 @@ function HeaderActions({ onClose }: { onClose: () => void }) {
   const st = useCompStore.getState
   const tlFrame = useTimelineStore(s => s.currentFrame)
   if (!comp) return <button className={btnCls} onClick={onClose}>✕ 閉じる</button>
-  const stale = comp.stale || dirty
+  const stale = (comp.stale_deep ?? comp.stale) || dirty
   return (
     <>
       <button className={btnCls} disabled={!canUndo} title="元に戻す(Ctrl+Z)" onClick={() => st().undo()} data-comp-undo>↶</button>
@@ -54,10 +55,46 @@ function HeaderActions({ onClose }: { onClose: () => void }) {
               title="今の中身を動画素材に描き出す(置いてあるクリップも新しい絵に差し替わる)">
         {render ? `描き出し中 ${render.status === 'pending' ? '(待機)' : `${Math.round(render.progress * 100)}%`}` : '🎬 描き出し'}
       </button>
-      <button className={btnCls} onClick={() => void st().place()} data-comp-place
-              title={`本体のタイムラインの再生位置(${Math.round(tlFrame)} コマ目)に、このコンポジションのクリップを置く(「Comps」トラック)`}>⤵ タイムラインに置く</button>
+      <PlaceButton tlFrame={tlFrame} />
       <button className={btnCls} onClick={onClose} data-comp-close title="保存して閉じる">✕ 閉じる</button>
     </>
+  )
+}
+
+/** 「タイムラインに置く」: 置き先のトラックを選ぶ(本体の映像トラック・新しいトラック・既定の「Comps」) */
+function PlaceButton({ tlFrame }: { tlFrame: number }) {
+  const [open, setOpen] = useState(false)
+  const tracks = useTimelineStore(s => s.tracks)
+  const boxRef = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => { if (!boxRef.current?.contains(e.target as Node)) setOpen(false) }
+    window.addEventListener('pointerdown', close, true)
+    return () => window.removeEventListener('pointerdown', close, true)
+  }, [open])
+  const video = tracks.filter(t => t.track_type === 'video').sort((a, b) => a.order - b.order)
+  const comps = video.find(t => t.name === 'Comps')
+  const go = (t?: number | 'new') => { setOpen(false); void useCompStore.getState().place(t) }
+  const itemCls = 'w-full text-left px-3 py-1 text-[11px] text-zinc-200 hover:bg-purple-800 flex items-center gap-2'
+  return (
+    <span className="relative" ref={boxRef}>
+      <button className={btnCls} onClick={() => setOpen(o => !o)} data-comp-place
+              title={`本体のタイムラインの再生位置(${Math.round(tlFrame)} コマ目)に、このコンポジションのクリップを置く(置き先のトラックを選べます)`}>⤵ タイムラインに置く ▾</button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-[200] w-[260px] py-1 rounded-md border border-zinc-600 bg-zinc-900 shadow-2xl max-h-[60vh] overflow-y-auto" data-comp-place-menu>
+          <div className="px-3 py-0.5 text-[9px] text-zinc-500">{Math.round(tlFrame)} コマ目に置く — 置き先のトラック</div>
+          <button className={itemCls} data-place-track="default" onClick={() => go(comps?.id)}>🎞 <span className="flex-1">「Comps」トラック{comps ? '' : '(無ければ作る)'}</span><span className="text-[9px] text-zinc-500">既定</span></button>
+          <button className={itemCls} data-place-track="new" onClick={() => go('new')}>＋ <span className="flex-1">新しいトラック(いちばん手前に作る)</span></button>
+          <div className="border-t border-zinc-700 my-1" />
+          {video.filter(t => t.id !== comps?.id).map(t => (
+            <button key={t.id} className={itemCls} data-place-track={t.id} onClick={() => go(t.id)}>
+              <span className="flex-1 truncate">{t.name}</span>{t.hidden && <span className="text-[9px] text-zinc-500">非表示</span>}<span className="text-[9px] text-zinc-600 font-mono">#{t.id}</span>
+            </button>
+          ))}
+          {video.length === 0 && <div className="px-3 py-1 text-[10px] text-zinc-500">映像トラックがまだありません</div>}
+        </div>
+      )}
+    </span>
   )
 }
 
@@ -120,32 +157,8 @@ export function CompEditor({ projectId, initialCompId, onClose }: { projectId: n
     const stop = (e: Event) => e.stopPropagation()
     const onKey = (e: KeyboardEvent) => {
       e.stopPropagation()
-      const st = useCompStore.getState()
-      if (!st.comp || isTyping(e.target)) return
-      if (document.querySelector('[data-comp-asset-picker],[data-comp-settings-dialog]')) return
-      const ctrl = e.ctrlKey || e.metaKey
-      const k = e.key
-      let used = true
-      if (ctrl && (k === 'z' || k === 'Z')) { if (e.shiftKey) st.redo(); else st.undo() }
-      else if (ctrl && (k === 'y' || k === 'Y')) st.redo()
-      else if (ctrl && (k === 'd' || k === 'D')) st.duplicateSelection()
-      else if (ctrl && (k === 'c' || k === 'C')) { if (window.getSelection()?.toString()) used = false; else st.copySelection() }
-      else if (ctrl && (k === 'v' || k === 'V')) st.paste()
-      else if (ctrl && (k === 's' || k === 'S')) void st.flush()
-      else if (ctrl && (k === 'a' || k === 'A')) st.setSel(st.doc.layers.map(l => l.id))
-      else if (ctrl || e.altKey) used = false
-      else if (k === ' ') { if (!st.playing && st.frame >= st.settings.duration_frames - 1) st.setFrame(0); st.setPlaying(!st.playing) }
-      else if (k === 'Delete' || k === 'Backspace') st.deleteSelection()
-      else if (k === '[') st.setInOutAtPlayhead('in')
-      else if (k === ']') st.setInOutAtPlayhead('out')
-      else if (k === 'ArrowLeft') { st.setPlaying(false); st.setFrame(st.frame - (e.shiftKey ? 10 : 1)) }
-      else if (k === 'ArrowRight') { st.setPlaying(false); st.setFrame(st.frame + (e.shiftKey ? 10 : 1)) }
-      else if (k === 'Home') { st.setPlaying(false); st.setFrame(0) }
-      else if (k === 'End') { st.setPlaying(false); st.setFrame(st.settings.duration_frames - 1) }
-      else if (k === 'k' || k === 'K') st.addTransformKeys()
-      else if (k === 'Escape') st.setSel([])
-      else used = false
-      if (used) e.preventDefault()
+      if (isTyping(e.target)) return
+      if (handleCompKey({ key: e.key, code: e.code, ctrl: e.ctrlKey, shift: e.shiftKey, alt: e.altKey, meta: e.metaKey }, !!window.getSelection()?.toString())) e.preventDefault()
     }
     body.addEventListener('keydown', onKey)
     for (const t of ['keyup', 'keypress', 'paste', 'copy', 'cut']) body.addEventListener(t, stop)

@@ -546,3 +546,92 @@ export const clampFrame = (f: number, s: CompSettings) => Math.min(Math.max(1, s
 
 /** 数の丸め(編集で 0.30000000004 のような値を書かない) */
 export const round = (v: number, digits = 3) => { const m = 10 ** digits; return Math.round(v * m) / m }
+
+// ── 第 2 期の追加 ────────────────────────────────────────────────────────────
+
+/** 項目を消す。消して空になった入れ物(オブジェクト)もさかのぼって消す(根の transform・source・配列の要素は残す) */
+export function unsetPath<T>(obj: T, path: string): T {
+  let out = setPath(obj, path, undefined)
+  const segs = path.split('.')
+  for (let n = segs.length - 1; n >= 1; n--) {
+    const p = segs.slice(0, n).join('.')
+    const v = getPath(out, p)
+    if (!isObj(v) || Object.keys(v).length) break
+    if (n === 1 && (segs[0] === 'transform' || segs[0] === 'source')) break
+    if (/^\d+$/.test(segs[n - 1])) break
+    out = setPath(out, p, undefined)
+  }
+  return out
+}
+
+/** 値に差分を足す(複数選択のつまみドラッグ用)。数 + 数、配列は成分ごと。回転のように数と配列が混ざるときは z(最後)へ */
+export function addDelta(cur: unknown, delta: number | number[]): unknown {
+  const r = (x: number) => round(x, 3)
+  if (typeof cur === 'number') {
+    if (typeof delta === 'number') return r(cur + delta)
+    const nz = delta.filter(d => d !== 0)
+    return r(cur + (nz.length === 1 ? nz[0] : (delta[delta.length >= 3 ? 2 : 0] ?? 0)))
+  }
+  if (Array.isArray(cur)) {
+    if (typeof delta === 'number') { const i = cur.length >= 3 ? 2 : cur.length - 1; return cur.map((c, j) => (j === i && typeof c === 'number' ? r(c + delta) : c)) }
+    const out = cur.map((c, i) => (typeof c === 'number' ? r(c + (delta[i] ?? 0)) : c))
+    for (let i = cur.length; i < delta.length; i++) if (delta[i]) { while (out.length < i) out.push(0); out.push(r(delta[i])) }
+    return out
+  }
+  return cur
+}
+
+/** group・camera の「効かせる範囲」。scope: 下の N 層(0 = 下すべて)か id の配列。group は書かなければ下すべて */
+export function scopeMembers(layers: Layer[], index: number): string[] | null {
+  const l = layers[index]
+  if (!l || (l.type !== 'group' && l.type !== 'camera')) return null
+  const sc = l.scope
+  if (Array.isArray(sc)) { const set = new Set(sc.map(String)); return layers.filter(x => set.has(x.id) && x.id !== l.id).map(x => x.id) }
+  if (l.type === 'camera' && !(typeof sc === 'number' && sc > 0)) return null   // 範囲なしのカメラは全体に効く(字下げしない)
+  const n = typeof sc === 'number' && sc > 0 ? Math.round(sc) : layers.length
+  return layers.slice(index + 1, index + 1 + n).map(x => x.id)
+}
+
+export interface ScopeInfo {
+  /** レイヤー id → 入っている範囲の持ち主(group・camera の id。外側から) */
+  owners: Map<string, string[]>
+  /** 範囲の持ち主 → 中のレイヤーの数 */
+  counts: Map<string, number>
+}
+export function scopeInfo(layers: Layer[]): ScopeInfo {
+  const owners = new Map<string, string[]>(), counts = new Map<string, number>()
+  let ids: Set<string> | null = null
+  const add = (id: string, owner: string) => { const a = owners.get(id); if (a) a.push(owner); else owners.set(id, [owner]) }
+  for (let i = 0; i < layers.length; i++) {
+    const l = layers[i]
+    if (l.type !== 'group' && l.type !== 'camera') continue
+    const sc = l.scope
+    if (Array.isArray(sc)) {
+      // id の配列: 文書にあるものだけ数える(レイヤーの数 × 範囲の数 を回さない)
+      ids ??= new Set(layers.map(x => x.id))
+      let n = 0
+      for (const x of sc) { const id = String(x); if (id !== l.id && ids.has(id)) { add(id, l.id); n++ } }
+      counts.set(l.id, n)
+      continue
+    }
+    if (l.type === 'camera' && !(typeof sc === 'number' && sc > 0)) continue
+    const end = typeof sc === 'number' && sc > 0 ? Math.min(layers.length, i + 1 + Math.round(sc)) : layers.length
+    for (let j = i + 1; j < end; j++) add(layers[j].id, l.id)
+    counts.set(l.id, end - i - 1)
+  }
+  return { owners, counts }
+}
+
+const keyedCache = new WeakMap<Layer, KeyedProp[]>()
+/** collectKeyedProps の使い回し(レイヤーの参照が同じ間。大きな文書の行の高さの計算用) */
+export function keyedPropsCached(l: Layer): KeyedProp[] {
+  let v = keyedCache.get(l)
+  if (!v) { v = collectKeyedProps(l); keyedCache.set(l, v) }
+  return v
+}
+const tickCache = new WeakMap<Layer, number[]>()
+export function keyTicksCached(l: Layer): number[] {
+  let v = tickCache.get(l)
+  if (!v) { v = allKeyFrames(l, 200); tickCache.set(l, v) }
+  return v
+}
