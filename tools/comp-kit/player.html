@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>comp player</title>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  #stage { position: relative; line-height: 0; }
+  #comp { display: block; }
+  #overlay { display: none; }
+  #msg { display: none; }
+  /* プレビュー: 透明な所が分かるよう市松模様の上に、窓に収まる大きさで置く */
+  body.preview { width: 100vw; height: 100vh; background: #17181c; user-select: none; -webkit-user-select: none; }
+  body.preview #stage {
+    position: absolute; touch-action: none;
+    background-color: #2a2c33;
+    background-image: linear-gradient(45deg, #34363e 25%, transparent 25%, transparent 75%, #34363e 75%),
+      linear-gradient(45deg, #34363e 25%, transparent 25%, transparent 75%, #34363e 75%);
+    background-size: 20px 20px; background-position: 0 0, 10px 10px;
+  }
+  body.preview #comp { width: 100%; height: 100%; }
+  body.preview #overlay { display: block; position: absolute; left: 0; top: 0; width: 100vw; height: 100vh; pointer-events: none; }
+  body.preview #msg { position: absolute; left: 8px; bottom: 6px; font: 12px/1.4 sans-serif; color: #f88; white-space: pre-wrap; pointer-events: none; }
+</style>
+</head>
+<body>
+<!-- 最初の canvas が描画先(キャプチャは document.querySelector('canvas') を読む)。重ね描き用は必ずその後ろ -->
+<div id="stage"><canvas id="comp"></canvas></div>
+<canvas id="overlay"></canvas>
+<div id="msg"></div>
+<script>/*__COMP_BOOT__*/</script>
+<script>
+(() => {
+  'use strict'
+  const qs = new URLSearchParams(location.search)
+  let B = window.__COMP_BOOT || null
+  const canvas = document.getElementById('comp')
+  const stage = document.getElementById('stage')
+  const overlay = document.getElementById('overlay')
+  const msgEl = document.getElementById('msg')
+  const say = (t) => { msgEl.style.display = t ? 'block' : 'none'; msgEl.textContent = t || '' }
+
+  let eng = null, comp = null, mode = 'preview'
+  let frame = 0, playing = false, selected = []
+  let playT0 = 0, playF0 = 0, raf = 0, dirty = false
+  let view = { x: 0, y: 0, s: 1 } // プレビューでの置き場所(CSS px)と倍率
+
+  const post = (m) => { if (window.parent && window.parent !== window) window.parent.postMessage(m, '*') }
+  const fps = () => (comp && comp.fps) || 30
+  const dur = () => Math.max(1, (comp && comp.duration_frames) || 1)
+
+  // ---- 起動 ----
+  async function boot() {
+    if (!B && qs.get('comp')) {
+      // 単体での確認用: player.html?comp=examples/01_kinetic_type.json
+      const c = await (await fetch(qs.get('comp'))).json()
+      B = { comp: c, mode: qs.get('mode') || 'preview', apiBase: qs.get('api') || '', engineBase: '' }
+    }
+    if (!B || !B.comp) throw new Error('window.__COMP_BOOT がない')
+    mode = B.mode === 'capture' ? 'capture' : 'preview'
+    comp = B.comp
+    const apiBase = String(B.apiBase || '').replace(/\/$/, '')
+    const base = B.engineBase ? apiBase + B.engineBase.replace(/\/?$/, '/') : new URL('./', location.href).href
+    // GLTFLoader の `import 'three'` を解決する import map(最初のモジュール読み込みより前に入れる)
+    const im = document.createElement('script')
+    im.type = 'importmap'
+    im.textContent = JSON.stringify({ imports: { three: base + 'three.module.min.js' } })
+    document.head.appendChild(im)
+    const { CompEngine } = await import(base + 'comp-engine.js')
+
+    document.body.className = mode
+    if (mode === 'capture') {
+      canvas.style.width = comp.width + 'px'; canvas.style.height = comp.height + 'px'
+    }
+    const scaleQ = parseFloat(qs.get('scale') || '')
+    eng = new CompEngine(canvas, {
+      mode, apiBase, scale: mode === 'capture' ? 1 : (scaleQ > 0 ? scaleQ : 1),
+      onInvalidate: () => { if (!playing) invalidate() },
+    })
+    window.__compEngine = eng
+    await eng.load(comp)
+    frame = clampFrame(parseInt(qs.get('frame') || '0', 10) || 0)
+    if (mode === 'preview') {
+      layout()
+      window.addEventListener('resize', () => { layout(); invalidate() })
+      window.addEventListener('message', onMessage)
+      bindPointer()
+    }
+    await eng.renderFrame(frame)
+    drawOverlay()
+    post({ type: 'comp:ready', width: comp.width, height: comp.height, fps: fps(), duration_frames: dur(), frame })
+  }
+  const clampFrame = (f) => Math.min(dur() - 1, Math.max(0, Math.round(f)))
+
+  // キャプチャ(motion_graphics.render_html_to_video)との約束:
+  //   window.__madAssetsReady … エンジンと文書の読み込みが済んだら解決
+  //   window.seek(tMs) … そのコマの素材がそろい、描き終わってから解決
+  window.__madAssetsReady = boot().catch((err) => { console.error('[comp player]', err); say(String(err && err.message || err)) })
+  window.seek = async (tMs) => {
+    await window.__madAssetsReady
+    if (!eng) return
+    frame = Math.round((tMs / 1000) * fps())
+    await eng.renderFrame(frame)
+  }
+
+  // ---- プレビューの配置 ----
+  let autoScale = !(parseFloat(qs.get('scale') || '') > 0)
+  function layout() {
+    const vw = window.innerWidth, vh = window.innerHeight
+    const s = Math.min(vw / comp.width, vh / comp.height) || 1
+    view = { s, x: (vw - comp.width * s) / 2, y: (vh - comp.height * s) / 2 }
+    stage.style.left = view.x + 'px'; stage.style.top = view.y + 'px'
+    stage.style.width = comp.width * s + 'px'; stage.style.height = comp.height * s + 'px'
+    const dpr = window.devicePixelRatio || 1
+    overlay.width = Math.round(vw * dpr); overlay.height = Math.round(vh * dpr)
+    if (autoScale && eng) {
+      // 表示より細かく描いても見えないので、表示の大きさに合わせて 0.5 / 0.75 / 1 倍で描く
+      const need = s * dpr
+      eng.setScale(need <= 0.5 ? 0.5 : need <= 0.75 ? 0.75 : 1)
+    }
+  }
+
+  // ---- 描き直し ----
+  function invalidate() {
+    if (dirty) return
+    dirty = true
+    requestAnimationFrame(() => { dirty = false; if (!playing) show(frame) })
+  }
+  function show(f) {
+    frame = f
+    eng.renderFrame(f) // preview では待たずにその場で描く
+    drawOverlay()
+  }
+  function tick(now) {
+    if (!playing) return
+    const f = (playF0 + Math.floor((Math.max(0, now - playT0) / 1000) * fps())) % dur()
+    if (f !== frame) { show(f); post({ type: 'comp:frame', frame: f }) }
+    raf = requestAnimationFrame(tick)
+  }
+  function setPlaying(on, f) {
+    cancelAnimationFrame(raf)
+    playing = !!on
+    if (f != null) frame = clampFrame(f)
+    eng.setPlaying(playing)
+    if (playing) {
+      playT0 = performance.now(); playF0 = frame
+      show(frame)
+      raf = requestAnimationFrame(tick)
+    } else show(frame)
+  }
+
+  // ---- 親との通信 ----
+  function onMessage(ev) {
+    const m = ev.data
+    if (!m || typeof m.type !== 'string' || !eng) return
+    switch (m.type) {
+      case 'comp:set': {
+        if (!m.comp) break
+        const resized = m.comp.width !== comp.width || m.comp.height !== comp.height
+        comp = m.comp
+        eng.clearOverrides()
+        eng.update(comp)
+        if (resized) layout()
+        frame = clampFrame(frame)
+        if (playing) { playT0 = performance.now(); playF0 = frame }
+        show(frame)
+        break
+      }
+      case 'comp:seek':
+        if (playing) { playT0 = performance.now(); playF0 = clampFrame(m.frame) }
+        show(clampFrame(m.frame))
+        break
+      case 'comp:play': setPlaying(m.playing, m.frame); break
+      case 'comp:select': selected = Array.isArray(m.ids) ? m.ids.map(String) : []; drawOverlay(); break
+      // 入れ子の子コンポジションを保存し直したとき: 読み直して描き直す
+      case 'comp:invalidate': eng.invalidateComp(m.comp_id); show(frame); break
+      case 'comp:quality': autoScale = !(m.scale > 0); if (m.scale > 0) eng.setScale(m.scale); else layout(); show(frame); break
+    }
+  }
+
+  // ---- 選択枠 ----
+  function drawOverlay() {
+    if (mode !== 'preview') return
+    const ctx = overlay.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, overlay.width, overlay.height)
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    const X = (p) => view.x + p[0] * view.s, Y = (p) => view.y + p[1] * view.s
+    for (const id of selected) {
+      const b = eng.layerBounds(id, frame)
+      if (!b) continue
+      const q = b.corners
+      ctx.beginPath()
+      q.forEach((p, i) => (i ? ctx.lineTo(X(p), Y(p)) : ctx.moveTo(X(p), Y(p))))
+      ctx.closePath()
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.stroke()
+      ctx.lineWidth = 1.5; ctx.strokeStyle = b.three_d ? '#ffb347' : '#4fc3ff'; ctx.stroke()
+      ctx.fillStyle = '#fff'
+      for (const p of q) { ctx.fillRect(X(p) - 3.5, Y(p) - 3.5, 7, 7); ctx.strokeRect(X(p) - 3.5, Y(p) - 3.5, 7, 7) }
+      if (b.anchor) {
+        const ax = X(b.anchor), ay = Y(b.anchor)
+        ctx.beginPath(); ctx.moveTo(ax - 8, ay); ctx.lineTo(ax + 8, ay); ctx.moveTo(ax, ay - 8); ctx.lineTo(ax, ay + 8)
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke()
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke()
+        ctx.beginPath(); ctx.arc(ax, ay, 4, 0, Math.PI * 2); ctx.stroke()
+      }
+    }
+  }
+
+  // ---- クリックで選択、ドラッグで移動 ----
+  function bindPointer() {
+    let drag = null
+    const toComp = (ev) => [(ev.clientX - view.x) / view.s, (ev.clientY - view.y) / view.s]
+    stage.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return
+      const [x, y] = toComp(ev)
+      // すでに選んでいるレイヤーの枠の中なら、そのレイヤーを優先(下にあっても動かせる)
+      let id = eng.pick(x, y, frame)
+      const keep = selected.find((sid) => inQuad(eng.layerBounds(sid, frame), x, y))
+      if (keep && !ev.shiftKey && !ev.altKey) id = keep
+      if (id == null) selected = []
+      else if (ev.shiftKey) selected = selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]
+      else selected = [id]
+      post({ type: 'comp:select', ids: selected })
+      drawOverlay()
+      if (id == null || !selected.includes(id) || playing) return
+      const base = eng.valueAt(id, 'transform.position', frame)
+      const b3 = [0, 1, 2].map((i) => (Array.isArray(base) && typeof base[i] === 'number' ? base[i] : 0))
+      drag = { id, sx: ev.clientX, sy: ev.clientY, base: b3, n: Array.isArray(base) && base.length >= 3 ? 3 : 2, moved: false, value: null }
+      stage.setPointerCapture(ev.pointerId)
+    })
+    stage.addEventListener('pointermove', (ev) => {
+      if (!drag) return
+      const dx = (ev.clientX - drag.sx) / view.s, dy = (ev.clientY - drag.sy) / view.s
+      if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 3) return
+      drag.moved = true
+      const d = eng.screenDelta(drag.id, frame, dx, dy)
+      const r = (v) => Math.round(v * 10) / 10
+      const n = drag.n === 3 || Math.abs(d[2]) > 1e-6 ? 3 : 2
+      drag.value = [r(drag.base[0] + d[0]), r(drag.base[1] + d[1]), r(drag.base[2] + d[2])].slice(0, n)
+      eng.setOverride(drag.id, 'transform.position', drag.value)
+      show(frame)
+      sendEdit(false)
+    })
+    const finish = (ev) => {
+      if (!drag) return
+      try { stage.releasePointerCapture(ev.pointerId) } catch {}
+      // 仮の値は、親が comp:set で確定した文書を送り返してくるまで残す
+      if (drag.moved && drag.value) sendEdit(true)
+      drag = null
+    }
+    stage.addEventListener('pointerup', finish)
+    stage.addEventListener('pointercancel', finish)
+    function sendEdit(final) {
+      const m = { type: 'comp:edit', id: drag.id, path: 'transform.position', value: drag.value, final }
+      if (eng.isKeyframed(drag.id, 'transform.position')) { m.keyframed = true; m.frame = frame }
+      post(m)
+    }
+  }
+  function inQuad(b, x, y) {
+    if (!b) return false
+    let pos = 0, neg = 0
+    const q = b.corners
+    for (let k = 0; k < 4; k++) {
+      const a = q[k], c = q[(k + 1) % 4]
+      const cr = (c[0] - a[0]) * (y - a[1]) - (c[1] - a[1]) * (x - a[0])
+      if (cr > 0) pos++; else if (cr < 0) neg++
+    }
+    return pos === 0 || neg === 0
+  }
+})()
+</script>
+</body>
+</html>

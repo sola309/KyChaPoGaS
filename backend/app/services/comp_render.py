@@ -60,17 +60,13 @@ def player_html(comp: dict, mode: str, api_base: str = "", frame: int | None = N
     src = (COMP_KIT / "player.html").read_text(encoding="utf-8")
     base = api_base.rstrip("/")
     boot = {"comp": comp, "mode": mode, "apiBase": base,
-            "engineBase": f"{base}/api/comps/engine/"}
+            "engineBase": "/api/comps/engine/"}
     if frame is not None:
         boot["frame"] = frame
     js = "window.__COMP_BOOT = " + json.dumps(boot, ensure_ascii=False).replace("</", "<\\/") + ";"
     if BOOT_MARK not in src:
         raise RuntimeError("player.html に /*__COMP_BOOT__*/ がありません")
-    html = src.replace(BOOT_MARK, js, 1)
-    if base:
-        # set_content(about:blank)でも相対の import が解けるように
-        html = html.replace("<head>", f'<head><base href="{base}/api/comps/engine/">', 1)
-    return html
+    return src.replace(BOOT_MARK, js, 1)
 
 
 def engine_file(path: str) -> Path | None:

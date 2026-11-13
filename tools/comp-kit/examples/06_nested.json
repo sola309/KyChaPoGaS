@@ -1,0 +1,211 @@
+{
+ "id": 9006,
+ "name": "06 入れ子のコンポジション",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#05060c",
+  "layers": [
+   {
+    "id": "cap",
+    "name": "cap",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      1010
+     ]
+    },
+    "source": {
+     "text": "comp レイヤー: 別のコンポジションを 1 枚の絵として置く(start / speed つき)",
+     "size": 34,
+     "weight": 700,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "n1",
+    "name": "n1",
+    "type": "comp",
+    "in": 0,
+    "out": 150,
+    "three_d": true,
+    "source": {
+     "comp_id": 9001
+    },
+    "start": 20,
+    "transform": {
+     "position": [
+      520,
+      330,
+      0
+     ],
+     "scale": [
+      44,
+      44,
+      100
+     ],
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         -30,
+         0
+        ]
+       },
+       {
+        "f": 150,
+        "v": [
+         0,
+         30,
+         0
+        ],
+        "e": "easeInOut"
+       }
+      ]
+     }
+    },
+    "effects": [
+     {
+      "type": "drop_shadow",
+      "params": {
+       "distance": 20,
+       "blur": 30,
+       "opacity": 70
+      }
+     }
+    ]
+   },
+   {
+    "id": "n2",
+    "name": "n2",
+    "type": "comp",
+    "in": 0,
+    "out": 75,
+    "source": {
+     "comp_id": 9002
+    },
+    "speed": 2,
+    "transform": {
+     "position": [
+      1400,
+      330
+     ],
+     "scale": [
+      44,
+      44
+     ],
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": -4
+       },
+       {
+        "f": 75,
+        "v": 4,
+        "e": "easeInOut"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "n2b",
+    "name": "n2b",
+    "type": "comp",
+    "in": 75,
+    "out": 150,
+    "source": {
+     "comp_id": 9005
+    },
+    "start": 40,
+    "transform": {
+     "position": [
+      1400,
+      330
+     ],
+     "scale": [
+      44,
+      44
+     ]
+    },
+    "blend": "normal"
+   },
+   {
+    "id": "n3",
+    "name": "n3",
+    "type": "comp",
+    "in": 0,
+    "out": 150,
+    "source": {
+     "comp_id": 9004
+    },
+    "transform": {
+     "position": [
+      960,
+      760
+     ],
+     "scale": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         20,
+         20
+        ]
+       },
+       {
+        "f": 30,
+        "v": [
+         38,
+         38
+        ],
+        "e": "easeOutBack"
+       }
+      ]
+     }
+    },
+    "masks": [
+     {
+      "shape": "rect",
+      "x": 0,
+      "y": 0,
+      "w": 1920,
+      "h": 1080,
+      "feather": 0
+     }
+    ]
+   },
+   {
+    "id": "frame",
+    "name": "frame",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 1880,
+     "height": 1040,
+     "radius": 30,
+     "fill": null,
+     "stroke": "#3a3f66",
+     "stroke_width": 4
+    }
+   }
+  ]
+ }
+}

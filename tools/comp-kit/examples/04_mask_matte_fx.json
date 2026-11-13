@@ -1,0 +1,817 @@
+{
+ "id": 9004,
+ "name": "04 マスク・マット・エフェクト",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#12131a",
+  "layers": [
+   {
+    "id": "cap1",
+    "name": "cap1",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      480,
+      60
+     ]
+    },
+    "source": {
+     "text": "mask: ellipse feather / polygon / invert",
+     "size": 30,
+     "weight": 700,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "m1",
+    "name": "m1",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      200,
+      250
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 300,
+     "height": 300,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "stops": [
+        [
+         0,
+         "#ff4d6d"
+        ],
+        [
+         1,
+         "#ffd23f"
+        ]
+       ]
+      }
+     }
+    },
+    "masks": [
+     {
+      "shape": "ellipse",
+      "x": 20,
+      "y": 20,
+      "w": 264,
+      "h": 264,
+      "feather": {
+       "k": [
+        {
+         "f": 0,
+         "v": 0
+        },
+        {
+         "f": 75,
+         "v": 80,
+         "e": "easeInOut"
+        },
+        {
+         "f": 150,
+         "v": 0,
+         "e": "easeInOut"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "m2",
+    "name": "m2",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      530,
+      250
+     ],
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 150,
+        "v": 90
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "rect",
+     "width": 300,
+     "height": 300,
+     "fill": "#7CFF6B"
+    },
+    "masks": [
+     {
+      "shape": "polygon",
+      "points": [
+       [
+        152,
+        12
+       ],
+       [
+        190,
+        110
+       ],
+       [
+        292,
+        112
+       ],
+       [
+        212,
+        176
+       ],
+       [
+        242,
+        276
+       ],
+       [
+        152,
+        218
+       ],
+       [
+        62,
+        276
+       ],
+       [
+        92,
+        176
+       ],
+       [
+        12,
+        112
+       ],
+       [
+        114,
+        110
+       ]
+      ],
+      "feather": 2
+     }
+    ]
+   },
+   {
+    "id": "m3",
+    "name": "m3",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      860,
+      250
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 300,
+     "height": 300,
+     "fill": "#9be7ff"
+    },
+    "masks": [
+     {
+      "shape": "rect",
+      "x": {
+       "k": [
+        {
+         "f": 0,
+         "v": 30
+        },
+        {
+         "f": 150,
+         "v": 180,
+         "e": "easeInOut"
+        }
+       ]
+      },
+      "y": 90,
+      "w": 100,
+      "h": 124,
+      "invert": true,
+      "feather": 6
+     },
+     {
+      "shape": "ellipse",
+      "feather": 2
+     }
+    ]
+   },
+   {
+    "id": "cap2",
+    "name": "cap2",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1450,
+      60
+     ]
+    },
+    "source": {
+     "text": "track matte: alpha / luma_inv",
+     "size": 30,
+     "weight": 700,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "matteText",
+    "name": "matteText",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1450,
+      190
+     ],
+     "scale": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         90,
+         90
+        ]
+       },
+       {
+        "f": 150,
+        "v": [
+         110,
+         110
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": "MATTE",
+     "size": 190,
+     "weight": 700,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "matteFill",
+    "name": "matteFill",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "matte": {
+     "layer": "matteText",
+     "mode": "alpha"
+    },
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         1250,
+         190
+        ]
+       },
+       {
+        "f": 150,
+        "v": [
+         1650,
+         190
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "rect",
+     "width": 1400,
+     "height": 300,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -700,
+        0
+       ],
+       "to": [
+        700,
+        0
+       ],
+       "stops": [
+        [
+         0,
+         "#ff4d6d"
+        ],
+        [
+         0.25,
+         "#ffd23f"
+        ],
+        [
+         0.5,
+         "#7CFF6B"
+        ],
+        [
+         0.75,
+         "#9be7ff"
+        ],
+        [
+         1,
+         "#7a5cff"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "lumaSrc",
+    "name": "lumaSrc",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1450,
+      390
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 120,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        0
+       ],
+       "to": [
+        380,
+        0
+       ],
+       "stops": [
+        [
+         0,
+         "#000000"
+        ],
+        [
+         1,
+         "#ffffff"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "lumaFill",
+    "name": "lumaFill",
+    "type": "solid",
+    "in": 0,
+    "out": 150,
+    "matte": {
+     "layer": "lumaSrc",
+     "mode": "luma_inv"
+    },
+    "transform": {
+     "position": [
+      1450,
+      390
+     ]
+    },
+    "source": {
+     "color": "#ff9f1c",
+     "width": 760,
+     "height": 120
+    }
+   },
+   {
+    "id": "fx_glow",
+    "name": "fx_glow",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      330,
+      560
+     ]
+    },
+    "source": {
+     "text": "GLOW",
+     "size": 150,
+     "weight": 700,
+     "fill": "#7CFF6B"
+    },
+    "effects": [
+     {
+      "type": "glow",
+      "params": {
+       "radius": {
+        "k": [
+         {
+          "f": 0,
+          "v": 10
+         },
+         {
+          "f": 75,
+          "v": 60,
+          "e": "easeInOut"
+         },
+         {
+          "f": 150,
+          "v": 10,
+          "e": "easeInOut"
+         }
+        ]
+       },
+       "strength": 1.6,
+       "threshold": 0.2
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_blur",
+    "name": "fx_blur",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      560
+     ]
+    },
+    "source": {
+     "text": "BLUR",
+     "size": 150,
+     "weight": 700,
+     "fill": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "blur",
+      "params": {
+       "radius": {
+        "k": [
+         {
+          "f": 0,
+          "v": 60
+         },
+         {
+          "f": 60,
+          "v": 0,
+          "e": "easeOutCubic"
+         },
+         {
+          "f": 110,
+          "v": 0
+         },
+         {
+          "f": 150,
+          "v": 40,
+          "e": "easeIn"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_rgb",
+    "name": "fx_rgb",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1560,
+      560
+     ]
+    },
+    "source": {
+     "text": "RGB",
+     "size": 150,
+     "weight": 700,
+     "fill": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "rgb_shift",
+      "params": {
+       "amount": {
+        "v": 10,
+        "wiggle": {
+         "freq": 6,
+         "amp": 10,
+         "seed": 2
+        }
+       },
+       "angle": 90
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_wipe",
+    "name": "fx_wipe",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      330,
+      770
+     ]
+    },
+    "source": {
+     "text": "WIPE",
+     "size": 150,
+     "weight": 700,
+     "fill": "#ffd23f"
+    },
+    "effects": [
+     {
+      "type": "wipe",
+      "params": {
+       "progress": {
+        "k": [
+         {
+          "f": 0,
+          "v": 100
+         },
+         {
+          "f": 50,
+          "v": 0,
+          "e": "easeInOutCubic"
+         },
+         {
+          "f": 100,
+          "v": 0
+         },
+         {
+          "f": 150,
+          "v": 100,
+          "e": "easeInOutCubic"
+         }
+        ]
+       },
+       "angle": 270,
+       "feather": 60
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_shadow",
+    "name": "fx_shadow",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      770
+     ]
+    },
+    "source": {
+     "text": "SHADOW",
+     "size": 130,
+     "weight": 700,
+     "fill": "#ff4d6d"
+    },
+    "effects": [
+     {
+      "type": "stroke_outline",
+      "params": {
+       "width": 6,
+       "color": "#ffffff"
+      }
+     },
+     {
+      "type": "drop_shadow",
+      "params": {
+       "distance": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 60,
+          "v": 26,
+          "e": "easeOutBack"
+         }
+        ]
+       },
+       "angle": 135,
+       "blur": 14,
+       "color": "#000000",
+       "opacity": 80
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_wave",
+    "name": "fx_wave",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1560,
+      770
+     ]
+    },
+    "source": {
+     "text": "WAVE",
+     "size": 150,
+     "weight": 700,
+     "fill": "#9be7ff"
+    },
+    "effects": [
+     {
+      "type": "wave",
+      "params": {
+       "amp": 14,
+       "freq": 9,
+       "speed": 1.5
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_mosaic",
+    "name": "fx_mosaic",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      330,
+      970
+     ]
+    },
+    "source": {
+     "text": "MOSAIC",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "mosaic",
+      "params": {
+       "size": {
+        "k": [
+         {
+          "f": 0,
+          "v": 40
+         },
+         {
+          "f": 70,
+          "v": 1,
+          "e": "easeOutCubic"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_color",
+    "name": "fx_color",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      970
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 520,
+     "height": 120,
+     "radius": 20,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -260,
+        0
+       ],
+       "to": [
+        260,
+        0
+       ],
+       "stops": [
+        [
+         0,
+         "#ff4d6d"
+        ],
+        [
+         0.5,
+         "#ffd23f"
+        ],
+        [
+         1,
+         "#2ec4ff"
+        ]
+       ]
+      }
+     }
+    },
+    "effects": [
+     {
+      "type": "color",
+      "params": {
+       "hue": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 150,
+          "v": 360
+         }
+        ]
+       },
+       "saturation": 10
+      }
+     }
+    ]
+   },
+   {
+    "id": "fx_noise",
+    "name": "fx_noise",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1560,
+      970
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 520,
+     "height": 120,
+     "radius": 20,
+     "fill": "#7a5cff"
+    },
+    "effects": [
+     {
+      "type": "noise",
+      "params": {
+       "amount": 40
+      }
+     },
+     {
+      "type": "color",
+      "params": {
+       "tint": "#ffd23f",
+       "tint_amount": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 150,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

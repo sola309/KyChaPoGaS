@@ -1,0 +1,355 @@
+{
+ "id": 9005,
+ "name": "05 粒子・調整レイヤー",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#0a0b14",
+  "layers": [
+   {
+    "id": "label",
+    "name": "label",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1440,
+      80
+     ]
+    },
+    "source": {
+     "text": "右半分だけ調整レイヤー(色相 + グロー)",
+     "size": 34,
+     "weight": 700,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "adj",
+    "name": "adj",
+    "type": "adjustment",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1440,
+      540
+     ]
+    },
+    "masks": [
+     {
+      "shape": "rect",
+      "x": 480,
+      "y": 0,
+      "w": 960,
+      "h": 1080,
+      "feather": 0
+     }
+    ],
+    "effects": [
+     {
+      "type": "color",
+      "params": {
+       "hue": 150,
+       "saturation": 20
+      }
+     },
+     {
+      "type": "glow",
+      "params": {
+       "radius": 30,
+       "strength": 1.2,
+       "threshold": 0.35
+      }
+     }
+    ]
+   },
+   {
+    "id": "adjAll",
+    "name": "adjAll",
+    "type": "adjustment",
+    "in": 0,
+    "out": 150,
+    "effects": [
+     {
+      "type": "rgb_shift",
+      "params": {
+       "amount": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 100,
+          "v": 0
+         },
+         {
+          "f": 104,
+          "v": 14,
+          "e": "easeOut"
+         },
+         {
+          "f": 116,
+          "v": 0,
+          "e": "easeOut"
+         }
+        ]
+       },
+       "angle": 90
+      }
+     }
+    ]
+   },
+   {
+    "id": "title",
+    "name": "title",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      540
+     ],
+     "scale": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         80,
+         80
+        ]
+       },
+       {
+        "f": 150,
+        "v": [
+         105,
+         105
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": "PARTICLES",
+     "size": 200,
+     "weight": 700,
+     "fill": null,
+     "stroke": "#ffffff",
+     "stroke_width": 4,
+     "stroke_over": true,
+     "tracking": 20
+    }
+   },
+   {
+    "id": "trail",
+    "name": "trail",
+    "type": "particles",
+    "in": 0,
+    "out": 150,
+    "source": {
+     "seed": 11,
+     "emitter": {
+      "position": {
+       "k": [
+        {
+         "f": 0,
+         "v": [
+          -700,
+          250
+         ]
+        },
+        {
+         "f": 50,
+         "v": [
+          0,
+          -280
+         ],
+         "e": "easeInOut"
+        },
+        {
+         "f": 100,
+         "v": [
+          700,
+          250
+         ],
+         "e": "easeInOut"
+        },
+        {
+         "f": 150,
+         "v": [
+          -700,
+          250
+         ],
+         "e": "easeInOut"
+        }
+       ]
+      },
+      "rate": 220,
+      "life": 1.3,
+      "speed": 60,
+      "spread": 360,
+      "gravity": [
+       0,
+       260,
+       0
+      ],
+      "size": [
+       34,
+       2
+      ],
+      "color": [
+       "#fff2a8",
+       "#ff4d6d"
+      ],
+      "opacity": [
+       100,
+       0
+      ],
+      "sprite": "soft",
+      "blend": "add"
+     }
+    }
+   },
+   {
+    "id": "burst",
+    "name": "burst",
+    "type": "particles",
+    "in": 30,
+    "out": 150,
+    "source": {
+     "seed": 5,
+     "emitter": {
+      "position": [
+       0,
+       0
+      ],
+      "rate": 0,
+      "burst": 260,
+      "life": 2.2,
+      "life_random": 0.5,
+      "speed": 900,
+      "speed_random": 0.8,
+      "drag": 2.2,
+      "gravity": [
+       0,
+       300,
+       0
+      ],
+      "size": [
+       26,
+       8
+      ],
+      "color": [
+       "#9be7ff",
+       "#7a5cff"
+      ],
+      "opacity": [
+       100,
+       0
+      ],
+      "sprite": "star",
+      "spin": 240,
+      "blend": "normal"
+     }
+    }
+   },
+   {
+    "id": "fountain",
+    "name": "fountain",
+    "type": "particles",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      1060
+     ]
+    },
+    "source": {
+     "seed": 3,
+     "emitter": {
+      "position": [
+       0,
+       0
+      ],
+      "area": [
+       80,
+       0,
+       0
+      ],
+      "rate": 90,
+      "life": 2.0,
+      "speed": 950,
+      "speed_random": 0.35,
+      "direction": 0,
+      "spread": 28,
+      "gravity": [
+       0,
+       900,
+       0
+      ],
+      "size": [
+       18,
+       6
+      ],
+      "color": [
+       "#ffffff",
+       "#7CFF6B"
+      ],
+      "opacity": [
+       90,
+       0
+      ],
+      "sprite": "circle",
+      "blend": "add"
+     }
+    }
+   },
+   {
+    "id": "snow",
+    "name": "snow",
+    "type": "particles",
+    "in": 0,
+    "out": 150,
+    "source": {
+     "seed": 21,
+     "emitter": {
+      "position": [
+       0,
+       -600
+      ],
+      "area": [
+       2000,
+       0,
+       0
+      ],
+      "rate": 40,
+      "life": 5,
+      "speed": 180,
+      "speed_random": 0.5,
+      "direction": 180,
+      "spread": 30,
+      "size": [
+       10,
+       10
+      ],
+      "size_random": 0.7,
+      "color": "#ffffff",
+      "opacity": [
+       60,
+       60
+      ],
+      "sprite": "soft",
+      "blend": "add"
+     }
+    }
+   }
+  ]
+ }
+}

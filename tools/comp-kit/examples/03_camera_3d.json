@@ -1,0 +1,1023 @@
+{
+ "id": 9003,
+ "name": "03 3D カメラ",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#07080f",
+  "layers": [
+   {
+    "id": "hud",
+    "name": "hud",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      990
+     ]
+    },
+    "source": {
+     "text": "2D レイヤーはカメラの影響を受けない",
+     "size": 40,
+     "weight": 700,
+     "fill": "#ffffff",
+     "stroke": "#000000",
+     "stroke_width": 3
+    }
+   },
+   {
+    "id": "cam",
+    "name": "cam",
+    "type": "camera",
+    "in": 0,
+    "out": 180,
+    "parent": "rig",
+    "source": {
+     "fov": 50,
+     "target": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0,
+         1600
+        ]
+       },
+       {
+        "f": 180,
+        "v": [
+         0,
+         0,
+         8600
+        ],
+        "e": "easeInOutCubic"
+       }
+      ]
+     }
+    },
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         -260,
+         -2100
+        ]
+       },
+       {
+        "f": 150,
+        "v": [
+         0,
+         0,
+         6300
+        ],
+        "e": "easeInOutCubic"
+       },
+       {
+        "f": 180,
+        "v": [
+         0,
+         0,
+         6900
+        ],
+        "e": "easeOutCubic"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "rig",
+    "name": "rig",
+    "type": "null",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         820,
+         540,
+         0
+        ]
+       },
+       {
+        "f": 45,
+        "v": [
+         1100,
+         500,
+         0
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 90,
+        "v": [
+         820,
+         560,
+         0
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 135,
+        "v": [
+         1100,
+         520,
+         0
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 180,
+        "v": [
+         960,
+         540,
+         0
+        ],
+        "e": "easeInOut"
+       }
+      ]
+     },
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0,
+         -5
+        ]
+       },
+       {
+        "f": 45,
+        "v": [
+         0,
+         0,
+         5
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 90,
+        "v": [
+         0,
+         0,
+         -5
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 135,
+        "v": [
+         0,
+         0,
+         5
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 180,
+        "v": [
+         0,
+         0,
+         0
+        ],
+        "e": "easeInOut"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "card_t0",
+    "name": "card_t0",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card0",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "一\nCARD 1",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card0",
+    "name": "card0",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      320,
+      540,
+      600
+     ],
+     "rotation": [
+      0,
+      28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#ff4d6d"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "card_t1",
+    "name": "card_t1",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card1",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "二\nCARD 2",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card1",
+    "name": "card1",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      1600,
+      540,
+      1700
+     ],
+     "rotation": [
+      0,
+      -28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#ffd23f"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "card_t2",
+    "name": "card_t2",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card2",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "三\nCARD 3",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card2",
+    "name": "card2",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      320,
+      540,
+      2800
+     ],
+     "rotation": [
+      0,
+      28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#7CFF6B"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "card_t3",
+    "name": "card_t3",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card3",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "四\nCARD 4",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card3",
+    "name": "card3",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      1600,
+      540,
+      3900
+     ],
+     "rotation": [
+      0,
+      -28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#9be7ff"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "card_t4",
+    "name": "card_t4",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card4",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "五\nCARD 5",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card4",
+    "name": "card4",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      320,
+      540,
+      5000
+     ],
+     "rotation": [
+      0,
+      28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#7a5cff"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "card_t5",
+    "name": "card_t5",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "parent": "card5",
+    "transform": {
+     "position": [
+      0,
+      0,
+      -2
+     ]
+    },
+    "source": {
+     "text": "六\nCARD 6",
+     "size": 120,
+     "weight": 700,
+     "fill": "#ffffff",
+     "leading": 150
+    }
+   },
+   {
+    "id": "card5",
+    "name": "card5",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      1600,
+      540,
+      6100
+     ],
+     "rotation": [
+      0,
+      -28,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 760,
+     "height": 520,
+     "radius": 36,
+     "stroke": "#ffffff",
+     "stroke_width": 8,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -380,
+        -260
+       ],
+       "to": [
+        380,
+        260
+       ],
+       "stops": [
+        [
+         0,
+         "#ff9f1c"
+        ],
+        [
+         1,
+         "#1b1d2b"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "end",
+    "name": "end",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      540,
+      8200
+     ]
+    },
+    "source": {
+     "text": "GOAL",
+     "size": 300,
+     "weight": 700,
+     "fill": "#ffd23f",
+     "stroke": "#ffffff",
+     "stroke_width": 6
+    }
+   },
+   {
+    "id": "stripe0",
+    "name": "stripe0",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      300
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe1",
+    "name": "stripe1",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      1000
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe2",
+    "name": "stripe2",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      1700
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe3",
+    "name": "stripe3",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      2400
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe4",
+    "name": "stripe4",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      3100
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe5",
+    "name": "stripe5",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      3800
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe6",
+    "name": "stripe6",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      4500
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe7",
+    "name": "stripe7",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      5200
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe8",
+    "name": "stripe8",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      5900
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe9",
+    "name": "stripe9",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      6600
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe10",
+    "name": "stripe10",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      7300
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   },
+   {
+    "id": "stripe11",
+    "name": "stripe11",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      8000
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#2a2f66"
+    }
+   },
+   {
+    "id": "stripe12",
+    "name": "stripe12",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      900,
+      8700
+     ],
+     "rotation": [
+      90,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2600,
+     "height": 90,
+     "radius": 45,
+     "fill": "#3b4290"
+    }
+   }
+  ]
+ }
+}

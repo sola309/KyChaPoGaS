@@ -1,0 +1,7 @@
+{"id": 9000, "name": "basic", "width": 640, "height": 360, "fps": 30, "duration_frames": 60,
+ "data": {"version": 1, "bg": null, "layers": [
+  {"id": "t", "name": "text", "type": "text", "in": 0, "out": 60, "transform": {"position": [320, 300]}, "source": {"text": "杏子 Kyoko 123", "size": 40, "weight": 700, "fill": "#ffffff", "stroke": "#000000", "stroke_width": 3}},
+  {"id": "r", "type": "solid", "in": 0, "out": 60, "transform": {"position": [160, 120], "opacity": 50}, "source": {"color": "#ff0000", "width": 200, "height": 100}},
+  {"id": "g", "type": "solid", "in": 0, "out": 60, "transform": {"position": [460, 120], "rotation": 30}, "source": {"color": "#808080", "width": 200, "height": 100}},
+  {"id": "s", "type": "shape", "in": 0, "out": 60, "transform": {"position": [320, 200]}, "source": {"kind": "star", "width": 120, "height": 120, "sides": 5, "fill": "#ffcc00", "stroke": "#ffffff", "stroke_width": 4}}
+ ]}}

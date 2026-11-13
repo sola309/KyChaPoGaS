@@ -1,0 +1,451 @@
+{
+ "id": 9001,
+ "name": "01 キネティックタイポ",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#101018",
+  "layers": [
+   {
+    "id": "title",
+    "name": "title",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      330
+     ]
+    },
+    "source": {
+     "text": "コンポジション",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 170,
+     "fill": "#ffffff",
+     "tracking": 12,
+     "per_char": {
+      "stagger": 3,
+      "order": "forward",
+      "from": {
+       "position": [
+        0,
+        140
+       ],
+       "scale": [
+        40,
+        40
+       ],
+       "rotation": -25,
+       "opacity": 0
+      },
+      "duration": 18,
+      "e": "easeOutBack",
+      "at": 4,
+      "out": {
+       "stagger": 2,
+       "order": "backward",
+       "from": {
+        "position": [
+         0,
+         -120
+        ],
+        "opacity": 0,
+        "scale": [
+         100,
+         0
+        ]
+       },
+       "duration": 10,
+       "e": "easeInCubic"
+      }
+     }
+    }
+   },
+   {
+    "id": "sub",
+    "name": "sub",
+    "type": "text",
+    "in": 20,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      500
+     ]
+    },
+    "source": {
+     "text": "KINETIC TYPOGRAPHY",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 72,
+     "fill": "#ffd23f",
+     "tracking": 18,
+     "per_char": {
+      "stagger": 1.5,
+      "order": "center",
+      "from": {
+       "scale": [
+        0,
+        0
+       ],
+       "rotation": 180,
+       "opacity": 0
+      },
+      "duration": 30,
+      "e": "easeOutElastic"
+     }
+    }
+   },
+   {
+    "id": "line",
+    "name": "line",
+    "type": "shape",
+    "in": 28,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      570
+     ]
+    },
+    "source": {
+     "kind": "line",
+     "points": [
+      [
+       -560,
+       0
+      ],
+      [
+       560,
+       0
+      ]
+     ],
+     "stroke": "#ff4d6d",
+     "stroke_width": 8,
+     "cap": "round",
+     "trim": {
+      "k": [
+       {
+        "f": 28,
+        "v": [
+         50,
+         50
+        ]
+       },
+       {
+        "f": 58,
+        "v": [
+         0,
+         100
+        ],
+        "e": "easeOutCubic"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "drop",
+    "name": "drop",
+    "type": "text",
+    "in": 45,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      690
+     ]
+    },
+    "source": {
+     "text": "文字ごとに、落ちて弾む。",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 84,
+     "fill": "#9be7ff",
+     "per_char": {
+      "stagger": 2,
+      "order": "random",
+      "seed": 7,
+      "from": {
+       "position": [
+        0,
+        -700
+       ],
+       "opacity": 100
+      },
+      "duration": 26,
+      "e": "easeOutBounce"
+     }
+    }
+   },
+   {
+    "id": "flip",
+    "name": "flip",
+    "type": "text",
+    "in": 70,
+    "out": 150,
+    "three_d": true,
+    "transform": {
+     "position": [
+      960,
+      850,
+      0
+     ]
+    },
+    "source": {
+     "text": "3D FLIP ／ 回転して登場",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 64,
+     "fill": "#ffffff",
+     "stroke": "#ff4d6d",
+     "stroke_width": 3,
+     "per_char": {
+      "stagger": 1.5,
+      "order": "forward",
+      "from": {
+       "rotation": [
+        0,
+        90,
+        0
+       ],
+       "opacity": 0,
+       "position": [
+        0,
+        0,
+        0
+       ]
+      },
+      "duration": 16,
+      "e": [
+       0.2,
+       0.9,
+       0.3,
+       1.2
+      ]
+     }
+    }
+   },
+   {
+    "id": "wig",
+    "name": "wig",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": {
+      "v": [
+       1640,
+       120
+      ],
+      "wiggle": {
+       "freq": 3,
+       "amp": [
+        10,
+        10
+       ],
+       "seed": 3
+      }
+     },
+     "rotation": {
+      "v": 8,
+      "wiggle": {
+       "freq": 2,
+       "amp": 6,
+       "seed": 5
+      }
+     },
+     "scale": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0
+        ]
+       },
+       {
+        "f": 12,
+        "v": [
+         100,
+         100
+        ],
+        "e": "easeOutBack"
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": "wiggle!",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 60,
+     "fill": "#101018",
+     "stroke": "#ffd23f",
+     "stroke_width": 10
+    }
+   },
+   {
+    "id": "count",
+    "name": "count",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      200,
+      120
+     ],
+     "opacity": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 10,
+        "v": 100,
+        "e": "easeOut"
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": {
+      "k": [
+       {
+        "f": 0,
+        "v": "3",
+        "e": "hold"
+       },
+       {
+        "f": 30,
+        "v": "2",
+        "e": "hold"
+       },
+       {
+        "f": 60,
+        "v": "1",
+        "e": "hold"
+       },
+       {
+        "f": 90,
+        "v": "GO!"
+       }
+      ]
+     },
+     "font": "Noto Sans Mono",
+     "weight": 700,
+     "size": 110,
+     "fill": {
+      "k": [
+       {
+        "f": 0,
+        "v": "#ff4d6d"
+       },
+       {
+        "f": 90,
+        "v": "#7CFF6B",
+        "e": "linear"
+       },
+       {
+        "f": 120,
+        "v": "#ffffff"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "bar",
+    "name": "bar",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         -200,
+         980
+        ]
+       },
+       {
+        "f": 40,
+        "v": [
+         960,
+         980
+        ],
+        "e": [
+         0.16,
+         1,
+         0.3,
+         1
+        ]
+       }
+      ]
+     },
+     "scale": {
+      "k": [
+       {
+        "f": 100,
+        "v": [
+         100,
+         100
+        ]
+       },
+       {
+        "f": 125,
+        "v": [
+         100,
+         0
+        ],
+        "e": "easeInOutCubic"
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "rect",
+     "width": 1500,
+     "height": 14,
+     "radius": 7,
+     "fill": {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        -750,
+        0
+       ],
+       "to": [
+        750,
+        0
+       ],
+       "stops": [
+        [
+         0,
+         "#ff4d6d"
+        ],
+        [
+         0.5,
+         "#ffd23f"
+        ],
+        [
+         1,
+         "#9be7ff"
+        ]
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}
