@@ -161,7 +161,7 @@ def em_factor(name):
 CAM_ROLL_SIGN = 1      # カメラの rotation.z の向き(エンジンの決めに合わせる。完成動画と見比べて決めた)
 BLEND = {'通常': 'normal', '加算': 'add', '減算': 'subtract', '乗算': 'multiply', 'スクリーン': 'screen',
          'オーバーレイ': 'overlay', '比較(明)': 'lighten', '比較(暗)': 'darken', '輝度': 'luminosity',
-         '色差': 'color_diff', '陰影': 'shade', '明暗': 'light_dark', '差分': 'difference'}
+         '色差': 'color', '陰影': 'shade', '明暗': 'light_dark', '差分': 'difference'}
 MASK_SHAPES = {1: 'ellipse', 2: 'rect', 3: 'triangle', 4: 'pentagon', 5: 'hexagon', 6: 'star'}
 
 
@@ -428,6 +428,7 @@ class SceneBuilder:
                 by[o.get('chain', {}).get('leader', o['id'])].append(o)
         self.chains = sorted((Chain(v) for v in by.values()), key=lambda c: (c.layer, c.start))
         self.stats = {'ease': collections.Counter(), 'ignore_mid': 0, 'baked': 0}
+        self._vignette = {}
         self.rep = {
             'scene': scene_no, 'objects_total': len(self.chains), 'segments': sum(len(c.segs) for c in self.chains),
             'dropped_disabled': 0, 'dropped_hidden_layer': 0, 'audio_skipped': 0, 'guide': 0,
@@ -464,6 +465,117 @@ class SceneBuilder:
         if not e:
             self.rep['missing'].append(AM.norm(path))
         return e
+
+    # ---- 絵の箱の大きさ(画像ファイル合成の左上合わせ・ランダム配置の範囲に使う) ----
+    def scene_size(self, sn):
+        sc = next((s for s in self.doc['exedit']['scenes'] if s['index'] == sn), None)
+        if not sc:
+            return None
+        return (sc['width'] or self.doc['project']['width'], sc['height'] or self.doc['project']['height'])
+
+    def asset_size(self, asset_id):
+        if not self.mats:
+            return None
+        for e in self.mats.amap.values():
+            if e.get('asset_id') == asset_id and e.get('w') and e.get('h'):
+                return (e['w'], e['h'])
+        return None
+
+    def obj_box(self, c, cv, upto):
+        """フィルタ upto の手前での絵の箱 (w, h)。分からなければ None。動く値は先頭の値で見る。"""
+        fs = c.o['filters']
+        f0 = fs[0]
+        x0 = f0['exdata']
+        k = c.kind
+        box = None
+        if k == '図形':
+            if x0.get('type', 0) == 0:
+                box = (self.W, self.H)
+            elif not x0.get('name'):
+                sz, asp = cv.const(0, 'サイズ'), cv.const(0, '縦横比')
+                box = (sz * (1 - max(0, asp) / 100), sz * (1 + min(0, asp) / 100))
+        elif k == '画像ファイル':
+            e = self.mats.still_asset(x0.get('file', ''), fetch=False) if self.mats else None
+            if e and e.get('w') and e.get('h'):
+                box = (e['w'], e['h'])
+        elif k == 'シーン':
+            box = self.scene_size(x0.get('scene'))
+        elif k == '動画ファイル':
+            base = AM.norm(x0.get('file', '')).rsplit('\\', 1)[-1]
+            m = AM.SCENE_AVI_RE.match(base)
+            if m:
+                box = self.scene_size(int(m.group(1)))
+            elif self.mats:
+                e = self.mats.amap.get(x0.get('file', '')) or self.mats.amap.get(AM.norm(x0.get('file', '')))
+                if e and e.get('w') and e.get('h'):
+                    box = (e['w'], e['h'])
+        elif k == 'フレームバッファ':
+            box = (self.W, self.H)
+        if box is None:
+            return None
+        w, h = box
+        for fi in range(1, upto):
+            f = fs[fi]
+            if not f['enabled']:
+                continue
+            n = f['name']
+            if n == '縁取り':
+                d = cv.const(fi, 'サイズ')
+                w, h = w + 2 * d, h + 2 * d
+            elif n == 'クリッピング':
+                w -= cv.const(fi, '左') + cv.const(fi, '右')
+                h -= cv.const(fi, '上') + cv.const(fi, '下')
+            elif n == 'ぼかし' and not f.get('checks', {}).get('サイズ固定'):
+                d = cv.const(fi, '範囲')
+                w, h = w + 2 * d, h + 2 * d
+            elif n == '領域拡張':
+                w += cv.const(fi, '左') + cv.const(fi, '右')
+                h += cv.const(fi, '上') + cv.const(fi, '下')
+            elif n == '画像ループ':
+                w, h = w * cv.const(fi, '横回数', 1), h * cv.const(fi, '縦回数', 1)
+            elif n == 'アニメーション効果':
+                nm = f['exdata'].get('script') or f['exdata'].get('name') or ''
+                if nm in ('円形並べ@ANM1', '円形配置', '一方向に並べる@ANM1', '画像ループ2@ANM1', 'ランダム配置@ANM1', 'ランダム配置'):
+                    return None        # 並べたあとの箱は追わない
+        return (max(0.0, w), max(0.0, h))
+
+    def keyed(self, v):
+        """文書のプロパティ値(数か {'k': [...]})→ eval_keys 用のキー列。"""
+        if isinstance(v, dict):
+            return [(k['f'], k['v'], k.get('e') or 'linear') for k in v['k']]
+        return [(0, v, None)]
+
+    def mul_prop(self, c, a, b, fn=lambda x, y: x * y):
+        """プロパティ値 a と b(数かキー列)を 1 個に。どちらかが動くなら 1 コマずつ焼く。"""
+        ka, kb = self.keyed(a), self.keyed(b)
+        if len(ka) == 1 and len(kb) == 1:
+            return round(fn(ka[0][1], kb[0][1]), 4)
+        if len(ka) == 1 or len(kb) == 1:
+            # 片方が定数の掛け算: キーの位置と補間はそのまま
+            if len(ka) == 1:
+                return Conv._kf([(f_, round(fn(ka[0][1], v), 4), e) for f_, v, e in kb])
+            return Conv._kf([(f_, round(fn(v, kb[0][1]), 4), e) for f_, v, e in ka])
+        keys = [(f_, round(fn(Conv.eval_keys(ka, f_), Conv.eval_keys(kb, f_)), 4), None) for f_ in range(c.start, c.end + 1)]
+        keys = [k for i, k in enumerate(keys) if i in (0, len(keys) - 1) or k[1] != keys[i - 1][1] or k[1] != keys[i + 1][1]]
+        self.stats['baked'] += 1
+        return Conv._kf(keys) if len(keys) > 1 else keys[0][1]
+
+    @staticmethod
+    def otsu(hist):
+        """256 段のヒストグラム → 判別分析法(大津)のしきい値。"""
+        tot = float(sum(hist)) or 1.0
+        mt = sum(i * h for i, h in enumerate(hist)) / tot
+        w = m = 0.0
+        best, bt = -1.0, 0
+        for t in range(256):
+            w += hist[t] / tot
+            m += t * hist[t] / tot
+            if w <= 0 or w >= 1:
+                continue
+            sb = (mt * w - m) ** 2 / (w * (1 - w))
+            if sb > best:
+                best, bt = sb, t
+        return bt
 
     # ---- フィルタ → エフェクト ----
     def effect(self, c, cv, fi, f, src):
@@ -562,16 +674,36 @@ class SceneBuilder:
             if ck.get('ループ画像'):
                 p['tile'] = True
             path = x.get('file') or ''
+            ov = None                   # 重ねる素材の大きさ (w, h)
             if n == '画像ファイル合成':
                 e = self.still(path) if path else None
                 p['asset_id'] = e['asset_id'] if e else None
+                if e and e.get('w') and e.get('h'):
+                    ov = (e['w'], e['h'])
+                c._overlay = {'entry': e, 'mode': mode, 'path': path}
             else:
                 src2 = self.video_source(c, cv, fi, path, {})
                 p.update(src2)
                 if ck.get('ループ再生'):
                     p['loop'] = True
+                if src2.get('comp_id') is not None:
+                    ov = self.scene_size(src2.get('scene_no'))
+                elif src2.get('asset_id') is not None:
+                    ov = self.asset_size(src2['asset_id'])
+                p.pop('scene_no', None)
             if p.get('asset_id') is None and p.get('comp_id') is None:
                 p['missing'] = AM.norm(path)
+            # AviUtl の X・Y は「絵の箱の左上に素材の左上を合わせた所からのずれ」(シーン 36 の縁の柄で確かめた:
+            # 縁取り 2 で 1924×1084 になった箱の左上 + (X, Y) に、102.3 % にした素材の左上が来る)。
+            # エンジンの x・y は中心どうしのずれなので、箱と素材の大きさから直す。
+            box = self.obj_box(c, cv, fi)
+            if box and ov:
+                (bw, bh), (ow, oh) = box, ov
+                p['x'] = cv.calc([(fi, 'X'), (fi, '拡大率')], lambda v: round(v[0] + ow * v[1] / 200 - bw / 2, 3))
+                p['y'] = cv.calc([(fi, 'Y'), (fi, '拡大率')], lambda v: round(v[0] + oh * v[1] / 200 - bh / 2, 3))
+                p['aviutl_xy'] = [cv.const(fi, 'X'), cv.const(fi, 'Y')]
+            elif cv.const(fi, 'X') or cv.const(fi, 'Y') or cv.const(fi, '拡大率') != 100 or cv.is_anim(fi, 'X') or cv.is_anim(fi, 'Y'):
+                self.rep['notes']['画像・動画ファイル合成の位置(箱か素材の大きさが分からず、中心合わせのまま)'] += 1
             return [self.fx('overlay_source', p)]
         if n == '画像ループ':
             return [self.fx('repeat', {'mode': 'grid', 'count_x': P('横回数'), 'count_y': P('縦回数'), 'gap_x': 100, 'gap_y': 100,
@@ -627,23 +759,141 @@ class SceneBuilder:
                 self.rep['notes']['扇クリッピングR のチェックあり(型が違う)'] += 1
             return [self.fx('clip_sector', p)]
         if name == '画像ループ2@ANM1':
-            return [self.fx('repeat', {'mode': 'grid', 'gap_x': T(0), 'gap_y': T(1), 'count_x': T(2), 'count_y': T(3),
-                                       'stagger_rows': bool(chk), 'opts': prm})]
+            # @ANM1.anm「画像ループ2」: track0/1 = X・Y 間隔(% = 自分の幅・高さに対するピッチ。個別基準 mode=1 のときは px)、
+            # track2/3 = X・Y 個数。yd = XY 軸段違い(偶数行を半ピッチ右へ)。gz・nz・zd は Z 方向(nz=1 なら効かない)。
+            p = {'mode': 'grid', 'gap_x': T(0), 'gap_y': T(1), 'count_x': T(2), 'count_y': T(3),
+                 'stagger_rows': bool(prm.get('yd')), 'opts': prm}
+            if prm.get('mode'):
+                p.update({'gap_x': 0, 'gap_y': 0, 'spacing_x': T(0), 'spacing_y': T(1)})
+            if prm.get('yd'):
+                self.rep['notes']['画像ループ2 の段違い(AviUtl は偶数行が右へはみ出す。エンジンは奇数行をずらして箱で切る)'] += 1
+            if (prm.get('nz') or 1) > 1:
+                self.rep['notes']['画像ループ2 の Z 個数 > 1(奥行きの並びは未対応)'] += 1
+            return [self.fx('repeat', p, _after=True)]
         if name == '一方向に並べる@ANM1':
-            return [self.fx('repeat', {'mode': 'line', 'count': T(0), 'gap': T(1), 'angle': T(2), 'both': bool(chk), 'extra': T(3)})]
-        if name in ('円形配置', '円形並べ@ANM1'):
+            # @ANM1.anm「一方向に並べる」: r = track2 + 90、i 個目の位置 = (sin r, -cos r) × 間隔 × i。
+            # → 角度 0 は右(+X)、90 は下(+Y)。エンジンの angle は 0 = 上・90 = 右・時計回りなので 90 を足す。
+            # track3 = 回転軸(0 = XY 平面、1 = X と Z、2 = Y と Z)。check0 = 双方向(-n+1 〜 n-1)。
+            p = {'mode': 'line', 'count': T(0), 'gap': T(1), 'angle': T(2, lambda v: v + 90), 'both': bool(chk)}
+            axis = int(K(3))
+            if axis:
+                p['axis_aviutl'] = axis
+                self.rep['notes']['一方向に並べる の回転軸 1・2(奥行き方向の並び。エンジンは XY 平面だけ)'] += 1
+            return [self.fx('repeat', p, _after=True)]
+        if name == '円形並べ@ANM1':
+            # @ANM1.anm「円形並べ」: track0 = 個数、track1 = 距離(半径 px)、track2 = 拡大率(1 個ずつの大きさ %)、track3 = 回転。
+            #   r = 360*i/n、位置 = (sin r, -cos r) × 距離(0 = 真上・時計回り)。
+            #   mode=0: 1 個ずつの回転 = r*(1-dir) + track3(位置は回らない)。tempbuffer に描いて 1 枚の絵にする。
+            #   mode=1(個別基準): 位置の角度 = r + track3、1 個ずつの回転 = (r + track3)*(1-dir)。
+            #   dir=1 が「回転なし」。
+            indiv_base = bool(prm.get('mode'))
+            p = {'mode': 'circle', 'count': T(0), 'radius': T(1), 'rotation': T(3) if indiv_base else 0, 'arc': 360,
+                 'rotate': not prm.get('dir'), 'opts': prm}
+            if not indiv_base and (K(3) or cv.is_anim(fi, 'track3')):
+                p['copy_rotation'] = T(3)       # 1 個ずつを自分の中心で回す(エンジン未対応)
+                self.rep['notes']['円形並べ の 回転(mode=0: 1 個ずつ自分の中心で回る。エンジンに無い)'] += 1
+            if K(2) != 100 or cv.is_anim(fi, 'track2'):
+                # 1 個ずつの拡大率: エンジンの circle には無いので、図形なら元の大きさに掛けておく
+                sc = T(2, lambda v: v / 100)
+                if src is not None and src.get('kind') in ('ellipse', 'rect', 'polygon', 'star') and 'width' in src:
+                    for kx in ('width', 'height', 'stroke_width'):
+                        if isinstance(src.get(kx), (int, float, dict)):
+                            src[kx] = self.mul_prop(c, src[kx], sc)
+                    p['copy_scale_baked'] = True
+                else:
+                    p['copy_scale'] = T(2)
+                    self.rep['notes']['円形並べ の 拡大率(1 個ずつの大きさ。図形以外はエンジンに無い)'] += 1
+            return [self.fx('repeat', p)]
+        if name == '円形配置':
+            # exedit.anm「円形配置」: track0 = 円周(%。100 で 1 周)、track1 = 半径、track2 = 回転(度)、track3 = ずらし(Z)。
+            # 設定 num = 数、dir = 向き反転、rot = 回転無し。
             indiv = src is not None and src.get('individual')
-            if indiv and name == '円形配置':
-                src['on_circle'] = {'arc': T(0), 'radius': T(1), 'rotation': T(2), 'opts': prm}
+            if indiv:
+                # 文字毎に個別: 角度 = ox × 円周 × 3.6 / (文字数 × 画面幅/20) + 回転(度)、半径 = 半径 - oy。
+                # エンジンの on_circle は「先頭と末尾の文字の中心のあいだの角度(arc)」を等間隔に割るので、字送りを見積もって直す。
+                txt = re.sub(r'[\r\n]', '', src.get('text') or '')
+                n_ch = max(1, len(txt))
+                size = src.get('size_aviutl') or 0
+                adv = [size * (0.5 if ord(ch) < 0x2000 else 1.0) + (src.get('tracking_aviutl', src.get('tracking', 0)) or 0) for ch in txt]
+                wt = sum(adv)
+                k = 3.6 / (n_ch * self.W / 20)            # 円周 1 % ・ ox 1px あたりの角度(度)
+                span = wt - (adv[0] + adv[-1]) / 2 if adv else 0
+                al = src.get('align', 'center')
+                mid = {'left': wt / 2, 'center': 0, 'right': -wt / 2}.get(al, 0)
+                sgn = -1 if prm.get('dir') else 1
+                src['on_circle'] = {'arc': T(0, lambda v: round(sgn * v * k * span, 4)),
+                                    'radius': T(1, (lambda v: -v) if prm.get('dir') else (lambda v: v)),
+                                    'rotation': cv.calc([(fi, 'track0'), (fi, 'track2')], lambda v: round(sgn * (v[1] + v[0] * k * mid), 4)),
+                                    'rotate': not prm.get('rot'), 'estimated': True, 'opts': prm}
                 self.rep['effects_mapped']['text.on_circle'] += 1
+                self.rep['notes']['円形配置(文字毎に個別): 字送りを見積もって角度にした'] += 1
                 return []
-            return [self.fx('repeat', {'mode': 'circle', 'arc': T(0), 'radius': T(1), 'rotation': T(2),
-                                       'count': prm.get('num', 8), 'opts': prm})]
-        if name == 'TA標準登場@TA' and src is not None and 'text' in src:
+            # 通常オブジェクト: i = 1..num、角度 = (i - (num+1)/2) × 円周 × 3.6 / num + 回転。位置 = (sin, -cos) × 半径。
+            # 1 個ずつ角度ぶん回る(rot=1 で回さない)。
+            num_ = int(prm.get('num', 8) or 1)
+            step = lambda v: v * 3.6 / num_                     # 隣どうしの角度
+            full = not cv.is_anim(fi, 'track0') and abs(K(0) - 100) < 1e-6
+            p = {'mode': 'circle', 'count': num_, 'radius': T(1), 'rotate': not prm.get('rot'), 'opts': prm}
+            if full or num_ == 1:
+                p['arc'] = 360
+                p['rotation'] = T(2, lambda v: round(v - (num_ - 1) / 2 * 360 / num_, 4))
+            else:
+                # エンジンは |arc| < 360 のとき、先頭と末尾のあいだを等分する
+                p['arc'] = T(0, lambda v: round(min(359.99, step(v) * (num_ - 1)), 4))
+                p['rotation'] = cv.calc([(fi, 'track0'), (fi, 'track2')], lambda v: round(v[1] - step(v[0]) * (num_ - 1) / 2, 4))
+                if step(K(0)) * (num_ - 1) >= 360:
+                    self.rep['notes']['円形配置の円周が 1 周を超える(359.99 度で止めた)'] += 1
+            if prm.get('dir'):
+                p['dir_aviutl'] = 1
+                self.rep['notes']['円形配置の向き反転(通常オブジェクト。未対応)'] += 1
+            if K(3) or cv.is_anim(fi, 'track3'):
+                self.rep['notes']['円形配置のずらし(Z。未対応)'] += 1
+            return [self.fx('repeat', p, _after=True)]
+        if name == 'ランダム配置@ANM1':
+            # @ANM1.anm「ランダム配置」: track0 = 個数、track1 = 範囲(%)、track2 = 移動速度、track3 = 回転速度。
+            #   x = rand(-(画面幅+自分の幅), +(同)) / 2 × 範囲/100 × wx/100 → ばらまく全幅 = (画面幅 + 自分の幅) × 範囲/100 × wx/100
+            #   大きさ = rand(100 - s_min, 100) %、Z 回転 = rand(0, 360) × kz(+ 回転速度ぶん時間で回る)、種 = i + 1 + ran。
+            box = self.obj_box(c, cv, fi) if c.kind not in ('グループ制御', 'カメラ制御') else None
+            ow, oh = box if box else (0, 0)
+            wx, wy = prm.get('wx', 100), prm.get('wy', 100)
+            p = {'mode': 'random', 'count': T(0),
+                 'area_x': T(1, lambda v: round((self.W + ow) * v / 100 * wx / 100, 3)),
+                 'area_y': T(1, lambda v: round((self.H + oh) * v / 100 * wy / 100, 3)),
+                 'seed': int(prm.get('ran', 0) or 0) + 1, 'random_rotation': 180 if prm.get('kz', 1) else 0,
+                 'scale_min': 100 - (prm.get('s_min', 0) or 0), 'scale_max': 100, 'opts': prm}
+            if K(2) or cv.is_anim(fi, 'track2'):
+                p['drift_speed_aviutl'] = T(2)
+                self.rep['notes']['ランダム配置@ANM1 の移動速度(時間で流れる。未対応)'] += 1
+            if K(3) or cv.is_anim(fi, 'track3'):
+                p['spin_speed_aviutl'] = T(3)
+                self.rep['notes']['ランダム配置@ANM1 の回転速度(時間で回る。未対応)'] += 1
+            if prm.get('wz') or prm.get('kx') or prm.get('ky'):
+                self.rep['notes']['ランダム配置@ANM1 の Z 範囲・X/Y 回転(未対応)'] += 1
+            if box is None:
+                self.rep['notes']['ランダム配置@ANM1: 自分の幅が分からず 画面幅 × 範囲 にした'] += 1
+            return [self.fx('repeat', p, _after=True)]
+        if name == '輪郭追跡拡張機能@輪郭追跡':
+            # 次の「輪郭追跡(表示)」の線を破線にする設定(変数を渡すだけ)。エンジンの trace_outline に破線が無いので残す。
+            self.rep['effects_unmapped'][name] += 1
+            return [{'type': 'aviutl_script', 'name': name,
+                     'params': {'dash_period': T(0), 'dash_gap': T(1), 'smooth': T(2), 'body_opacity': T(3, lambda v: 100 - v),
+                                'shape': prm.get('fig'), 'along_path': bool(prm.get('td')), 'head': bool(prm.get('senp')),
+                                'head_shape': prm.get('senz'), 'head_size': prm.get('sens')},
+                     'raw': {'filter': f['name'], 'exdata': {k: v for k, v in x.items() if not k.startswith('_')}}}]
+        if name in ('TA標準登場@TA', 'TA指定順で登場@TA') and src is not None and 'text' in src:
             dur, itv = K(0), K(1)
             pw = prm.get('beki', 1)
             ez = {1: 'linear', 2: 'outQuad', 3: 'outCubic', 4: 'outQuart', 5: 'outQuint'}.get(pw, {'pow': pw})
-            order = {0: 'forward', 1: 'backward', 2: 'random', 3: 'random', 4: 'center', 5: 'edges'}.get(int(K(3)), 'forward')
+            ranks = None
+            if name == 'TA指定順で登場@TA':
+                # @TA.anm「TA指定順で登場」: number = num0..num1..num2、jb = number の j 文字目ぶんの 2 桁、
+                # j 文字目は jb × 間隔 秒から出る → 表は「j 文字目が何番目に出るか」(= ranks)。
+                number = ''.join(str(prm.get(k, d)) for k, d in (('num0', '00010203040506070809'), ('num1', '10111213141516171819'), ('num2', '20212223242526272829')))
+                n_ch = len(re.sub(r'[\r\n]', '', src.get('text') or ''))
+                ranks = [int(number[j * 2:j * 2 + 2] or 0) for j in range(min(30, max(1, n_ch)))]
+                if n_ch > 30:
+                    self.rep['notes']['TA指定順で登場: 31 文字目から先は表が無い(0 番目扱い)'] += 1
+            order = {0: 'forward', 1: 'backward', 2: 'random', 3: 'random', 4: 'center', 5: 'edges'}.get(0 if ranks is not None else int(K(3)), 'forward')
             frm = {'position': [prm.get('x', 0), prm.get('y', 0), prm.get('z', 0)]}
             if K(2) != 100:
                 frm['scale'] = [K(2), K(2)]
@@ -653,7 +903,9 @@ class SceneBuilder:
             if prm.get('fade'):
                 frm['opacity'] = 0
             pc = {'stagger': round(itv * fps, 3), 'duration': round(abs(dur) * fps, 3), 'order': order, 'from': frm, 'e': ez}
-            if int(K(3)) in (2, 3):
+            if ranks is not None:
+                pc['ranks'] = ranks
+            elif int(K(3)) in (2, 3):
                 pc['seed'] = c.id
             if dur < 0:      # 退場
                 src.setdefault('per_char', {})
@@ -687,7 +939,33 @@ class SceneBuilder:
                 p.update({'r': T(0), 'g': T(1), 'b': T(2), 'w': T(3)})
             return [self.fx('duotone', p)]
         if name == '２値化@T_Color_Module':
-            p = {'level': T(0), 'mode': T(1)}
+            # @T_Color_Module.anm「２値化」: track0 = 閾値(0〜255)、track1 = ｸﾞﾚｰ処理、track2 = 自動判定(0 = 手動。1〜6 は DLL が閾値を決める)、
+            # check0 = 色付け(明部色 col1・暗部色 col2)。
+            p = {'level': T(0), 'gray': K(1)}
+            auto = int(K(2))
+            if auto:
+                p['auto_aviutl'] = auto
+                ov = getattr(c, '_overlay', None)
+                lvl = None
+                if auto == 1 and self.mats:
+                    # 完成動画と合うのは 判別分析法(大津)のしきい値(シーン 36 の縁: 手動値 9 ではなく 13〜14)。
+                    # 直前で色を置き換えた素材(か、画像そのもの)の輝度から求めて焼く。
+                    path = ov['path'] if ov and ov.get('mode') == 'replace_color' and ov.get('entry') else (c.o['filters'][0]['exdata'].get('file') if c.kind == '画像ファイル' else None)
+                    loc = self.mats.local(AM.norm(path)) if path else None
+                    if loc and os.path.exists(loc):
+                        try:
+                            from PIL import Image
+                            im = Image.open(loc)
+                            im.thumbnail((1024, 1024))
+                            lvl = self.otsu(im.convert('RGB').convert('L').histogram())
+                        except Exception:
+                            lvl = None
+                if lvl is not None:
+                    p['level_aviutl'] = p['level']
+                    p['level'] = lvl
+                    self.rep['notes']['２値化の自動判定 1(大津のしきい値を素材から求めて焼いた)'] += 1
+                else:
+                    self.rep['notes'][f'２値化の自動判定 {auto}(求め方が分からず、手動の閾値のまま)'] += 1
             if chk:
                 p.update({'light': col_param(prm.get('col1'), '#ffffff'), 'dark': col_param(prm.get('col2'), '#000000')})
             return [self.fx('threshold', p)]
@@ -761,6 +1039,7 @@ class SceneBuilder:
             # AVI の 0 コマ目 = シーンの (c.start - (再生位置-1)) コマ目とみなすので、c.start に映るのはシーンの c.start コマ目。
             sn = int(m.group(1))
             out['comp_id'] = self.comp_of(sn)
+            out['scene_no'] = sn
             out['start'] = round(c.start, 3)
             out['substituted'] = AM.norm(path)
             self.rep['avi_as_scene'].append((base, sn))
@@ -853,6 +1132,7 @@ class SceneBuilder:
         if kind == '動画ファイル':
             path = x0.get('file', '')
             vs = self.video_source(c, cv, 0, path, None)
+            vs.pop('scene_no', None)
             if 'comp_id' in vs:
                 L = self.base_layer(c, 'comp')
                 src = {'comp_id': vs['comp_id'], 'substituted': vs.get('substituted')}
@@ -951,8 +1231,26 @@ class SceneBuilder:
                 if not f['enabled']:
                     e['enabled'] = False
                 effects.append(e)
+        effects = self.effect_first_order(effects)
+        vg = self._vignette.get(c.id)
+        if vg is not None:
+            # 周辺ボケ光量: 調整レイヤーの先頭に vignette_blur。中心 = オブジェクトの X・Y。
+            # あとに続く 色ずれ は周辺の絵にだけ掛かるので color_shift に畳む。ほかのエフェクトは調整レイヤーに残す(画面全体に掛かる)
+            if has_draw:
+                vg['cx'], vg['cy'] = cv.prop(last, 'X'), cv.prop(last, 'Y')
+            rest = []
+            for e in effects:
+                if e['type'] == 'rgb_shift' and not vg.get('color_shift'):
+                    vg['color_shift'] = e['params'].get('amount', 0)
+                    self.rep['notes']['周辺ボケ光量のあとの 色ずれ → color_shift に畳んだ'] += 1
+                else:
+                    rest.append(e)
+                    self.rep['notes']['周辺ボケ光量のあとのエフェクト(画面全体に掛かる形で残した)'] += 1
+            effects = [{'type': 'vignette_blur', 'params': vg}] + rest
         if has_draw:
             L['transform'] = self.draw_transform(c, cv, last)
+            if vg is not None:
+                L['transform'] = {'position': [self.W / 2, self.H / 2, 0], 'opacity': L['transform']['opacity']}
             bn = fs[last]['exdata'].get('blend_name', '通常')
             if bn != '通常':
                 L['blend'] = BLEND.get(bn, 'normal')
@@ -1048,6 +1346,47 @@ class SceneBuilder:
                    'counter': {'start': K(0), 'rate': K(1), 'format': int(K(3)), 'from_frame': c.start}}
             self.rep['effects_mapped']['text.counter'] += 1
             return L, src
+        if name == '市松模様N@FIGURE':
+            # @FIGURE.obj「市松模様N」: track0 = サイズ(1 升の px)、track1 = 横回数、track2 = 縦回数。箱 = サイズ × 回数。
+            # ICHIMATSU(col1, 1) は (i+j) が奇数の升、ICHIMATSU(col2, 0) は偶数の升 → 左上の升(i=j=0)は col2。
+            L = self.base_layer(c, 'pattern')
+            src = {'kind': 'checker', 'size': cv.prop(0, 'track0'), 'cols': cv.prop(0, 'track1'), 'rows': cv.prop(0, 'track2'),
+                   'colors': [col_param(prm.get('col2'), '#000000'), col_param(prm.get('col1'), '#ffffff')]}
+            self.rep['effects_mapped']['pattern.checker'] += 1
+            return L, src
+        if name == '周辺ボケ光量':
+            # exedit.obj「周辺ボケ光量」: フレームバッファを読み、ぼかして(範囲 = 対角 × ボケ/10000 px・光の強さ bokeh)、
+            # 明るさを 光量(100 = そのまま)にし、まん中を円のマスク(直径 = (幅+高さ)/2 × 半径/100、ぼかし = (幅+高さ)/2 × 境界/400、
+            # 反転)でくり抜いて、元の画面の上に重ねる。マスクの中心 = オブジェクトの X・Y。check0 = 色ずれ(幅 = ぼかし範囲 × colshf %)。
+            L = self.base_layer(c, 'adjustment')
+            W, H = self.W, self.H
+            diag, l_ = math.hypot(W, H), (W + H) / 2
+            if prm.get('adjust'):
+                l_ = max(W, H)
+                self.rep['notes']['周辺ボケ光量の縦横比補正(だ円のマスク。エンジンは箱の縦横比のだ円)'] += 1
+            hd = diag / 2
+            T4 = [(0, 'track2'), (0, 'track3')]
+            inner = lambda v: max(0.0, l_ * v[0] / 200 - l_ * v[1] / 800)       # マスクが効き始める半径 px(ぼかしは境目の両側へ半分ずつ)
+            outer = lambda v: l_ * v[0] / 200 + l_ * v[1] / 800
+            p = {'blur': cv.prop(0, 'track0', lambda v: round(diag * v / 10000, 3)),
+                 'radius': cv.calc(T4, lambda v: round(inner(v) / hd * 100, 3)),
+                 'softness': cv.calc(T4, lambda v: round(max(0.0, outer(v) - inner(v)) / hd * 100, 3)),
+                 'amount': cv.prop(0, 'track1', lambda v: round(min(100.0, abs(v - 100)), 3)),
+                 'color': '#000000', 'color_shift': 0}
+            lum = cv.scalar(0, 'track1')
+            if all(k[1] >= 100 for k in lum):
+                p['color'] = '#ffffff'           # 光量 > 100 = 周辺を明るくする
+            elif any(k[1] > 100 for k in lum):
+                self.rep['notes']['周辺ボケ光量の 光量 が 100 をまたいで動く(暗くする側だけにした)'] += 1
+                p['amount'] = cv.prop(0, 'track1', lambda v: round(max(0.0, 100 - v), 3))
+            if f0['checks'].get('check0'):
+                cs = prm.get('colshf', 50)
+                p['color_shift'] = cv.prop(0, 'track0', lambda v: round(max(1.0, diag * v / 10000 * cs / 100), 3))
+            p['aviutl'] = {'bokeh': cv.prop(0, 'track0'), 'light': cv.prop(0, 'track1'), 'radius': cv.prop(0, 'track2'),
+                           'border': cv.prop(0, 'track3'), 'opts': prm}
+            self._vignette[c.id] = p
+            self.rep['effects_mapped']['vignette_blur'] += 1
+            return L, {}
         L = self.base_layer(c, 'null')
         self.rep['effects_unmapped'][f'カスタムオブジェクト:{name}'] += 1
         L['aviutl_object'] = {'type': 'aviutl_script', 'name': name,
@@ -1147,9 +1486,41 @@ class SceneBuilder:
                 if not f['enabled']:
                     e['enabled'] = False
                 effects.append(e)
+        effects = self.effect_first_order(effects)
         if effects:
             L['effects'] = effects
         return L
+
+    def effect_first_order(self, effects):
+        """先頭で obj.effect() を呼ぶスクリプト(一方向に並べる・画像ループ2・円形配置・ランダム配置@ANM1)は、
+        あとに続くフィルタを「並べる前の 1 枚」に掛けてから並べる。エンジンは書いた順に掛けるので、並べるのを後ろへ回す。"""
+        late = [e for e in effects if e.get('_after')]
+        if not late:
+            return effects
+        moved = any(e2['type'] != 'offset' and not e2.get('_after') for i, e in enumerate(effects) if e.get('_after') for e2 in effects[i + 1:])
+        out = [e for e in effects if not e.get('_after')] + late
+        for e in late:
+            del e['_after']
+        if moved:
+            self.rep['notes']['並べるスクリプトのあとのフィルタ(並べる前の絵に掛かる → 順番を入れ替えた)'] += 1
+        return out
+
+    def empty_scope_reason(self, c):
+        """対象が 1 つも無いグループ制御・カメラ制御の、理由の名前。"""
+        rng = c.filt(0)['exdata'].get('range', 0) or 0
+        inr = [u for u in self.chains if u is not c and u.layer > c.layer and (not rng or u.layer <= c.layer + rng) and u.kind != '音声ファイル']
+        if not inr:
+            return '対象の段にオブジェクトが無い'
+        ov = [u for u in inr if u.start <= c.end and u.end >= c.start]
+        if not ov:
+            return 'その時間に対象の段に何も無い'
+        if c.kind == 'カメラ制御' and not any(u.o.get('camera_target') for u in ov):
+            return 'カメラ制御の対象(カメラ制御の対象フラグ)が無い'
+        if all(u.disabled for u in ov):
+            return '相手が無効のオブジェクト'
+        if all(u.disabled or u.layer in self.hidden for u in ov):
+            return '相手が非表示の段(か無効)'
+        return '相手が先に捨てられた制御だけ'
 
     def chain_pos(self, u, f):
         """オブジェクトの f コマ目の位置(画面の中心が原点。描画フィルタの X・Y・Z + 座標フィルタ)。"""
@@ -1310,6 +1681,33 @@ class SceneBuilder:
                 out.append(extra[c.id])
         if default_cam:
             out.append(default_cam)
+        # グループ制御・カメラ制御の scope は、文書にあるレイヤーだけにする。対象が 1 つも無い制御(編集画面で ⊟0 と出る)は捨てる。
+        # 対象が無くなる理由: 相手が無効・非表示の段・その時間に何も無い(中間点で切った制御の端など)。
+        ctl = {c.lid: c for c in controls}
+        dropped = collections.Counter()
+        while True:
+            ids = {L['id'] for L in out}
+            gone = []
+            for L in out:
+                if L['type'] in ('group', 'camera') and isinstance(L.get('scope'), list) and L['id'] != 'cam_default':
+                    sc = [i for i in L['scope'] if i in ids and i != L['id']]
+                    if len(sc) != len(L['scope']):
+                        self.rep['scope_ids_removed'] = self.rep.get('scope_ids_removed', 0) + len(L['scope']) - len(sc)
+                        L['scope'] = sc
+                    if not sc and not (self.opts.drop_disabled is False and L.get('visible') is False):
+                        gone.append(L)
+            if not gone:
+                break
+            for L in gone:
+                c = ctl.get(L['id'])
+                dropped[self.empty_scope_reason(c) if c else '不明'] += 1
+                self.rep['layers'][L['type']] -= 1
+            gid = {L['id'] for L in gone}
+            out = [L for L in out if L['id'] not in gid]
+        if default_cam:
+            ids = {L['id'] for L in out}
+            default_cam['scope'] = [i for i in default_cam['scope'] if i in ids]
+        self.rep['empty_controls_dropped'] = dict(dropped)
         dur = max([c.end + 1 for c in kept] + [1])
         data = {'version': 1, 'bg': None if self.sc.get('alpha') else '#000000', 'layers': out,
                 'aviutl': {'scene': self.no, 'source': os.path.basename(self.doc['project'].get('project_path', '').replace('\\', '/'))}}

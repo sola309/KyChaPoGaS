@@ -44,6 +44,13 @@ def main():
     print('\n### メモ\n')
     for k, v in notes.most_common():
         print(f'- {k}: {v}')
+    dropped = collections.Counter()
+    for r in reps:
+        dropped.update(r.get('empty_controls_dropped', {}))
+    if dropped:
+        print(f'\n### 対象が無くて捨てたグループ制御・カメラ制御 {sum(dropped.values())} 個(編集画面で ⊟0 と出ていたもの)\n')
+        for k, v in dropped.most_common():
+            print(f'- {k}: {v}')
     print(f'\n### 無い素材 {len(missing)} 種類\n')
     kinds = collections.Counter()
     for p in missing:
