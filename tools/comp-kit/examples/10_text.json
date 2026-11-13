@@ -1,0 +1,579 @@
+{
+ "id": "ex10",
+ "name": "10 文字(縦書き・カウンター・タイプライター・座布団)",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#f3ede4",
+  "layers": [
+   {
+    "id": "counter",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      110
+     ]
+    },
+    "source": {
+     "counter": {
+      "value": {
+       "k": [
+        {
+         "f": 0,
+         "v": 201201010000
+        },
+        {
+         "f": 110,
+         "v": 202111111111,
+         "e": "outExpo"
+        }
+       ]
+      },
+      "format": "####.##.##.##:##",
+      "fixed_width": true,
+      "scramble": {
+       "k": [
+        {
+         "f": 0,
+         "v": 100
+        },
+        {
+         "f": 120,
+         "v": 0,
+         "e": "linear"
+        }
+       ]
+      }
+     },
+     "font": "Noto Sans JP",
+     "weight": 300,
+     "size": 64,
+     "fill": "#00060b",
+     "tracking": 14,
+     "plate": {
+      "color": "#bdeef2",
+      "opacity": 85,
+      "padding": [
+       900,
+       4
+      ],
+      "radius": 0
+     }
+    }
+   },
+   {
+    "id": "tc",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      300,
+      220
+     ]
+    },
+    "source": {
+     "counter": {
+      "start": 0,
+      "rate": 1,
+      "format": "timecode",
+      "fixed_width": true
+     },
+     "font": "Noto Sans Mono",
+     "weight": 700,
+     "size": 40,
+     "fill": "#e65163"
+    }
+   },
+   {
+    "id": "num",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      240
+     ]
+    },
+    "source": {
+     "counter": {
+      "value": {
+       "k": [
+        {
+         "f": 0,
+         "v": 0
+        },
+        {
+         "f": 150,
+         "v": 1234567,
+         "e": "outCubic"
+        }
+       ]
+      },
+      "separator": true,
+      "prefix": "¥ ",
+      "suffix": " -",
+      "fixed_width": true
+     },
+     "weight": 900,
+     "size": 72,
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#ffd166"
+        ],
+        [
+         1,
+         "#ef476f"
+        ]
+       ]
+      }
+     },
+     "stroke": "#3b2d59",
+     "stroke_width": 5,
+     "strokes": [
+      {
+       "color": "#ffffff",
+       "width": 5
+      }
+     ],
+     "shadow": {
+      "color": "#000000",
+      "x": 6,
+      "y": 8,
+      "blur": 6,
+      "opacity": 40
+     }
+    }
+   },
+   {
+    "id": "pct",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1640,
+      220
+     ]
+    },
+    "source": {
+     "counter": {
+      "value": {
+       "k": [
+        {
+         "f": 0,
+         "v": 0
+        },
+        {
+         "f": 150,
+         "v": 100,
+         "e": "inOutQuad"
+        }
+       ]
+      },
+      "decimals": 1,
+      "suffix": "%",
+      "pad": 3
+     },
+     "weight": 700,
+     "size": 44,
+     "fill": "#3b2d59"
+    }
+   },
+   {
+    "id": "v1",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      200,
+      640
+     ]
+    },
+    "source": {
+     "text": "佐倉杏子",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 84,
+     "fill": "#221914",
+     "tracking": 8,
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       18,
+       26
+      ],
+      "radius": 0,
+      "stroke": "#221914",
+      "stroke_width": 2
+     }
+    },
+    "transition_in": {
+     "type": "clip",
+     "side": "bottom",
+     "duration": 24,
+     "e": "inOutExpo"
+    }
+   },
+   {
+    "id": "v2",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      400,
+      420
+     ]
+    },
+    "source": {
+     "text": "風見野を拠点に、\n活動する魔法少女ー「2011」（Ver.2）",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 500,
+     "size": 40,
+     "leading": 62,
+     "fill": "#221914",
+     "valign": "top",
+     "align": "center",
+     "per_char": {
+      "stagger": 2,
+      "duration": 14,
+      "from": {
+       "position": [
+        0,
+        -50
+       ],
+       "opacity": 0
+      },
+      "e": {
+       "pow": 2
+      }
+     }
+    }
+   },
+   {
+    "id": "v3",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      640,
+      660
+     ]
+    },
+    "source": {
+     "text": "ポッキー＆プリッツの日、いつも何かを食べている女の子。",
+     "writing": "vertical",
+     "wrap_width": 330,
+     "size": 34,
+     "weight": 700,
+     "leading": 50,
+     "fill": "#ffffff",
+     "plate": {
+      "color": "#69416e",
+      "padding": [
+       16,
+       16
+      ],
+      "radius": 12
+     }
+    }
+   },
+   {
+    "id": "runs",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1180,
+      420
+     ]
+    },
+    "source": {
+     "runs": [
+      {
+       "text": "Sakura ",
+       "font": "Noto Serif JP",
+       "weight": 700,
+       "size": 92
+      },
+      {
+       "text": "Kyoko",
+       "font": "Noto Sans JP",
+       "weight": 100,
+       "size": 92,
+       "fill": "#e65163"
+      },
+      {
+       "text": "\n"
+      },
+      {
+       "text": "2",
+       "size": 110,
+       "weight": 900,
+       "fill": "#e65163"
+      },
+      {
+       "text": "PACKS ",
+       "size": 56,
+       "weight": 700
+      },
+      {
+       "text": "入り",
+       "size": 40,
+       "weight": 400
+      }
+     ],
+     "fill": "#221914",
+     "align": "left",
+     "leading": 120
+    }
+   },
+   {
+    "id": "type",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1180,
+      650
+     ]
+    },
+    "source": {
+     "text": "タイプライターで 1 文字ずつ出る。箱の幅で折り返し、行頭に「、」や「。」が来ないようにする(禁則)。English words wrap at spaces.",
+     "size": 34,
+     "weight": 500,
+     "fill": "#221914",
+     "align": "left",
+     "wrap_width": 620,
+     "leading": 52,
+     "visible_chars": {
+      "k": [
+       {
+        "f": 10,
+        "v": 0
+       },
+       {
+        "f": 150,
+        "v": 90,
+        "e": "linear"
+       }
+      ]
+     },
+     "plate": {
+      "color": "#ffffff",
+      "opacity": 80,
+      "padding": [
+       22,
+       16
+      ],
+      "radius": 14
+     }
+    }
+   },
+   {
+    "id": "arc",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1700,
+      860
+     ]
+    },
+    "source": {
+     "text": "A LOVE FOR SAKURA KYOKO ★ ",
+     "size": 40,
+     "weight": 900,
+     "fill": "#e65163",
+     "arc": {
+      "radius": 170,
+      "start": {
+       "k": [
+        {
+         "f": 0,
+         "v": 0
+        },
+        {
+         "f": 180,
+         "v": 360
+        }
+       ]
+      },
+      "sweep": 360
+     }
+    }
+   },
+   {
+    "id": "arc2",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1700,
+      860
+     ]
+    },
+    "source": {
+     "text": "円周に沿う文字",
+     "size": 44,
+     "weight": 700,
+     "fill": "#3b2d59",
+     "arc": {
+      "radius": 110,
+      "start": 0
+     }
+    }
+   },
+   {
+    "id": "pat",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      960
+     ]
+    },
+    "source": {
+     "text": "KYOKO SAKURA",
+     "size": 130,
+     "weight": 900,
+     "tracking": 4,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#e65163",
+        "#f6a5b0"
+       ],
+       "size": 34,
+       "ratio": 1.3,
+       "offset": {
+        "k": [
+         {
+          "f": 0,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 180,
+          "v": [
+           0,
+           -177
+          ]
+         }
+        ]
+       }
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 6,
+     "strokes": [
+      {
+       "color": "#3b2d59",
+       "width": 6
+      }
+     ],
+     "per_char": {
+      "unit": "word",
+      "stagger": 8,
+      "duration": 20,
+      "from": {
+       "scale": [
+        0,
+        0
+       ],
+       "rotation": -20,
+       "opacity": 0
+      },
+      "e": "outBack"
+     }
+    }
+   },
+   {
+    "id": "rnd",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1180,
+      860
+     ]
+    },
+    "source": {
+     "text": "ばらばらの文字",
+     "size": 54,
+     "weight": 900,
+     "fill": "#2a9d8f",
+     "per_char": {
+      "random": {
+       "position": [
+        0,
+        14
+       ],
+       "rotation": 14,
+       "scale": 20,
+       "seed": 5,
+       "amount": {
+        "k": [
+         {
+          "f": 0,
+          "v": 100
+         },
+         {
+          "f": 90,
+          "v": 100
+         },
+         {
+          "f": 120,
+          "v": 0,
+          "e": "outElastic"
+         }
+        ]
+       }
+      }
+     }
+    }
+   },
+   {
+    "id": "bg",
+    "type": "pattern",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "kind": "asanoha",
+     "colors": [
+      "#f3ede4",
+      "#e6dccd"
+     ],
+     "size": 150,
+     "line_width": 2
+    }
+   }
+  ]
+ }
+}

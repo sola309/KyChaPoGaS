@@ -55,11 +55,11 @@ export class ModelStore {
     const e = url && this.entry(url)
     if (!e || e.state !== 'ready') return null
     const env = this.env, g = env.gfx, s = L.def.source || {}
-    const cam = scene.camera(f)
+    const cam = scene.camFor(L, f)
     // 高さが source.height(px、既定は画面の半分)になるよう正規化して、中心を原点へ
     const k = num(evalProp(s.height, f, scene.fps), scene.H * 0.5) / Math.max(1e-6, e.size.y)
     _a.makeScale(k, k, k).multiply(_b.makeTranslation(-e.center.x, -e.center.y, -e.center.z))
-    e.holder.matrix.copy(FLIP).multiply(scene.world(L, f)).multiply(FLIP).multiply(_a)
+    e.holder.matrix.copy(FLIP).multiply(scene.drawWorld(L, f)).multiply(FLIP).multiply(_a)
     e.holder.matrixWorldNeedsUpdate = true // matrix を直に書いたので、世界行列の更新を頼む
     const c = this.camera
     c.fov = (2 * Math.atan(scene.H / 2 / cam.zoom) * 180) / Math.PI

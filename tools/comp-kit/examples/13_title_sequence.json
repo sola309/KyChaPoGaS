@@ -1,0 +1,9687 @@
+{
+ "id": "ex13",
+ "name": "13 タイトルシーケンス(負荷の確認用)",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 570,
+ "data": {
+  "version": 1,
+  "bg": "#f3ede4",
+  "layers": [
+   {
+    "id": "adj_grain",
+    "type": "adjustment",
+    "in": 0,
+    "out": 570,
+    "effects": [
+     {
+      "type": "noise",
+      "params": {
+       "amount": 5
+      }
+     },
+     {
+      "type": "vignette",
+      "params": {
+       "amount": 28,
+       "radius": 62,
+       "softness": 45
+      }
+     }
+    ]
+   },
+   {
+    "id": "flash0",
+    "type": "solid",
+    "in": 146,
+    "out": 164,
+    "blend": "add",
+    "source": {
+     "color": "#ffffff"
+    },
+    "transform": {
+     "opacity": {
+      "k": [
+       {
+        "f": 146,
+        "v": 0
+       },
+       {
+        "f": 150,
+        "v": 70,
+        "e": "outQuad"
+       },
+       {
+        "f": 164,
+        "v": 0,
+        "e": "outQuad"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "flash1",
+    "type": "solid",
+    "in": 296,
+    "out": 314,
+    "blend": "add",
+    "source": {
+     "color": "#ffffff"
+    },
+    "transform": {
+     "opacity": {
+      "k": [
+       {
+        "f": 296,
+        "v": 0
+       },
+       {
+        "f": 300,
+        "v": 70,
+        "e": "outQuad"
+       },
+       {
+        "f": 314,
+        "v": 0,
+        "e": "outQuad"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "flash2",
+    "type": "solid",
+    "in": 426,
+    "out": 444,
+    "blend": "add",
+    "source": {
+     "color": "#ffffff"
+    },
+    "transform": {
+     "opacity": {
+      "k": [
+       {
+        "f": 426,
+        "v": 0
+       },
+       {
+        "f": 430,
+        "v": 70,
+        "e": "outQuad"
+       },
+       {
+        "f": 444,
+        "v": 0,
+        "e": "outQuad"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "d_title",
+    "type": "text",
+    "in": 440,
+    "out": 570,
+    "transform": {
+     "position": [
+      960,
+      500
+     ]
+    },
+    "source": {
+     "text": "A LOVE FOR\nSAKURA KYOKO",
+     "weight": 900,
+     "size": 150,
+     "leading": 170,
+     "tracking": 8,
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#ffffff"
+        ],
+        [
+         1,
+         "#ffd9e4"
+        ]
+       ]
+      }
+     },
+     "stroke": "#e65163",
+     "stroke_width": 8,
+     "strokes": [
+      {
+       "color": "#ffffff",
+       "width": 6
+      }
+     ],
+     "shadow": {
+      "color": "#2b2230",
+      "x": 8,
+      "y": 10,
+      "blur": 0,
+      "opacity": 60
+     },
+     "per_char": {
+      "stagger": 1.5,
+      "duration": 18,
+      "from": {
+       "position": [
+        0,
+        90
+       ],
+       "scale": [
+        60,
+        60
+       ],
+       "opacity": 0
+      },
+      "e": "outBack"
+     }
+    },
+    "effects": [
+     {
+      "type": "glow",
+      "params": {
+       "radius": 30,
+       "strength": 0.5,
+       "threshold": 70
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_date",
+    "type": "text",
+    "in": 460,
+    "out": 570,
+    "transform": {
+     "position": [
+      960,
+      820
+     ]
+    },
+    "source": {
+     "counter": {
+      "value": {
+       "k": [
+        {
+         "f": 460,
+         "v": 201111110000
+        },
+        {
+         "f": 530,
+         "v": 202111111111,
+         "e": "outExpo"
+        }
+       ]
+      },
+      "format": "####.##.##.##:##",
+      "fixed_width": true,
+      "scramble": {
+       "k": [
+        {
+         "f": 460,
+         "v": 100
+        },
+        {
+         "f": 540,
+         "v": 0
+        }
+       ]
+      }
+     },
+     "weight": 300,
+     "size": 54,
+     "tracking": 12,
+     "fill": "#2b2230",
+     "plate": {
+      "color": "#bdeef2",
+      "opacity": 90,
+      "padding": [
+       1000,
+       6
+      ]
+     }
+    },
+    "transition_in": {
+     "type": "clip",
+     "side": "right",
+     "duration": 20,
+     "e": "inOutExpo"
+    }
+   },
+   {
+    "id": "d_petals",
+    "type": "particles",
+    "in": 420,
+    "out": 570,
+    "source": {
+     "seed": 3,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       960,
+       -60,
+       0
+      ],
+      "area": [
+       2200,
+       40,
+       0
+      ],
+      "rate": 30,
+      "size": [
+       34,
+       34
+      ]
+     }
+    }
+   },
+   {
+    "id": "d_fan0",
+    "type": "pattern",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 0
+    },
+    "source": {
+     "kind": "asanoha",
+     "colors": [
+      "#fde2e7",
+      "#ffffff"
+     ],
+     "size": 150,
+     "line_width": 3,
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_sector",
+      "params": {
+       "start": {
+        "k": [
+         {
+          "f": 420,
+          "v": -144
+         },
+         {
+          "f": 450,
+          "v": -72,
+          "e": "outExpo"
+         }
+        ]
+       },
+       "sweep": -288
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fl0",
+    "type": "solid",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 0
+    },
+    "source": {
+     "color": "#ffffff",
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 10
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 180,
+       "width": 0,
+       "cy": {
+        "k": [
+         {
+          "f": 420,
+          "v": 0
+         },
+         {
+          "f": 446,
+          "v": -1600,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 0
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fan1",
+    "type": "pattern",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 72
+    },
+    "source": {
+     "kind": "seigaiha",
+     "colors": [
+      "#ffffff",
+      "#f6a5b0"
+     ],
+     "size": 80,
+     "line_width": 0,
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_sector",
+      "params": {
+       "start": {
+        "k": [
+         {
+          "f": 420,
+          "v": -144
+         },
+         {
+          "f": 453,
+          "v": -72,
+          "e": "outExpo"
+         }
+        ]
+       },
+       "sweep": -288
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fl1",
+    "type": "solid",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 72
+    },
+    "source": {
+     "color": "#ffffff",
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 10
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 180,
+       "width": 0,
+       "cy": {
+        "k": [
+         {
+          "f": 420,
+          "v": 0
+         },
+         {
+          "f": 446,
+          "v": -1600,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 0
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fan2",
+    "type": "pattern",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 144
+    },
+    "source": {
+     "kind": "shippo",
+     "colors": [
+      "#fff8e7",
+      "#f2c14e",
+      "#e0a526"
+     ],
+     "size": 130,
+     "line_width": 3,
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_sector",
+      "params": {
+       "start": {
+        "k": [
+         {
+          "f": 420,
+          "v": -144
+         },
+         {
+          "f": 456,
+          "v": -72,
+          "e": "outExpo"
+         }
+        ]
+       },
+       "sweep": -288
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fl2",
+    "type": "solid",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 144
+    },
+    "source": {
+     "color": "#ffffff",
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 10
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 180,
+       "width": 0,
+       "cy": {
+        "k": [
+         {
+          "f": 420,
+          "v": 0
+         },
+         {
+          "f": 446,
+          "v": -1600,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 0
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fan3",
+    "type": "pattern",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 216
+    },
+    "source": {
+     "kind": "yagasuri",
+     "colors": [
+      "#f6a5b0",
+      "#fbd0d8",
+      "#ffffff"
+     ],
+     "size": 90,
+     "line_width": 3,
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_sector",
+      "params": {
+       "start": {
+        "k": [
+         {
+          "f": 420,
+          "v": -144
+         },
+         {
+          "f": 459,
+          "v": -72,
+          "e": "outExpo"
+         }
+        ]
+       },
+       "sweep": -288
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fl3",
+    "type": "solid",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 216
+    },
+    "source": {
+     "color": "#ffffff",
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 10
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 180,
+       "width": 0,
+       "cy": {
+        "k": [
+         {
+          "f": 420,
+          "v": 0
+         },
+         {
+          "f": 446,
+          "v": -1600,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 0
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fan4",
+    "type": "pattern",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 288
+    },
+    "source": {
+     "kind": "kagome",
+     "colors": [
+      "#f6a5b0",
+      "#ffffff"
+     ],
+     "size": 110,
+     "line_width": 6,
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_sector",
+      "params": {
+       "start": {
+        "k": [
+         {
+          "f": 420,
+          "v": -144
+         },
+         {
+          "f": 462,
+          "v": -72,
+          "e": "outExpo"
+         }
+        ]
+       },
+       "sweep": -288
+      }
+     }
+    ]
+   },
+   {
+    "id": "d_fl4",
+    "type": "solid",
+    "in": 420,
+    "out": 570,
+    "transform": {
+     "rotation": 288
+    },
+    "source": {
+     "color": "#ffffff",
+     "width": 3000,
+     "height": 3000
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 10
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 180,
+       "width": 0,
+       "cy": {
+        "k": [
+         {
+          "f": 420,
+          "v": 0
+         },
+         {
+          "f": 446,
+          "v": -1600,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 0
+      }
+     }
+    ]
+   },
+   {
+    "id": "c_cam",
+    "type": "camera",
+    "scope": 40,
+    "in": 290,
+    "out": 440,
+    "source": {
+     "zoom": 1024,
+     "dof": {
+      "focus_distance": 1400,
+      "aperture": 18,
+      "max_blur": 20
+     }
+    },
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 290,
+        "v": [
+         960,
+         540,
+         -1400
+        ]
+       },
+       {
+        "f": 440,
+        "v": [
+         960,
+         480,
+         2400
+        ],
+        "e": "inOutQuad"
+       }
+      ]
+     },
+     "rotation": {
+      "k": [
+       {
+        "f": 290,
+        "v": [
+         0,
+         0,
+         -6
+        ]
+       },
+       {
+        "f": 440,
+        "v": [
+         0,
+         0,
+         6
+        ],
+        "e": "inOutQuad"
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "c_txt",
+    "type": "text",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      960,
+      520,
+      4200
+     ]
+    },
+    "source": {
+     "text": "咲き誇れ",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 300,
+     "fill": "#ffffff",
+     "stroke": "#e65163",
+     "stroke_width": 8
+    }
+   },
+   {
+    "id": "c_card0",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1799.544406713225,
+      830.1443871128753,
+      300
+     ],
+     "rotation": [
+      0,
+      14.759678278284833,
+      13.273508513311508
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card1",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1583.73629432382,
+      1046.7899959985004,
+      400
+     ],
+     "rotation": [
+      0,
+      -23.549738585819263,
+      -1.0313203686568395
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "seigaiha",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 15,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card2",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      2112.7274641956155,
+      718.7694637643091,
+      500
+     ],
+     "rotation": [
+      0,
+      20.045024587531135,
+      -11.60382106040567
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "shippo",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 16,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card3",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      359.57952423362576,
+      235.88739914379636,
+      600
+     ],
+     "rotation": [
+      0,
+      2.1880429617965214,
+      2.2182356378430237
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 17,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card4",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      -305.9031070688543,
+      200.0757605566178,
+      700
+     ],
+     "rotation": [
+      0,
+      -11.025881699444485,
+      12.490361154256558
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "checker",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 18,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card5",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1650.8861742357685,
+      131.52505482964585,
+      800
+     ],
+     "rotation": [
+      0,
+      14.857349571560224,
+      -10.836977448032904
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "kagome",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 19,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card6",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1785.3765532119032,
+      92.03907906032367,
+      900
+     ],
+     "rotation": [
+      0,
+      -24.91125688987327,
+      11.142142341728462
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "hex",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 20,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card7",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      204.58659448730646,
+      198.57740306967872,
+      1000
+     ],
+     "rotation": [
+      0,
+      24.121055441296264,
+      11.172232963104056
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "uroko",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card8",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      412.19343614200886,
+      1093.7735867401002,
+      1100
+     ],
+     "rotation": [
+      0,
+      1.9611734435405315,
+      5.33491431751777
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 15,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card9",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      192.42673778786138,
+      1069.171201305599,
+      1200
+     ],
+     "rotation": [
+      0,
+      9.532097055345412,
+      13.996929369515863
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "seigaiha",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 16,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card10",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1983.728361698844,
+      298.5466774246413,
+      1300
+     ],
+     "rotation": [
+      0,
+      -6.940503263880792,
+      -10.021318286107633
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "shippo",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 17,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card11",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      38.824964805774584,
+      18.1676560508115,
+      1400
+     ],
+     "rotation": [
+      0,
+      -9.932044961526875,
+      3.093299922229631
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 18,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card12",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      -331.20388962667244,
+      753.5210994572294,
+      1500
+     ],
+     "rotation": [
+      0,
+      -8.105156918606744,
+      -5.701262051906136
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "checker",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 19,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card13",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1788.146994082384,
+      516.8942239560467,
+      1600
+     ],
+     "rotation": [
+      0,
+      -9.210344707677798,
+      -0.5634484128940842
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "kagome",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 20,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card14",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1492.139748766364,
+      8.401115442947912,
+      1700
+     ],
+     "rotation": [
+      0,
+      23.754978157211763,
+      -14.314033102418378
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "hex",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card15",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1609.4670579573103,
+      953.8570672657556,
+      1800
+     ],
+     "rotation": [
+      0,
+      -24.096623231073494,
+      8.632149119413025
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "uroko",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 15,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card16",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      612.0796371888374,
+      634.2225948682495,
+      1900
+     ],
+     "rotation": [
+      0,
+      -24.546080659023577,
+      -13.598186439031753
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 16,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card17",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      130.39066867272436,
+      1086.2158795093997,
+      2000
+     ],
+     "rotation": [
+      0,
+      -15.173916474349591,
+      7.672092373539532
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "seigaiha",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 17,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card18",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      2077.103830953555,
+      1070.4525953132393,
+      2100
+     ],
+     "rotation": [
+      0,
+      -7.780909347349402,
+      -4.356203848262633
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "shippo",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 18,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card19",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1544.224733802112,
+      870.7236176387944,
+      2200
+     ],
+     "rotation": [
+      0,
+      -19.597356546758355,
+      7.451941694539892
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 19,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card20",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1732.7893617374652,
+      971.6331830250961,
+      2300
+     ],
+     "rotation": [
+      0,
+      -23.168421002858626,
+      13.374005551265514
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "checker",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 20,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card21",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      -102.93235315340166,
+      348.8886426050667,
+      2400
+     ],
+     "rotation": [
+      0,
+      5.541376904631212,
+      12.542615565999364
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "kagome",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card22",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      543.894769227196,
+      1049.0371433133487,
+      2500
+     ],
+     "rotation": [
+      0,
+      2.257201854911944,
+      -5.626488919712792
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "hex",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 15,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card23",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      483.6799627247807,
+      152.9733306059863,
+      2600
+     ],
+     "rotation": [
+      0,
+      -21.090188388971328,
+      -10.533958661302544
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "uroko",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 16,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card24",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1451.8539271070754,
+      1136.0721774440447,
+      2700
+     ],
+     "rotation": [
+      0,
+      -16.923526778769187,
+      -13.543435093546313
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 17,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card25",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      2225.417682839095,
+      580.2368896330012,
+      2800
+     ],
+     "rotation": [
+      0,
+      -4.705598938529759,
+      -7.87990188437138
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "seigaiha",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 18,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card26",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1724.2965738025719,
+      931.5546141583519,
+      2900
+     ],
+     "rotation": [
+      0,
+      -2.2167449254667626,
+      -2.3472815426523197
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "shippo",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 19,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card27",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      -195.161199379477,
+      1039.283218130389,
+      3000
+     ],
+     "rotation": [
+      0,
+      -23.36393900153621,
+      -0.19307404737503364
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 20,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card28",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1839.9161310371437,
+      96.686192583744,
+      3100
+     ],
+     "rotation": [
+      0,
+      11.583221168833823,
+      13.493956878656963
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "checker",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card29",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      1299.038162908626,
+      885.6114597364284,
+      3200
+     ],
+     "rotation": [
+      0,
+      -19.668469515137055,
+      -1.9633442819868863
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "kagome",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 15,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card30",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      48.03789580467037,
+      953.6806764064355,
+      3300
+     ],
+     "rotation": [
+      0,
+      -10.259353689401445,
+      -1.405352595000715
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "hex",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 16,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card31",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      2258.179864980617,
+      962.7032050724915,
+      3400
+     ],
+     "rotation": [
+      0,
+      23.800378487331546,
+      -1.3938003122512999
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "uroko",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 17,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card32",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      409.21339624361315,
+      815.406023720225,
+      3500
+     ],
+     "rotation": [
+      0,
+      -1.0478774927424162,
+      -6.269321485590751
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 18,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card33",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      189.85247958330206,
+      115.80763500237776,
+      3600
+     ],
+     "rotation": [
+      0,
+      -6.149962610730903,
+      14.651631012205446
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "seigaiha",
+       "colors": [
+        "#e65163",
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 19,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card34",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      2155.5212970557077,
+      692.3579651458069,
+      3700
+     ],
+     "rotation": [
+      0,
+      -0.03387746669392122,
+      -4.845637191805179
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "shippo",
+       "colors": [
+        "#69416e",
+        "#8a5a90",
+        "#ffffff"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 20,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_card35",
+    "type": "shape",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      -108.24271769194866,
+      266.7721609638231,
+      3800
+     ],
+     "rotation": [
+      0,
+      14.100948552824748,
+      11.021604203319061
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "width": 330,
+     "height": 330,
+     "radius": 30,
+     "sides": 6,
+     "fill": {
+      "pattern": {
+       "kind": "yagasuri",
+       "colors": [
+        "#fff8e7",
+        "#f2c14e",
+        "#b8860b"
+       ],
+       "size": 60,
+       "line_width": 3
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 0,
+     "duration": 14,
+     "e": "outBack"
+    }
+   },
+   {
+    "id": "c_petals",
+    "type": "particles",
+    "three_d": true,
+    "in": 230,
+    "out": 440,
+    "transform": {
+     "position": [
+      960,
+      540,
+      1500
+     ]
+    },
+    "source": {
+     "seed": 9,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -800,
+       0
+      ],
+      "area": [
+       3200,
+       60,
+       2600
+      ],
+      "rate": 40,
+      "life": 7,
+      "size": [
+       40,
+       40
+      ]
+     }
+    }
+   },
+   {
+    "id": "c_floor",
+    "type": "pattern",
+    "three_d": true,
+    "in": 290,
+    "out": 440,
+    "transform": {
+     "position": [
+      960,
+      1300,
+      2500
+     ],
+     "rotation": [
+      -84,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "checker",
+     "colors": [
+      "#fde2e7",
+      "#ffffff"
+     ],
+     "size": 240,
+     "width": 9000,
+     "height": 9000
+    }
+   },
+   {
+    "id": "c_sky",
+    "type": "solid",
+    "in": 290,
+    "out": 440,
+    "source": {
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#f6a5b0"
+        ],
+        [
+         1,
+         "#fff6f8"
+        ]
+       ]
+      }
+     }
+    },
+    "transition_in": {
+     "type": "iris",
+     "shape": "circle",
+     "duration": 16,
+     "e": "outCirc"
+    }
+   },
+   {
+    "id": "b_cap",
+    "type": "text",
+    "in": 186,
+    "out": 304,
+    "transform": {
+     "position": [
+      640,
+      700
+     ]
+    },
+    "source": {
+     "text": "風見野を拠点に活動する魔法少女",
+     "weight": 700,
+     "size": 46,
+     "tracking": 6,
+     "fill": "#ffffff",
+     "plate": {
+      "color": "#2b2230",
+      "padding": [
+       26,
+       10
+      ],
+      "stroke": "#7fd0d8",
+      "stroke_width": 4
+     },
+     "per_char": {
+      "stagger": 1.5,
+      "duration": 15,
+      "from": {
+       "position": [
+        0,
+        60
+       ],
+       "opacity": 0
+      },
+      "e": {
+       "pow": 2
+      }
+     }
+    },
+    "transition_in": {
+     "type": "clip",
+     "side": "right",
+     "duration": 16,
+     "e": "inOutExpo"
+    },
+    "transition_out": {
+     "type": "fade",
+     "duration": 8
+    }
+   },
+   {
+    "id": "b_g0",
+    "type": "group",
+    "scope": 3,
+    "in": 180,
+    "out": 304,
+    "transform": {
+     "position": [
+      1180,
+      290
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red0",
+    "type": "solid",
+    "in": 198,
+    "out": 304,
+    "clip_to": "b_name0",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 198,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 220,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name0",
+    "type": "text",
+    "in": 180,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "佐倉杏子",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 180,
+          "v": 400
+         },
+         {
+          "f": 204,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq0",
+    "type": "solid",
+    "in": 180,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#7fd0d8",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 180,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 200,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 200,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 224,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_g1",
+    "type": "group",
+    "scope": 3,
+    "in": 184,
+    "out": 304,
+    "transform": {
+     "position": [
+      1298,
+      350
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red1",
+    "type": "solid",
+    "in": 202,
+    "out": 304,
+    "clip_to": "b_name1",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 202,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 224,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name1",
+    "type": "text",
+    "in": 184,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "美樹さやか",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 184,
+          "v": 400
+         },
+         {
+          "f": 208,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq1",
+    "type": "solid",
+    "in": 184,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#f0a30a",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 184,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 204,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 204,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 228,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_g2",
+    "type": "group",
+    "scope": 3,
+    "in": 188,
+    "out": 304,
+    "transform": {
+     "position": [
+      1416,
+      290
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red2",
+    "type": "solid",
+    "in": 206,
+    "out": 304,
+    "clip_to": "b_name2",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 206,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 228,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name2",
+    "type": "text",
+    "in": 188,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "巴マミ",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 188,
+          "v": 400
+         },
+         {
+          "f": 212,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq2",
+    "type": "solid",
+    "in": 188,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#7fd0d8",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 188,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 208,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 208,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 232,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_g3",
+    "type": "group",
+    "scope": 3,
+    "in": 192,
+    "out": 304,
+    "transform": {
+     "position": [
+      1534,
+      350
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red3",
+    "type": "solid",
+    "in": 210,
+    "out": 304,
+    "clip_to": "b_name3",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 210,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 232,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name3",
+    "type": "text",
+    "in": 192,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "鹿目まどか",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 192,
+          "v": 400
+         },
+         {
+          "f": 216,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq3",
+    "type": "solid",
+    "in": 192,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#f0a30a",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 192,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 212,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 212,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 236,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_g4",
+    "type": "group",
+    "scope": 3,
+    "in": 196,
+    "out": 304,
+    "transform": {
+     "position": [
+      1652,
+      290
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red4",
+    "type": "solid",
+    "in": 214,
+    "out": 304,
+    "clip_to": "b_name4",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 214,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 236,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name4",
+    "type": "text",
+    "in": 196,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "暁美ほむら",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 196,
+          "v": 400
+         },
+         {
+          "f": 220,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq4",
+    "type": "solid",
+    "in": 196,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#7fd0d8",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 196,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 216,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 216,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 240,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_g5",
+    "type": "group",
+    "scope": 3,
+    "in": 200,
+    "out": 304,
+    "transform": {
+     "position": [
+      1770,
+      350
+     ]
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "opacity": {
+        "k": [
+         {
+          "f": 298,
+          "v": 100
+         },
+         {
+          "f": 304,
+          "v": 0
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_red5",
+    "type": "solid",
+    "in": 218,
+    "out": 304,
+    "clip_to": "b_name5",
+    "blend": "multiply",
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "color": "#b81a35",
+     "width": 120,
+     "height": 420
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 218,
+          "v": [
+           0,
+           420
+          ]
+         },
+         {
+          "f": 240,
+          "v": [
+           0,
+           260
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_name5",
+    "type": "text",
+    "in": 200,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "text": "百江なぎさ",
+     "writing": "vertical",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 52,
+     "fill": "#221914",
+     "plate": {
+      "color": "#ffffff",
+      "padding": [
+       16,
+       24
+      ],
+      "stroke": "#221914",
+      "stroke_width": 1.5
+     }
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "bottom": {
+        "k": [
+         {
+          "f": 200,
+          "v": 400
+         },
+         {
+          "f": 224,
+          "v": 0,
+          "e": "inOutExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_sq5",
+    "type": "solid",
+    "in": 200,
+    "out": 304,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "color": "#f0a30a",
+     "width": 84,
+     "height": 12
+    },
+    "effects": [
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 200,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 220,
+          "v": [
+           0,
+           55
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 220,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 244,
+          "v": [
+           0,
+           40
+          ],
+          "e": "outExpo"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_chara",
+    "type": "image",
+    "in": 158,
+    "out": 304,
+    "transform": {
+     "position": [
+      620,
+      520
+     ],
+     "scale": [
+      84,
+      84
+     ]
+    },
+    "source": {
+     "asset_id": 7514
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 100,
+       "width": 700
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 158,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 184,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 296,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           -1200
+          ],
+          "e": "inExpo"
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 150,
+          "v": [
+           -30,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           30,
+           0
+          ]
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "outline",
+      "params": {
+       "width": 10,
+       "color": "#ffffff"
+      }
+     },
+     {
+      "type": "drop_shadow",
+      "params": {
+       "x": 18,
+       "y": 18,
+       "blur": 0,
+       "color": "#2b2230",
+       "opacity": 85
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_big",
+    "type": "text",
+    "in": 152,
+    "out": 304,
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 152,
+        "v": [
+         2400,
+         300
+        ]
+       },
+       {
+        "f": 190,
+        "v": [
+         1100,
+         300
+        ],
+        "e": "outExpo"
+       },
+       {
+        "f": 304,
+        "v": [
+         900,
+         300
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": "SAKURA",
+     "weight": 900,
+     "italic": true,
+     "size": 340,
+     "tracking": 30,
+     "fill": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "drop_shadow",
+      "params": {
+       "x": 10,
+       "y": 10,
+       "blur": 0,
+       "color": "#d8d2cf",
+       "opacity": 100
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar0",
+    "type": "shape",
+    "in": 150,
+    "out": 304,
+    "transform": {
+     "position": [
+      150,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f0a30a"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 110
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": -38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 150,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 150,
+          "v": [
+           0,
+           -1300
+          ]
+         },
+         {
+          "f": 176,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 150,
+          "v": 0
+         },
+         {
+          "f": 156,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar1",
+    "type": "shape",
+    "in": 153,
+    "out": 304,
+    "transform": {
+     "position": [
+      330,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#69416e"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 250
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 153,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 153,
+          "v": [
+           0,
+           1300
+          ]
+         },
+         {
+          "f": 179,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           -2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 153,
+          "v": 0
+         },
+         {
+          "f": 159,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar2",
+    "type": "shape",
+    "in": 156,
+    "out": 304,
+    "transform": {
+     "position": [
+      1010,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f0a30a"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 110
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": -38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 156,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 156,
+          "v": [
+           0,
+           -1300
+          ]
+         },
+         {
+          "f": 182,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 156,
+          "v": 0
+         },
+         {
+          "f": 162,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar3",
+    "type": "shape",
+    "in": 159,
+    "out": 304,
+    "transform": {
+     "position": [
+      1500,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#e65163"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 170
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 159,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 159,
+          "v": [
+           0,
+           1300
+          ]
+         },
+         {
+          "f": 185,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           -2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 159,
+          "v": 0
+         },
+         {
+          "f": 165,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar4",
+    "type": "shape",
+    "in": 155,
+    "out": 304,
+    "transform": {
+     "position": [
+      1840,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#69416e"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 280
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": -38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 155,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 155,
+          "v": [
+           0,
+           -1300
+          ]
+         },
+         {
+          "f": 181,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 155,
+          "v": 0
+         },
+         {
+          "f": 161,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bar5",
+    "type": "shape",
+    "in": 161,
+    "out": 304,
+    "transform": {
+     "position": [
+      1250,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#7fd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 40
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 38,
+       "width": 760
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 161,
+          "v": [
+           0,
+           140
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 161,
+          "v": [
+           0,
+           1300
+          ]
+         },
+         {
+          "f": 187,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         },
+         {
+          "f": 294,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 304,
+          "v": [
+           0,
+           -2400
+          ],
+          "e": "inCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 161,
+          "v": 0
+         },
+         {
+          "f": 167,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln0",
+    "type": "solid",
+    "in": 150,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 60,
+       "width": 12,
+       "cx": -300,
+       "cy": 0
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 330,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 150,
+          "v": -1500
+         },
+         {
+          "f": 180,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln1",
+    "type": "solid",
+    "in": 154,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 120,
+       "width": 12,
+       "cx": 500,
+       "cy": 0
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 390,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 154,
+          "v": -1500
+         },
+         {
+          "f": 184,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln2",
+    "type": "solid",
+    "in": 158,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 29.4,
+       "width": 12,
+       "cx": 0,
+       "cy": 260
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 299.4,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 158,
+          "v": -1500
+         },
+         {
+          "f": 188,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln3",
+    "type": "solid",
+    "in": 162,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 150.6,
+       "width": 12,
+       "cx": 200,
+       "cy": -300
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 420.6,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 162,
+          "v": -1500
+         },
+         {
+          "f": 192,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln4",
+    "type": "solid",
+    "in": 166,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 0,
+       "width": 12,
+       "cx": 0,
+       "cy": 380
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 270,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 166,
+          "v": -1500
+         },
+         {
+          "f": 196,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_ln5",
+    "type": "solid",
+    "in": 170,
+    "out": 304,
+    "source": {
+     "color": "#ffffff"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 12,
+       "cx": -700,
+       "cy": 0
+      }
+     },
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 360,
+       "width": 0,
+       "cx": {
+        "k": [
+         {
+          "f": 170,
+          "v": -1500
+         },
+         {
+          "f": 200,
+          "v": 1500,
+          "e": "outCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_manga",
+    "type": "image",
+    "in": 150,
+    "out": 304,
+    "transform": {
+     "position": [
+      1500,
+      800
+     ],
+     "scale": [
+      150,
+      150
+     ],
+     "rotation": 8
+    },
+    "source": {
+     "asset_id": 7514
+    },
+    "effects": [
+     {
+      "type": "halftone",
+      "params": {
+       "size": 9,
+       "fg": "#4a4a4a",
+       "bg": "#e9e4e2",
+       "min": 10,
+       "max": 105,
+       "self_mask": false
+      }
+     },
+     {
+      "type": "mask_shape",
+      "params": {
+       "shape": "diamond",
+       "w": 560,
+       "h": 560
+      }
+     }
+    ]
+   },
+   {
+    "id": "b_bg",
+    "type": "pattern",
+    "in": 148,
+    "out": 304,
+    "source": {
+     "kind": "yagasuri",
+     "colors": [
+      "#dcd8d6",
+      "#e9e5e3",
+      "#f3f0ee"
+     ],
+     "size": 76,
+     "ratio": 2.1,
+     "slope": 0.55,
+     "line_width": 2,
+     "offset": {
+      "k": [
+       {
+        "f": 150,
+        "v": [
+         0,
+         0
+        ]
+       },
+       {
+        "f": 304,
+        "v": [
+         0,
+         -160
+        ]
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "a_num",
+    "type": "text",
+    "in": 10,
+    "out": 154,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "counter": {
+      "value": {
+       "k": [
+        {
+         "f": 10,
+         "v": 0
+        },
+        {
+         "f": 140,
+         "v": 2021,
+         "e": "outExpo"
+        }
+       ]
+      },
+      "pad": 4,
+      "fixed_width": true
+     },
+     "weight": 900,
+     "size": 420,
+     "tracking": 10,
+     "fill": {
+      "pattern": {
+       "kind": "stripes",
+       "colors": [
+        "#e65163",
+        "#f6a5b0"
+       ],
+       "size": 18,
+       "angle": 45,
+       "offset": {
+        "k": [
+         {
+          "f": 0,
+          "v": [
+           0,
+           0
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           144,
+           0
+          ]
+         }
+        ]
+       }
+      }
+     },
+     "stroke": "#ffffff",
+     "stroke_width": 10,
+     "strokes": [
+      {
+       "color": "#2b2230",
+       "width": 6
+      }
+     ]
+    },
+    "transition_in": {
+     "type": "zoom",
+     "from": 140,
+     "duration": 16,
+     "e": "outCirc",
+     "fade": true
+    }
+   },
+   {
+    "id": "a_bandtxt",
+    "type": "text",
+    "in": 14,
+    "out": 154,
+    "clip_to": "a_band",
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 14,
+        "v": [
+         2000,
+         860
+        ]
+       },
+       {
+        "f": 154,
+        "v": [
+         -200,
+         860
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "text": "POCKY & PRETZ DAY ★ 11.11 ★ POCKY & PRETZ DAY ★ 11.11 ★ POCKY & PRETZ DAY",
+     "weight": 300,
+     "size": 50,
+     "tracking": 10,
+     "fill": "#ffffff"
+    }
+   },
+   {
+    "id": "a_band",
+    "type": "solid",
+    "in": 4,
+    "out": 154,
+    "transform": {
+     "position": [
+      960,
+      860
+     ]
+    },
+    "source": {
+     "color": "#2b2230",
+     "width": 1920,
+     "height": 90
+    },
+    "effects": [
+     {
+      "type": "crop",
+      "params": {
+       "right": {
+        "k": [
+         {
+          "f": 4,
+          "v": 1920
+         },
+         {
+          "f": 30,
+          "v": 0,
+          "e": "inOutCirc"
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya0_0",
+    "type": "shape",
+    "in": 0,
+    "out": 154,
+    "transform": {
+     "position": [
+      40,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 0,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 0,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 30,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 10,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya0_1",
+    "type": "shape",
+    "in": 6,
+    "out": 154,
+    "transform": {
+     "position": [
+      40,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 0,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 6,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 36,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 6,
+          "v": 0
+         },
+         {
+          "f": 16,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya1_0",
+    "type": "shape",
+    "in": 2,
+    "out": 154,
+    "transform": {
+     "position": [
+      120,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 2,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 2,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 32,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 2,
+          "v": 0
+         },
+         {
+          "f": 12,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya1_1",
+    "type": "shape",
+    "in": 8,
+    "out": 154,
+    "transform": {
+     "position": [
+      120,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 2,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 8,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 38,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 8,
+          "v": 0
+         },
+         {
+          "f": 18,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya2_0",
+    "type": "shape",
+    "in": 4,
+    "out": 154,
+    "transform": {
+     "position": [
+      200,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 4,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 4,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 34,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 4,
+          "v": 0
+         },
+         {
+          "f": 14,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya2_1",
+    "type": "shape",
+    "in": 10,
+    "out": 154,
+    "transform": {
+     "position": [
+      200,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 4,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 10,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 40,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 10,
+          "v": 0
+         },
+         {
+          "f": 20,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya3_0",
+    "type": "shape",
+    "in": 6,
+    "out": 154,
+    "transform": {
+     "position": [
+      280,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 6,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 6,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 36,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 6,
+          "v": 0
+         },
+         {
+          "f": 16,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya3_1",
+    "type": "shape",
+    "in": 12,
+    "out": 154,
+    "transform": {
+     "position": [
+      280,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 6,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 12,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 42,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 12,
+          "v": 0
+         },
+         {
+          "f": 22,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya4_0",
+    "type": "shape",
+    "in": 8,
+    "out": 154,
+    "transform": {
+     "position": [
+      360,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 8,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 8,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 38,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 8,
+          "v": 0
+         },
+         {
+          "f": 18,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya4_1",
+    "type": "shape",
+    "in": 14,
+    "out": 154,
+    "transform": {
+     "position": [
+      360,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 8,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 14,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 44,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 14,
+          "v": 0
+         },
+         {
+          "f": 24,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya5_0",
+    "type": "shape",
+    "in": 10,
+    "out": 154,
+    "transform": {
+     "position": [
+      440,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 10,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 10,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 40,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 10,
+          "v": 0
+         },
+         {
+          "f": 20,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya5_1",
+    "type": "shape",
+    "in": 16,
+    "out": 154,
+    "transform": {
+     "position": [
+      440,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 10,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 16,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 46,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 16,
+          "v": 0
+         },
+         {
+          "f": 26,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya6_0",
+    "type": "shape",
+    "in": 12,
+    "out": 154,
+    "transform": {
+     "position": [
+      520,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 12,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 12,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 42,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 12,
+          "v": 0
+         },
+         {
+          "f": 22,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya6_1",
+    "type": "shape",
+    "in": 18,
+    "out": 154,
+    "transform": {
+     "position": [
+      520,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 12,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 18,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 48,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 18,
+          "v": 0
+         },
+         {
+          "f": 28,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya7_0",
+    "type": "shape",
+    "in": 14,
+    "out": 154,
+    "transform": {
+     "position": [
+      600,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 14,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 14,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 44,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 14,
+          "v": 0
+         },
+         {
+          "f": 24,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya7_1",
+    "type": "shape",
+    "in": 20,
+    "out": 154,
+    "transform": {
+     "position": [
+      600,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 14,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 20,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 50,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 20,
+          "v": 0
+         },
+         {
+          "f": 30,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya8_0",
+    "type": "shape",
+    "in": 16,
+    "out": 154,
+    "transform": {
+     "position": [
+      680,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 16,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 16,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 46,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 16,
+          "v": 0
+         },
+         {
+          "f": 26,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya8_1",
+    "type": "shape",
+    "in": 22,
+    "out": 154,
+    "transform": {
+     "position": [
+      680,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 16,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 22,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 52,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 22,
+          "v": 0
+         },
+         {
+          "f": 32,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya9_0",
+    "type": "shape",
+    "in": 18,
+    "out": 154,
+    "transform": {
+     "position": [
+      760,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 18,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 18,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 48,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 18,
+          "v": 0
+         },
+         {
+          "f": 28,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya9_1",
+    "type": "shape",
+    "in": 24,
+    "out": 154,
+    "transform": {
+     "position": [
+      760,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 18,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 24,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 54,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 24,
+          "v": 0
+         },
+         {
+          "f": 34,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya10_0",
+    "type": "shape",
+    "in": 20,
+    "out": 154,
+    "transform": {
+     "position": [
+      840,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 20,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 20,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 50,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 20,
+          "v": 0
+         },
+         {
+          "f": 30,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya10_1",
+    "type": "shape",
+    "in": 26,
+    "out": 154,
+    "transform": {
+     "position": [
+      840,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 20,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 26,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 56,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 26,
+          "v": 0
+         },
+         {
+          "f": 36,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya11_0",
+    "type": "shape",
+    "in": 22,
+    "out": 154,
+    "transform": {
+     "position": [
+      920,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 22,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 22,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 52,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 22,
+          "v": 0
+         },
+         {
+          "f": 32,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya11_1",
+    "type": "shape",
+    "in": 28,
+    "out": 154,
+    "transform": {
+     "position": [
+      920,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 22,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 28,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 58,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 28,
+          "v": 0
+         },
+         {
+          "f": 38,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya12_0",
+    "type": "shape",
+    "in": 24,
+    "out": 154,
+    "transform": {
+     "position": [
+      1000,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 24,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 24,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 54,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 24,
+          "v": 0
+         },
+         {
+          "f": 34,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya12_1",
+    "type": "shape",
+    "in": 30,
+    "out": 154,
+    "transform": {
+     "position": [
+      1000,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 24,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 30,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 60,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 30,
+          "v": 0
+         },
+         {
+          "f": 40,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya13_0",
+    "type": "shape",
+    "in": 26,
+    "out": 154,
+    "transform": {
+     "position": [
+      1080,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 26,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 26,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 56,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 26,
+          "v": 0
+         },
+         {
+          "f": 36,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya13_1",
+    "type": "shape",
+    "in": 32,
+    "out": 154,
+    "transform": {
+     "position": [
+      1080,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 26,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 32,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 62,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 32,
+          "v": 0
+         },
+         {
+          "f": 42,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya14_0",
+    "type": "shape",
+    "in": 28,
+    "out": 154,
+    "transform": {
+     "position": [
+      1160,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 28,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 28,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 58,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 28,
+          "v": 0
+         },
+         {
+          "f": 38,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya14_1",
+    "type": "shape",
+    "in": 34,
+    "out": 154,
+    "transform": {
+     "position": [
+      1160,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 28,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 34,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 64,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 34,
+          "v": 0
+         },
+         {
+          "f": 44,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya15_0",
+    "type": "shape",
+    "in": 30,
+    "out": 154,
+    "transform": {
+     "position": [
+      1240,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 30,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 30,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 60,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 30,
+          "v": 0
+         },
+         {
+          "f": 40,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya15_1",
+    "type": "shape",
+    "in": 36,
+    "out": 154,
+    "transform": {
+     "position": [
+      1240,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 30,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 36,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 66,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 36,
+          "v": 0
+         },
+         {
+          "f": 46,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya16_0",
+    "type": "shape",
+    "in": 32,
+    "out": 154,
+    "transform": {
+     "position": [
+      1320,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 32,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 32,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 62,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 32,
+          "v": 0
+         },
+         {
+          "f": 42,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya16_1",
+    "type": "shape",
+    "in": 38,
+    "out": 154,
+    "transform": {
+     "position": [
+      1320,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 32,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 38,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 68,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 38,
+          "v": 0
+         },
+         {
+          "f": 48,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya17_0",
+    "type": "shape",
+    "in": 34,
+    "out": 154,
+    "transform": {
+     "position": [
+      1400,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 34,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 34,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 64,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 34,
+          "v": 0
+         },
+         {
+          "f": 44,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya17_1",
+    "type": "shape",
+    "in": 40,
+    "out": 154,
+    "transform": {
+     "position": [
+      1400,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 34,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 40,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 70,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 40,
+          "v": 0
+         },
+         {
+          "f": 50,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya18_0",
+    "type": "shape",
+    "in": 36,
+    "out": 154,
+    "transform": {
+     "position": [
+      1480,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 36,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 36,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 66,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 36,
+          "v": 0
+         },
+         {
+          "f": 46,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya18_1",
+    "type": "shape",
+    "in": 42,
+    "out": 154,
+    "transform": {
+     "position": [
+      1480,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 36,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 42,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 72,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 42,
+          "v": 0
+         },
+         {
+          "f": 52,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya19_0",
+    "type": "shape",
+    "in": 38,
+    "out": 154,
+    "transform": {
+     "position": [
+      1560,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 38,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 38,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 68,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 38,
+          "v": 0
+         },
+         {
+          "f": 48,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya19_1",
+    "type": "shape",
+    "in": 44,
+    "out": 154,
+    "transform": {
+     "position": [
+      1560,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 38,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 44,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 74,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 44,
+          "v": 0
+         },
+         {
+          "f": 54,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya20_0",
+    "type": "shape",
+    "in": 40,
+    "out": 154,
+    "transform": {
+     "position": [
+      1640,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 40,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 40,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 70,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 40,
+          "v": 0
+         },
+         {
+          "f": 50,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya20_1",
+    "type": "shape",
+    "in": 46,
+    "out": 154,
+    "transform": {
+     "position": [
+      1640,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 40,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 46,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 76,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 46,
+          "v": 0
+         },
+         {
+          "f": 56,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya21_0",
+    "type": "shape",
+    "in": 42,
+    "out": 154,
+    "transform": {
+     "position": [
+      1720,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 42,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 42,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 72,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 42,
+          "v": 0
+         },
+         {
+          "f": 52,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya21_1",
+    "type": "shape",
+    "in": 48,
+    "out": 154,
+    "transform": {
+     "position": [
+      1720,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 42,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 48,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 78,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 48,
+          "v": 0
+         },
+         {
+          "f": 58,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya22_0",
+    "type": "shape",
+    "in": 44,
+    "out": 154,
+    "transform": {
+     "position": [
+      1800,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": -40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 44,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 44,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 74,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 44,
+          "v": 0
+         },
+         {
+          "f": 54,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya22_1",
+    "type": "shape",
+    "in": 50,
+    "out": 154,
+    "transform": {
+     "position": [
+      1800,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": -40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 44,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 50,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 80,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 50,
+          "v": 0
+         },
+         {
+          "f": 60,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya23_0",
+    "type": "shape",
+    "in": 46,
+    "out": 154,
+    "transform": {
+     "position": [
+      1880,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#f6a5b0"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 344,
+       "angle": 40,
+       "phase": 0
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 46,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 46,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 76,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 46,
+          "v": 0
+         },
+         {
+          "f": 56,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_ya23_1",
+    "type": "shape",
+    "in": 52,
+    "out": 154,
+    "transform": {
+     "position": [
+      1880,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 2000,
+     "height": 2000,
+     "fill": "#fbd0d8"
+    },
+    "effects": [
+     {
+      "type": "clip_line",
+      "params": {
+       "angle": 90,
+       "width": 63
+      }
+     },
+     {
+      "type": "blinds",
+      "params": {
+       "ratio": 50,
+       "pitch": 172,
+       "angle": 40,
+       "phase": 86
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 46,
+          "v": [
+           0,
+           112
+          ]
+         },
+         {
+          "f": 154,
+          "v": [
+           0,
+           0
+          ]
+         }
+        ],
+        "ignore_mid": true
+       }
+      }
+     },
+     {
+      "type": "offset",
+      "params": {
+       "position": {
+        "k": [
+         {
+          "f": 52,
+          "v": [
+           0,
+           1000
+          ]
+         },
+         {
+          "f": 82,
+          "v": [
+           0,
+           0
+          ],
+          "e": "outCirc"
+         }
+        ]
+       },
+       "opacity": {
+        "k": [
+         {
+          "f": 52,
+          "v": 0
+         },
+         {
+          "f": 62,
+          "v": 100
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "a_bg",
+    "type": "solid",
+    "in": 0,
+    "out": 154,
+    "source": {
+     "color": "#e65163"
+    }
+   }
+  ]
+ }
+}

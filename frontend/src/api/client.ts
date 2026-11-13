@@ -2,6 +2,7 @@ import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
 import { useUIStore } from '../store/uiStore'
 import type { SatsueiMeta } from '../components/Preview/satsueiLook'
+import type { CompDoc, CompFull, CompSummary } from '../components/CompEditor/types'
 
 export const api = axios.create({
   baseURL: '/api',
@@ -330,7 +331,7 @@ export const assetsApi = {
 
 // ── Job types ─────────────────────────────────────────────────────────────────
 
-export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v' | 'precompose' | 'create_proxy' | 'render_motion_graphics' | 'analyze_audio' | 'analyze_video' | 'decompose_character'
+export type JobType   = 'render_final' | 'generate_image' | 'generate_audio' | 'generate_video_i2v' | 'precompose' | 'create_proxy' | 'render_motion_graphics' | 'analyze_audio' | 'analyze_video' | 'decompose_character' | 'render_comp'
 export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
 
 export interface Job {
@@ -653,4 +654,65 @@ export const llmApi = {
   status: () => api.get<{ configured: boolean; model: string }>('/llm/status').then(r => r.data),
   chat:   (project_id: number, message: string, history: LLMChatMessage[]) =>
     api.post<LLMChatResponse>('/llm/chat', { project_id, message, history }).then(r => r.data),
+}
+
+// ── 🎞 コンポジション(入れ子のタイムライン。docs/composition-design.md)────────────
+
+export interface CompCreate {
+  project_id: number
+  name?: string
+  width?: number
+  height?: number
+  fps?: number
+  duration_frames: number
+  data?: CompDoc
+}
+export interface CompUpdate {
+  name?: string
+  width?: number
+  height?: number
+  fps?: number
+  duration_frames?: number
+  data?: CompDoc
+}
+export interface CompPlaceBody { track_id?: number; start_frame: number; render?: boolean }
+export interface CompPlaceResult { clip_id: number; track_id: number; job_id: number | null }
+
+/** quiet=true: 失敗のトーストを出さない(呼んだ側が 409・422 の文面を自分で見せる) */
+const compCfg = (quiet?: boolean) => (quiet ? ({ __silent: true } as AxiosRequestConfig) : undefined)
+
+export const compsApi = {
+  list:      (projectId: number) =>
+    api.get<CompSummary[]>('/comps/', { params: { project_id: projectId } }).then(r => r.data),
+  get:       (id: number) => api.get<CompFull>(`/comps/${id}`).then(r => r.data),
+  create:    (body: CompCreate, quiet?: boolean) => api.post<CompFull>('/comps/', body, compCfg(quiet)).then(r => r.data),
+  /** 中身が変わるたびに rev が上がる。返事の stale = 描き直しが要る */
+  update:    (id: number, body: CompUpdate, quiet?: boolean) =>
+    api.patch<CompFull>(`/comps/${id}`, body, compCfg(quiet)).then(r => r.data),
+  delete:    (id: number, quiet?: boolean) => api.delete(`/comps/${id}`, compCfg(quiet)),
+  duplicate: (id: number) => api.post<CompFull>(`/comps/${id}/duplicate`).then(r => r.data),
+  /** 描き出しジョブ(render_comp)を投げる */
+  render:    (id: number) => api.post<{ job_id: number; comp_id: number; rev: number }>(`/comps/${id}/render`).then(r => r.data),
+  /** タイムラインに comp クリップを置く(track_id 省略時は「Comps」トラック) */
+  place:     (id: number, body: CompPlaceBody) => api.post<CompPlaceResult>(`/comps/${id}/place`, body).then(r => r.data),
+  /** 編集画面の iframe のページ */
+  playerUrl: (id: number, frame = 0) => `/api/comps/${id}/player.html?mode=preview&frame=${Math.max(0, Math.round(frame))}`,
+}
+
+/** ページを閉じる・読み直す最中のコンポジションの保存(keepalive。返事は待てない) */
+export function patchCompKeepalive(id: number, body: CompUpdate) {
+  try {
+    const json = JSON.stringify(body)
+    // keepalive の本文は 64KB まで。越える文書はふつうの fetch で送る(届かないこともある)
+    void fetch(`${api.defaults.baseURL ?? '/api'}/comps/${id}`, {
+      method: 'PATCH', keepalive: new Blob([json]).size < 60000, headers: { 'Content-Type': 'application/json' }, body: json,
+    }).catch(() => undefined)
+  } catch { /* 送れない端末は諦める */ }
+}
+
+/** axios の失敗からサーバの文面(detail)を取り出す */
+export function apiErrorText(e: unknown): string {
+  const err = e as { response?: { data?: { detail?: unknown } }; message?: string }
+  const d = err?.response?.data?.detail
+  return typeof d === 'string' ? d : d != null ? JSON.stringify(d) : (err?.message ?? '通信エラー')
 }

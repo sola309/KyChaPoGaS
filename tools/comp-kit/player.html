@@ -78,6 +78,8 @@
       onInvalidate: () => { if (!playing) invalidate() },
     })
     window.__compEngine = eng
+    // プロジェクトの書体(boot.fonts: [{family, url, weight}])は、最初の 1 コマより前に読み終える
+    if (Array.isArray(B.fonts) && B.fonts.length) await eng.loadFonts(B.fonts)
     await eng.load(comp)
     frame = clampFrame(parseInt(qs.get('frame') || '0', 10) || 0)
     if (mode === 'preview') {
@@ -174,6 +176,8 @@
       case 'comp:select': selected = Array.isArray(m.ids) ? m.ids.map(String) : []; drawOverlay(); break
       // 入れ子の子コンポジションを保存し直したとき: 読み直して描き直す
       case 'comp:invalidate': eng.invalidateComp(m.comp_id); show(frame); break
+      // 書体の追加(追加): {fonts:[{family,url,weight}]}
+      case 'comp:fonts': eng.loadFonts(m.fonts).then(() => show(frame)); break
       case 'comp:quality': autoScale = !(m.scale > 0); if (m.scale > 0) eng.setScale(m.scale); else layout(); show(frame); break
     }
   }

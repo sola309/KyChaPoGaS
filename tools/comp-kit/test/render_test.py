@@ -36,7 +36,7 @@ LIBS = REPO / "tools" / "mg-libs"
 BACKEND = "http://127.0.0.1:8002"
 sys.path.insert(0, str(REPO / "backend"))
 
-MIME = {".js": "text/javascript", ".html": "text/html; charset=utf-8", ".json": "application/json",
+MIME = {".js": "text/javascript", ".html": "text/html; charset=utf-8", ".json": "application/json", ".ttf": "font/ttf", ".otf": "font/otf", ".woff2": "font/woff2",
         ".png": "image/png", ".jpg": "image/jpeg", ".glb": "model/gltf-binary", ".mp4": "video/mp4", ".webm": "video/webm"}
 CHROME_ARGS = ["--force-color-profile=srgb", "--use-gl=angle", "--use-angle=swiftshader",
                "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
@@ -105,7 +105,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 c = json.loads(f.read_text(encoding="utf-8"))
                 if str(c.get("id")) == cid:
                     return self._send(200, json.dumps(c).encode(), MIME[".json"])
-            return self._send(404, b"{}", MIME[".json"])
+            # 例に無い id は本番から読む(取り込んだ文書の入れ子を確かめる用)
+            try:
+                with urllib.request.urlopen(BACKEND + path, timeout=30) as r:
+                    return self._send(200, r.read(), MIME[".json"])
+            except Exception:  # noqa: BLE001
+                return self._send(404, b"{}", MIME[".json"])
         if path.startswith("/preview/"):
             f = KIT / "examples" / path.rsplit("/", 1)[1]
             if not f.is_file():
@@ -159,7 +164,7 @@ async def render_frames(comp: dict, frames: list[int], out: Path, base: str, mod
     async with async_playwright() as p:
         browser = await p.chromium.launch(args=CHROME_ARGS)
         page = await browser.new_page(viewport={"width": comp["width"], "height": comp["height"]}, device_scale_factor=1)
-        page.on("console", lambda m: print(f"  [console.{m.type}] {m.text}") if m.type in ("warning", "error") else None)
+        page.on("console", lambda m: print(f"  [console.{m.type}] {m.text}") if m.type in ("warning", "error") and "GPU stall" not in m.text else None)
         page.on("pageerror", lambda e: print(f"  [pageerror] {e}"))
         grab = "() => document.querySelector('canvas').toDataURL('image/png')"
         if mode == "capture":
@@ -187,6 +192,40 @@ async def render_frames(comp: dict, frames: list[int], out: Path, base: str, mod
     return stats
 
 
+BENCH_JS = """async (frames) => {
+  const e = window.__compEngine, gl = e.renderer.getContext(), px = new Uint8Array(4), out = []
+  const fps = e.scene.fps
+  for (const f of frames) {
+    const t0 = performance.now()
+    await window.seek(f / fps * 1000)
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px)   // 描き終わるまで待つ(GL は非同期なので)
+    out.push(performance.now() - t0)
+  }
+  return out
+}"""
+
+
+async def bench(comp: dict, base: str, n: int):
+    """書き出しと同じ経路(SwiftShader)で 1 コマあたりの時間を測る。全体から等間隔に n コマ、2 回まわして 2 回目を採る。"""
+    from playwright.async_api import async_playwright
+    dur = comp["duration_frames"]
+    frames = sorted({int(i * (dur - 1) / max(1, n - 1)) for i in range(n)})
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(args=CHROME_ARGS)
+        page = await browser.new_page(viewport={"width": comp["width"], "height": comp["height"]}, device_scale_factor=1)
+        page.on("console", lambda m: print(f"  [console.{m.type}] {m.text}") if m.type in ("warning", "error") and "GPU stall" not in m.text else None)
+        page.on("pageerror", lambda e: print(f"  [pageerror] {e}"))
+        await page.set_content(build_html(comp, "capture", base), wait_until="load")
+        await page.evaluate("window.__madAssetsReady || 0")
+        await page.evaluate(BENCH_JS, frames)
+        ts = await page.evaluate(BENCH_JS, frames)
+        await browser.close()
+    ts2 = sorted(ts)
+    mean = sum(ts) / len(ts)
+    print(f"  bench {comp.get('name', '')}: {len(ts)} frames  mean {mean:.1f} ms  median {ts2[len(ts2) // 2]:.1f} ms  max {ts2[-1]:.1f} ms  (layers {len(comp['data'].get('layers', []))})")
+    return mean
+
+
 async def render_video(comp: dict, out: Path, base: str):
     from app.services.motion_graphics import render_html_to_video
     transparent = comp["data"].get("bg") is None
@@ -202,10 +241,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("example")
     ap.add_argument("--frames", default="")
-    ap.add_argument("--out", default="/tmp/claude-1000/comp-kit-work/out")
+    ap.add_argument("--out", default="/tmp/claude-1000/comp-kit-work2/out")
     ap.add_argument("--video", default="")
     ap.add_argument("--mode", default="capture", choices=["capture", "preview"])
     ap.add_argument("--tag", default="")
+    ap.add_argument("--bench", type=int, default=0, help="1 コマあたりの時間を測る(コマ数)")
     ap.add_argument("--serve", action="store_true", help="サーバだけ立てて待つ(手で確認する用)")
     a = ap.parse_args()
     ex = Path(a.example)
@@ -223,6 +263,8 @@ def main():
             frames = [int(x) for x in a.frames.split(",") if x.strip() != ""]
             tag = a.tag or (ex.stem + ("_pv" if a.mode == "preview" else ""))
             asyncio.run(render_frames(comp, frames, Path(a.out), base, a.mode, ex.name, tag))
+        if a.bench:
+            asyncio.run(bench(comp, base, a.bench))
         if a.video:
             asyncio.run(render_video(comp, Path(a.video), base))
     finally:

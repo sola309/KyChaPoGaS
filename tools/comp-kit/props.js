@@ -82,6 +82,31 @@ const EASE = {
   easeInExpo: (t) => (t <= 0 ? 0 : 2 ** (10 * t - 10)),
   easeOutExpo: (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t)),
 }
+// Penner 式の全種類(AviUtl の「イージング」スクリプトの番号 1〜41 と同じ並び)。
+// 名前は inQuad / outQuad / inOutQuad / outInQuad … の形。
+const PENNER_IN = {
+  Quad: (t) => t * t,
+  Cubic: (t) => t * t * t,
+  Quart: (t) => t ** 4,
+  Quint: (t) => t ** 5,
+  Sine: (t) => 1 - Math.cos((t * Math.PI) / 2),
+  Expo: (t) => (t <= 0 ? 0 : 2 ** (10 * (t - 1))),
+  Circ: (t) => 1 - Math.sqrt(Math.max(0, 1 - t * t)),
+  Elastic: (t) => (t <= 0 ? 0 : t >= 1 ? 1 : -(2 ** (10 * (t - 1))) * Math.sin(((t - 1 - 0.075) * 2 * Math.PI) / 0.3)),
+  Back: (t) => t * t * (2.70158 * t - 1.70158),
+  Bounce: (t) => 1 - bounceOut(1 - t),
+}
+export const PENNER_ORDER = ['linear']
+for (const name of ['Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Elastic', 'Back', 'Bounce']) {
+  const fin = PENNER_IN[name]
+  const fout = (t) => 1 - fin(1 - t)
+  EASE['in' + name] = fin
+  EASE['out' + name] = fout
+  EASE['inOut' + name] = (t) => (t < 0.5 ? fin(t * 2) / 2 : 1 - fin(2 - t * 2) / 2)
+  EASE['outIn' + name] = (t) => (t < 0.5 ? fout(t * 2) / 2 : 0.5 + fin(t * 2 - 1) / 2)
+  PENNER_ORDER.push('in' + name, 'out' + name, 'inOut' + name, 'outIn' + name)
+}
+export const EASE_NAMES = Object.keys(EASE)
 // 3 次ベジェ(CSS の cubic-bezier と同じ)。x から媒介変数を解いて y を返す
 function bezierEase(x1, y1, x2, y2, x) {
   const bx = (t) => 3 * (1 - t) * (1 - t) * t * x1 + 3 * (1 - t) * t * t * x2 + t * t * t
@@ -97,9 +122,21 @@ function bezierEase(x1, y1, x2, y2, x) {
   return by(t)
 }
 export function ease(e, t) {
-  if (t <= 0) return Array.isArray(e) || e !== 'hold' ? 0 : 0
+  if (t <= 0) return 0
   if (t >= 1) return 1
   if (Array.isArray(e)) return bezierEase(+e[0] || 0, +e[1] || 0, e[2] ?? 1, e[3] ?? 1, t)
+  if (e && typeof e === 'object') {
+    // {"pow": n}(TA の beki。n 乗で減速)/ {"penner": 番号} / {"back": 係数}
+    if (e.penner != null) return (EASE[PENNER_ORDER[(e.penner | 0) - 1]] || EASE.linear)(t)
+    if (e.pow != null) { const n = Math.max(0.01, +e.pow || 1); return e.out === false ? t ** n : 1 - (1 - t) ** n }
+    if (e.back != null) {
+      const s = +e.back || 1.70158, fin = (x) => x * x * ((s + 1) * x - s)
+      if (e.mode === 'in') return fin(t)
+      if (e.mode === 'inOut') return t < 0.5 ? fin(t * 2) / 2 : 1 - fin(2 - t * 2) / 2
+      return 1 - fin(1 - t)
+    }
+    return t
+  }
   return (EASE[e] || EASE.linear)(t)
 }
 
@@ -156,7 +193,10 @@ export function evalProp(p, f, fps = 30, dflt) {
     }
     if (t <= f0) v = k[0].v
     else if (t >= f1) v = k[n - 1].v
-    else {
+    else if (p.ignore_mid) {
+      // 中間点無視: 最初のキーから最後のキーへ 1 本のイージング(途中のキーは見ない)
+      v = lerpAny(k[0].v, k[n - 1].v, ease(p.e ?? k[0].e, (t - f0) / span))
+    } else {
       // キーは少数なので線形探索で十分
       let i = 0
       while (i < n - 2 && k[i + 1].f <= t) i++
@@ -172,6 +212,15 @@ export function evalProp(p, f, fps = 30, dflt) {
   else return p // ただのオブジェクト(gradient など)はそのまま
   if (p.wiggle) v = addWiggle(v ?? 0, p.wiggle, f / fps)
   return v ?? dflt
+}
+
+// 位置などのベクトル: 配列のプロパティ値のほか、{"x": <prop>, "y": <prop>, "z": <prop>} の分け書きも受ける
+export function evalVec(p, f, fps, dflt) {
+  if (p && typeof p === 'object' && !Array.isArray(p) && !Array.isArray(p.k) && !('v' in p) && !p.wiggle && ('x' in p || 'y' in p || 'z' in p)) {
+    const d = Array.isArray(dflt) ? dflt : [dflt ?? 0, dflt ?? 0, dflt ?? 0]
+    return [num(evalProp(p.x, f, fps), d[0] ?? 0), num(evalProp(p.y, f, fps), d[1] ?? 0), num(evalProp(p.z, f, fps), d[2] ?? 0)]
+  }
+  return evalProp(p, f, fps, dflt)
 }
 
 // オブジェクトの直下のプロパティをまとめて評価(source・effect の params 用)
@@ -192,6 +241,7 @@ export function maxAbs(p, dflt = 0) {
   }
   if (p == null) return dflt
   if (typeof p === 'object' && !Array.isArray(p)) {
+    if (!Array.isArray(p.k) && !('v' in p) && ('x' in p || 'y' in p)) return Math.max(maxAbs(p.x, dflt), maxAbs(p.y, dflt))
     if (Array.isArray(p.k)) p.k.forEach((key) => walk(key.v))
     else if ('v' in p) walk(p.v)
     const w = p.wiggle

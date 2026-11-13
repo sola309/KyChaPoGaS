@@ -1,7 +1,7 @@
-// エフェクト。どれも「画面と同じ大きさの RT → 新しい RT」の全画面パス(乗算済みアルファ)。
-// 長さの単位はコンポジションの px(プレビューの縮小表示では rs を掛けて合わせる)。
-// 角度は AE と同じく 0° = 上、時計回り。
-import { evalAll, num, toColor, clamp } from './props.js'
+// 「重い」エフェクト = まわりの画素を読むもの(ぼかし・光・縁・ずらし)。RT → 新しい RT のパスで掛ける。
+// 軽いもの(切る・色)は ops.js にあり、RT を使わない。
+// 長さの単位はレイヤーの px(info.res = RT の 1px あたりの倍率を掛けて合わせる)。角度は 0° = 上、時計回り。
+import { num, toColor, clamp } from './props.js'
 import { THREE } from './gfx.js'
 
 const HEAD = /* glsl */ `
@@ -10,19 +10,23 @@ vec2 P(){ return vec2(vUv.x * uRes.x, (1.0 - vUv.y) * uRes.y); }
 vec4 S(vec2 p){ return texture2D(tSrc, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)); }
 vec3 unpm(vec4 c){ return c.a > 1e-5 ? c.rgb / c.a : vec3(0.0); }
 float luma(vec3 c){ return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+float H2(vec2 p){ vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973)); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
+float VN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(H2(i), H2(i + vec2(1.0, 0.0)), f.x), mix(H2(i + vec2(0.0, 1.0)), H2(i + vec2(1.0, 1.0)), f.x), f.y); }
 `
 const F = {
+  // ガウスぼかし(1 方向)。隣り合う 2 画素を線形補間の 1 回読みでまとめる(中心 + 5 組 × 2 = 11 回読み。半径 10 画素まで)
   blur: HEAD + /* glsl */ `
-    uniform vec2 uDir; uniform float uSigma;
+    uniform vec2 uDir; uniform float uW0; uniform vec4 uOffA, uWA; uniform vec2 uOffB, uWB;
     void main(){
-      vec2 p = P(); vec4 acc = vec4(0.0); float wsum = 0.0;
-      float k = min(ceil(uSigma * 2.6), 16.0);
-      for (float i = -16.0; i <= 16.0; i += 1.0){
-        if (abs(i) > k) continue;
-        float w = exp(-0.5 * i * i / (uSigma * uSigma));
-        acc += S(p + uDir * i) * w; wsum += w;
-      }
-      gl_FragColor = acc / wsum;
+      vec2 p = P();
+      vec4 acc = S(p) * uW0;
+      acc += (S(p + uDir * uOffA.x) + S(p - uDir * uOffA.x)) * uWA.x;
+      acc += (S(p + uDir * uOffA.y) + S(p - uDir * uOffA.y)) * uWA.y;
+      acc += (S(p + uDir * uOffA.z) + S(p - uDir * uOffA.z)) * uWA.z;
+      acc += (S(p + uDir * uOffA.w) + S(p - uDir * uOffA.w)) * uWA.w;
+      acc += (S(p + uDir * uOffB.x) + S(p - uDir * uOffB.x)) * uWB.x;
+      gl_FragColor = acc;
     }`,
   bright: HEAD + /* glsl */ `
     uniform float uThreshold;
@@ -39,21 +43,6 @@ const F = {
       float a = clamp(max(c.a + g.a * (1.0 - c.a), max(rgb.r, max(rgb.g, rgb.b))), 0.0, 1.0);
       gl_FragColor = vec4(min(rgb, vec3(a)), a);
     }`,
-  color: HEAD + /* glsl */ `
-    uniform float uBrightness, uContrast, uSaturation, uHue, uTintAmount; uniform vec3 uTint;
-    void main(){
-      vec4 c = texture2D(tSrc, vUv);
-      vec3 x = unpm(c);
-      if (abs(uHue) > 1e-4){
-        float cs = cos(uHue), sn = sin(uHue); vec3 k = vec3(0.57735);
-        x = x * cs + cross(k, x) * sn + k * dot(k, x) * (1.0 - cs);
-      }
-      float l = luma(x);
-      x = mix(vec3(l), x, uSaturation);
-      x = (x - 0.5) * uContrast + 0.5 + uBrightness;
-      x = mix(x, uTint * luma(clamp(x, 0.0, 1.0)) , uTintAmount);
-      gl_FragColor = vec4(clamp(x, 0.0, 1.0) * c.a, c.a);
-    }`,
   rgb_shift: HEAD + /* glsl */ `
     uniform vec2 uOff;
     void main(){
@@ -62,40 +51,16 @@ const F = {
       gl_FragColor = vec4(a.r, b.g, c.b, max(b.a, max(a.a, c.a)));
     }`,
   wave: HEAD + /* glsl */ `
-    uniform float uAmp, uFreq, uPhase, uVertical;
+    uniform float uAmp, uK, uPhase, uVertical;
     void main(){
       vec2 p = P();
-      if (uVertical > 0.5) p.y += uAmp * sin(6.2831853 * (p.x / uRes.x * uFreq + uPhase));
-      else p.x += uAmp * sin(6.2831853 * (p.y / uRes.y * uFreq + uPhase));
+      if (uVertical > 0.5) p.y += uAmp * sin(6.2831853 * (p.x * uK + uPhase));
+      else p.x += uAmp * sin(6.2831853 * (p.y * uK + uPhase));
       gl_FragColor = S(p);
     }`,
-  noise: HEAD + /* glsl */ `
-    uniform float uAmount, uSeed, uColorNoise;
-    float h(vec2 p, float s){ vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973) + s * 0.6180339); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }
-    void main(){
-      vec4 c = texture2D(tSrc, vUv);
-      vec2 p = floor(P());
-      vec3 n = vec3(h(p, uSeed));
-      if (uColorNoise > 0.5) n = vec3(n.x, h(p + 17.0, uSeed + 3.0), h(p + 41.0, uSeed + 7.0));
-      vec3 x = unpm(c) + (n - 0.5) * uAmount;
-      gl_FragColor = vec4(clamp(x, 0.0, 1.0) * c.a, c.a);
-    }`,
   mosaic: HEAD + /* glsl */ `
-    uniform float uSize;
-    void main(){ vec2 p = P(); gl_FragColor = S((floor(p / uSize) + 0.5) * uSize); }`,
-  wipe: HEAD + /* glsl */ `
-    uniform vec2 uDir; uniform float uProgress, uFeather; uniform vec4 uBounds;
-    void main(){
-      vec2 p = P();
-      // 範囲の四隅を進む向きへ射影して、端から端までを 0〜1 にする
-      vec2 c = (uBounds.xy + uBounds.zw) * 0.5, hsz = (uBounds.zw - uBounds.xy) * 0.5;
-      float ext = abs(uDir.x) * hsz.x + abs(uDir.y) * hsz.y;
-      float s = dot(p - c, uDir) + ext;
-      float edge = uProgress * (2.0 * ext + uFeather) - uFeather;
-      float m = uFeather > 1e-3 ? clamp((s - edge) / uFeather, 0.0, 1.0) : step(edge, s);
-      if (uProgress <= 0.0) m = 1.0;
-      gl_FragColor = texture2D(tSrc, vUv) * m;
-    }`,
+    uniform float uSize; uniform vec2 uOrg;
+    void main(){ vec2 p = P() - uOrg; gl_FragColor = S((floor(p / uSize) + 0.5) * uSize + uOrg); }`,
   shadow: HEAD + /* glsl */ `
     uniform sampler2D tBlur; uniform vec2 uOff; uniform vec4 uColor;
     void main(){
@@ -104,34 +69,175 @@ const F = {
       float a = texture2D(tBlur, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)).a * uColor.a;
       gl_FragColor = c + vec4(uColor.rgb * a, a) * (1.0 - c.a);
     }`,
-  stroke_outline: HEAD + /* glsl */ `
-    uniform float uWidth; uniform vec4 uColor;
+  inner_shadow: HEAD + /* glsl */ `
+    uniform sampler2D tBlur; uniform vec2 uOff; uniform vec4 uColor;
     void main(){
-      vec2 p = P(); vec4 c = S(p); float a = c.a;
-      for (float i = 0.0; i < 16.0; i += 1.0){
-        float t = i * 0.3926991; vec2 d = vec2(cos(t), sin(t));
-        a = max(a, S(p + d * uWidth).a);
-        a = max(a, S(p + d * uWidth * 0.5).a);
-      }
-      a *= uColor.a;
-      gl_FragColor = c + vec4(uColor.rgb * a, a) * (1.0 - c.a);
+      vec4 c = texture2D(tSrc, vUv);
+      vec2 p = P() - uOff;
+      float k = (1.0 - texture2D(tBlur, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)).a) * uColor.a;
+      gl_FragColor = vec4(mix(c.rgb, uColor.rgb * c.a, k), c.a);
     }`,
-  half: HEAD + /* glsl */ `void main(){ gl_FragColor = texture2D(tSrc, vUv); }`,
+  // アルファを広げる(uInv = 1 で縮める)。α だけを返す
+  dilate: HEAD + /* glsl */ `
+    uniform float uWidth, uInv, uTh, uN, uHalf;
+    float A(vec2 p){ float a = S(p).a; if (uTh > 0.0) a = smoothstep(uTh - 0.02, uTh + 0.02, a); return uInv > 0.5 ? 1.0 - a : a; }
+    void main(){
+      vec2 p = P(); float a = A(p);
+      float st = 6.2831853 / uN;
+      for (float i = 0.0; i < 16.0; i += 1.0){
+        if (i >= uN) break;
+        float t = i * st; vec2 d = vec2(cos(t), sin(t));
+        a = max(a, A(p + d * uWidth));
+        if (uHalf > 0.5) a = max(a, A(p + d * uWidth * 0.5));
+      }
+      gl_FragColor = vec4(uInv > 0.5 ? 1.0 - a : a);
+    }`,
+  // 縁取りの仕上げ。tOut = 外へ広げた α、tIn = 内へ縮めた α
+  outline: HEAD + /* glsl */ `
+    uniform sampler2D tOut, tIn; uniform vec4 uColor; uniform float uOnly, uUseIn, uUseOut;
+    void main(){
+      vec4 c = texture2D(tSrc, vUv);
+      float ao = uUseOut > 0.5 ? texture2D(tOut, vUv).a : c.a;
+      float ai = uUseIn > 0.5 ? texture2D(tIn, vUv).a : c.a;
+      float inner = clamp(c.a - ai, 0.0, 1.0) * uColor.a;
+      float outer = clamp(ao - c.a, 0.0, 1.0);
+      vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
+      base = vec4(mix(base.rgb, uColor.rgb * max(base.a, inner), inner), max(base.a, inner));
+      float oa = (uOnly > 0.5 ? outer : ao) * uColor.a;
+      gl_FragColor = base + vec4(uColor.rgb * oa, oa) * (1.0 - base.a);
+    }`,
+  trace: HEAD + /* glsl */ `
+    uniform sampler2D tOut, tIn; uniform vec4 uColor; uniform float uOnly, uProgress, uStart; uniform vec2 uC;
+    void main(){
+      vec4 c = texture2D(tSrc, vUv);
+      float band = clamp(texture2D(tOut, vUv).a - texture2D(tIn, vUv).a, 0.0, 1.0);
+      vec2 q = P() - uC;
+      float t = fract(atan(q.x, -q.y) / 6.2831853 - uStart);
+      float k = uProgress >= 1.0 ? 1.0 : uProgress <= 0.0 ? 0.0 : clamp((uProgress - t) * length(q) * 6.2831853 + 0.5, 0.0, 1.0);
+      float a = band * k * uColor.a;
+      vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
+      gl_FragColor = vec4(uColor.rgb * a, a) + base * (1.0 - a);
+    }`,
+  radial_blur: HEAD + /* glsl */ `
+    uniform vec2 uC; uniform float uAmt, uSpin;
+    void main(){
+      vec2 q = P() - uC; vec4 acc = vec4(0.0);
+      for (float i = 0.0; i < 24.0; i += 1.0){
+        float t = (i / 23.0 - 0.5) * uAmt;
+        vec2 r;
+        if (uSpin > 0.5) { float cs = cos(t), sn = sin(t); r = vec2(q.x * cs - q.y * sn, q.x * sn + q.y * cs); }
+        else r = q * (1.0 + t);
+        acc += S(uC + r);
+      }
+      gl_FragColor = acc / 24.0;
+    }`,
+  halftone: HEAD + /* glsl */ `
+    uniform vec2 uC, uCS; uniform float uSize, uMin, uMax, uStagger, uSelf, uUseColor, uInvert; uniform vec4 uFg, uBg;
+    void main(){
+      vec2 p = P(); vec2 d = p - uC;
+      vec2 q = vec2(d.x * uCS.x + d.y * uCS.y, -d.x * uCS.y + d.y * uCS.x) / uSize;
+      float row = floor(q.y); float sh = uStagger > 0.5 ? 0.5 * mod(row, 2.0) : 0.0;
+      vec2 cell = vec2(floor(q.x + sh) + 0.5 - sh, row + 0.5);
+      vec2 cc = cell * uSize; vec2 pc = uC + vec2(cc.x * uCS.x - cc.y * uCS.y, cc.x * uCS.y + cc.y * uCS.x);
+      vec4 sc = S(pc); vec4 own = texture2D(tSrc, vUv);
+      float dark = 1.0 - luma(unpm(sc)); if (uInvert > 0.5) dark = 1.0 - dark;
+      dark *= step(0.004, sc.a);
+      float r = mix(uMin, uMax, dark) * 0.7071 * uSize;
+      float k = r <= 0.01 ? 0.0 : clamp(0.5 - (length(q - cell) * uSize - r), 0.0, 1.0);
+      vec4 fg = uUseColor > 0.5 ? vec4(unpm(sc), 1.0) : uFg;
+      vec4 o = mix(vec4(uBg.rgb * uBg.a, uBg.a), vec4(fg.rgb * fg.a, fg.a), k);
+      gl_FragColor = o * (uSelf > 0.5 ? own.a : 1.0);
+    }`,
+  glitch: HEAD + /* glsl */ `
+    uniform float uAmt, uBlock, uSeed, uRate, uShift;
+    void main(){
+      vec2 p = P(); float row = floor(p.y / uBlock);
+      float on = step(1.0 - uRate, H2(vec2(row, uSeed + 7.0)));
+      float sub = floor(p.x / (uBlock * 6.0));
+      float dx = (H2(vec2(row, uSeed)) - 0.5) * 2.0 * uAmt * on;
+      float dy = on * step(0.85, H2(vec2(row + sub, uSeed + 3.0))) * (H2(vec2(sub, uSeed + 9.0)) - 0.5) * uBlock * 2.0;
+      vec2 o = vec2(dx, dy);
+      vec4 a = S(p + o + vec2(uShift * on, 0.0)), b = S(p + o), c = S(p + o - vec2(uShift * on, 0.0));
+      gl_FragColor = vec4(a.r, b.g, c.b, max(b.a, max(a.a, c.a)));
+    }`,
+  smear: HEAD + /* glsl */ `
+    uniform vec2 uStep; uniform float uFade, uN;
+    void main(){
+      vec2 p = P(); float a = 0.0;
+      for (float i = 0.0; i <= 32.0; i += 1.0){
+        if (i > uN) break;
+        a = max(a, S(p - uStep * i).a * (1.0 - uFade * i / max(uN, 1.0)));
+      }
+      gl_FragColor = vec4(a);
+    }`,
+  turbulent: HEAD + /* glsl */ `
+    uniform float uAmt, uSize, uSeed, uEvo, uOct;
+    float fbm(vec2 g){ float n = 0.0, am = 0.5, tot = 0.0; for (int k = 0; k < 4; k++){ if (float(k) >= uOct) break; n += VN(g) * am; tot += am; g = g * 2.03 + 11.7; am *= 0.5; } return n / tot; }
+    void main(){
+      vec2 p = P(); vec2 g = p / uSize + uSeed * 13.7;
+      vec2 d = vec2(fbm(g + vec2(uEvo, 0.0)), fbm(g + vec2(37.2, 17.9 + uEvo))) - 0.5;
+      gl_FragColor = S(p + d * 2.0 * uAmt);
+    }`,
+  feather: HEAD + /* glsl */ `
+    uniform sampler2D tBlur;
+    void main(){ gl_FragColor = texture2D(tSrc, vUv) * clamp((texture2D(tBlur, vUv).a - 0.5) * 2.0, 0.0, 1.0); }`,
+  mirror: HEAD + /* glsl */ `
+    uniform vec2 uC, uN;
+    void main(){ vec2 p = P(); float d = dot(p - uC, uN); if (d > 0.0) p -= 2.0 * d * uN; gl_FragColor = S(p); }`,
+  polar: HEAD + /* glsl */ `
+    uniform vec2 uC; uniform float uR, uInvP;
+    void main(){
+      vec2 p = P(); vec2 q = p - uC;
+      if (uInvP > 0.5) { float a = (p.x / uRes.x) * 6.2831853, r = (1.0 - p.y / uRes.y) * uR; gl_FragColor = S(uC + vec2(sin(a), -cos(a)) * r); }
+      else { float a = fract(atan(q.x, -q.y) / 6.2831853), r = length(q) / uR; gl_FragColor = r > 1.0 ? vec4(0.0) : S(vec2(a * uRes.x, (1.0 - r) * uRes.y)); }
+    }`,
+  sharpen: HEAD + /* glsl */ `
+    uniform float uAmt;
+    void main(){ vec2 p = P(); vec4 c = S(p);
+      vec4 n = S(p + vec2(1.0, 0.0)) + S(p - vec2(1.0, 0.0)) + S(p + vec2(0.0, 1.0)) + S(p - vec2(0.0, 1.0));
+      vec4 o = c + (c * 4.0 - n) * uAmt; gl_FragColor = vec4(clamp(o.rgb, 0.0, c.a), c.a); }`,
 }
 
 const D2R = Math.PI / 180
 const dirOf = (deg) => [Math.sin(deg * D2R), -Math.cos(deg * D2R)]
 const pct = (v, d) => { const x = num(v, d); return x > 1.0001 ? x / 100 : x } // 0〜1 でも 0〜100 でも受ける
+const V2 = () => new THREE.Vector2(), V4 = () => new THREE.Vector4()
+
+// type → はみ出す量(レイヤーの px)。RT の余白を決めるのに使う
+const PAD = {
+  blur: (p) => num(p.radius, 10) * 1.3 + 1,
+  glow: (p) => num(p.radius, 20) * 1.3 + 1,
+  rgb_shift: (p) => Math.abs(num(p.amount, 4)) + 1,
+  wave: (p) => Math.abs(num(p.amp, 10)) + 1,
+  raster: (p) => Math.abs(num(p.amp, 10)) + 1,
+  mosaic: () => 0,
+  drop_shadow: (p) => (p.x != null || p.y != null ? Math.hypot(num(p.x, 0), num(p.y, 0)) : Math.abs(num(p.distance, 12))) + num(p.blur, 12) * 1.3 + 1,
+  inner_shadow: () => 0,
+  stroke_outline: (p) => (p.position === 'inner' ? 0 : num(p.width, 4) + num(p.blur ?? p.softness, 0) + 2),
+  outline: (p) => (p.position === 'inner' ? 0 : num(p.width ?? p.size, 4) + num(p.blur ?? p.softness, 0) + 2),
+  trace_outline: (p) => num(p.width, 8) / 2 + 2,
+  directional_blur: (p) => num(p.length, 40) * 0.65 + 1,
+  radial_blur: (p, r) => (p.kind === 'spin' || p.mode === 'spin' ? 0 : (Math.abs(num(p.amount, 20)) / 100) * Math.hypot(r.w, r.h) * 0.3),
+  halftone: () => 0,
+  glitch: (p) => Math.abs(num(p.amount, 40)) + Math.abs(num(p.rgb_shift, 6)) + 1,
+  long_shadow: (p) => num(p.length, 100) + 1,
+  turbulent_displace: (p) => Math.abs(num(p.amount, 20)) + 1,
+  feather: () => 0,
+  mirror: () => 0,
+  polar: () => 0,
+  sharpen: () => 0,
+}
+export const isPass = (type) => type in PAD
+export const PASS_TYPES = Object.keys(PAD)
 
 export class Effects {
   constructor(gfx) {
     this.g = gfx
     this.mats = {}
-    this.warned = new Set()
-    this.v2 = new THREE.Vector2()
+    this.v2 = V2()
   }
   mat(name, extra) {
-    return (this.mats[name] ??= this.g.passMaterial('fx_' + name, F[name], { tSrc: null, uRes: new THREE.Vector2(), ...extra }))
+    return (this.mats[name] ??= this.g.passMaterial('fx_' + name, F[name], { tSrc: null, uRes: V2(), ...extra }))
   }
   run1(name, extra, src, values, dstW, dstH) {
     const dst = this.g.acquire(dstW ?? src.width, dstH ?? src.height)
@@ -140,9 +246,12 @@ export class Effects {
     this.g.pass(m, dst, { tSrc: src.texture, ...values })
     return dst
   }
+  pad(type, p, rect) { const f = PAD[type]; return f ? Math.max(0, f(p, rect) || 0) : 0 }
 
-  // ガウスぼかし。大きい半径は縮小してから掛ける(ソフトウェア GL でも重くならないように)
-  blur(src, radius, dirX = 1, dirY = 1) {
+  // ガウスぼかし。大きい半径は縮小してから掛ける(ソフトウェア GL でも重くならないように)。
+  // dir = [x,y] を渡すとその向きだけ
+  // keepSmall = 縮小したままの RT を返す(呼び出し側が、小さい RT を引き伸ばして使えるとき)
+  blur(src, radius, dirX = 1, dirY = 1, dir = null, keepSmall = false) {
     const g = this.g
     if (!(radius > 0.05)) { const d = g.acquire(src.width, src.height); g.copy(src.texture, d); return d }
     let ds = 1
@@ -155,18 +264,26 @@ export class Effects {
       cur = nx; own = true
     }
     const sigma = Math.max(0.3, radius / 2 / ds)
-    const extra = { uDir: new THREE.Vector2(), uSigma: 1 }
-    if (dirX > 0) {
-      const a = this.run1('blur', extra, cur, { uDir: this.v2.set(dirX, 0), uSigma: sigma })
+    // 重み: w(i) = exp(-i²/2σ²)。(1,2)(3,4)…(9,10) を 1 組ずつにまとめ、合計が 1 になるよう割る
+    const w = (i) => Math.exp((-0.5 * i * i) / (sigma * sigma))
+    const offs = [], ws = []
+    let tot = 1
+    for (let k = 0; k < 5; k++) {
+      const a = w(2 * k + 1), b = w(2 * k + 2), sum = a + b
+      offs.push(sum > 1e-12 ? (a * (2 * k + 1) + b * (2 * k + 2)) / sum : 2 * k + 1.5); ws.push(sum); tot += 2 * sum
+    }
+    const m = this.mat('blur', { uDir: V2(), uW0: 1, uOffA: V4(), uWA: V4(), uOffB: V2(), uWB: V2() })
+    m.uniforms.uW0.value = 1 / tot
+    m.uniforms.uOffA.value.set(offs[0], offs[1], offs[2], offs[3]); m.uniforms.uWA.value.set(ws[0] / tot, ws[1] / tot, ws[2] / tot, ws[3] / tot)
+    m.uniforms.uOffB.value.set(offs[4], 0); m.uniforms.uWB.value.set(ws[4] / tot, 0)
+    const step = (x, y) => {
+      const a = this.run1('blur', null, cur, { uDir: this.v2.set(x, y) })
       if (own) g.release(cur)
       cur = a; own = true
     }
-    if (dirY > 0) {
-      const b = this.run1('blur', extra, cur, { uDir: this.v2.set(0, dirY), uSigma: sigma })
-      if (own) g.release(cur)
-      cur = b; own = true
-    }
-    if (cur.width !== src.width || cur.height !== src.height) {
+    if (dir) step(dir[0], dir[1])
+    else { if (dirX > 0) step(dirX, 0); if (dirY > 0) step(0, dirY) }
+    if (!keepSmall && (cur.width !== src.width || cur.height !== src.height)) {
       const up = g.acquire(src.width, src.height)
       g.copy(cur.texture, up)
       g.release(cur)
@@ -174,91 +291,176 @@ export class Effects {
     }
     return cur
   }
+  // α を w px 広げる(inv で縮める)。太いときは何回かに分ける(角が多角形にならないように)
+  dilate(src, w, inv, th = 0) {
+    const g = this.g
+    // 太い縁は半分の解像度で広げる(33 回読むパスなので、画素数を 1/4 にすると効く。境目は 1px ほど甘くなる)
+    const half = w >= 5 && src.width * src.height > 120000
+    let cur = src, own = false
+    if (half) { cur = g.acquire(Math.ceil(src.width / 2), Math.ceil(src.height / 2)); g.copy(src.texture, cur); own = true; w /= 2 }
+    const n = clamp(Math.ceil(w / 10), 1, 6)
+    for (let i = 0; i < n; i++) {
+      // 細い縁は読む回数を減らす(1〜2 画素なら 8 方向で足りる)
+      const ww = w / n
+      const nx = this.run1('dilate', { uWidth: 1, uInv: 0, uTh: 0, uN: 16, uHalf: 1 }, cur, { uWidth: ww, uInv: inv ? 1 : 0, uTh: i === 0 ? th : 0, uN: ww <= 2.5 ? 8 : ww <= 6 ? 12 : 16, uHalf: ww <= 2.5 ? 0 : 1 })
+      if (own) g.release(cur)
+      cur = nx; own = true
+    }
+    return cur
+  }
 
-  // 1 つ掛ける。src は解放しない。新しい RT を返す(効かないときは null)
-  apply(fx, f, fps, src, info) {
-    const p = evalAll(fx.params, f, fps)
-    const rs = info.rs, g = this.g
-    switch (fx.type) {
+  // 1 つ掛ける。p = 評価済みの値。src は解放しない。新しい RT を返す(効かないときは null)。
+  // info: {res, f, fps, rect:[x0,y0,x1,y1](レイヤーの箱。RT の px)}
+  apply(type, p, src, info) {
+    const rs = info.res, g = this.g, b = info.rect
+    const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2
+    switch (type) {
       case 'blur': {
         const r = num(p.radius, 10) * rs
+        if (r < 0.05) return null
         const dir = p.direction // 'h' | 'v' で片方向だけ
-        return this.blur(src, r, dir === 'v' ? 0 : 1, dir === 'h' ? 0 : 1)
+        return this.blur(src, r, dir === 'v' ? 0 : 1, dir === 'h' ? 0 : 1, null, !!info.small)
+      }
+      case 'directional_blur': {
+        const r = num(p.length, 40) * rs
+        if (r < 0.05) return null
+        return this.blur(src, r, 1, 1, dirOf(num(p.angle, 90)))
       }
       case 'glow': {
-        const b = this.run1('bright', { uThreshold: 0 }, src, { uThreshold: pct(p.threshold, 0.5) })
-        const bl = this.blur(b, num(p.radius, 20) * rs)
-        g.release(b)
+        const br = this.run1('bright', { uThreshold: 0 }, src, { uThreshold: pct(p.threshold, 0.5) })
+        const bl = this.blur(br, num(p.radius, 20) * rs)
+        g.release(br)
         const out = this.run1('glowAdd', { tGlow: null, uStrength: 1 }, src, { tGlow: bl.texture, uStrength: num(p.strength, 1) })
         g.release(bl)
         return out
       }
-      case 'color': {
-        const tint = p.tint != null ? toColor(p.tint) : null
-        const m = this.mat('color', { uBrightness: 0, uContrast: 1, uSaturation: 1, uHue: 0, uTintAmount: 0, uTint: new THREE.Vector3(1, 1, 1) })
-        return this.run1('color', null, src, {
-          uBrightness: num(p.brightness, 0) / 100, uContrast: Math.max(0, 1 + num(p.contrast, 0) / 100),
-          uSaturation: Math.max(0, 1 + num(p.saturation, 0) / 100), uHue: num(p.hue, 0) * D2R,
-          uTintAmount: tint ? clamp(num(p.tint_amount, 100) / 100, 0, 1) : 0,
-          uTint: m.uniforms.uTint.value.set(...(tint || [1, 1, 1]).slice(0, 3)),
-        })
-      }
       case 'rgb_shift': {
         const d = dirOf(num(p.angle, 90)), a = num(p.amount, 4) * rs
-        return this.run1('rgb_shift', { uOff: new THREE.Vector2() }, src, { uOff: this.v2.set(d[0] * a, d[1] * a) })
+        return this.run1('rgb_shift', { uOff: V2() }, src, { uOff: this.v2.set(d[0] * a, d[1] * a) })
       }
       case 'wave':
-        return this.run1('wave', { uAmp: 0, uFreq: 1, uPhase: 0, uVertical: 0 }, src, {
-          uAmp: num(p.amp, 10) * rs, uFreq: num(p.freq, 4), uPhase: num(p.speed, 1) * (f / fps) + num(p.phase, 0),
-          uVertical: p.direction === 'v' ? 1 : 0,
-        })
-      case 'noise':
-        return this.run1('noise', { uAmount: 0, uSeed: 0, uColorNoise: 0 }, src, {
-          uAmount: num(p.amount, 10) / 100, uSeed: (p.animated === false ? 0 : Math.round(f * 8) % 4096) + num(p.seed, 0), uColorNoise: p.color ? 1 : 0,
-        })
-      case 'mosaic':
-        return this.run1('mosaic', { uSize: 8 }, src, { uSize: Math.max(1, num(p.size, 16) * rs) })
-      case 'wipe': {
-        const d = dirOf(num(p.angle, 90)), b = info.bounds
-        const m = this.mat('wipe', { uDir: new THREE.Vector2(), uProgress: 0, uFeather: 0, uBounds: new THREE.Vector4() })
-        return this.run1('wipe', null, src, {
-          uDir: this.v2.set(d[0], d[1]), uProgress: clamp(num(p.progress, 0) / 100, 0, 1), uFeather: Math.max(0, num(p.feather, 0) * rs),
-          uBounds: m.uniforms.uBounds.value.set(b[0], b[1], b[2], b[3]),
+      case 'raster': {
+        const vert = p.direction === 'v' || !!p.vertical
+        // freq = コンポジションの高さ(縦波は幅)あたりの山の数(v1 と同じ)。wavelength(px)を書けばそちら
+        const k = p.wavelength != null ? 1 / Math.max(1, num(p.wavelength, 100) * rs) : num(p.freq, 4) / Math.max(1, (vert ? info.W : info.H) * rs)
+        return this.run1('wave', { uAmp: 0, uK: 1, uPhase: 0, uVertical: 0 }, src, {
+          uAmp: num(p.amp, 10) * rs, uK: k, uPhase: num(p.speed, 1) * (info.f / info.fps) + num(p.phase, 0) - (vert ? b[0] : b[1]) * k,
+          uVertical: vert ? 1 : 0,
         })
       }
-      case 'drop_shadow': {
-        const bl = this.blur(src, num(p.blur, 12) * rs)
-        const d = dirOf(num(p.angle, 135)), dist = num(p.distance, 12) * rs
+      case 'mosaic':
+        return this.run1('mosaic', { uSize: 8, uOrg: V2() }, src, { uSize: Math.max(1, num(p.size, 16) * rs), uOrg: this.v2.set(b[0], b[1]) })
+      case 'drop_shadow':
+      case 'inner_shadow': {
+        const inner = type === 'inner_shadow'
+        const br = num(p.blur, 12) * rs
+        const bl = br > 0.05 ? this.blur(src, br) : null // ぼかさない影は元の絵のアルファをそのまま使う
+        let ox, oy
+        if (p.x != null || p.y != null) { ox = num(p.x, 0) * rs; oy = num(p.y, 0) * rs }
+        else { const d = dirOf(num(p.angle, 135)), dist = num(p.distance, inner ? 6 : 12) * rs; ox = d[0] * dist; oy = d[1] * dist }
         const c = toColor(p.color ?? '#000000'), op = clamp(num(p.opacity, 60) / 100, 0, 1) * c[3]
-        const m = this.mat('shadow', { tBlur: null, uOff: new THREE.Vector2(), uColor: new THREE.Vector4() })
-        const out = this.run1('shadow', null, src, {
-          tBlur: bl.texture, uOff: this.v2.set(d[0] * dist, d[1] * dist), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], op),
-        })
+        const name = inner ? 'inner_shadow' : 'shadow'
+        const m = this.mat(name, { tBlur: null, uOff: V2(), uColor: V4() })
+        const out = this.run1(name, null, src, { tBlur: (bl || src).texture, uOff: this.v2.set(ox, oy), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], op) })
         g.release(bl)
         return out
       }
-      case 'stroke_outline': {
+      case 'stroke_outline':
+      case 'outline': {
         const c = toColor(p.color ?? '#000000')
-        const m = this.mat('stroke_outline', { uWidth: 1, uColor: new THREE.Vector4() })
-        return this.run1('stroke_outline', null, src, { uWidth: Math.max(0, num(p.width, 4) * rs), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]) })
+        const w = Math.max(0, num(p.width ?? p.size, 4) * rs)
+        if (w <= 0.01) return null
+        const pos = p.position || 'outer'
+        const wo = pos === 'inner' ? 0 : pos === 'center' ? w / 2 : w, wi = pos === 'inner' ? w : pos === 'center' ? w / 2 : 0
+        let ao = wo > 0 ? this.dilate(src, wo, false) : null
+        const ai = wi > 0 ? this.dilate(src, wi, true) : null
+        const soft = num(p.blur ?? p.softness, 0) * rs
+        if (ao && soft > 1.5) { const t = this.blur(ao, soft); g.release(ao); ao = t }
+        const m = this.mat('outline', { tOut: null, tIn: null, uColor: V4(), uOnly: 0, uUseIn: 0, uUseOut: 0 })
+        const out = this.run1('outline', null, src, {
+          tOut: ao ? ao.texture : src.texture, tIn: ai ? ai.texture : src.texture, uUseOut: ao ? 1 : 0, uUseIn: ai ? 1 : 0, uOnly: p.only || num(p.mix, 100) < 0 ? 1 : 0, // mix < 0(縁取りT の合成量)= 縁だけ
+          uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3] * clamp(num(p.opacity, 100) / 100, 0, 1)),
+        })
+        g.release(ao); g.release(ai)
+        return out
       }
-      default:
-        if (!this.warned.has(fx.type)) { this.warned.add(fx.type); console.warn(`[comp-engine] 未対応のエフェクト: ${fx.type}`) }
-        return null
+      case 'trace_outline': {
+        const c = toColor(p.color ?? '#ffffff')
+        const w = Math.max(0.5, (num(p.width, 8) * rs) / 2)
+        const th = clamp(num(p.threshold, 128) / 255, 0.02, 0.98)
+        const ao = this.dilate(src, w, false, th), ai = this.dilate(src, w, true, th)
+        const m = this.mat('trace', { tOut: null, tIn: null, uColor: V4(), uOnly: 0, uProgress: 1, uStart: 0, uC: V2() })
+        const out = this.run1('trace', null, src, {
+          tOut: ao.texture, tIn: ai.texture, uOnly: p.only_line ? 1 : 0, uProgress: clamp(num(p.progress, 100) / 100, 0, 1),
+          uStart: num(p.start, 0) / 100, uC: this.v2.set(cx, cy), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
+        })
+        g.release(ao); g.release(ai)
+        return out
+      }
+      case 'radial_blur': {
+        const spin = p.kind === 'spin' || p.mode === 'spin'
+        const amt = spin ? num(p.amount, 20) * D2R : num(p.amount, 20) / 100
+        if (Math.abs(amt) < 1e-4) return null
+        return this.run1('radial_blur', { uC: V2(), uAmt: 0, uSpin: 0 }, src, { uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs), uAmt: amt, uSpin: spin ? 1 : 0 })
+      }
+      case 'halftone': {
+        const a = num(p.angle, 45) * D2R
+        const fg = toColor(p.fg ?? p.color ?? '#000000'), bg = toColor(p.bg ?? '#ffffff00', [1, 1, 1, 0])
+        const m = this.mat('halftone', { uC: V2(), uCS: V2(), uSize: 8, uMin: 0, uMax: 1, uStagger: 0, uSelf: 1, uUseColor: 0, uInvert: 0, uFg: V4(), uBg: V4() })
+        m.uniforms.uCS.value.set(Math.cos(a), Math.sin(a))
+        m.uniforms.uBg.value.set(bg[0], bg[1], bg[2], bg[3])
+        return this.run1('halftone', null, src, {
+          uC: this.v2.set(cx, cy), uSize: Math.max(2, num(p.size, 8) * rs), uMin: num(p.min, 0) / 100, uMax: num(p.max, 100) / 100,
+          uStagger: p.stagger ? 1 : 0, uSelf: p.self_mask === false ? 0 : 1, uUseColor: p.use_color ? 1 : 0, uInvert: p.invert ? 1 : 0,
+          uFg: m.uniforms.uFg.value.set(fg[0], fg[1], fg[2], fg[3]),
+        })
+      }
+      case 'glitch': {
+        const sp = num(p.speed, info.fps)
+        return this.run1('glitch', { uAmt: 0, uBlock: 8, uSeed: 0, uRate: 0.3, uShift: 0 }, src, {
+          uAmt: num(p.amount, 40) * rs, uBlock: Math.max(1, num(p.block, 24) * rs), uSeed: num(p.seed, 1) * 31 + Math.floor((info.f / info.fps) * sp + 1e-6),
+          uRate: clamp(num(p.rate, 35) / 100, 0, 1), uShift: num(p.rgb_shift, 6) * rs,
+        })
+      }
+      case 'long_shadow': {
+        const len = Math.max(0, num(p.length, 100) * rs)
+        if (len < 0.5) return null
+        const d = dirOf(num(p.angle, 135))
+        const ex = { uStep: V2(), uFade: 0, uN: 32 }
+        const stepPx = len / 32
+        let mask = src
+        if (stepPx > 1) mask = this.run1('smear', ex, src, { uStep: this.v2.set((d[0] * stepPx) / 8, (d[1] * stepPx) / 8), uFade: 0, uN: 8 })
+        const m2 = this.run1('smear', ex, mask, { uStep: this.v2.set(d[0] * stepPx, d[1] * stepPx), uFade: clamp(num(p.fade, 0) / 100, 0, 1), uN: 32 })
+        if (mask !== src) g.release(mask)
+        const c = toColor(p.color ?? '#000000'), op = clamp(num(p.opacity, 50) / 100, 0, 1) * c[3]
+        const m = this.mat('shadow', { tBlur: null, uOff: V2(), uColor: V4() })
+        const out = this.run1('shadow', null, src, { tBlur: m2.texture, uOff: this.v2.set(0, 0), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], op) })
+        g.release(m2)
+        return out
+      }
+      case 'turbulent_displace':
+        return this.run1('turbulent', { uAmt: 0, uSize: 100, uSeed: 0, uEvo: 0, uOct: 2 }, src, {
+          uAmt: num(p.amount, 20) * rs, uSize: Math.max(1, num(p.size, 100) * rs), uSeed: num(p.seed, 1), uEvo: num(p.evolution, 0), uOct: clamp(Math.round(num(p.octaves, 2)), 1, 4),
+        })
+      case 'feather': {
+        const r = num(p.radius, 10) * rs
+        if (r < 0.2) return null
+        const bl = this.blur(src, r)
+        const out = this.run1('feather', { tBlur: null }, src, { tBlur: bl.texture })
+        g.release(bl)
+        return out
+      }
+      case 'mirror': {
+        const n = dirOf(num(p.angle, 90))
+        const m = this.mat('mirror', { uC: V2(), uN: V2() })
+        m.uniforms.uN.value.set(n[0], n[1])
+        return this.run1('mirror', null, src, { uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs) })
+      }
+      case 'polar':
+        return this.run1('polar', { uC: V2(), uR: 1, uInvP: 0 }, src, { uC: this.v2.set(cx, cy), uR: Math.max(1, Math.min(b[2] - b[0], b[3] - b[1]) / 2), uInvP: p.invert ? 1 : 0 })
+      case 'sharpen':
+        return this.run1('sharpen', { uAmt: 0 }, src, { uAmt: num(p.amount, 50) / 100 })
     }
-  }
-
-  // list を順に掛ける。src は呼び出し側の持ち物のまま。何も掛からなければ src をそのまま返す
-  run(list, f, fps, src, info) {
-    let cur = src
-    for (const fx of list) {
-      if (!fx || fx.enabled === false) continue
-      let out = null
-      try { out = this.apply(fx, f, fps, cur, info) } catch (err) { console.warn('[comp-engine] effect', fx.type, err) }
-      if (!out) continue
-      if (cur !== src) this.g.release(cur)
-      cur = out
-    }
-    return cur
+    return null
   }
 }

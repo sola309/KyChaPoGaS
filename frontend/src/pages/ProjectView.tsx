@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useProjectStore } from '../store/projectStore'
 import { Timeline } from '../components/Timeline/Timeline'
 import { PreviewPlayer } from '../components/Preview/PreviewPlayer'
@@ -12,6 +12,10 @@ import { useAutoPlaceGenerated } from '../hooks/useAutoPlaceGenerated'
 import { useCollab } from '../hooks/useCollab'
 import { CollabBar } from '../components/CollabBar'
 import { CAPTURE } from '../capture'
+import { useCompListStore, openCompEditor } from '../components/CompEditor/compList'
+
+// 🎞 コンポジション編集画面は開いたときに読み込む(本体のバンドルを重くしない)
+const CompEditor = lazy(() => import('../components/CompEditor/CompEditor').then(m => ({ default: m.CompEditor })))
 
 const MIN_TIMELINE_H  = 120
 const MAX_TIMELINE_H  = 600
@@ -37,6 +41,17 @@ export function ProjectView() {
   const shotEditor = useUIStore(st => st.shotEditor)
   const closeShotEditor = useUIStore(st => st.closeShotEditor)
   const [timelineH, setTimelineH] = useState(DEFAULT_TIMELINE_H)
+
+  // 🎞 コンポジション: 一覧(comp クリップの名前と「古い」印用)を読み、合図で編集画面を開く
+  const [compEditor, setCompEditor] = useState<{ compId: number | null } | null>(null)
+  const projectIdForComps = activeProject?.id
+  useEffect(() => {
+    if (projectIdForComps == null) return
+    void useCompListStore.getState().load(projectIdForComps)
+    const onOpen = (e: Event) => setCompEditor({ compId: (e as CustomEvent).detail?.compId ?? null })
+    window.addEventListener('kychapogas:open-comp', onOpen)
+    return () => { window.removeEventListener('kychapogas:open-comp', onOpen); setCompEditor(null) }
+  }, [projectIdForComps])
 
   // アセット一覧は AssetPanel が読み、onAssetsChange でここへ届く(以前はここでも
   // 同じ一覧を取得しており、起動時に同一の5MB応答を3回受けていた)。
@@ -136,6 +151,11 @@ export function ProjectView() {
         <ShotEditor projectId={activeProject.id} shotId={shotEditor.shotId}
           onClose={closeShotEditor} />
       )}
+      {compEditor && (
+        <Suspense fallback={null}>
+          <CompEditor projectId={activeProject.id} initialCompId={compEditor.compId} onClose={() => setCompEditor(null)} />
+        </Suspense>
+      )}
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Project header */}
@@ -146,6 +166,12 @@ export function ProjectView() {
             <span>{activeProject.width} × {activeProject.height}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            <button
+              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5"
+              title="コンポジション(レイヤーを重ねてキーフレームで動かす、入れ子のタイムライン)を開く"
+              data-open-comp-editor
+              onClick={() => openCompEditor(null)}
+            >🎞 コンポジション</button>
             <button
               className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5"
               title="プロジェクト一式を .kycha.zip に書き出し(別ストレージ保管用)"

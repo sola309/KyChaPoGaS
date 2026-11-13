@@ -94,6 +94,7 @@ export class CompEngine {
     }
     this.scene = null
     this.frame = 0
+    this.fontFaces = new Set()
   }
 
   get width() { return this.scene ? this.scene.W : 0 }
@@ -107,6 +108,27 @@ export class CompEngine {
       this.renderer.setSize(w, h, false)
       this.env.gfx.trim()
     }
+  }
+
+  // プロジェクトの書体を読み込む。list = [{family, url, weight?, style?}](url の "/..." は apiBase から)
+  async loadFonts(list) {
+    if (!Array.isArray(list) || typeof FontFace === 'undefined') return
+    await Promise.all(list.map(async (ft) => {
+      if (!ft || !ft.family || !ft.url) return
+      const key = `${ft.family}|${ft.url}|${ft.weight || ''}|${ft.style || ''}`
+      if (this.fontFaces.has(key)) return
+      this.fontFaces.add(key)
+      try {
+        const url = typeof ft.url === 'string' && ft.url.startsWith('/') && !ft.url.startsWith('//') ? this.env.apiBase + ft.url : ft.url
+        // 別名(aliases: 日本語の書体名など)でも引けるよう、同じファイルを名前ごとに登録する
+        for (const fam of [ft.family, ...(Array.isArray(ft.aliases) ? ft.aliases : [])]) {
+          const face = new FontFace(fam, `url("${url}")`, { weight: String(ft.weight || 'normal'), style: ft.style || 'normal' })
+          document.fonts.add(await face.load())
+        }
+        this.env.fontEpoch++
+      } catch (err) { console.warn(`[comp-engine] 書体を読めない: ${ft.family}`, err) }
+    }))
+    this.env.fonts.clear()
   }
 
   // comp = {id?, width, height, fps, duration_frames, data}
@@ -156,9 +178,12 @@ export class CompEngine {
     if (!s) return
     this.frame = f
     this.env.pending.length = 0
+    g.setScissor(null)
     const acc = s.render(f, [String(s.comp.id ?? '')])
+    g.setScissor(null)
     g.copy(acc.texture, null)
     g.release(acc)
+    g.gc()
   }
 
   pick(x, y, f = this.frame) { try { return this.scene ? this.scene.pick(x, y, f) : null } catch { return null } }
@@ -181,13 +206,12 @@ export class CompEngine {
     if (!this.scene || path !== 'transform.position') return
     if (value == null) this.scene.overrides.delete(String(id))
     else this.scene.overrides.set(String(id), { position: value })
-    const L = this.scene.layers.get(String(id))
-    if (L) for (const x of this.scene.layers.values()) { x.stamp = NaN; x.mvpStamp = NaN }
+    this.scene.resetStamps()
   }
   clearOverrides() {
     if (!this.scene) return
     this.scene.overrides.clear()
-    for (const x of this.scene.layers.values()) { x.stamp = NaN; x.mvpStamp = NaN }
+    this.scene.resetStamps()
   }
   // transform の値をそのコマで評価する
   valueAt(id, path, f = this.frame) {

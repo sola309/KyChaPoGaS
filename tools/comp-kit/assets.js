@@ -20,6 +20,7 @@ function setupTex(t, mip) {
 }
 
 const MAX_FRAMES = 8 // capture で持っておく動画のコマ数(コマごとに入れ替わるので少なくてよい)
+const MAX_SEQ = 96 // 連番画像を持っておく枚数
 
 export class Assets {
   constructor(env) {
@@ -30,7 +31,7 @@ export class Assets {
     this.tick = 0
   }
 
-  // 画像。transient = 動画のコマ(古いものから捨てる)
+  // 画像。transient = true: 動画のコマ / 'seq': 連番(どちらも古いものから捨てる)
   image(url, transient = false) {
     let e = this.images.get(url)
     if (!e) {
@@ -64,13 +65,15 @@ export class Assets {
     return e
   }
   evict() {
-    const list = [...this.images.entries()].filter(([, e]) => e.transient)
-    if (list.length <= MAX_FRAMES) return
-    list.sort((a, b) => a[1].used - b[1].used)
-    for (const [url, e] of list.slice(0, list.length - MAX_FRAMES)) {
-      if (e.state === 'loading') continue
-      e.tex?.dispose()
-      this.images.delete(url)
+    for (const [kind, max] of [[true, MAX_FRAMES], ['seq', MAX_SEQ]]) {
+      const list = [...this.images.entries()].filter(([, e]) => e.transient === kind)
+      if (list.length <= max) continue
+      list.sort((a, b) => a[1].used - b[1].used)
+      for (const [url, e] of list.slice(0, list.length - max)) {
+        if (e.state === 'loading') continue
+        e.tex?.dispose()
+        this.images.delete(url)
+      }
     }
   }
 

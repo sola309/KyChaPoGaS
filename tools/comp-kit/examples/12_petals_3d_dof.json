@@ -1,0 +1,564 @@
+{
+ "id": "ex12",
+ "name": "12 花びら(3D カメラ・被写界深度)",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#fff6f8",
+  "layers": [
+   {
+    "id": "cam",
+    "type": "camera",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "zoom": 1400,
+     "target": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         960,
+         560,
+         0
+        ]
+       },
+       {
+        "f": 180,
+        "v": [
+         960,
+         500,
+         600
+        ],
+        "e": "inOutQuad"
+       }
+      ]
+     },
+     "dof": {
+      "focus_distance": {
+       "k": [
+        {
+         "f": 0,
+         "v": 1500
+        },
+        {
+         "f": 180,
+         "v": 2100,
+         "e": "inOutQuad"
+        }
+       ]
+      },
+      "aperture": 26,
+      "max_blur": 28
+     }
+    },
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         760,
+         620,
+         -1500
+        ]
+       },
+       {
+        "f": 180,
+        "v": [
+         1100,
+         520,
+         -1250
+        ],
+        "e": "inOutQuad"
+       }
+      ],
+      "wiggle": {
+       "freq": 0.8,
+       "amp": [
+        14,
+        10,
+        0
+       ],
+       "seed": 3
+      }
+     },
+     "rotation": {
+      "v": [
+       0,
+       0,
+       0
+      ],
+      "wiggle": {
+       "freq": 0.6,
+       "amp": [
+        0,
+        0,
+        1.2
+       ],
+       "seed": 9
+      }
+     }
+    }
+   },
+   {
+    "id": "title",
+    "type": "text",
+    "three_d": true,
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      520,
+      600
+     ]
+    },
+    "source": {
+     "text": "桜",
+     "font": "Noto Serif JP",
+     "weight": 700,
+     "size": 420,
+     "fill": "#ffffff",
+     "stroke": "#e65163",
+     "stroke_width": 6
+    },
+    "transition_in": {
+     "type": "blur",
+     "radius": 50,
+     "duration": 30
+    }
+   },
+   {
+    "id": "sub",
+    "type": "text",
+    "three_d": true,
+    "billboard": true,
+    "in": 20,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      800,
+      600
+     ]
+    },
+    "source": {
+     "text": "billboard: いつもカメラを向く",
+     "size": 44,
+     "weight": 700,
+     "fill": "#69416e",
+     "plate": {
+      "color": "#ffffff",
+      "opacity": 85,
+      "padding": [
+       20,
+       8
+      ],
+      "radius": 30
+     }
+    },
+    "transition_in": {
+     "type": "fade",
+     "duration": 20
+    }
+   },
+   {
+    "id": "petals0",
+    "type": "particles",
+    "three_d": true,
+    "in": -120,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      -700
+     ]
+    },
+    "source": {
+     "seed": 11,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -900,
+       0
+      ],
+      "area": [
+       3600,
+       100,
+       500
+      ],
+      "rate": 16,
+      "life": 9,
+      "size": [
+       46,
+       46
+      ],
+      "gravity": [
+       0,
+       30,
+       0
+      ],
+      "wind": [
+       70,
+       0,
+       0
+      ],
+      "speed": 150,
+      "sway": {
+       "amp": 70,
+       "freq": 0.35
+      },
+      "colors": [
+       "#ffd9e4",
+       "#ffb7cd",
+       "#fff0f4",
+       "#f8a5c2"
+      ]
+     }
+    }
+   },
+   {
+    "id": "petals1",
+    "type": "particles",
+    "three_d": true,
+    "in": -120,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      -200
+     ]
+    },
+    "source": {
+     "seed": 18,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -900,
+       0
+      ],
+      "area": [
+       3600,
+       100,
+       500
+      ],
+      "rate": 21,
+      "life": 9,
+      "size": [
+       46,
+       46
+      ],
+      "gravity": [
+       0,
+       30,
+       0
+      ],
+      "wind": [
+       70,
+       0,
+       0
+      ],
+      "speed": 150,
+      "sway": {
+       "amp": 70,
+       "freq": 0.35
+      },
+      "colors": [
+       "#ffd9e4",
+       "#ffb7cd",
+       "#fff0f4",
+       "#f8a5c2"
+      ]
+     }
+    }
+   },
+   {
+    "id": "petals2",
+    "type": "particles",
+    "three_d": true,
+    "in": -120,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      400
+     ]
+    },
+    "source": {
+     "seed": 25,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -900,
+       0
+      ],
+      "area": [
+       3600,
+       100,
+       500
+      ],
+      "rate": 26,
+      "life": 9,
+      "size": [
+       46,
+       46
+      ],
+      "gravity": [
+       0,
+       30,
+       0
+      ],
+      "wind": [
+       70,
+       0,
+       0
+      ],
+      "speed": 150,
+      "sway": {
+       "amp": 70,
+       "freq": 0.35
+      },
+      "colors": [
+       "#ffd9e4",
+       "#ffb7cd",
+       "#fff0f4",
+       "#f8a5c2"
+      ]
+     }
+    }
+   },
+   {
+    "id": "petals3",
+    "type": "particles",
+    "three_d": true,
+    "in": -120,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      1100
+     ]
+    },
+    "source": {
+     "seed": 32,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -900,
+       0
+      ],
+      "area": [
+       3600,
+       100,
+       500
+      ],
+      "rate": 31,
+      "life": 9,
+      "size": [
+       46,
+       46
+      ],
+      "gravity": [
+       0,
+       30,
+       0
+      ],
+      "wind": [
+       70,
+       0,
+       0
+      ],
+      "speed": 150,
+      "sway": {
+       "amp": 70,
+       "freq": 0.35
+      },
+      "colors": [
+       "#ffd9e4",
+       "#ffb7cd",
+       "#fff0f4",
+       "#f8a5c2"
+      ]
+     }
+    }
+   },
+   {
+    "id": "petals4",
+    "type": "particles",
+    "three_d": true,
+    "in": -120,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      2000
+     ]
+    },
+    "source": {
+     "seed": 39,
+     "emitter": {
+      "preset": "petals",
+      "position": [
+       0,
+       -900,
+       0
+      ],
+      "area": [
+       3600,
+       100,
+       500
+      ],
+      "rate": 36,
+      "life": 9,
+      "size": [
+       46,
+       46
+      ],
+      "gravity": [
+       0,
+       30,
+       0
+      ],
+      "wind": [
+       70,
+       0,
+       0
+      ],
+      "speed": 150,
+      "sway": {
+       "amp": 70,
+       "freq": 0.35
+      },
+      "colors": [
+       "#ffd9e4",
+       "#ffb7cd",
+       "#fff0f4",
+       "#f8a5c2"
+      ]
+     }
+    }
+   },
+   {
+    "id": "cards",
+    "type": "shape",
+    "three_d": true,
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      700,
+      1600
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 150,
+     "height": 150,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 40,
+       "line_width": 1.5
+      }
+     },
+     "stroke": "#c9a227",
+     "stroke_width": 6
+    },
+    "repeater": {
+     "count": 40,
+     "mode": "random",
+     "random": {
+      "area": [
+       5200,
+       1300,
+       2600
+      ],
+      "seed": 4,
+      "rotation": 30,
+      "scale_range": [
+       60,
+       140
+      ],
+      "rotation_3d": 25
+     }
+    }
+   },
+   {
+    "id": "floor",
+    "type": "pattern",
+    "three_d": true,
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      1250,
+      1800
+     ],
+     "rotation": [
+      -82,
+      0,
+      0
+     ]
+    },
+    "source": {
+     "kind": "seigaiha",
+     "colors": [
+      "#fdeff2",
+      "#f3b6c4"
+     ],
+     "size": 180,
+     "rings": 4,
+     "ratio": 0.2,
+     "width": 9000,
+     "height": 7000
+    }
+   },
+   {
+    "id": "sky",
+    "type": "solid",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#bfe3f5"
+        ],
+        [
+         0.6,
+         "#fde8ee"
+        ],
+        [
+         1,
+         "#fff6f8"
+        ]
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}

@@ -165,3 +165,115 @@ eng.dispose()
 3. マスク・マット・エフェクト・文字ごとアニメ・入れ子・adjustment
 4. model(GLB)・particles・モーションブラー
 5. 参考作品(AviUtl の 2 プロジェクト)との差の洗い出し → 足りない機能、exo/aup の取り込み
+
+## v1.1 の追加
+
+2026-11-14。参考作品(AviUtl / AE)の読み解き(`reference/aviutl_mad/ANALYSIS.md` 7 章)に合わせて、文書の書式を足した。
+v1 の文書はそのまま読める(`version` は 1 のまま。足した項目は書かなければ v1 と同じ動き)。
+編集画面むけの機械可読な一覧は `tools/comp-kit/schema.json`(エフェクト・レイヤー種別・共通項目・合成モード・イージング・プリセット)。
+
+### エフェクトは「上から順の列」。位置の足し算・切り抜きも同じ列に書く
+
+`effects` は配列の順に掛かる。同じ種類を何個重ねてもよい。長さ・座標の単位は **拡大・回転する前のレイヤーの px**(原点 = レイヤーの中心。拡大率 50% のレイヤーに幅 30 の帯を切ると、画面では 15px)。
+角度は 0° = 上・時計回り。エフェクトはレイヤー空間で掛かり、そのあと transform で画面に置く(v1 の「画面空間で掛ける」をやめた。`"fx_space": "screen"` は無い)。
+
+- **軽いエフェクト**(schema の `cheap: true`)は、レンダーターゲットを使わない。位置の足し算は行列に畳み、切り抜き・色はレイヤーを描くシェーダの中で順に評価する。
+  切り抜き(`clip_line` `crop` `mask_shape` `iris`)は描く四角形そのものも切りつめる(全面の四角を細い帯に切る、という作りが軽い)。
+- **重いエフェクト**(ぼかし・縁・影・ゆがみ)が出てきたときだけ、「レイヤーの箱 + はみ出す分」の大きさの RT に描いて掛ける。RT が画面の 1.5 倍より大きくなるとき・範囲の決まらない絵(粒子・文字ごとアニメ・モデル)は画面大の RT で掛ける。
+- `crop` で切ったあとは、切ったあとの箱が「レイヤーの箱」になる(あとに続く `clip_line` の中心、`mask_shape` の既定の大きさ、`border`、`wipe` の範囲など)。
+- 対応していない `type`(取り込みで残した `{"type":"aviutl_script","name":...}` など)は飛ばす。警告は名前ごとに 1 回。
+
+**位置・並べる**
+
+| type | params(数・色はプロパティ値) | 働き |
+|---|---|---|
+| `offset` | `position:[x,y,z]`(足す。`{"x":..,"y":..}` の分け書きも可)、`scale`(% を掛ける。数か `[sx,sy]`)、`rotation`(足す。数 = Z、`[x,y,z]`)、`opacity`(% を掛ける) | AviUtl の 座標・拡大率・回転・透明度。1 レイヤーに何個でも。position は親の空間の px(拡大率に関係なく足す) |
+| `flip` | `h` `v`(真偽。別名 `horizontal` `vertical`。何も書かなければ左右)、`luma` `hue` `alpha`(輝度・色相・透明度の反転) | 反転。箱の中心で裏返す |
+| `repeat`(別名 `tile`) | `mode: "grid"`: `count_x` `count_y`、`gap_x` `gap_y`(自分の幅・高さに対する %。100 = すき間なし)、`spacing_x` `spacing_y`(足すすき間 px)、`stagger_rows`、`scroll_x` `scroll_y`(px。流す)、`mirror` / `"line"`: `count`(= `count_x`)、`gap`(= `gap_x`。ピッチ px。省略 = 自分の幅)、`angle`(既定 90 = 右)、`both` / `"circle"`: `count`、`radius`、`rotation`(開始角。= `angle`)、`arc`(範囲の度。= `sweep`。既定 360)、`rotate`(中心を向ける。既定 true) | 画像ループ・一方向に並べる・円形配置。この前に書いたエフェクトは 1 個ずつに、後に書いたものは並べた全体に掛かる。grid は中心をそろえて広がり、箱も全体の大きさになる |
+
+**切る・隠す**(どれも軽い)
+
+| type | params | 働き |
+|---|---|---|
+| `clip_line` | `cx` `cy`(箱の中心から px)、`angle`、`width`、`feather`、`invert` | 斜めクリッピング。法線 n = (−sin a, cos a)(a = 0 で下向き)。`width` 0 = n の側(a = 0 なら中心より下)を消す / 正 = 線を中心にその幅の帯だけ残す / 負 = 帯を消す |
+| `crop`(別名 `clip`) | `top` `bottom` `left` `right`(px)、`feather`、`recenter`(= `center`。切ったあとの絵の中心を元の中心へ寄せる) | クリッピング。絵は動かさず端が欠ける |
+| `blinds` | `ratio`(残す %)、`pitch`(縞の幅 px。別名 `width`。`count` でも可)、`angle`、`stagger`(%。縞ごとに開く時刻をずらす)、`feather`、`phase`(px) | 斜めブラインド。角度の向きに pitch ごとの縞を並べ、各縞の頭から ratio % を残す |
+| `clip_sector` | `start`、`sweep`(時計回りが正。負も可)、`cx` `cy`、`feather`、`keep` | 扇クリッピング。start から sweep の扇形を **消す**。`keep: true` でその扇形だけ残す |
+| `radial_wipe` | `start`、`sweep`(または `progress` %)、`cx` `cy`、`feather` | 扇形だけ **残す**(clip_sector の逆) |
+| `iris` | `progress`(%)か `radius`(px)、`shape`(circle / rect / diamond / star / polygon)、`sides`、`inner`、`cx` `cy`、`feather`、`invert` | 形で開く |
+| `wipe` | `progress` `angle` `feather` | v1 と同じ。範囲はレイヤーの箱 |
+| `mask_shape`(別名 `mask`) | `shape`(rect / ellipse / diamond / triangle / pentagon / hexagon / star / polygon)、`x` `y`、`size` + `aspect`(正 = 横を縮める %、負 = 縦を縮める %)または `w` `h`、`rotation`、`radius`(rect の角丸)、`sides` `inner`、`feather`、`expansion`、`invert`、`opacity`、`fit_original` | マスク(図形)。レイヤーに付いて動く。大きさを書かなければレイヤーの箱 |
+| `mask_image` | `asset_id`(または `url`)、`x` `y`、`size`(画像の長辺 px。0・省略 = 元の大きさ)、`scale`、`aspect`、`rotation`、`feather`、`invert`、`channel`("alpha" / "luma" / 省略 = アルファがあればアルファ、無ければ輝度)、`opacity` | マスク(画像)。1 回の描画で 2 枚まで(超えると RT に描き出す) |
+| `opacity` | `amount`(%) | 列の途中で不透明度を掛ける |
+
+**色**(どれも軽い)
+
+`fill`(`color` `amount` `keep_luma`。単色化)、`tint`(= 輝度を保つ fill)、`color`(v1 の brightness / contrast / saturation / hue / tint に `luminance`(100 = 元)と `gamma` を足した)、`grayscale`(`amount`)、
+`duotone`(`dark` `light` `gamma` `amount`)、`threshold`(別名 `binarize`。`level` 0〜255、`light` `dark`、`softness`、`amount`。色に `#rrggbbaa` を書けば片側を透明にできる)、
+`bleach_bypass`(`amount` `saturation` `gamma`)、`invert`(`amount` `luma_only`)、`levels`(`in_black` `in_white` `gamma` `out_black` `out_white`)、`gradient_map`(`colors` 2〜4、`amount`)、`posterize`(`levels`)、
+`chroma_key`(`color` `hue_range` `sat_range` `edge` `spill`。範囲は 256 目盛り。`mode: "color_key"` + `diff_range` で色の近さだけ)、`luma_key`(`threshold` `softness` `invert`)、
+`vignette`(`amount` `radius` `softness` `color`)、`flash`(`amount` `color`)、`lightleak`(`color` `x` `y` `radius` `amount` `angle` `stretch`)、
+`gradient_overlay`(別名 `gradient`。`color` → `color2` または `colors` 2〜4、`shape` linear / radial、`angle`(0 = 上から下へ)、`cx` `cy`、`width`、`amount`、`blend` normal / add / subtract / multiply / screen / overlay / lighten / darken / difference)、
+`border`(`width` `color` `position` inside / center / outside、`opacity`)、`noise`(v1 と同じ)、
+`overlay_source`(`asset_id` / `url` / `comp_id`、`mode` over / under / replace_color / luma_to_alpha、`x` `y` `scale` `opacity`、`start` `speed`、`tile`、`fit`、`kind: "video"`)= 別の素材をレイヤーの絵に重ねる・色だけ置き換える。
+
+**重いエフェクト**
+
+v1 の `blur`(+ `variant: "directional" | "radial"`)`glow` `rgb_shift` `wave` `mosaic` `drop_shadow`(+ `x` `y` での指定)`stroke_outline` に加えて:
+`stroke_outline`(別名 `outline`)に `position`(outer / inner / center)`blur` `opacity` `only`(縁だけ。`mix < 0` も同じ)、
+`inner_shadow`、`long_shadow`(`length` `angle` `color` `opacity` `fade`)、`trace_outline`(`progress` `width` `start` `threshold` `color` `only_line`。輪郭の帯を、中心まわりの角度で progress % まで見せる。AviUtl の輪郭追跡の近似)、`feather`(`radius`)、
+`directional_blur`(`length` `angle`)、`radial_blur`(`amount`、`mode` zoom / spin、`cx` `cy`)、`sharpen`、`raster`(`amp` `wavelength` `speed` `vertical`)、`turbulent_displace`(`amount` `size` `seed` `evolution` `octaves`)、
+`halftone`(`size` `min` `max` `angle` `fg` `bg` `stagger` `self_mask` `use_color` `invert`)、`glitch`(`amount` `block` `rate` `rgb_shift` `seed` `speed`)、`mirror`(`angle` `cx` `cy`)、`polar`(`invert`)。
+`wave` の `freq` は v1 と同じく「コンポジションの高さあたりの山の数」。
+
+### プロパティ値・イージング
+
+- `e`: v1 の名前に加えて Penner 式の全種類 `inQuad` `outQuad` `inOutQuad` `outInQuad`、同じく `Cubic` `Quart` `Quint` `Sine` `Expo` `Circ` `Elastic` `Back` `Bounce`。
+  ほかに `{"pow": n}`(n 乗で減速。TA の beki。`"out": false` で加速)、`{"back": s, "mode": "out" | "in" | "inOut"}`、`{"penner": 番号}`(AviUtl のイージング番号 1〜41)。
+- `{"k": [...], "ignore_mid": true, "e": ...}`: 最初のキーから最後のキーへ 1 本の補間(途中のキーは見ない。中間点無視)。
+- `transform.position`(と `offset.position`)は `{"x": <prop>, "y": <prop>, "z": <prop>}` と分けて書ける。
+
+### レイヤーの追加項目
+
+| 項目 | 意味 |
+|---|---|
+| `type: "pattern"` | 模様。`source: {kind, colors(1〜4), size, angle, offset:[x,y], line_width, softness, ratio, width, height, …}`。kind = stripes / checker / dots / grid / hex / triangles / uroko / yagasuri / asanoha / seigaiha / shippo / kagome / halftone / rays / concentric / waves / noise / grain / zigzag / gradient。式で描くのでどの拡大率でもくっきり。`offset` を動かすと流れる。kind ごとの追加: `stagger`(dots・halftone)、`slope`(yagasuri)、`rings`(seigaiha)、`count` `jitter` `inner` `seed`(rays)、`amplitude` `wavelength`(waves・zigzag)、`contrast` `octaves` `seed`(noise)、`amount`(grain)、`grad_angle` `grad_length` `grad_center` `grad_type` `dot_min` `dot_max`(halftone) |
+| `fill: {"pattern": {...}}` | shape・text・solid の塗りに模様。solid は `fill: {"gradient": {...}}` も可 |
+| `type: "group"` | グループ制御。`scope`: 自分より下の N 層(0・省略 = 下すべて)または id の配列。自分の `in`〜`out` の間だけ効く。transform は「画面の中心を軸にした回転・拡大 + 位置のずれ」(position が画面の中心なら動かさない)、`opacity` と `effects` は対象の各レイヤーへ配る(effects は各レイヤーの列の末尾に足す)。入れ子可(内側 → 外側) |
+| `type: "camera"` の追加 | `scope`(group と同じ。範囲の違うカメラを同時に置ける。範囲に入っていない 3D レイヤーは既定のカメラ)、`source.zoom`(距離。AviUtl は 1024)、`source.ortho`、`source.target_layer` / `source.targets` + `source.target_index`(レイヤーの位置を注視。position を書かなければその正面 zoom の距離に据える)、`source.zbuffer: false`(奥行きで並べ替えず配列の順)、`source.dof: {focus_distance, aperture, max_blur}`(レイヤーごとに、ぼかし半径 = aperture × |d − focus| / d。d = anchor の奥行き)。`target` は position と同じ空間(親があれば親の空間) |
+| `type: "sequence"` / `source.sequence` | 連番画像。`{"asset_ids": [...]}` または `{"url_pattern": ".../%04d.png", "start": 1, "count": N, "fps": 24}`。image・video レイヤーの source に書いてもよい |
+| `repeater` | 複製。`{"count", "mode": "linear" | "grid" | "radial" | "random", "offset": {position, rotation, scale, opacity}(1 個ごとに重ねて掛かる), "grid": {cols, gap:[x,y], pitch:[x,y], stagger}, "radial": {radius, start_angle, sweep, face_center}, "random": {area:[w,h,d], seed, rotation, scale_range:[min,max], rotation_3d}, "time_offset": コマ, "order": "back" | "front"}`。置き場所のずれは親の空間で足し、回転・拡大は 1 個ずつ自分の anchor を中心に掛かる。`time_offset` は複製 i を i × time_offset コマ前の時刻で評価する(変形・不透明度。中身やエフェクトが動くレイヤーは 64 個まで中身ごと)。描画は 1 回にまとめる。3D レイヤーは奥から並べる。エフェクトは複製の前に 1 回だけ掛かる |
+| `time_remap` | 素材のコマを直接指定するプロパティ値(video・comp・sequence。`source.time_remap` でも可)。`freeze`(そのコマで止める)、`reverse`、`loop`(true / "pingpong"。`source.loop` でも可) |
+| `posterize_time` | コマ打ち。1 秒あたり N コマに間引いてレイヤー全体(変形・中身・エフェクト)を評価 |
+| `transition_in` / `transition_out` | `{"type": "fade" | "slide" | "wipe" | "blinds" | "iris" | "radial" | "zoom" | "flip" | "blur" | "clip", "duration": コマ, "e", …}`。文書は書き換えず、評価のときに変形・エフェクトとして足す。type ごと: slide `direction`(left / right / up / down か角度)`distance` `fade`、wipe `angle` `feather`、blinds `pitch` `angle` `stagger`、iris `shape` `feather`、radial `start` `direction: "ccw"`、zoom `from`(%)、flip `axis`、blur `radius`、clip `side`(最後まで隠れている側)|
+| `clip_to: "<id>"` | そのレイヤーのアルファで切り抜く(相手も映る。AviUtl の「上のオブジェクトでクリッピング」)。`clip_mode` は matte の mode と同じ。`matte.keep_source: true` も同じ意味 |
+| `billboard` / `double_sided` | 3D: いつもカメラを向く / `false` で裏面を描かない |
+| `guide: true` | 下絵。preview では描き、capture(書き出し)では描かない |
+| `blend` の追加 | `subtract` `exclusion` `hard_light` `soft_light` `color_dodge` `color_burn` `linear_burn` |
+| adjustment の `snapshot` | `true` = ここまでの画面に effects を掛けた 1 枚を、transform を掛けて元の画面の上に重ねる(フレームバッファ)。`"replace"` = 置き換える |
+| `masks[]` の追加 | `shape`: rounded_rect(`radius`)・path(`points` にベジェのハンドル)・シェイプの形(star / heart / flower など。`sides` `inner` も)。`expansion`(px。動かせる)。多角形は 48 頂点まで |
+
+描く順: v1 と同じ(配列の順。連続する 3D レイヤーの塊だけ anchor の奥行きで並べ替え)。交差する面・大きな床は正しく並ばない。
+
+### テキストの追加
+
+`writing: "vertical"`(縦書き。長音・かっこ・半角英数は 90° 回す、句読点・小書きは右上へ寄せる。`vertical_latin: "upright"` で英数字を立てる)、
+`align` × `valign`(`valign` を書くと、その側の端がレイヤーの原点になる = AviUtl の「左寄せ[上]」など。書かなければ箱の中心)、`wrap_width`(折り返し。禁則つき。縦書きでは列の長さ)、
+`runs: [{text, font, size, weight, italic, fill, tracking, baseline_shift}]`(文の途中の書体・サイズ替え)、`plate: {color, opacity, padding, radius, stroke, stroke_width}`(座布団)、
+`fill` に gradient(`{"gradient": {angle | from/to, stops}}`)・pattern、`strokes: [{color, width}]`(外側へ重ねる縁)、`shadow: {color, x, y, blur, opacity}`、
+`counter: {value(プロパティ値)| start + rate(/秒)+ from_frame, decimals, pad, prefix, suffix, separator, format, fixed_width, scramble, seed}`
+(format: "number" / "timecode" / "hh:mm:ss" / "mm:ss" / "mm:ss.cc" / `"####.##.##.##:##"` のひな形(# に数字を右づめ)/ AviUtl の番号 0〜7。scramble % は右側の数字をコマごとの乱数にする)、
+`visible_chars`(プロパティ値。タイプライター)、`arc: {radius, start, sweep}`(円周に沿わせる。負の radius で下側。`on_circle: {radius, rotation, arc}` も同じ)、`rotated_glyphs`(@ つき書体)、
+`per_char` に `unit: "char" | "word" | "line"`、`ranks: [...]`(順番の表)、`random: {position, rotation, scale, opacity, seed, amount}`(文字ごとの決まった乱れ)。
+書体: 起動時の `boot.fonts: [{family, url, weight, style, aliases}]` を `FontFace` で読んでから最初の 1 コマを描く。
+
+### シェイプ・粒子の追加
+
+- shape の `kind`: arc / pie / ring(`start` `end` `inner`)、arrow(`head` `shaft`)、chevron・cross(`thickness`)、heart、flower(`petals` `inner`)、petal、burst(`sides` `inner` `jitter` `seed`)、bubble(`radius` `tail` `tail_x` `tail_width`)。
+  polygon・star・path に `radius`(角丸)。`dash: [線, すき間]` `dash_offset`。path に `morph_to`(同じ頂点数のパス)+ `morph`(%)。
+- particles の `emitter`: `preset`(petals / confetti / snow / sparks / dust)、`sprite` に petal / heart / flower / rect と `{asset_id}` `{shape: {...}}` `{text: "桜"}`、`emit`(box / circle / line / point)`emit_edge`、
+  `wind` `turbulence: {amp, freq}` `sway: {amp, freq}` `flutter`(度/秒。立体のひらひら)`orient`、`size` `opacity` `color` は 3 個以上の列も可、`colors`(粒ごとに 1 色)、`bursts: [{f, count}]`。3D レイヤーではカメラから遠い順に描く(通常合成のとき)。
+
+### player.html
+
+boot に `fonts` を足した。postMessage に `comp:fonts {fonts}` を足した。ほかは v1 と同じ。

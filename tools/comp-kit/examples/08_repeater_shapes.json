@@ -1,0 +1,1152 @@
+{
+ "id": "ex08",
+ "name": "08 複製(repeater)とシェイプ",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#f6f1ea",
+  "layers": [
+   {
+    "id": "st0",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      80.0,
+      196
+     ]
+    },
+    "source": {
+     "text": "arc",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s0",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      80.0,
+      110
+     ]
+    },
+    "source": {
+     "kind": "arc",
+     "width": 110,
+     "height": 110,
+     "start": 0,
+     "end": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 90,
+        "v": 300,
+        "e": "outCirc"
+       }
+      ]
+     },
+     "stroke": "#e65163",
+     "stroke_width": 14,
+     "cap": "round",
+     "fill": null
+    }
+   },
+   {
+    "id": "st1",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      215.4,
+      196
+     ]
+    },
+    "source": {
+     "text": "pie",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s1",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      215.4,
+      110
+     ]
+    },
+    "source": {
+     "kind": "pie",
+     "width": 120,
+     "height": 120,
+     "start": -30,
+     "end": {
+      "k": [
+       {
+        "f": 0,
+        "v": -30
+       },
+       {
+        "f": 90,
+        "v": 240,
+        "e": "outCirc"
+       }
+      ]
+     },
+     "fill": "#69416e"
+    }
+   },
+   {
+    "id": "st2",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      350.8,
+      196
+     ]
+    },
+    "source": {
+     "text": "ring",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s2",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      350.8,
+      110
+     ]
+    },
+    "source": {
+     "kind": "ring",
+     "width": 120,
+     "height": 120,
+     "inner": 0.62,
+     "start": 0,
+     "end": {
+      "k": [
+       {
+        "f": 0,
+        "v": 1
+       },
+       {
+        "f": 120,
+        "v": 360,
+        "e": "inOutCirc"
+       }
+      ]
+     },
+     "fill": {
+      "gradient": {
+       "angle": 90,
+       "stops": [
+        [
+         0,
+         "#ffd166"
+        ],
+        [
+         1,
+         "#ef476f"
+        ]
+       ]
+      }
+     }
+    }
+   },
+   {
+    "id": "st3",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      486.20000000000005,
+      196
+     ]
+    },
+    "source": {
+     "text": "arrow",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s3",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      486.20000000000005,
+      110
+     ]
+    },
+    "source": {
+     "kind": "arrow",
+     "width": 130,
+     "height": 80,
+     "fill": "#2a9d8f"
+    }
+   },
+   {
+    "id": "st4",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      621.6,
+      196
+     ]
+    },
+    "source": {
+     "text": "chevron",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s4",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      621.6,
+      110
+     ]
+    },
+    "source": {
+     "kind": "chevron",
+     "width": 80,
+     "height": 110,
+     "thickness": 0.45,
+     "fill": "#e65163"
+    }
+   },
+   {
+    "id": "st5",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      757.0,
+      196
+     ]
+    },
+    "source": {
+     "text": "cross",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s5",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      757.0,
+      110
+     ]
+    },
+    "source": {
+     "kind": "cross",
+     "width": 100,
+     "height": 100,
+     "thickness": 0.3,
+     "fill": "#3b2d59",
+     "radius": 6
+    }
+   },
+   {
+    "id": "st6",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      892.4000000000001,
+      196
+     ]
+    },
+    "source": {
+     "text": "heart",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s6",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      892.4000000000001,
+      110
+     ]
+    },
+    "source": {
+     "kind": "heart",
+     "width": 110,
+     "height": 100,
+     "fill": "#ef476f",
+     "stroke": "#ffffff",
+     "stroke_width": 4
+    }
+   },
+   {
+    "id": "st7",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1027.8000000000002,
+      196
+     ]
+    },
+    "source": {
+     "text": "flower",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s7",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1027.8000000000002,
+      110
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 120,
+     "height": 120,
+     "petals": 5,
+     "fill": {
+      "pattern": {
+       "kind": "asanoha",
+       "colors": [
+        "#f6a5b0",
+        "#ffffff"
+       ],
+       "size": 36,
+       "line_width": 1.5
+      }
+     },
+     "stroke": "#c9a227",
+     "stroke_width": 5
+    }
+   },
+   {
+    "id": "st8",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1163.2,
+      196
+     ]
+    },
+    "source": {
+     "text": "petal",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s8",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1163.2,
+      110
+     ]
+    },
+    "source": {
+     "kind": "petal",
+     "width": 70,
+     "height": 100,
+     "fill": "#ffb7cd"
+    }
+   },
+   {
+    "id": "st9",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1298.6000000000001,
+      196
+     ]
+    },
+    "source": {
+     "text": "burst",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s9",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1298.6000000000001,
+      110
+     ]
+    },
+    "source": {
+     "kind": "burst",
+     "width": 140,
+     "height": 120,
+     "sides": 14,
+     "jitter": 0.25,
+     "fill": "#ffd166",
+     "stroke": "#111111",
+     "stroke_width": 4,
+     "join": "miter"
+    }
+   },
+   {
+    "id": "st10",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1434.0,
+      196
+     ]
+    },
+    "source": {
+     "text": "bubble",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s10",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1434.0,
+      110
+     ]
+    },
+    "source": {
+     "kind": "bubble",
+     "width": 140,
+     "height": 86,
+     "radius": 20,
+     "fill": "#ffffff",
+     "stroke": "#111111",
+     "stroke_width": 4
+    }
+   },
+   {
+    "id": "st11",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1569.4,
+      196
+     ]
+    },
+    "source": {
+     "text": "polygon r",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s11",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1569.4,
+      110
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "sides": 6,
+     "width": 110,
+     "height": 110,
+     "radius": 16,
+     "fill": "#4cc9f0"
+    }
+   },
+   {
+    "id": "st12",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1704.8000000000002,
+      196
+     ]
+    },
+    "source": {
+     "text": "dash",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s12",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1704.8000000000002,
+      110
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 110,
+     "height": 110,
+     "fill": null,
+     "stroke": "#3b2d59",
+     "stroke_width": 6,
+     "dash": [
+      14,
+      10
+     ],
+     "dash_offset": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 180,
+        "v": -240
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "st13",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1840.2,
+      196
+     ]
+    },
+    "source": {
+     "text": "morph",
+     "size": 18,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "s13",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1840.2,
+      110
+     ]
+    },
+    "source": {
+     "kind": "path",
+     "closed": true,
+     "fill": "#f72585",
+     "points": [
+      [
+       -50,
+       -50
+      ],
+      [
+       50,
+       -50
+      ],
+      [
+       50,
+       50
+      ],
+      [
+       -50,
+       50
+      ]
+     ],
+     "morph_to": [
+      [
+       0,
+       -65
+      ],
+      [
+       65,
+       0
+      ],
+      [
+       0,
+       65
+      ],
+      [
+       -65,
+       0
+      ]
+     ],
+     "morph": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 60,
+        "v": 100,
+        "e": "inOutCubic"
+       },
+       {
+        "f": 120,
+        "v": 0,
+        "e": "inOutCubic"
+       }
+      ],
+      "loop": "cycle"
+     }
+    }
+   },
+   {
+    "id": "h1",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      330,
+      250
+     ]
+    },
+    "source": {
+     "text": "linear + time_offset",
+     "size": 22,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "rep_lin",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         90,
+         700
+        ]
+       },
+       {
+        "f": 30,
+        "v": [
+         90,
+         350
+        ],
+        "e": "outCirc"
+       }
+      ]
+     },
+     "opacity": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 12,
+        "v": 100
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "chevron",
+     "width": 70,
+     "height": 110,
+     "thickness": 0.5,
+     "fill": "#e65163"
+    },
+    "repeater": {
+     "count": 9,
+     "mode": "linear",
+     "offset": {
+      "position": [
+       62,
+       0
+      ],
+      "opacity": 92
+     },
+     "time_offset": 3
+    }
+   },
+   {
+    "id": "h2",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      960,
+      250
+     ]
+    },
+    "source": {
+     "text": "radial(face_center)",
+     "size": 22,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "rep_rad",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      390
+     ],
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 180,
+        "v": 90
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "petal",
+     "width": 46,
+     "height": 84,
+     "fill": "#ffb7cd",
+     "stroke": "#e65163",
+     "stroke_width": 2
+    },
+    "repeater": {
+     "count": {
+      "k": [
+       {
+        "f": 0,
+        "v": 1
+       },
+       {
+        "f": 60,
+        "v": 12,
+        "e": "outQuad"
+       }
+      ]
+     },
+     "mode": "radial",
+     "radial": {
+      "radius": {
+       "k": [
+        {
+         "f": 0,
+         "v": 20
+        },
+        {
+         "f": 60,
+         "v": 86,
+         "e": "outBack"
+        }
+       ]
+      },
+      "start_angle": 0,
+      "sweep": 360,
+      "face_center": true
+     }
+    }
+   },
+   {
+    "id": "h3",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1580,
+      250
+     ]
+    },
+    "source": {
+     "text": "grid + time_offset",
+     "size": 22,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "rep_grid",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1580,
+      390
+     ],
+     "scale": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         100,
+         100
+        ]
+       },
+       {
+        "f": 20,
+        "v": [
+         40,
+         40
+        ],
+        "e": "inOutQuad"
+       },
+       {
+        "f": 40,
+        "v": [
+         100,
+         100
+        ],
+        "e": "inOutQuad"
+       }
+      ],
+      "loop": "cycle"
+     },
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 40,
+        "v": 90,
+        "e": "inOutQuad"
+       }
+      ],
+      "loop": "cycle"
+     }
+    },
+    "source": {
+     "kind": "rect",
+     "width": 44,
+     "height": 44,
+     "radius": 8,
+     "fill": "#69416e"
+    },
+    "repeater": {
+     "count": 40,
+     "mode": "grid",
+     "grid": {
+      "cols": 10,
+      "gap": [
+       12,
+       12
+      ]
+     },
+     "time_offset": 1
+    }
+   },
+   {
+    "id": "h4",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      480,
+      520
+     ]
+    },
+    "source": {
+     "text": "random × 500(1 回の描画)",
+     "size": 22,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "rep_rnd",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      480,
+      790
+     ],
+     "rotation": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 180,
+        "v": 180
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "star",
+     "sides": 5,
+     "width": 26,
+     "height": 26,
+     "inner": 0.45,
+     "fill": "#ffd166",
+     "stroke": "#b8860b",
+     "stroke_width": 1.5
+    },
+    "repeater": {
+     "count": 500,
+     "mode": "random",
+     "random": {
+      "area": [
+       880,
+       440,
+       0
+      ],
+      "seed": 7,
+      "rotation": 180,
+      "scale_range": [
+       40,
+       160
+      ]
+     }
+    }
+   },
+   {
+    "id": "h5",
+    "type": "text",
+    "in": 0,
+    "out": 100000,
+    "transform": {
+     "position": [
+      1440,
+      520
+     ]
+    },
+    "source": {
+     "text": "repeat エフェクト(流れるタイル)+ 画像を円形に",
+     "size": 22,
+     "weight": 700,
+     "fill": "#221914"
+    }
+   },
+   {
+    "id": "tile",
+    "type": "shape",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1210,
+      790
+     ]
+    },
+    "source": {
+     "kind": "flower",
+     "width": 70,
+     "height": 70,
+     "fill": "#e65163"
+    },
+    "effects": [
+     {
+      "type": "repeat",
+      "params": {
+       "mode": "grid",
+       "count_x": 5,
+       "count_y": 5,
+       "spacing_x": 18,
+       "spacing_y": 18,
+       "stagger_rows": true,
+       "scroll_x": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 180,
+          "v": 176
+         }
+        ]
+       },
+       "scroll_y": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 180,
+          "v": 88
+         }
+        ]
+       }
+      }
+     },
+     {
+      "type": "mask_shape",
+      "params": {
+       "shape": "ellipse",
+       "feather": 2
+      }
+     }
+    ]
+   },
+   {
+    "id": "ring_img",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1680,
+      790
+     ]
+    },
+    "source": {
+     "text": "杏",
+     "size": 54,
+     "weight": 900,
+     "fill": "#ffffff",
+     "plate": {
+      "color": "#e65163",
+      "padding": [
+       12,
+       6
+      ],
+      "radius": 40
+     }
+    },
+    "effects": [
+     {
+      "type": "outline",
+      "params": {
+       "width": 4,
+       "color": "#3b2d59"
+      }
+     }
+    ],
+    "repeater": {
+     "count": 8,
+     "mode": "radial",
+     "radial": {
+      "radius": 150,
+      "start_angle": {
+       "k": [
+        {
+         "f": 0,
+         "v": 0
+        },
+        {
+         "f": 180,
+         "v": 90
+        }
+       ]
+      },
+      "face_center": false
+     },
+     "offset": {
+      "scale": 100
+     }
+    }
+   },
+   {
+    "id": "bg",
+    "type": "pattern",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "kind": "seigaiha",
+     "colors": [
+      "#f6f1ea",
+      "#ece2d4"
+     ],
+     "size": 70,
+     "rings": 3,
+     "ratio": 0.12
+    }
+   }
+  ]
+ }
+}

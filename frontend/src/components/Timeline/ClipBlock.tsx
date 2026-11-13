@@ -16,6 +16,7 @@ import { RingTicks } from './RingTicks'
 import { isCreditClip, creditOf, creditLabel, eAt, gOf, holdOf, type CreditV1 } from '../Preview/creditLook'
 import { previewCredit, commitCreditDrag, cancelCreditDrag, settleBeforeDrag, shiftCreditHead } from './creditEdit'
 import { subscribeCreditMaps, creditMapsErrorFor } from '../Preview/creditFields'
+import { useCompListStore, compClipAttrs, openCompEditor } from '../CompEditor/compList'
 
 const noSub = () => () => {}
 const noErr = () => ''
@@ -146,7 +147,13 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
   // パネルを閉じていても気づけるようにクリップに ⚠ を出す(文字列が変わったときだけ描き直す)
   const creditErr = useSyncExternalStore(isCredit ? subscribeCreditMaps : noSub, isCredit ? () => creditMapsErrorFor(clip.id) : noErr)
   const openCredit = () => window.dispatchEvent(new CustomEvent('kychapogas:open-credit', { detail: { clipId: clip.id } }))
-  const colorClass = isFilter
+  // 🎞 コンポジション(描き出した動画を指すクリップ)。ダブルクリックで編集画面。中身が描き出しより新しいと「古い」
+  const compAttrs = clip.kind === 'comp' ? compClipAttrs(clip) : null
+  const isComp = compAttrs != null
+  const compInfo = useCompListStore(s => (compAttrs ? s.byId[compAttrs.comp_id] : undefined))
+  const compStale = isComp && (clip.asset_id == null || (compInfo != null && compInfo.rev !== compAttrs.rev))
+  const colorClass = isComp ? 'bg-purple-950 border-fuchsia-400'
+    : isFilter
     ? (clip.kind === 'blur' ? 'bg-cyan-950 border-cyan-600' : isSatsuei ? 'bg-amber-950 border-amber-500' : 'bg-zinc-800 border-zinc-400')
     : isRain ? 'bg-sky-950 border-sky-500'
     : isCredit ? (creditErr ? 'bg-red-950 border-red-500' : 'bg-slate-900 border-cyan-300')
@@ -467,6 +474,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           : ri?.low ? { outline: '2px solid rgb(220 38 38)', outlineOffset: '-2px' } : {}),
       }}
       onDoubleClick={() => {
+        if (isComp) { openCompEditor(compAttrs.comp_id); return }   // 🎞 消さずに編集画面を開く
         if (isCredit) { openCredit(); return }          // 🔤 字幕は消さない(素材なしのクリップは下の「削除」に落ちる)
         if (isSatsuei) { openSatsuei(); return }
         if (isFilter) { openFilter(); return }
@@ -476,6 +484,7 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
         else deleteClip(clip.id)
       }}
       title={remoteLock ? `${remoteLock.name} が編集中`
+        : isComp ? `🎞 コンポジション「${compInfo?.name ?? `#${compAttrs.comp_id}`}」${compStale ? '— 古い(中身が描き出しより新しい。編集画面の「描き出し」で差し替わります)' : ''} — ダブルクリックで編集`
         : isCredit && credit ? `${creditErr ? `⚠ この字幕は描けません: ${creditErr}(パネルで文字・大きさを直してください)\n` : ''}${creditLabel(credit)} — 出現 ${credit.timing.appear_frames} / 保持 ${holdOf(credit, clip.duration_frames)} / 消失 ${credit.timing.disappear_frames} コマ`
           + `${credit.label ? `・${credit.label}` : ''}${credit.group ? `・組 ${credit.group}` : ''}`
           + `${holdOf(credit, clip.duration_frames) < 0 ? '(出現と消失が重なっています)' : ''} — ダブルクリックで字幕の調整`
@@ -686,7 +695,10 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
               {ri.label}{ri.tier ? `·${ri.tier}` : ''}{ri.redraw ? '·♻' : ''}
             </span>
           )}
-          {isFilter
+          {isComp
+            ? <span className="px-1 rounded bg-black/55" data-comp-clip={compAttrs.comp_id}>🎞 {compInfo?.name ?? `コンポジション #${compAttrs.comp_id}`}
+                {compStale && <span className="ml-1 px-1 rounded bg-amber-500 text-black font-bold" data-comp-clip-stale>古い</span>}</span>
+            : isFilter
             ? <span className="px-1 rounded bg-black/55">{filterLabel(clip)}</span>
             : isCredit && credit ? <span className="px-1 rounded bg-black/55">{creditErr ? '⚠ ' : ''}{creditLabel(credit)}</span>
             : isRain ? <span className="px-1 rounded bg-black/55">🌧 雨 {Math.round((clip.opacity ?? 1) * 100)}%</span>
