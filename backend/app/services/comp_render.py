@@ -61,7 +61,7 @@ def player_html(comp: dict, mode: str, api_base: str = "", frame: int | None = N
     base = api_base.rstrip("/")
     boot = {"comp": comp, "mode": mode, "apiBase": base,
             "engineBase": "/api/comps/engine/"}
-    boot["fonts"] = [{"family": f["family"], "weight": f["weight"],
+    boot["fonts"] = [{"family": f["family"], "weight": f["weight"], "aliases": f.get("aliases", []),
                       "url": f"{base}/api/comps/fonts/{f['file']}"} for f in list_fonts()]
     if frame is not None:
         boot["frame"] = frame
@@ -97,7 +97,19 @@ def list_fonts() -> list[dict]:
                 w = next((v for k, v in (("thin", 100), ("extralight", 200), ("light", 300), ("medium", 500),
                                          ("semibold", 600), ("demibold", 600), ("extrabold", 800), ("heavy", 900),
                                          ("black", 900), ("bold", 700)) if k in st.replace(" ", "")), 400)
-                hit = (mt, {"family": fam, "weight": w, "style": style, "file": f.name})
+                aliases: list[str] = []
+                try:
+                    from fontTools.ttLib import TTFont
+                    tt = TTFont(str(f), fontNumber=0, lazy=True)
+                    for rec in tt["name"].names:
+                        if rec.nameID in (1, 16):
+                            n = rec.toUnicode().strip()
+                            if n and n != fam and n not in aliases:
+                                aliases.append(n)
+                    tt.close()
+                except Exception:
+                    pass
+                hit = (mt, {"family": fam, "weight": w, "style": style, "file": f.name, "aliases": aliases})
                 _font_cache[str(f)] = hit
             out.append(dict(hit[1]))
     return out
@@ -125,6 +137,19 @@ def remap_refs(data: dict, asset_fn=None, comp_fn=None) -> dict:
             seq["asset_ids"] = [asset_fn(x) if isinstance(x, int) else x for x in seq["asset_ids"]]
         if comp_fn and isinstance(src.get("comp_id"), int):
             src["comp_id"] = comp_fn(src["comp_id"])
+        sp = src.get("sprite")
+        if asset_fn and isinstance(sp, dict) and isinstance(sp.get("asset_id"), int):
+            sp["asset_id"] = asset_fn(sp["asset_id"])
+    # 効果の中の参照(mask_image・overlay_source など)
+    for ly in d.get("layers") or []:
+        for fx in (ly.get("effects") or []) if isinstance(ly, dict) else []:
+            pr = fx.get("params") if isinstance(fx, dict) else None
+            if not isinstance(pr, dict):
+                continue
+            if asset_fn and isinstance(pr.get("asset_id"), int):
+                pr["asset_id"] = asset_fn(pr["asset_id"])
+            if comp_fn and isinstance(pr.get("comp_id"), int):
+                pr["comp_id"] = comp_fn(pr["comp_id"])
     return d
 
 
@@ -140,13 +165,32 @@ def engine_file(path: str) -> Path | None:
 # ── 入れ子・参照 ──────────────────────────────────────────────────────────────
 
 def child_comp_ids(data: dict) -> set[int]:
+    """文書が中で使っているコンポジション(comp レイヤーと、効果 overlay_source の comp_id)。"""
     out = set()
     for ly in data.get("layers") or []:
+        if not isinstance(ly, dict):
+            continue
         if ly.get("type") == "comp":
             cid = (ly.get("source") or {}).get("comp_id")
             if isinstance(cid, int):
                 out.add(cid)
+        for fx in ly.get("effects") or []:
+            cid = (fx.get("params") or {}).get("comp_id") if isinstance(fx, dict) else None
+            if isinstance(cid, int):
+                out.add(cid)
     return out
+
+
+def is_stale_deep(c: Composition, session: Session) -> bool:
+    """描き出しが古いか。入れ子の子が変わった場合・素材ファイルが無い場合も古いとみなす。"""
+    a = session.get(Asset, c.rendered_asset_id) if c.rendered_asset_id else None
+    if not a or not Path(a.file_path).exists():
+        return True
+    try:
+        key = json.loads(a.gen_params_json or "{}").get("content_key", "")
+    except Exception:
+        key = ""
+    return key != content_key(c.id, session)
 
 
 def find_cycle(comp_id: int, data: dict, session: Session) -> bool:
@@ -343,12 +387,54 @@ def stale_comp_ids_for_project(project_id: int, session: Session) -> list[int]:
         c = session.get(Composition, cid) if isinstance(cid, int) else None
         if not c or cid in out:
             continue
-        a = session.get(Asset, c.rendered_asset_id) if c.rendered_asset_id else None
-        key = ""
-        try:
-            key = json.loads(a.gen_params_json or "{}").get("content_key", "") if a else ""
-        except Exception:
-            pass
-        if not a or not Path(a.file_path).exists() or key != content_key(cid, session):
+        if is_stale_deep(c, session):
             out.append(cid)
     return out
+
+
+# ── サムネイル(未描き出しでも 1 コマだけ描く)────────────────────────────────
+
+THUMB_DIR = DATA / "comp_cache" / "thumbs"
+_thumb_lock = threading.Lock()
+
+
+def comp_thumb(comp: dict, frame: int, width: int = 480) -> Path | None:
+    """コンポジションの 1 コマを小さい JPEG に。rev ごとにキャッシュ。ヘッドレスのブラウザを 1 回立てる(数秒)。"""
+    THUMB_DIR.mkdir(parents=True, exist_ok=True)
+    frame = max(0, min(int(frame), comp["duration_frames"] - 1))
+    out = THUMB_DIR / f"{comp['id']}_r{comp['rev']}_{frame}_{width}.jpg"
+    if out.exists():
+        return out
+    with _thumb_lock:
+        if out.exists():
+            return out
+        try:
+            import base64, io
+            from PIL import Image
+            from playwright.sync_api import sync_playwright
+            html = player_html(comp, "capture", API_BASE)
+            with sync_playwright() as p:
+                br = p.chromium.launch(args=["--use-gl=angle", "--use-angle=swiftshader",
+                                             "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"])
+                try:
+                    pg = br.new_page(viewport={"width": comp["width"], "height": comp["height"]})
+                    pg.set_content(html, wait_until="load")
+                    pg.evaluate("window.__madAssetsReady || 0")
+                    pg.evaluate("(t) => window.seek(t)", frame / comp["fps"] * 1000.0)
+                    durl = pg.evaluate("() => document.querySelector('canvas').toDataURL('image/png')")
+                finally:
+                    br.close()
+            im = Image.open(io.BytesIO(base64.b64decode(durl.split(",", 1)[1]))).convert("RGBA")
+            # 透明な所は市松にせず暗い地に
+            bg = Image.new("RGBA", im.size, (24, 24, 28, 255))
+            bg.alpha_composite(im)
+            bg = bg.convert("RGB")
+            bg.thumbnail((width, width))
+            bg.save(out, "JPEG", quality=82)
+            for old in THUMB_DIR.glob(f"{comp['id']}_r*_*.jpg"):
+                if f"_r{comp['rev']}_" not in old.name:
+                    old.unlink(missing_ok=True)
+        except Exception as e:
+            log.warning(f"comp thumb failed: {e}")
+            return None
+    return out if out.exists() else None

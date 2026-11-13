@@ -107,6 +107,7 @@ def list_comps(project_id: int, session: Session = Depends(get_session)):
     out = []
     for c in rows:
         d = CR.comp_dict(c)
+        d["stale_deep"] = CR.is_stale_deep(c, session)
         d["layer_count"] = len(d["data"].get("layers", []))
         del d["data"]            # 一覧は軽く
         out.append(d)
@@ -133,7 +134,23 @@ def create_comp(body: CompCreate, session: Session = Depends(get_session)):
 
 @router.get("/{comp_id}")
 def get_comp(comp_id: int, session: Session = Depends(get_session)):
-    return CR.comp_dict(_get(comp_id, session))
+    c = _get(comp_id, session)
+    d = CR.comp_dict(c)
+    d["stale_deep"] = CR.is_stale_deep(c, session)
+    return d
+
+
+@router.get("/{comp_id}/thumb")
+def comp_thumb(comp_id: int, frame: int | None = None, width: int = 480,
+               session: Session = Depends(get_session)):
+    """1 コマの小さい絵(未描き出しでも出る)。frame 省略時は長さの 1/3 のコマ。"""
+    c = _get(comp_id, session)
+    d = CR.comp_dict(c)
+    f = frame if frame is not None else d["duration_frames"] // 3
+    p = CR.comp_thumb(d, f, max(120, min(960, width)))
+    if not p:
+        raise HTTPException(503, "サムネイルを作れませんでした")
+    return FileResponse(p, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=60"})
 
 
 @router.patch("/{comp_id}")
