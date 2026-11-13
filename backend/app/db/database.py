@@ -153,6 +153,7 @@ def create_db_and_tables() -> None:
     from app.models.analysis import AnalysisResult  # noqa: F401
     from app.models.oplog import OperationLog  # noqa: F401
     from app.models.library import LibraryItem, LibraryCut  # noqa: F401
+    from app.models.composition import Composition  # noqa: F401
     SQLModel.metadata.create_all(engine)
     with engine.begin() as conn:
         _migrate(conn)

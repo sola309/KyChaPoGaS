@@ -144,6 +144,8 @@ app.include_router(rain_router.router, prefix="/api")
 app.include_router(satsuei_router.router, prefix="/api")
 app.include_router(library_router.router, prefix="/api")
 app.include_router(credits_router.router, prefix="/api")
+from app.routers import comps as comps_router  # noqa: E402
+app.include_router(comps_router.router, prefix="/api")
 
 
 @app.get("/api/build-id")

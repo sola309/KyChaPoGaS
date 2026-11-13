@@ -279,6 +279,8 @@ async def _dispatch(job: Job) -> None:
             await _separate_vocals(job, params)
         case "precompose":
             await _precompose(job, params)
+        case "render_comp":
+            await _render_comp(job, params)
         case "render_motion_graphics":
             await _render_motion_graphics(job, params)
         case "decompose_character":
@@ -416,6 +418,16 @@ async def _render_final(job: Job, params: dict) -> None:
 
     # project_id lives on the Job; params may omit it (the render dialog sends {}).
     project_id = params.get("project_id") or job.project_id
+    # 🎞 置いてあるコンポジションの描き出しが古ければ、先に描き直す(クリップの素材が差し替わる)
+    try:
+        from app.services import comp_render as _CR
+        with Session(engine) as session:
+            stale = _CR.stale_comp_ids_for_project(project_id, session)
+        for cid in stale:
+            log.info(f"render_final: comp {cid} を先に描き直す")
+            await _CR.render_comp(cid, job.id)
+    except Exception as e:
+        log.warning(f"comp の描き直しに失敗(古い描き出しのまま続ける): {e}")
     with Session(engine) as session:
         project = session.get(Project, project_id)
         if not project:
@@ -542,6 +554,16 @@ async def _precompose(job: Job, params: dict) -> None:
     _update_result_assets(job.id, [asset_id])
     _update_progress(job.id, 1.0)
     log.info(f"Precompose done → asset {asset_id}")
+
+
+# ── render_comp: コンポジション(入れ子のタイムライン)を動画素材に描き出す ─────────
+
+async def _render_comp(job: Job, params: dict) -> None:
+    from app.services.comp_render import render_comp
+    asset_id = await render_comp(int(params["comp_id"]), job.id,
+                                 progress_cb=lambda p: _update_progress(job.id, p))
+    _update_result_assets(job.id, [asset_id])
+    _update_progress(job.id, 1.0)
 
 
 # ── generate_image ────────────────────────────────────────────────────────────
