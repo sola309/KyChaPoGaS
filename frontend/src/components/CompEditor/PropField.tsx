@@ -429,7 +429,7 @@ export const PropField = memo(function PropField({ ids, layer, path, desc, label
   // ── optional で「切」: スイッチだけの行 ──
   if (off) {
     return (
-      <div className="flex items-center gap-1 min-h-[22px]" data-prop-path={path} data-prop-off>
+      <div className="flex items-center gap-1 min-h-[22px]" data-prop-path={path} data-prop-off data-prop-row="off">
         <span className="w-4 flex-shrink-0" />
         <input type="checkbox" checked={false} disabled={locked} data-opt-switch title="入にする(この項目を書く)"
                onChange={() => {
@@ -437,7 +437,7 @@ export const PropField = memo(function PropField({ ids, layer, path, desc, label
                  const leaf = path.split('.').pop(), cs = useCompStore.getState().settings
                  setRaw(ids, path, desc.default == null && leaf === 'width' ? cs.width : desc.default == null && leaf === 'height' ? cs.height : defaultFor(schema, desc))
                }} />
-        <span className={`${labelCls} text-zinc-500`} title={`${title}(${path})— 切(書かれていない)`}>{title}</span>
+        <span data-prop-label className={`${labelCls} text-zinc-500`} title={`${title}(${path})— 切(書かれていない)`}>{title}</span>
         <span className="text-[10px] text-zinc-700">—</span>
       </div>
     )
@@ -516,14 +516,14 @@ export const PropField = memo(function PropField({ ids, layer, path, desc, label
     // なし・単色は下の 1 行の形で出す(単色はキーフレーム可)
     const atKeyF = keyed && hasKeyAt(raw, frame)
     return (
-      <div className="flex items-start gap-1 min-h-[22px]" data-prop-path={path}>
+      <div className="flex items-start gap-1 min-h-[22px]" data-prop-path={path} data-prop-row>
         {mode === 'color' && desc.animatable !== false ? (
-          <button className={`w-4 h-[22px] text-[11px] leading-none flex-shrink-0 ${atKeyF ? 'text-amber-300' : keyed ? 'text-amber-600' : 'text-zinc-600 hover:text-zinc-300'}`} disabled={locked}
+          <button className={`w-4 h-[22px] text-[11px] leading-none flex-shrink-0 ${atKeyF ? 'text-amber-300' : keyed ? 'text-amber-600' : 'text-zinc-600 hover:text-zinc-300'}`} disabled={locked} data-key-toggle
                   title="キーフレーム(Shift + クリックですべて消す)" onClick={e => (e.shiftKey ? clearKeys(ids, path, dflt) : toggleKeyAt(ids, path, value ?? '#ffffff'))}>{atKeyF ? '◆' : '◇'}</button>
         ) : <span className="w-4 flex-shrink-0" />}
         {optional && <input type="checkbox" checked data-opt-switch title="切にすると、この項目を消します" onChange={turnOff} />}
-        <span className={`${labelCls} text-zinc-400`} title={`${title}(${path})`}>{title}</span>
-        <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1">
+        <span data-prop-label className={`${labelCls} text-zinc-400`} title={`${title}(${path})`}>{title}</span>
+        <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1" data-prop-body>
           {modeSel}
           {mode === 'color' && <ColorField value={value} onChange={write} onEnd={end} />}
         </div>
@@ -636,7 +636,7 @@ export const PropField = memo(function PropField({ ids, layer, path, desc, label
 
   return (
     <>
-      <div className="flex items-start gap-1 min-h-[22px]" data-prop-path={path}>
+      <div className="flex items-start gap-1 min-h-[22px]" data-prop-path={path} data-prop-row>
         {canKey ? (
           <button
             className={`w-4 h-[22px] text-[11px] leading-none flex-shrink-0 ${atKey ? 'text-amber-300' : keyed ? 'text-amber-600' : 'text-zinc-600 hover:text-zinc-300'}`}
@@ -646,10 +646,10 @@ export const PropField = memo(function PropField({ ids, layer, path, desc, label
           >{atKey ? '◆' : '◇'}</button>
         ) : <span className="w-4 flex-shrink-0" />}
         {optional && <input type="checkbox" checked disabled={locked} data-opt-switch className="self-center" title="切にすると、この項目を消します(機能オフ)" onChange={turnOff} />}
-        <span className={`${labelCls} text-zinc-400 ${optional ? '!w-[68px]' : ''}`} title={`${title}(${path})`}>{title}</span>
-        <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1">{body}</div>
+        <span data-prop-label className={`${labelCls} text-zinc-400 ${optional ? '!w-[68px]' : ''}`} title={`${title}(${path})`}>{title}</span>
+        <div className="flex items-center gap-1 flex-wrap min-w-0 flex-1" data-prop-body>{body}</div>
         {keyed && (
-          <span className="flex items-center flex-shrink-0">
+          <span className="flex items-center flex-shrink-0" data-key-nav>
             <button className={iconBtnCls} disabled={!prevKey} title="前のキーへ" onClick={() => prevKey && setFrame(prevKey.f)}>◂</button>
             <button className={iconBtnCls} disabled={!nextKey} title="次のキーへ" onClick={() => nextKey && setFrame(nextKey.f)}>▸</button>
           </span>

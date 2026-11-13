@@ -83,6 +83,7 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
   }, [])
   const [drag, setDrag] = useState<DragState | null>(null)
   const dragRef = useRef<DragState | null>(null)
+  const lastTapRef = useRef<{ i: number; t: number } | null>(null)   // 指の 2 回押し(🗂 テイク履歴)
   const justDraggedRef = useRef(false)   // ドラッグ直後のclick(シーク)誤発火防止
 
   const { cuts, dangling } = useMemo(() => {
@@ -260,6 +261,11 @@ export function CutLane({ tracks, clips, assets, pixelsPerFrame, fps, totalWidth
                 if (justDraggedRef.current) return
                 setCurrentFrame(c.s)
                 toggleCutSelect(c)
+                // 指: ダブルクリックの代わりに、同じカットを 2 回続けて押すと 🗂 テイク履歴(iOS は dblclick が来ないことがある)
+                const now = Date.now()
+                if (lastTapRef.current && lastTapRef.current.i === i && now - lastTapRef.current.t < 450
+                    && window.matchMedia?.('(pointer: coarse)').matches) setTakeCut({ s: c.s, e: c.e })
+                lastTapRef.current = { i, t: now }
               }}
               onDoubleClick={() => setTakeCut({ s: c.s, e: c.e })}
               // 🎞プレビズ: 右クリック(タッチは長押し500ms)でカットの動き設定を開く

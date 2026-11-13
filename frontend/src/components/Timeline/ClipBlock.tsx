@@ -697,7 +697,12 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
             </span>
           )}
           {isComp
-            ? <span className="px-1 rounded bg-black/55" data-comp-clip={compAttrs.comp_id}>🎞 {compInfo?.name ?? `コンポジション #${compAttrs.comp_id}`}
+            ? <span className="px-1 rounded bg-black/55" data-comp-clip={compAttrs.comp_id}>
+                {/* 指ではダブルクリックできないので、選んだクリップの頭に「開く」を出す */}
+                {COARSE && selected && (
+                  <button className="mr-1 px-2 py-0.5 rounded bg-purple-600 text-white font-bold pointer-events-auto" data-comp-clip-open
+                          onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); openCompEditor(compAttrs.comp_id) }}>開く</button>
+                )}🎞 {compInfo?.name ?? `コンポジション #${compAttrs.comp_id}`}
                 {compStale && <span className="ml-1 px-1 rounded bg-amber-500 text-black font-bold" data-comp-clip-stale>古い</span>}</span>
             : isFilter
             ? <span className="px-1 rounded bg-black/55">{filterLabel(clip)}</span>

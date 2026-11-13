@@ -422,7 +422,7 @@ export function CreditPanel({ clip, onClose }: Props) {
   const clipEnd = clip.start_frame + dur - 1
 
   return createPortal(
-    <div className="fixed right-3 bottom-3 w-[372px] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto rounded-lg border border-cyan-800 bg-zinc-900/95 shadow-2xl backdrop-blur p-3 z-[110] text-zinc-200"
+    <div className="fixed right-3 bottom-3 w-[372px] max-w-[calc(100vw-1.5rem)] max-h-[85dvh] overflow-y-auto overscroll-contain rounded-lg border border-cyan-800 bg-zinc-900/95 shadow-2xl backdrop-blur p-3 z-[110] text-zinc-200"
          onKeyDown={e => e.stopPropagation()} data-credit-panel={clip.id}>
       <div className="flex items-center justify-between mb-1 gap-2">
         <span className="text-[11px] font-semibold text-cyan-200 truncate">

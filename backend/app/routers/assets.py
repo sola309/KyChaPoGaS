@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import Request, APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from sqlmodel import Session, select
 
@@ -400,7 +400,7 @@ def get_thumbnail(asset_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/{asset_id}/file")
-def get_asset_file(asset_id: int, proxy: bool = False, download: bool = False,
+def get_asset_file(asset_id: int, request: Request, proxy: bool = False, download: bool = False,
                    session: Session = Depends(get_session)):
     asset = session.get(Asset, asset_id)
     if not asset:
@@ -409,6 +409,15 @@ def get_asset_file(asset_id: int, proxy: bool = False, download: bool = False,
     # Serve the low-res proxy for preview when requested and available.
     if proxy and asset.proxy_path and Path(asset.proxy_path).exists():
         path = Path(asset.proxy_path)
+        # 🎞 透明なコンポジションの軽量版は VP9 アルファの webm。iOS・Safari は再生できないので、
+        # 隣に不透明の H.264(<id>.safari.mp4)があればそちらを返す(下は透けないが絵は見える)
+        if path.suffix == ".webm":
+            ua = request.headers.get("user-agent", "")
+            webkit_only = any(k in ua for k in ("iPhone", "iPad", "iPod")) or (
+                "Safari" in ua and not any(k in ua for k in ("Chrome", "Chromium", "Android", "Edg")))
+            alt = path.with_suffix(".safari.mp4")
+            if webkit_only and alt.exists():
+                path = alt
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
     media_type, _ = mimetypes.guess_type(str(path))

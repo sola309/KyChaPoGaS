@@ -103,3 +103,87 @@ html.has-notch .fixed.inset-0 {
   /* clip trim handles → faintly visible so they're discoverable */
   .clip-trim-handle { background: rgba(255, 255, 255, 0.14); }
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * 🎞 コンポジション編集画面: 指で触る並び(スマホ・タブレット)。
+ * 編集画面が <body class="comp-touch"> を付けている間だけ効く(PC の見た目は変えない)。
+ * 編集画面の本体と、body 直下に出すメニュー・ダイアログの両方に掛ける。
+ * Tailwind のユーティリティは @layer の中なので、ここ(レイヤーの外)の指定が勝つ。
+ * ────────────────────────────────────────────────────────────────────────── */
+.comp-vh { height: var(--comp-vvh, 100dvh); }
+@supports not (height: 100dvh) { .comp-vh { height: var(--comp-vvh, 100vh); } }
+.comp-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+.comp-safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+/* 欄の中のスクロール: 端で親(ページ)を引っぱらない・iOS の慣性つき */
+.comp-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+
+/* スクラブ用のスライダー(つまみを大きく) */
+.comp-range { -webkit-appearance: none; appearance: none; background: transparent; height: 32px; margin: 0; touch-action: none; }
+.comp-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--color-purple-500) var(--p, 0%), var(--color-zinc-700) var(--p, 0%)); }
+.comp-range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--color-zinc-700); }
+.comp-range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--color-purple-500); }
+.comp-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%; background: var(--color-purple-200); border: 2px solid var(--color-purple-600); }
+.comp-range::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--color-purple-200); border: 2px solid var(--color-purple-600); }
+
+body.comp-touch { overscroll-behavior: none; }
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) {
+  -webkit-tap-highlight-color: transparent;
+  color-scheme: dark;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* 文字は 12px より小さくしない */
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) :is(.text-\[8px\], .text-\[9px\], .text-\[10px\]) { font-size: 12px; line-height: 1.35; }
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) .text-\[11px\] { font-size: 13px; line-height: 1.4; }
+/* 入力欄は 16px(iOS は 16px 未満の欄にフォーカスするとページを拡大する) */
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) :is(input:not([type]), input[type=text], input[type=search], input[type=number], select, textarea) {
+  font-size: 16px; line-height: 1.25; min-height: 40px; padding: 6px 8px; border-radius: 6px;
+}
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) select { max-width: 100%; min-width: 88px; }
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) button {
+  min-height: 40px; min-width: 40px; touch-action: manipulation;
+}
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) input[type=checkbox] { width: 24px; height: 24px; flex-shrink: 0; accent-color: var(--color-purple-500); }
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) input[type=color] { width: 48px; height: 40px; flex-shrink: 0; }
+body.comp-touch :is([data-comp-editor], [data-comp-add-menu], [data-effect-menu], [data-tl-menu], [data-comp-asset-picker], [data-comp-settings-dialog], [data-comp-place-menu]) label { min-height: 32px; }
+/* 数値欄(− 値 +) */
+body.comp-touch [data-num-field] > input { min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }
+body.comp-touch [data-num-field] > button.comp-num-step { min-width: 36px; }
+
+/* プロパティの 1 行: ◆ とラベルを上、値を下の段に */
+body.comp-touch [data-prop-row] { flex-wrap: wrap; align-items: center; row-gap: 4px; column-gap: 6px; padding: 4px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-zinc-800) 70%, transparent); }
+body.comp-touch [data-prop-row] > span:empty { display: none; }
+body.comp-touch [data-prop-row] > [data-prop-label] { flex: 1 1 0%; min-width: 0; max-height: none; overflow: visible; word-break: normal; overflow-wrap: anywhere; font-size: 13px; line-height: 1.3; color: var(--color-zinc-300); }
+body.comp-touch [data-prop-row] > [data-prop-body] { order: 10; flex: 1 0 100%; gap: 8px; }
+body.comp-touch [data-prop-row] > [data-key-toggle] { width: 40px; height: 40px; font-size: 20px; border-radius: 6px; background: color-mix(in srgb, var(--color-zinc-800) 60%, transparent); }
+body.comp-touch [data-prop-row="off"] { flex-wrap: nowrap; }
+body.comp-touch [data-anim-extras] { margin-left: 8px; }
+body.comp-touch [data-colors-field] button.absolute { display: block; width: 22px; height: 22px; min-width: 0; min-height: 0; line-height: 20px; top: -8px; right: -8px; }
+body.comp-touch [data-colors-field] { gap: 14px; }
+
+/* タブレット: レイヤーのタイムライン(行は LayerTimeline.tsx が高くする。中の部品をそれに合わせる) */
+body.comp-touch [data-comp-editor] [data-comp-timeline] :is(button, select, input:not([type]), input[type=text]) { min-height: 28px; height: 28px; min-width: 26px; font-size: 12px; padding-top: 0; padding-bottom: 0; }
+body.comp-touch [data-comp-editor] [data-comp-timeline] input:not([type]) { font-size: 16px; }
+body.comp-touch [data-comp-editor] [data-comp-timeline] :is([data-bar-id], [data-reorder-handle], [data-comp-ruler], [data-key-f]) { touch-action: none; }
+body.comp-touch [data-comp-editor] [data-comp-timeline] [data-reorder-handle] { width: 26px; font-size: 16px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * 📱 スマホ・タブレット(指で触る・引き出しの並び = 1023px 以下)での読みやすさ。PC には効かない。
+ *   - 入力欄は 16px(iOS は 16px 未満の欄にフォーカスするとページを拡大したままになる)
+ *   - 引き出し(プロジェクト一覧・右のパネル)と主なダイアログ([data-mobile-readable])の中は、文字を 12px 以上・押す所を大きく
+ * タイムラインとプレビュー本体の細かい文字はそのまま(行の高さが固定なので、ここでは変えない)。
+ * ────────────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) and (max-width: 1023px) {
+  [data-mobile-readable] :is(.text-\[8px\], .text-\[9px\], .text-\[10px\]) { font-size: 12px; line-height: 1.35; }
+  [data-mobile-readable] :is(.text-\[11px\], .text-xs) { font-size: 13px; line-height: 1.4; }
+  [data-mobile-readable] :is(button, select, a[download], summary) { min-height: 34px; touch-action: manipulation; }
+  [data-mobile-readable] input[type=checkbox] { width: 20px; height: 20px; }
+  [data-mobile-readable] { -webkit-tap-highlight-color: transparent; overscroll-behavior: contain; }
+}
+@media (pointer: coarse) and (max-width: 640px) {
+  input:not([type]), input[type=text], input[type=search], input[type=number], input[type=password], input[type=url], select, textarea { font-size: 16px; }
+}

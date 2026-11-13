@@ -8,6 +8,7 @@ import { useUIStore } from '../../store/uiStore'
 import { useCompListStore } from './compList'
 import type { CompSummary } from './types'
 import { ColorField, NumField, Row, btnCls, inputCls } from './fields'
+import { isPhoneLayout, type CompLayout } from './mobile'
 
 interface FormValue { name: string; width: number; height: number; fps: number; duration_frames: number; bg: string | null }
 
@@ -22,8 +23,8 @@ function SettingsDialog({ title, initial, okLabel, onOk, onClose }: {
     try { await onOk({ ...v, name: v.name.trim() || 'コンポジション' }); onClose() } catch { /* 文面は呼び出し側が出す */ } finally { setBusy(false) }
   }
   return createPortal(
-    <div className="fixed inset-0 z-[210] bg-black/70 flex items-center justify-center p-6" onPointerDown={onClose} data-comp-settings-dialog>
-      <div className="w-[380px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl p-3 flex flex-col gap-2" onPointerDown={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[210] bg-black/70 flex items-center justify-center p-6 max-sm:p-3" onPointerDown={onClose} data-comp-settings-dialog>
+      <div className="w-[380px] max-w-full max-h-full overflow-y-auto overscroll-contain rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl p-3 flex flex-col gap-2" onPointerDown={e => e.stopPropagation()}>
         <div className="text-xs font-bold text-zinc-200 mb-1">{title}</div>
         <Row label="名前"><input autoFocus className={`${inputCls} flex-1`} value={v.name} onChange={e => set({ name: e.target.value })}
                                onKeyDown={e => { if (e.key === 'Enter') void submit() }} /></Row>
@@ -116,7 +117,10 @@ function CompThumb({ comp }: { comp: CompSummary }) {
 
 const isStale = (c: CompSummary) => c.stale_deep ?? c.stale
 
-export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id: number) => void }) {
+/**
+ * layout: 画面の並び(省略 = PC)。スマホ・タブレットでは大きなカード + 検索、カードを押すと「見るだけ」の画面(onView)。
+ */
+export function CompList({ projectId, onOpen, onView, layout = 'desktop' }: { projectId: number; onOpen: (id: number) => void; onView?: (id: number) => void; layout?: CompLayout }) {
   const list = useCompListStore(s => s.list)
   const loading = useCompListStore(s => s.loading)
   const load = useCompListStore(s => s.load)
@@ -126,6 +130,13 @@ export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id
   const [editing, setEditing] = useState<{ comp: CompSummary; bg: string | null } | null>(null)
   const [renaming, setRenaming] = useState<{ id: number; name: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [moreId, setMoreId] = useState<number | null>(null)
+  const phone = isPhoneLayout(layout)
+  const touch = layout !== 'desktop'
+  const view = onView ?? onOpen
+  const needle = query.trim().toLowerCase()
+  const shown = needle ? list.filter(c => c.name.toLowerCase().includes(needle) || `#${c.id}`.includes(needle)) : list
 
   useEffect(() => { void load(projectId) }, [projectId, load])
 
@@ -145,6 +156,103 @@ export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id
   }
   const openSettings = async (c: CompSummary) => {
     try { const full = await compsApi.get(c.id); setEditing({ comp: c, bg: full.data?.bg ?? null }) } catch { /* トーストは client */ }
+  }
+
+  const badge = (c: CompSummary, cls: string) => (
+    <span className={`${cls} rounded ${isStale(c) ? 'bg-amber-600 text-black' : 'bg-emerald-700 text-white'}`} data-comp-badge
+          title={isStale(c) && c.rendered_rev !== 0 && !c.stale ? '入れ子の子コンポジションが変わった(または描き出したファイルが無い)' : ''}>
+      {c.rendered_rev === 0 ? '未描き出し' : isStale(c) ? '古い' : '描き出し済み'}
+    </span>
+  )
+  const dialogs = (<>
+      {creating && (
+        <SettingsDialog
+          title="新しいコンポジション" okLabel="作って開く"
+          initial={{ name: `コンポジション ${list.length + 1}`, width: project?.width ?? 1920, height: project?.height ?? 1080, fps: project?.fps ?? 30,
+            duration_frames: Math.round((project?.fps ?? 30) * 5), bg: null }}
+          onClose={() => setCreating(false)}
+          onOk={async v => {
+            const { bg, ...rest } = v
+            const c = await compsApi.create({ project_id: projectId, ...rest, data: { version: 1, bg, layers: [] } })
+            await load(projectId)
+            onOpen(c.id)
+          }}
+        />
+      )}
+      {editing && (
+        <SettingsDialog
+          title={`「${editing.comp.name}」の設定`} okLabel="保存"
+          initial={{ name: editing.comp.name, width: editing.comp.width, height: editing.comp.height, fps: editing.comp.fps,
+            duration_frames: editing.comp.duration_frames, bg: editing.bg }}
+          onClose={() => setEditing(null)}
+          onOk={async v => {
+            const { bg, ...rest } = v
+            // 背景は文書(data)の中にあるので、変えたときだけ文書ごと送る(ほかの項目はそのまま)
+            if (bg !== editing.bg) {
+              const full = await compsApi.get(editing.comp.id)
+              await compsApi.update(editing.comp.id, { ...rest, data: { ...full.data, bg } })
+            } else await compsApi.update(editing.comp.id, rest)
+            await load(projectId)
+            toast('設定を保存しました', 'success')
+          }}
+        />
+      )}
+  </>)
+
+  // ── スマホ・タブレット: 大きなカード(スマホの縦は 1 列、横は 2 列、タブレットは幅に合わせて)。押すと「見るだけ」の画面 ──
+  if (touch) {
+    const act = 'h-11 px-3 rounded-lg border text-[14px] whitespace-nowrap flex items-center justify-center gap-1 active:bg-zinc-800'
+    return (
+      <div className="flex-1 min-h-0 comp-scroll comp-safe-bottom" data-comp-list data-comp-list-layout={phone ? 'phone' : 'tablet'}>
+        <div className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur px-3 pt-2 pb-2 border-b border-zinc-800 flex items-center gap-2">
+          <input type="search" enterKeyHint="search" className="flex-1 min-w-0 h-11 rounded-lg bg-zinc-800 border border-zinc-700 px-3 text-[16px] text-zinc-100 outline-none focus:border-purple-500"
+                 placeholder={`🔍 ${list.length} 件からさがす`} value={query} onChange={e => setQuery(e.target.value)} data-comp-search />
+          <button className="h-11 px-3 rounded-lg bg-purple-700 active:bg-purple-600 text-white text-[14px] font-bold whitespace-nowrap flex-shrink-0" onClick={() => setCreating(true)} data-comp-new>+ 新規</button>
+        </div>
+        {error && <div className="m-3 px-3 py-2 rounded border border-red-800 bg-red-950/60 text-[13px] text-red-200 flex gap-2" data-comp-list-error>
+          <span className="flex-1">⚠ {error}</span><button className="text-red-300 px-2" onClick={() => setError(null)} aria-label="閉じる">✕</button></div>}
+        {loading && !list.length && <div className="text-[14px] text-zinc-400 p-6">読み込み中…</div>}
+        {!loading && !list.length && <div className="text-[14px] text-zinc-400 m-3 p-5 border border-dashed border-zinc-700 rounded-lg leading-relaxed">まだありません。「+ 新規」で作れます。</div>}
+        {!!list.length && !shown.length && <div className="text-[14px] text-zinc-400 p-6">「{query}」に合うコンポジションがありません。</div>}
+        <div className="grid gap-3 p-3" style={{ gridTemplateColumns: layout === 'phone' ? 'minmax(0, 1fr)' : layout === 'phoneWide' ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          {shown.map(c => (
+            <div key={c.id} data-comp-card={c.id} className="rounded-xl border border-zinc-700 bg-zinc-900 overflow-hidden flex flex-col">
+              <button className="relative w-full bg-black flex items-center justify-center" style={{ aspectRatio: '16 / 9' }} onClick={() => view(c.id)} aria-label={`「${c.name}」を見る`} data-comp-view={c.id}>
+                <CompThumb comp={c} />
+                {badge(c, 'absolute top-2 right-2 text-[12px] px-2 py-0.5 font-bold')}
+                <span className="absolute bottom-2 left-2 w-10 h-10 rounded-full bg-black/60 text-white text-[16px] flex items-center justify-center pointer-events-none">▶</span>
+                <span className="absolute bottom-2 right-2 text-[12px] px-1.5 py-0.5 rounded bg-black/70 text-zinc-100 font-mono pointer-events-none">{(c.duration_frames / Math.max(1, c.fps)).toFixed(1)}s</span>
+              </button>
+              <div className="px-3 pt-2 pb-3 flex flex-col gap-1.5">
+                {renaming?.id === c.id
+                  ? <input autoFocus className="w-full h-11 rounded-lg bg-zinc-800 border border-purple-500 px-2 text-[16px] text-zinc-100 outline-none" value={renaming.name} enterKeyHint="done"
+                           onChange={e => setRenaming({ id: c.id, name: e.target.value })}
+                           onKeyDown={e => { if (e.key === 'Enter') void rename(); else if (e.key === 'Escape') setRenaming(null) }} onBlur={() => void rename()} />
+                  : <div className="text-[15px] font-bold text-zinc-100 leading-snug break-words">{c.name}</div>}
+                <div className="text-[13px] text-zinc-400">
+                  {c.width}×{c.height} · {c.fps}fps · {c.duration_frames} コマ · {c.layer_count ?? '?'} レイヤー
+                </div>
+                <div className="flex items-center gap-2 mt-1">
+                  <button className={`${act} flex-1 border-purple-500 bg-purple-900/50 text-purple-100 font-bold`} onClick={() => view(c.id)} data-comp-view-btn={c.id}>▶ 見る</button>
+                  <button className={`${act} flex-1 border-zinc-600 text-zinc-100`} onClick={() => onOpen(c.id)} data-comp-open={c.id}>✏ 開く(編集)</button>
+                  <button className={`${act} w-11 !px-0 border-zinc-600 text-zinc-200 ${moreId === c.id ? 'bg-zinc-700' : ''}`} aria-label="そのほかの操作" aria-expanded={moreId === c.id}
+                          onClick={() => setMoreId(moreId === c.id ? null : c.id)} data-comp-more={c.id}>⋯</button>
+                </div>
+                {moreId === c.id && (
+                  <div className="grid grid-cols-2 gap-2" data-comp-more-menu>
+                    <button className={`${act} border-zinc-700 text-zinc-200`} onClick={() => { setMoreId(null); setRenaming({ id: c.id, name: c.name }) }}>✎ 名前を変える</button>
+                    <button className={`${act} border-zinc-700 text-zinc-200`} onClick={() => { setMoreId(null); void compsApi.duplicate(c.id).then(() => load(projectId)).catch(() => undefined) }} data-comp-dup={c.id}>⧉ 複製</button>
+                    <button className={`${act} border-zinc-700 text-zinc-200`} onClick={() => { setMoreId(null); void openSettings(c) }}>⚙ 大きさ・長さ</button>
+                    <button className={`${act} border-red-900 text-red-300`} onClick={() => { setMoreId(null); void del(c) }} data-comp-del={c.id}>🗑 削除</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {dialogs}
+      </div>
+    )
   }
 
   return (
@@ -189,38 +297,7 @@ export function CompList({ projectId, onOpen }: { projectId: number; onOpen: (id
           ))}
         </div>
       </div>
-      {creating && (
-        <SettingsDialog
-          title="新しいコンポジション" okLabel="作って開く"
-          initial={{ name: `コンポジション ${list.length + 1}`, width: project?.width ?? 1920, height: project?.height ?? 1080, fps: project?.fps ?? 30,
-            duration_frames: Math.round((project?.fps ?? 30) * 5), bg: null }}
-          onClose={() => setCreating(false)}
-          onOk={async v => {
-            const { bg, ...rest } = v
-            const c = await compsApi.create({ project_id: projectId, ...rest, data: { version: 1, bg, layers: [] } })
-            await load(projectId)
-            onOpen(c.id)
-          }}
-        />
-      )}
-      {editing && (
-        <SettingsDialog
-          title={`「${editing.comp.name}」の設定`} okLabel="保存"
-          initial={{ name: editing.comp.name, width: editing.comp.width, height: editing.comp.height, fps: editing.comp.fps,
-            duration_frames: editing.comp.duration_frames, bg: editing.bg }}
-          onClose={() => setEditing(null)}
-          onOk={async v => {
-            const { bg, ...rest } = v
-            // 背景は文書(data)の中にあるので、変えたときだけ文書ごと送る(ほかの項目はそのまま)
-            if (bg !== editing.bg) {
-              const full = await compsApi.get(editing.comp.id)
-              await compsApi.update(editing.comp.id, { ...rest, data: { ...full.data, bg } })
-            } else await compsApi.update(editing.comp.id, rest)
-            await load(projectId)
-            toast('設定を保存しました', 'success')
-          }}
-        />
-      )}
+      {dialogs}
     </div>
   )
 }

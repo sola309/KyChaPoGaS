@@ -41,6 +41,21 @@ export function ProjectView() {
   const shotEditor = useUIStore(st => st.shotEditor)
   const closeShotEditor = useUIStore(st => st.closeShotEditor)
   const [timelineH, setTimelineH] = useState(DEFAULT_TIMELINE_H)
+  // 📱 指で触る機械むけ: 「プレビューだけ」(タイムラインを畳む)と、背の低い画面(横持ちのスマホ)でのタイムラインの高さの上限。
+  // 横持ち(高さ 390px ほど)では、タイムライン 260px + 見出しでプレビューの高さが 0 になっていた。PC では何も変わらない。
+  const [touchUi, setTouchUi] = useState({ coarse: false, short: false })
+  // null = まだ選んでいない(背の低い画面では、最初からプレビューだけにする)
+  const [previewOnlyPick, setPreviewOnly] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const c = window.matchMedia('(pointer: coarse)'), s = window.matchMedia('(max-height: 500px)')
+    const upd = () => setTouchUi({ coarse: c.matches, short: c.matches && s.matches })
+    upd()
+    c.addEventListener?.('change', upd); s.addEventListener?.('change', upd)
+    return () => { c.removeEventListener?.('change', upd); s.removeEventListener?.('change', upd) }
+  }, [])
+  const previewOnly = previewOnlyPick ?? touchUi.short
+  const hideTimeline = previewOnly && touchUi.coarse && !CAPTURE
 
   // 🎞 コンポジション: 一覧(comp クリップの名前と「古い」印用)を読み、合図で編集画面を開く
   const [compEditor, setCompEditor] = useState<{ compId: number | null } | null>(null)
@@ -160,26 +175,37 @@ export function ProjectView() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Project header */}
         <div className="px-4 max-sm:px-2 py-2 max-sm:py-1.5 border-b border-zinc-800 flex items-center gap-4 max-sm:gap-2 flex-shrink-0 bg-zinc-900">
-          <h1 className="text-sm font-bold text-white">{activeProject.name}</h1>
+          <h1 className="text-sm font-bold text-white max-sm:truncate max-sm:min-w-0">{activeProject.name}</h1>
           <div className="flex gap-3 text-xs text-zinc-500 max-sm:hidden">
             <span>{activeProject.fps} fps</span>
             <span>{activeProject.width} × {activeProject.height}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
+            {/* スマホ幅: 折り返さない・押しやすい高さ(「コンポジション」は「コンポ」に縮める) */}
             <button
-              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5"
+              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap flex-shrink-0 max-sm:min-h-[36px] max-sm:text-[13px] max-sm:text-zinc-200"
               title="コンポジション(レイヤーを重ねてキーフレームで動かす、入れ子のタイムライン)を開く"
+              aria-label="コンポジションを開く"
               data-open-comp-editor
               onClick={() => openCompEditor(null)}
-            >🎞 コンポジション</button>
+            >🎞 <span className="max-sm:hidden">コンポジション</span><span className="sm:hidden">コンポ</span></button>
             <button
-              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5"
+              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded px-2 py-0.5 whitespace-nowrap flex-shrink-0 max-sm:min-h-[36px]"
               title="プロジェクト一式を .kycha.zip に書き出し(別ストレージ保管用)"
               onClick={async () => {
                 const r = await api.post(`/projects/${activeProject.id}/export`)
                 window.open(r.data.download, '_blank')
               }}
-            >📦 書き出し</button>
+            >📦<span className="max-sm:hidden"> 書き出し</span></button>
+            {touchUi.coarse && !CAPTURE && (
+              <button
+                className={`text-xs border rounded px-2 py-0.5 whitespace-nowrap flex-shrink-0 min-h-[36px] ${previewOnly ? 'bg-purple-800 border-purple-500 text-white' : 'border-zinc-700 text-zinc-200'}`}
+                aria-pressed={previewOnly}
+                title="プレビューだけを大きく出す(タイムラインを畳む)。もう一度押すと戻る"
+                data-preview-only={previewOnly ? '1' : '0'}
+                onClick={() => setPreviewOnly(!previewOnly)}
+              >{previewOnly ? '▤ タイムライン' : '⛶ 大きく'}</button>
+            )}
             <span className="max-sm:hidden"><SaveIndicator /></span>
             {!CAPTURE && <CollabBar />}
           </div>
@@ -192,7 +218,7 @@ export function ProjectView() {
 
         {/* Drag divider */}
         <div
-          className="h-2 lg:h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors"
+          className={`h-2 lg:h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors ${hideTimeline ? 'hidden' : ''}`}
           style={{ touchAction: 'none' }}
           title="タイムラインの高さを調整"
           onPointerDown={handleDividerPointerDown}
@@ -200,7 +226,8 @@ export function ProjectView() {
 
         {/* Timeline */}
         {/* 🎥 撮影用モード: タイムラインは中身の高さ(全レーン・全トラック)。残りをプレビューに */}
-        <div className="flex-shrink-0 border-t border-zinc-800" style={{ height: CAPTURE ? 'auto' : timelineH }}>
+        <div className={`flex-shrink-0 border-t border-zinc-800 ${hideTimeline ? 'hidden' : ''}`}
+             style={{ height: CAPTURE ? 'auto' : touchUi.short ? `min(${timelineH}px, 36dvh)` : timelineH }}>
           <Timeline
             projectId={activeProject.id}
             fps={activeProject.fps}

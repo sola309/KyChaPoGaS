@@ -63,7 +63,7 @@ export function AddLayerMenu() {
   const [open, setOpen] = useState(false)
   const [sub, setSub] = useState<string | null>(null)
   const [pick, setPick] = useState<PickReq | null>(null)
-  const [pos, setPos] = useState({ left: 0, bottom: 0 })
+  const [pos, setPos] = useState<{ left: number; bottom: number; maxHeight?: number }>({ left: 0, bottom: 0 })
   const comps = useCompListStore(s => s.list)
   const selfId = useCompStore(s => s.comp?.id)
 
@@ -119,7 +119,8 @@ export function AddLayerMenu() {
     <span className="relative" onPointerDown={e => e.stopPropagation()}>
       <button data-comp-add-layer className="text-[11px] px-2 py-0.5 rounded bg-purple-800 hover:bg-purple-700 text-purple-100" onClick={e => {
         const r = e.currentTarget.getBoundingClientRect()
-        setPos({ left: r.left, bottom: window.innerHeight - r.top + 4 })
+        // 上へ開く。画面の上にはみ出さない高さまで(スマホではボタンが画面の中ほどにある)
+        setPos({ left: Math.max(4, Math.min(r.left, window.innerWidth - 204)), bottom: window.innerHeight - r.top + 4, maxHeight: Math.min(window.innerHeight * 0.7, Math.max(160, r.top - 12)) })
         setOpen(o => !o)
       }}>+ レイヤー</button>
       {open && createPortal(

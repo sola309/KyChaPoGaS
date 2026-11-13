@@ -278,12 +278,13 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-2 sm:p-6"
+    <div data-mobile-readable className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-2 sm:p-6"
          onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
-           className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-[min(880px,96vw)] max-h-[94vh] overflow-y-auto p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-zinc-200">
+           className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-[min(880px,96vw)] max-h-[94dvh] overflow-y-auto overscroll-contain p-4 max-sm:p-3 flex flex-col gap-3">
+        {/* スマホ幅: 見出しと操作を折り返す(1 行に詰めると見出しが縦に潰れる) */}
+        <div className="flex items-center justify-between max-sm:flex-wrap max-sm:gap-2">
+          <span className="text-sm text-zinc-200 max-sm:basis-full">
             🗂 テイク履歴 — カット f{cut.s}–{cut.e}({((cut.e + 1 - cut.s) / fps).toFixed(2)}秒)
             <span className="text-zinc-500 ml-2 text-xs">{takes.filter(t => t.kind !== 'placed').length}テイク{takes.some(t => t.kind === 'placed') ? '＋📌' : ''}</span>
             {takes.some(t => t.drift !== 0) && (
@@ -293,7 +294,7 @@ export function TakeSelector({ cut, sourceClipId, assets, fps, onClose }: Props)
               </span>
             )}
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 max-sm:flex-1 max-sm:min-w-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:flex-shrink-0 max-sm:[&>label]:min-w-0 max-sm:[&_select]:min-w-0 max-sm:[&_select]:max-w-[40vw]">
             {/* 採用の書き換え先を明示(誤操作でも他レイヤーに波及しないことの見える化) */}
             <label className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-zinc-400 flex items-center gap-1"
                    title="採用したテイクを書き込むクリップ。既定は Shots の該当カット。比較用レイヤーへ入れたいときはここで選ぶ">

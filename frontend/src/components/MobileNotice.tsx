@@ -22,15 +22,15 @@ export function MobileNotice() {
   if (!show) return null
   return (
     <div
-      className="safe-top-pad fixed inset-x-0 top-0 z-[60] bg-purple-900/95 text-purple-50 text-xs px-3 py-2 flex items-center gap-2 shadow"
+      className="safe-top-pad fixed inset-x-0 top-0 z-[60] bg-purple-900/95 text-purple-50 text-[13px] leading-snug px-3 py-2 flex items-center gap-2 shadow"
       style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}
     >
       <span className="flex-1">
-        📱 スマホでも編集できます。上部の <b>☰</b>＝プロジェクト、<b>✨</b>＝アセット/生成。広い画面や<b>横向き</b>だとより快適です。
+        📱 スマホは<b>確認むけ</b>です(再生・テイクの切り替え・書き出しのダウンロード)。<b>☰</b>＝プロジェクト、<b>✨</b>＝アセット/生成/ジョブ、<b>🎞 コンポ</b>＝コンポジション(スマホ用の画面)。カットを<b>2 回押す</b>とテイク履歴。細かい編集は広い画面や<b>横向き</b>で。
       </span>
       <button
         onClick={() => { sessionStorage.setItem('mobile_notice_dismissed', '1'); setShow(false) }}
-        className="px-2 py-0.5 rounded bg-purple-800 hover:bg-purple-700"
+        className="px-3 py-1.5 rounded bg-purple-800 hover:bg-purple-700 flex-shrink-0 text-[13px]"
       >閉じる</button>
     </div>
   )

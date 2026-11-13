@@ -49,7 +49,8 @@ export function RightPanel({ projectId, onAssetsChange, assets }: Props) {
 
   return (
     <div
-      className={`flex flex-col w-64 max-w-[85vw] border-l border-zinc-800 h-full bg-zinc-900
+      data-mobile-readable
+      className={`flex flex-col w-64 max-lg:w-[22rem] max-w-[85vw] max-lg:max-w-[92vw] border-l border-zinc-800 h-full bg-zinc-900
         fixed inset-y-0 right-0 z-50 transition-transform duration-200
         lg:static lg:z-auto lg:max-w-none lg:flex-shrink-0 lg:translate-x-0
         ${panelOpen ? 'translate-x-0' : 'translate-x-full'}`}

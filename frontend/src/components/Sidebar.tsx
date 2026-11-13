@@ -50,7 +50,8 @@ export function Sidebar({ onOpenTerminal, termOpen, terminalEnabled = true }: Pr
 
   return (
     <aside
-      className={`w-64 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 flex flex-col h-full
+      data-mobile-readable
+      className={`w-64 max-lg:w-80 max-w-[85vw] bg-zinc-900 border-r border-zinc-800 flex flex-col h-full
         fixed inset-y-0 left-0 z-50 transition-transform duration-200
         lg:static lg:z-auto lg:max-w-none lg:translate-x-0
         ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}

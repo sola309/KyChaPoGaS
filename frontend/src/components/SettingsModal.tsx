@@ -61,8 +61,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const isSecret = (k: string) => /API_KEY/.test(k)
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-[92vw] max-w-lg max-h-[88vh] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-4"
+    <div data-mobile-readable className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-[92vw] max-w-lg max-h-[88dvh] overflow-y-auto overscroll-contain rounded-xl border border-zinc-700 bg-zinc-900 p-4"
            onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-bold text-purple-300">設定</h2>

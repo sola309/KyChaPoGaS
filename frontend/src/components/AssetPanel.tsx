@@ -341,6 +341,8 @@ function AssetCard({ asset, onDelete, currentProjectId }: { asset: Asset; onDele
           <img
             src={assetsApi.thumbnailUrl(asset.id)}
             alt=""
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
             onError={() => setThumbError(true)}
           />

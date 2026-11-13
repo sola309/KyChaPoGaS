@@ -126,7 +126,7 @@ function App() {
   return (
     <div className="app-root flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
       {/* GPU / VRAM status bar(モバイルでは非表示にして縦を節約) */}
-      <div className="max-sm:hidden"><GpuStatusBar /></div>
+      <div className="max-sm:hidden [@media(max-height:500px)_and_(pointer:coarse)]:hidden"><GpuStatusBar /></div>
 
       {/* App launcher — one app active at a time.
           スマホ幅では絵文字のみ(アクティブタブだけラベル表示)+横スクロールで視認性を確保 */}
@@ -149,8 +149,9 @@ function App() {
             </button>
           )
         })}
-        <span className="ml-auto flex items-center gap-2">
-          <BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" />
+        <span className="ml-auto flex items-center gap-2 max-sm:sticky max-sm:right-0 max-sm:bg-zinc-950 max-sm:pl-1">
+          {/* スマホ幅: 下の段にもロゴがあるので、ここでは出さない(⚙ が画面の外へ押し出されていた) */}
+          <span className="contents max-sm:hidden"><BrandLogo className="text-[10px] font-bold tracking-widest text-purple-400/70" /></span>
           <button
             onClick={() => setInspectMode(!inspectMode)}
             className={`px-2 text-lg leading-none rounded ${inspectMode ? 'bg-sky-600' : 'hover:bg-zinc-700'}`}

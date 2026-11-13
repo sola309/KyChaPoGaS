@@ -33,6 +33,31 @@ const FrameReadout = memo(function FrameReadout() {
   )
 })
 
+/** スマホ用: 全体をなぞれるスライダー(ここも再生位置を購読する) */
+const Scrubber = memo(function Scrubber({ className }: { className?: string }) {
+  const frame = useCompStore(s => s.frame)
+  const dur = useCompStore(s => s.settings.duration_frames)
+  const max = Math.max(1, dur - 1)
+  return (
+    <input type="range" className={`comp-range ${className ?? ''}`} min={0} max={max} step={1} value={Math.min(frame, max)} data-comp-scrub aria-label="再生位置"
+           style={{ '--p': `${(Math.min(frame, max) / max) * 100}%` } as React.CSSProperties}
+           onChange={e => { const s = useCompStore.getState(); if (s.playing) s.setPlaying(false); s.setFrame(Number(e.target.value)) }} />
+  )
+})
+
+/** スマホ用: 今のコマ / 全体 と時刻(文字だけ) */
+const FrameText = memo(function FrameText() {
+  const frame = useCompStore(s => s.frame)
+  const fps = useCompStore(s => s.settings.fps)
+  const dur = useCompStore(s => s.settings.duration_frames)
+  return (
+    <span className="flex flex-col items-end leading-tight font-mono whitespace-nowrap" data-comp-frame={frame}>
+      <span className="text-[13px] text-zinc-100">{frame}<span className="text-zinc-500"> / {dur}</span></span>
+      <span className="text-[12px] text-zinc-400">{timecode(frame, fps)}</span>
+    </span>
+  )
+})
+
 /** エンジンからの知らせ(comp:error)。押すとそのレイヤーを選ぶ */
 const Problems = memo(function Problems() {
   const problems = useCompStore(s => s.problems)
@@ -89,10 +114,23 @@ function OverlayFallback({ w, h, safe, grid }: { w: number; h: number; safe: boo
   )
 }
 
-export const PreviewPane = memo(function PreviewPane({ compId }: { compId: number }) {
+interface PreviewProps {
+  compId: number
+  /** スマホの並び。portrait = 上に固定の高さで置く / landscape = 左に置く。省略 = PC の並び(今までどおり) */
+  compact?: 'portrait' | 'landscape'
+  /** portrait のときの絵の高さ(px) */
+  stageHeight?: number
+  /** 最初の画質(0 = 自動)。スマホでは 0.5 から始める */
+  defaultQuality?: number
+  /** 再生のボタンの段を出さない(画面キーボードが出ている間) */
+  hideTransport?: boolean
+}
+
+export const PreviewPane = memo(function PreviewPane({ compId, compact, stageHeight, defaultQuality = 0, hideTransport }: PreviewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [ready, setReady] = useState(false)
-  const [quality, setQuality] = useState(0)
+  const [quality, setQuality] = useState(defaultQuality)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [zoom, setZoom] = useState(0)          // 0 = 窓に合わせる
   const [guides, setGuides] = useState(true)
   const [safe, setSafe] = useState(false)
@@ -245,9 +283,17 @@ export const PreviewPane = memo(function PreviewPane({ compId }: { compId: numbe
   const tgl = (on: boolean) => `${iconBtnCls} !px-1.5 border ${on ? 'border-purple-500 text-purple-200 bg-purple-950/60' : 'border-transparent'}`
   const fallbackOverlay = !engineOverlay && (safe || grid)
 
+  const qualitySelect = (
+    <select className={inputCls} value={quality} data-preview-quality onChange={e => setQuality(Number(e.target.value))} title="プレビューを描く解像度(描き出しは常に 100%)">
+      <option value={0}>自動</option><option value={1}>100%</option><option value={0.75}>75%</option><option value={0.5}>50%</option><option value={0.25}>25%</option>
+    </select>
+  )
+  const portrait = compact === 'portrait'
+  const bigBtn = 'w-11 h-11 flex items-center justify-center rounded-lg text-[17px] leading-none text-zinc-200 active:bg-zinc-700 flex-shrink-0'
+
   return (
-    <div className="flex flex-col min-h-0 min-w-0 flex-1 bg-[#17181c]">
-      <div className={`flex-1 min-h-0 relative ${zoom ? 'overflow-auto' : 'overflow-hidden'}`}>
+    <div className={`flex flex-col min-h-0 min-w-0 bg-[#17181c] ${portrait ? 'flex-none' : 'flex-1'}`} data-comp-preview-pane={compact ?? 'desktop'}>
+      <div className={`${portrait ? 'flex-none' : 'flex-1'} min-h-0 relative ${zoom ? 'overflow-auto' : 'overflow-hidden'}`} style={portrait ? { height: stageHeight ?? 220 } : undefined}>
         <div className="relative" style={zoom ? { width: Math.max(320, width * zoom + 40), height: Math.max(180, height * zoom + 40) } : { width: '100%', height: '100%' }}>
           <iframe
             ref={iframeRef}
@@ -261,7 +307,34 @@ export const PreviewPane = memo(function PreviewPane({ compId }: { compId: numbe
         {!ready && <div className="absolute inset-0 flex items-center justify-center text-xs text-zinc-500 pointer-events-none">プレビューを読み込み中…</div>}
       </div>
       <Problems />
-      <div className="flex items-center gap-1 px-2 py-1 border-t border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap">
+      {compact && !hideTransport && (
+        <div className="relative flex items-center gap-1 px-2 py-1 border-t border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap" data-comp-transport>
+          <Scrubber className={portrait ? 'basis-full w-full' : 'order-2 flex-1 min-w-[90px] mx-1'} />
+          <button className={bigBtn} aria-label="1 コマ戻る" onClick={() => step(-1)} data-comp-step="-1">◀</button>
+          <button className={`${bigBtn} !w-14 !text-[22px] bg-purple-800 text-white active:bg-purple-700`} aria-label="再生 / 停止" onClick={togglePlay} data-comp-play>{playing ? '⏸' : '▶'}</button>
+          <button className={bigBtn} aria-label="1 コマ進む" onClick={() => step(1)} data-comp-step="1">▶</button>
+          {portrait && <button className={`${bigBtn} ${loop ? '' : 'opacity-40 grayscale'}`} aria-label="ループ再生" aria-pressed={loop} onClick={() => st().setLoop(!loop)}>🔁</button>}
+          <span className={`order-3 flex items-center gap-1 ${portrait ? 'ml-auto' : ''}`}>
+            <FrameText />
+            <button className={`${bigBtn} ${menuOpen ? 'bg-zinc-700' : ''}`} aria-label="プレビューの設定" data-preview-menu-btn onClick={() => setMenuOpen(o => !o)}>⚙</button>
+          </span>
+          {menuOpen && (<>
+            <div className="fixed inset-0 z-[60]" onPointerDown={() => setMenuOpen(false)} />
+            <div className="absolute right-2 bottom-full mb-1 z-[61] w-[250px] rounded-lg border border-zinc-600 bg-zinc-900 shadow-2xl p-3 flex flex-col gap-2 text-[13px] text-zinc-200" data-preview-menu>
+              <label className="flex items-center justify-between gap-2">画質(軽さ){qualitySelect}</label>
+              <label className="flex items-center justify-between gap-2">ループ再生<input type="checkbox" checked={loop} onChange={e => st().setLoop(e.target.checked)} /></label>
+              <label className="flex items-center justify-between gap-2">下絵{hasGuides ? '' : '(なし)'}<input type="checkbox" checked={guides} data-toggle-guides={guides ? '1' : '0'} onChange={e => setGuides(e.target.checked)} /></label>
+              <label className="flex items-center justify-between gap-2">セーフ枠<input type="checkbox" checked={safe} data-toggle-safe={safe ? '1' : '0'} onChange={e => setSafe(e.target.checked)} /></label>
+              <label className="flex items-center justify-between gap-2">グリッド<input type="checkbox" checked={grid} data-toggle-grid={grid ? '1' : '0'} onChange={e => setGrid(e.target.checked)} /></label>
+              <div className="flex gap-2">
+                <button className="flex-1 rounded border border-zinc-700 text-[13px]" onClick={() => { const s = st(); s.setPlaying(false); s.setFrame(0) }}>⏮ 先頭</button>
+                <button className="flex-1 rounded border border-zinc-700 text-[13px]" onClick={() => { const s = st(); s.setPlaying(false); s.setFrame(s.settings.duration_frames - 1) }}>最後 ⏭</button>
+              </div>
+            </div>
+          </>)}
+        </div>
+      )}
+      {!compact && <div className="flex items-center gap-1 px-2 py-1 border-t border-zinc-800 bg-zinc-900 flex-shrink-0 flex-wrap">
         <button className={iconBtnCls} title="先頭へ(Home)" onClick={() => { const s = st(); s.setPlaying(false); s.setFrame(0) }}>⏮</button>
         <button className={iconBtnCls} title="1 コマ戻る(, または ←)" onClick={() => step(-1)}>◀</button>
         <button className={`${iconBtnCls} text-[13px] w-7 ${playing ? 'text-purple-300' : 'text-zinc-100'}`} title="再生 / 停止(Space)" onClick={togglePlay} data-comp-play>
@@ -277,15 +350,13 @@ export const PreviewPane = memo(function PreviewPane({ compId }: { compId: numbe
           <button className={tgl(safe)} data-toggle-safe={safe ? '1' : '0'} onClick={() => setSafe(v => !v)} title="セーフ枠(外 = 90% / 内 = 80%)">セーフ枠</button>
           <button className={tgl(grid)} data-toggle-grid={grid ? '1' : '0'} onClick={() => setGrid(v => !v)} title="グリッド">グリッド</button>
           <span className="ml-1">画質</span>
-          <select className={inputCls} value={quality} data-preview-quality onChange={e => setQuality(Number(e.target.value))} title="プレビューを描く解像度(描き出しは常に 100%)">
-            <option value={0}>自動</option><option value={1}>100%</option><option value={0.75}>75%</option><option value={0.5}>50%</option><option value={0.25}>25%</option>
-          </select>
+          {qualitySelect}
           表示
           <select className={inputCls} value={zoom} data-preview-fit onChange={e => setZoom(Number(e.target.value))} title="プレビューの大きさ">
             <option value={0}>窓に合わせる</option><option value={0.25}>25%</option><option value={0.5}>50%</option><option value={1}>100%</option><option value={2}>200%</option>
           </select>
         </span>
-      </div>
+      </div>}
     </div>
   )
 })

@@ -12,11 +12,15 @@ import {
 import { useCompStore } from './store'
 import { typeIcon, typeLabel } from './schema'
 import { AddLayerMenu } from './AddLayerMenu'
+import { COARSE } from './mobile'
 
-const ROW_H = 24
-const KEY_ROW_H = 18
-const HEADER_W = 492
-const RULER_H = 22
+// 指で触る機械(タブレット)では行を高く・見出しの列を広くする(読み込んだときに決める。PC は今までどおり)
+const ROW_H = COARSE ? 36 : 24
+const KEY_ROW_H = COARSE ? 28 : 18
+// 縦持ちのタブレット(幅が狭い): 行の「親・重ね方・マット」の選択を出さず、見出しの列を細くする(その 3 つは「プロパティ」で変えられる)
+const NARROW = COARSE && typeof window !== 'undefined' && window.innerWidth < 900
+const HEADER_W = COARSE ? (NARROW ? 400 : 560) : 492
+const RULER_H = COARSE ? 36 : 22
 const SNAP_PX = 7
 const OVERSCAN = 8
 
@@ -113,7 +117,7 @@ const LayerRow = memo(function LayerRow({ layer, selected, expanded, ppf, dur, o
   const multi = '(選んだ行の上で押すと、選んだレイヤーすべてに)'
   const nFx = Array.isArray(layer.effects) ? layer.effects.length : 0
   // 細い帯では端のつまみを細くする(全部がつまみになって動かせなくなるのを防ぐ)
-  const handleW = Math.max(1, Math.min(6, Math.floor(((o0 - i0) * ppf) / 4)))
+  const handleW = Math.max(1, Math.min(COARSE ? 14 : 6, Math.floor(((o0 - i0) * ppf) / 4)))
 
   return (
     <div data-row-id={id} className={`flex border-b border-zinc-800/80 ${selected ? 'bg-purple-950/25' : ''}`} style={{ height: ROW_H }}
@@ -149,6 +153,7 @@ const LayerRow = memo(function LayerRow({ layer, selected, expanded, ppf, dur, o
         <Toggle flag="locked" on={locked} title={`ロック(動かせなくする)${multi}`} onClick={() => toggleFlag(id, 'locked')}><span className={locked ? '' : 'opacity-20 grayscale'}>🔒</span></Toggle>
         <Toggle flag="solo" on={!!layer.solo} onCls="text-amber-300 bg-amber-950" title={`ソロ(ソロのレイヤーだけ表示)${multi}`} onClick={() => toggleFlag(id, 'solo')}>S</Toggle>
         <Toggle flag="three_d" on={!!layer.three_d} onCls="text-orange-300 bg-orange-950" title={`3D レイヤー(カメラの影響を受ける)${multi}`} onClick={() => toggleFlag(id, 'three_d')}>3D</Toggle>
+        {!NARROW && (<>
         <LazySelect width={64} value={layer.parent ?? ''} options={parentOpts} title="親(位置・回転・拡大を継ぐ)" emptyLabel="親なし"
                     onChange={v => patchLayer(id, { parent: v || null })} />
         <LazySelect width={58} value={layer.blend && layer.blend !== 'normal' ? layer.blend : ''} options={blendOpts} title="重ね方(ブレンド)" emptyLabel="通常"
@@ -159,6 +164,10 @@ const LayerRow = memo(function LayerRow({ layer, selected, expanded, ppf, dur, o
           ? <LazySelect width={34} value={layer.matte.mode ?? 'alpha'} options={MATTE_MODES} title="マットの読み方(α = 不透明な所 / α反 = その逆 / 輝 = 明るい所 / 輝反 = 暗い所)" emptyLabel="α"
                         onChange={v => patchLayer(id, { matte: { ...layer.matte!, mode: v || 'alpha' } })} />
           : <span className="w-[34px] flex-shrink-0" />}
+        </>)}
+        {/* 指では右クリック(長押し)のメニューが出せない機械がある(iOS)。行のメニューをボタンでも開けるようにする */}
+        {COARSE && <button className="w-[26px] text-[14px] text-zinc-400 flex-shrink-0" data-row-menu aria-label="このレイヤーのメニュー"
+                           onPointerDown={e => e.stopPropagation()} onClick={e => onMenu(e, id)}>⋯</button>}
       </div>
       <div className="relative flex-1 min-w-0" data-lane>
         <div
@@ -173,7 +182,7 @@ const LayerRow = memo(function LayerRow({ layer, selected, expanded, ppf, dur, o
             if (typeof cid === 'number') window.dispatchEvent(new CustomEvent('kychapogas:comp-open-child', { detail: { compId: cid } }))
           }}
         >
-          <span className="px-1.5 leading-[16px] whitespace-nowrap pointer-events-none">{layer.name || id}</span>
+          <span className="px-1.5 leading-[16px] whitespace-nowrap pointer-events-none" style={COARSE ? { lineHeight: `${ROW_H - 9}px` } : undefined}>{layer.name || id}</span>
           {!locked && (<>
             <span className="absolute left-0 top-0 bottom-0 cursor-ew-resize hover:bg-white/40" style={{ width: handleW }} onPointerDown={e => onBarDown(e, id, 'in')} />
             <span className="absolute right-0 top-0 bottom-0 cursor-ew-resize hover:bg-white/40" style={{ width: handleW }} onPointerDown={e => onBarDown(e, id, 'out')} />
@@ -222,7 +231,7 @@ const KeyRow = memo(function KeyRow({ layerId, path, label, frames, ppf, locked,
               data-key-f={k.f} data-key-sel={sel ? '1' : '0'}
               className={`absolute top-[4px] w-[10px] h-[10px] rotate-45 border ${k.e === 'hold' ? 'rounded-none' : 'rounded-[2px]'}
                 ${sel ? 'bg-white border-purple-400 z-10' : 'bg-amber-400 border-amber-700 hover:bg-amber-200'} ${locked ? '' : 'cursor-ew-resize'}`}
-              style={{ left: k.f * ppf - 5 }}
+              style={COARSE ? { left: k.f * ppf - 8, top: (KEY_ROW_H - 16) / 2, width: 16, height: 16 } : { left: k.f * ppf - 5 }}
               title={`${label} @ ${k.f}${k.e ? ` / ${Array.isArray(k.e) ? 'ベジェ' : typeof k.e === 'string' ? k.e : JSON.stringify(k.e)}` : ''}(ドラッグで時刻を動かす・ダブルクリックでここへ移動・右クリックでイージング)`}
               onPointerDown={e => onKeyDown(e, { layerId, path, f: k.f })}
               onDoubleClick={() => setFrame(k.f)}
@@ -615,6 +624,7 @@ export function LayerTimeline({ onOpenChild }: { onOpenChild: (compId: number) =
     const st0 = useCompStore.getState()
     st0.setFocusArea('timeline')
     if (e.button !== 0) return
+    if (e.pointerType === 'touch') return          // 指: 何もない所のドラッグはスクロール(範囲選択は始めない)
     if (!(t.hasAttribute('data-lane') || t.hasAttribute('data-tl-content') || t === e.currentTarget)) return
     const el = scrollRef.current
     if (!el) return
@@ -682,7 +692,8 @@ export function LayerTimeline({ onOpenChild }: { onOpenChild: (compId: number) =
     if (key) {
       if (!st.selKeys.some(k => k.layerId === key.layerId && k.path === key.path && sameFrame(k.f, key.f))) st.setSelKeys([key])
     } else if (!st.sel.includes(layerId)) st.setSel([layerId])
-    setMenu({ x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - 380), layerId, key })
+    // 指むけの大きさでは項目が高いので、70vh ぶん(メニューの高さの上限)が入る所まで上げる
+    setMenu({ x: Math.min(e.clientX, window.innerWidth - 240), y: Math.min(e.clientY, window.innerHeight - (COARSE ? Math.round(window.innerHeight * 0.7) + 8 : 380)), layerId, key })
   }, [])
 
   useEffect(() => {
@@ -723,7 +734,7 @@ export function LayerTimeline({ onOpenChild }: { onOpenChild: (compId: number) =
                      value={query} data-layer-filter onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); (e.target as HTMLInputElement).blur() } }} />
               <button className={`px-1 h-[18px] rounded border ${aliveOnly ? 'bg-purple-800 border-purple-500 text-white' : 'border-zinc-700 hover:text-white'}`} data-alive-only={aliveOnly ? '1' : '0'}
                       title="再生位置にあるレイヤーだけ出す" onClick={() => setAliveOnly(v => !v)}>今だけ</button>
-              <span className={`ml-0.5 whitespace-nowrap ${filtering ? 'text-purple-300' : ''}`} data-layer-count title="出している数 / 全部">{shown === layers.length ? `${layers.length} レイヤー` : `${shown} / ${layers.length}`}</span>
+              <span className={`ml-0.5 whitespace-nowrap ${filtering ? 'text-purple-300' : ''} ${NARROW ? 'hidden' : ''}`} data-layer-count title="出している数 / 全部">{shown === layers.length ? `${layers.length} レイヤー` : `${shown} / ${layers.length}`}</span>
               {filtering && <button className="px-0.5 hover:text-white" title="しぼり込みをやめる" onClick={() => { setQuery(''); setAliveOnly(false) }}>✕</button>}
               {scopeIds.length > 0 && (
                 <button className="px-1 hover:text-white" data-fold-all title={allCollapsed ? 'グループ・カメラの範囲をすべて出す' : 'グループ・カメラの範囲をすべてたたむ'}
@@ -732,7 +743,7 @@ export function LayerTimeline({ onOpenChild }: { onOpenChild: (compId: number) =
               {anyExpanded && <button className="px-1 hover:text-white" title="キーフレームの行をすべて閉じる" onClick={() => useCompStore.setState({ expanded: {} })}>▸▸</button>}
               <span className="ml-auto flex items-center gap-0.5" title="タイムラインの拡大(Ctrl + ホイールでも)">
                 <button className="px-1 hover:text-white" onClick={() => st().setPpf(ppf / 1.4)}>−</button>
-                <input type="range" min={0} max={100} value={Math.round((Math.log(ppf / 0.05) / Math.log(1200)) * 100)} className="w-12 accent-purple-500" data-tl-zoom
+                <input type="range" min={0} max={100} value={Math.round((Math.log(ppf / 0.05) / Math.log(1200)) * 100)} className={`w-12 accent-purple-500 ${NARROW ? 'hidden' : ''}`} data-tl-zoom
                        onChange={e => st().setPpf(0.05 * Math.pow(1200, Number(e.target.value) / 100))} />
                 <button className="px-1 hover:text-white" onClick={() => st().setPpf(ppf * 1.4)}>+</button>
                 <button className="px-1 hover:text-white" title="全体が見えるように合わせる"

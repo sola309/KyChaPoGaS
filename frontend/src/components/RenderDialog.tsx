@@ -95,7 +95,7 @@ export function RenderDialog({ onClose }: Props) {
   // 端末やブラウザによってはツールバーやジョブ一覧の下に潜ってしまう(スマホで発生)。
   // z は他のモーダルより上の層にして、生成ジョブ一覧(z-[90])にも確実に勝たせる。
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-2 sm:p-6"
+    <div data-mobile-readable className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-2 sm:p-6"
          onClick={onClose}>
       <div
         className="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl w-80 max-w-full p-5

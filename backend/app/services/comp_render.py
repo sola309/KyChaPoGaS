@@ -341,6 +341,17 @@ async def render_comp(comp_id: int, job_id: int, progress_cb=None, frames: tuple
                "-movflags", "+faststart", str(proxy)]
     p = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
     _, err = await p.communicate()
+    if transparent:
+        # iOS・Safari 用の不透明の写し(暗い地に重ねる)。assets.py が UA を見て出し分ける
+        alt = pdir / f"{asset_id}.safari.mp4"
+        p2 = await asyncio.create_subprocess_exec(
+            FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c=0x18181c:s={info.width}x{info.height}:r={comp['fps']}",
+            "-i", str(out), "-filter_complex", "[0][1]overlay=shortest=1,scale='min(960,iw)':-2,format=yuv420p",
+            "-c:v", "libx264", "-crf", "26", "-preset", "veryfast", "-movflags", "+faststart", str(alt),
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        _, err2 = await p2.communicate()
+        if p2.returncode != 0:
+            log.warning(f"comp safari proxy failed: {err2.decode(errors='replace')[-300:]}")
     if progress_cb:
         progress_cb(0.97)
     with Session(engine) as s:

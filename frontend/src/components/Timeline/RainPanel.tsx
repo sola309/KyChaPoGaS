@@ -186,7 +186,7 @@ export function RainPanel({ clip, onChange, onClose }: Props) {
   // ツールバー(横スクロール)の中に置くと切れて見えないので body へ出す。プレビューを隠さないよう右下に浮かべる
   // (背景を暗くしない = 再生・コマ送りしながら調整できる)
   return createPortal(
-    <div className="fixed right-3 bottom-3 w-[340px] max-w-[calc(100vw-1.5rem)] max-h-[80vh] overflow-y-auto rounded-lg border border-sky-800 bg-zinc-900/95 shadow-2xl backdrop-blur p-3 z-[110] text-zinc-200"
+    <div className="fixed right-3 bottom-3 w-[340px] max-w-[calc(100vw-1.5rem)] max-h-[80dvh] overflow-y-auto overscroll-contain rounded-lg border border-sky-800 bg-zinc-900/95 shadow-2xl backdrop-blur p-3 z-[110] text-zinc-200"
          onKeyDown={e => e.stopPropagation()}>
       <div className="flex items-center justify-between mb-1">
         <span className="text-[11px] font-semibold text-sky-200">🌧 雨(f{clip.start_frame}〜{clip.start_frame + clip.duration_frames - 1})</span>
