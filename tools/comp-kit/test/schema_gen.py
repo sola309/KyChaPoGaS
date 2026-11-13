@@ -37,10 +37,12 @@ fx("opacity", "透明度", G1, {"amount": P("不透明度")}, True)
 # --- 位置・並べる ---
 fx("offset", "座標・拡大率・回転・透明度(足し算)", G2, {"position": V3("位置に足す", [0, 0, 0]), "scale": P("拡大率に掛ける", 100, 0, 1000), "rotation": A("回転に足す"), "opacity": P("不透明度に掛ける")}, True)
 fx("flip", "反転", G2, {"h": B("左右", True), "v": B("上下"), "luma": B("輝度反転"), "hue": B("色相反転"), "alpha": B("透明度反転")}, True)
-fx("repeat", "並べる(画像ループ・一方向・円形)", G2, {"mode": S("並べ方", "grid", [("grid", "格子"), ("line", "一列"), ("circle", "円形")]), "count_x": N("個数 X(一列・円形の個数)", 3, 1, 256, 1), "count_y": N("個数 Y", 3, 1, 256, 1),
+fx("repeat", "並べる(画像ループ・一方向・円形)", G2, {"mode": S("並べ方", "grid", [("grid", "格子"), ("line", "一列"), ("circle", "円形"), ("random", "ばらまく")]), "count_x": N("個数 X(一列・円形の個数)", 3, 1, 256, 1), "count_y": N("個数 Y", 3, 1, 256, 1),
     "gap_x": P("間隔 X(幅に対する %。一列では px)", 100, 0, 1000), "gap_y": P("間隔 Y(高さに対する %)", 100, 0, 1000), "spacing_x": N("すき間 X(px)", 0, -2000, 2000, 1), "spacing_y": N("すき間 Y(px)", 0, -2000, 2000, 1),
     "stagger_rows": B("1 行おきに半分ずらす"), "scroll_x": N("流す X", 0, -100000, 100000, 1), "scroll_y": N("流す Y", 0, -100000, 100000, 1), "mirror": B("1 個おきに裏返す"),
-    "angle": A("角度(一列の向き・円形の開始角)", 90), "radius": N("半径(円形)", 200, 0, 8000, 1), "sweep": A("範囲(円形)", 360), "rotate": B("中心を向ける(円形)", True), "both": B("両方向(一列)")}, True)
+    "angle": A("角度(一列の向き・円形の開始角)", 90), "radius": N("半径(円形)", 200, 0, 8000, 1), "sweep": A("範囲(円形)", 360), "rotate": B("中心を向ける(円形)", True), "both": B("両方向(一列)"),
+    "area_x": N("ばらまく範囲 幅(ばらまく)", 400, 0, 16000, 1), "area_y": N("ばらまく範囲 高さ(ばらまく)", 400, 0, 16000, 1), "seed": N("乱数の種(ばらまく)", 1, 0, 99999, 1, False),
+    "random_rotation": A("回転のばらつき ±(ばらまく)", 0), "scale_min": P("拡大率 最小(ばらまく)", 100, 0, 1000), "scale_max": P("拡大率 最大(ばらまく)", 100, 0, 1000)}, True)
 # --- 色(シェーダで済む) ---
 fx("fill", "単色化", G3, {"color": C("色", "#ffffff"), "amount": P("強さ"), "keep_luma": B("輝度を保持")}, True)
 fx("tint", "色味を付ける", G3, {"color": C("色", "#ffb347"), "amount": P("強さ")}, True)
@@ -75,6 +77,8 @@ fx("directional_blur", "方向ブラー", G5, {"length": N("範囲", 40, 0, 1000
 fx("radial_blur", "放射ブラー", G5, {"amount": N("範囲", 20, 0, 200, 1), "mode": S("種類", "zoom", [("zoom", "ズーム"), ("spin", "回転")]), "cx": CX(), "cy": CY()}, False)
 fx("glow", "グロー", G5, {"radius": N("拡散", 20, 0, 300, 1), "strength": N("強さ", 1, 0, 5, 0.05), "threshold": P("しきい値", 50)}, False)
 fx("sharpen", "シャープ", G5, {"amount": P("強さ", 50, 0, 400)}, False)
+fx("vignette_blur", "周辺ボケ光量", G5, {"amount": P("周辺の暗さ", 60), "blur": N("周辺のぼかし", 8, 0, 200, 0.5), "radius": P("効き始める位置", 50, 0, 200), "softness": P("効ききるまでの幅", 50, 0, 200),
+    "color_shift": N("周辺の色ずれ", 0, 0, 100, 0.5), "color": C("暗くする色", "#000000"), "cx": CX(), "cy": CY()}, False)
 # --- ゆがみ ---
 fx("wave", "波(ラスター)", G6, {"amp": N("振幅", 10, 0, 500, 1), "freq": N("山の数", 4, 0, 100, 0.1), "speed": N("速さ", 1, -20, 20, 0.1), "phase": N("位相", 0, -10, 10, 0.01)}, False)
 fx("raster", "ラスター(波長で指定)", G6, {"amp": N("振幅", 10, 0, 500, 1), "wavelength": N("波長", 200, 2, 4000, 1), "speed": N("速さ", 1, -20, 20, 0.1), "vertical": B("縦")}, False)
@@ -105,7 +109,9 @@ LT["image"] = {"label": "画像", "icon": "🖼️", "source": {"asset_id": N("�
 LT["video"] = {"label": "動画", "icon": "🎞️", "source": {"asset_id": N("素材", None, anim=False, asset="video", **g("素材")), "loop": B("繰り返す", **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {"start": 0, "speed": 1}}
 LT["sequence"] = {"label": "連番画像", "icon": "🎬", "source": {"sequence": {"type": "object", "label": "連番({asset_ids:[...]} か {url_pattern, start, count, fps})", "default": {"asset_ids": []}, "animatable": False, "group": "素材"}, "loop": B("繰り返す", **g("素材"))}, "default_source": {"sequence": {"asset_ids": []}}, "default_layer": {}}
 LT["solid"] = {"label": "平面", "icon": "⬛", "source": {"color": C("色", "#ffffff", **g("塗り")), "width": N("幅(省略 = 画面)", None, 1, 8000, 1, optional=True, **g("大きさ")), "height": N("高さ", None, 1, 8000, 1, optional=True, **g("大きさ")), "fill": FILL("塗り(グラデーション・模様)", None, "塗り") | {"optional": True}}, "default_source": {"color": "#ffffff"}, "default_layer": {}}
-LT["pattern"] = {"label": "模様", "icon": "🎴", "source": {**pattern_params(), "width": N("幅(省略 = 画面)", None, 1, 16000, 1, optional=True, **g("大きさ")), "height": N("高さ", None, 1, 16000, 1, optional=True, **g("大きさ"))}, "default_source": {"kind": "yagasuri", "colors": ["#e65163", "#f6a5b0"], "size": 80}, "default_layer": {}}
+LT["pattern"] = {"label": "模様", "icon": "🎴", "source": {**pattern_params(), "width": N("幅(省略 = 画面)", None, 1, 16000, 1, optional=True, **g("大きさ")), "height": N("高さ", None, 1, 16000, 1, optional=True, **g("大きさ")),
+    "cols": N("横の升目の数(幅 = 大きさ × 個数。市松など)", None, 1, 1000, 1, False, optional=True, **g("大きさ")), "rows": N("縦の升目の数", None, 1, 1000, 1, False, optional=True, **g("大きさ")),
+    "origin": S("模様の原点", "center", [("center", "箱の中心"), ("top_left", "箱の左上")], optional=True, **g("大きさ"))}, "default_source": {"kind": "yagasuri", "colors": ["#e65163", "#f6a5b0"], "size": 80}, "default_layer": {}}
 LT["shape"] = {"label": "シェイプ", "icon": "🔷", "source": {"kind": S("形", "rect", SHAPE_KINDS, **g("形")), "width": N("幅", 300, 0, 8000, 1, **g("形")), "height": N("高さ", 300, 0, 8000, 1, **g("形")), "radius": N("角丸", 0, 0, 2000, 1, **g("形")),
     "sides": N("頂点の数", 5, 3, 64, 1, optional=True, **g("形")), "inner": N("内径の比(星・輪)", 0.5, 0, 1, 0.01, optional=True, **g("形")), "start": A("開始角(円弧・扇・輪)", 0, optional=True, **g("形")), "end": A("終了角", 360, optional=True, **g("形")),
     "thickness": N("太さの比(矢じり・十字)", 0.4, 0.02, 1, 0.01, optional=True, **g("形")), "head": N("矢の頭の比", 0.4, 0.02, 1, 0.01, optional=True, **g("形")), "shaft": N("矢の軸の比", 0.4, 0.01, 1, 0.01, optional=True, **g("形")), "petals": N("花びらの数", 5, 3, 24, 1, optional=True, **g("形")),
@@ -129,7 +135,14 @@ LT["text"] = {"label": "テキスト", "icon": "🔤", "source": {"text": T("文
     "arc": {"type": "object", "label": "円周に沿わせる", "default": None, "animatable": False, "optional": True, "group": "円周", "fields": {"radius": N("半径(負 = 下側)", 300, -8000, 8000, 1), "start": A("位置"), "sweep": A("等間隔に配る範囲(省略 = 字幅どおり)", None)}},
     "per_char": {"type": "object", "label": "文字ごとアニメ", "default": None, "animatable": False, "optional": True, "group": "アニメ", "fields": {"unit": S("単位", "char", [("char", "文字"), ("word", "単語"), ("line", "行")]), "stagger": N("間隔(コマ)", 2, 0, 600, 0.1, False), "duration": N("時間(コマ)", 12, 0.1, 600, 0.1, False),
         "order": S("登場順", "forward", [("forward", "前から"), ("backward", "後ろから"), ("center", "内側から"), ("edges", "外側から"), ("random", "ランダム")]), "e": T("イージング", "easeOut"), "at": N("開始(レイヤーの頭からのコマ)", 0, 0, 100000, 1, False),
+        "ranks": {"type": "numbers", "label": "順番の表(i 文字目が何番目に出るか。書くと登場順より優先)", "default": None, "animatable": False, "optional": True},
+        "sequence": {"type": "numbers", "label": "出る順に並べた文字の番号(0 始まり。ranks の逆の書き方)", "default": None, "animatable": False, "optional": True},
         "from": {"type": "object", "label": "始まりの姿", "fields": {"position": V3("位置", [0, 40, 0]), "scale": V2("拡大率", [100, 100]), "rotation": A("回転"), "opacity": P("不透明度", 0)}},
+        "out": {"type": "object", "label": "退場(文字ごと)", "default": None, "animatable": False, "optional": True, "fields": {
+            "stagger": N("間隔(コマ)", 2, 0, 600, 0.1, False), "duration": N("時間(コマ)", 12, 0.1, 600, 0.1, False),
+            "order": S("退場順", "forward", [("forward", "前から"), ("backward", "後ろから"), ("center", "内側から"), ("edges", "外側から"), ("random", "ランダム")]), "e": T("イージング", "easeIn", easing=True),
+            "at": N("開始(レイヤーの頭からのコマ。省略 = 最後の文字がレイヤーの終わりで消え終わる)", None, 0, 100000, 1, False, optional=True),
+            "to": {"type": "object", "label": "終わりの姿", "fields": {"position": V3("位置", [0, -40, 0]), "scale": V2("拡大率", [100, 100]), "rotation": A("回転"), "opacity": P("不透明度", 0)}}}},
         "random": {"type": "object", "label": "文字ごとの乱れ", "fields": {"position": V3("位置", [0, 0, 0]), "rotation": A("回転"), "scale": P("拡大率", 0, 0, 500), "opacity": P("不透明度", 0), "seed": N("種", 1, 0, 9999, 1, False), "amount": P("量")}}}},
     "runs": {"type": "list", "label": "文の途中の書体・サイズ替え", "default": None, "animatable": False, "optional": True, "group": "文字", "item": {"text": T("文字"), "font": T("書体", None, font=True), "size": N("サイズ", None, 1, 2000, 1, False), "weight": N("太さ", None, 100, 900, 100, False), "fill": C("色", None), "baseline_shift": N("上下のずれ", 0, -1000, 1000, 1, False)}}},
     "default_source": {"text": "テキスト", "font": "Noto Sans JP", "weight": 700, "size": 96, "fill": "#ffffff"}, "default_layer": {}}
@@ -137,7 +150,9 @@ LT["comp"] = {"label": "コンポジション", "icon": "🧩", "source": {"comp
 LT["null"] = {"label": "ヌル(親)", "icon": "✛", "source": {}, "default_source": {}, "default_layer": {}}
 LT["group"] = {"label": "グループ制御", "icon": "🗂️", "source": {}, "default_source": {}, "default_layer": {"scope": 1}}
 LT["camera"] = {"label": "カメラ", "icon": "🎥", "source": {"zoom": N("距離(zoom。AviUtl は 1024)", None, 1, 100000, 1, optional=True, **g("レンズ")), "fov": N("水平画角(zoom が無いとき)", 39.6, 1, 170, 0.1, **g("レンズ")), "ortho": B("平行投影", **g("レンズ")), "target": V3("注視点", None, optional=True, **g("向き")),
-    "target_layer": T("注視するレイヤーの id", None, optional=True, layer=True, **g("向き")), "zbuffer": B("奥行きで並べ替える", True, **g("向き")),
+    "target_layer": T("注視するレイヤーの id", None, optional=True, layer=True, **g("向き")),
+    "targets": {"type": "layers", "label": "注視するレイヤーの列(target_index で順に移る)", "default": None, "animatable": False, "optional": True, "group": "向き"},
+    "target_index": N("注視する相手の番号(0 始まり。小数で途中)", 0, 0, 1000, 0.01, optional=True, when={"targets": ["*"]}, **g("向き")), "zbuffer": B("奥行きで並べ替える", True, **g("向き")),
     "dof": {"type": "object", "label": "被写界深度", "default": None, "animatable": False, "optional": True, "group": "被写界深度", "fields": {"focus_distance": N("ピントの距離(0 = zoom)", 0, 0, 100000, 1), "aperture": N("ぼけの強さ", 20, 0, 500, 1), "max_blur": N("ぼけの上限", 60, 0, 300, 1, False)}}},
     "default_source": {"zoom": 1024}, "default_layer": {}}
 LT["model"] = {"label": "3D モデル", "icon": "🧊", "source": {"asset_id": N("素材(GLB)", None, anim=False, asset="model", **g("素材")), "height": N("高さ", 540, 1, 8000, 1, **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {}}
@@ -168,8 +183,8 @@ COMMON = {
     "blend": {"type": "select", "label": "合成モード", "default": "normal", "options": "blend_modes", "animatable": False, "group": "合成"}, "three_d": B("3D レイヤー", group="3D"), "billboard": B("いつもカメラを向く", group="3D"), "double_sided": B("裏面も描く", True, group="3D"),
     "motion_blur": B("モーションブラー", group="合成"), "parent": T("親レイヤー", None, layer=True, optional=True, group="変形"), "clip_to": T("このレイヤーの形で切り抜く(相手も映る)", None, layer=True, optional=True, group="合成"),
     "matte.layer": T("トラックマット", None, layer=True, optional=True, group="合成"), "matte.mode": S("マットの種類", "alpha", [("alpha", "アルファ"), ("alpha_inv", "アルファ反転"), ("luma", "ルミナンス"), ("luma_inv", "ルミナンス反転")], optional=True, group="合成"), "matte.keep_source": B("マット元も映す", optional=True, group="合成"),
-    "scope": N("効かせる範囲(下の N 層。0 = 下すべて。id の配列も可)", 0, 0, 1000, 1, False, group="グループ・カメラ", types=["group", "camera"], optional=True), "snapshot": B("画面を 1 枚の絵として動かす(フレームバッファ)", group="調整レイヤー", types=["adjustment"]),
-    "repeater.count": N("個数", 1, 0, 4096, 1, **RG), "repeater.mode": S("並べ方", "linear", [("linear", "一方向"), ("grid", "格子"), ("radial", "円形"), ("random", "ランダム")], **RG), "repeater.offset.position": V3("1 個ごとのずれ", [100, 0, 0], **RG), "repeater.offset.rotation": A("1 個ごとの回転", **RG),
+    "scope": {"type": "scope", "label": "効かせる範囲(数 = 下の N 層・0 = 下すべて / レイヤー id の配列)", "default": 0, "min": 0, "max": 1000, "step": 1, "animatable": False, "accepts": ["number", "layers"], "group": "グループ・カメラ", "types": ["group", "camera"], "optional": True}, "snapshot": B("画面を 1 枚の絵として動かす(フレームバッファ)", group="調整レイヤー", types=["adjustment"]),
+    "repeater.count": N("個数(書かなければ 1 = 複製なし)", 3, 0, 4096, 1, **RG), "repeater.mode": S("並べ方", "linear", [("linear", "一方向"), ("grid", "格子"), ("radial", "円形"), ("random", "ランダム")], **RG), "repeater.offset.position": V3("1 個ごとのずれ", [100, 0, 0], **RG), "repeater.offset.rotation": A("1 個ごとの回転", **RG),
     "repeater.offset.scale": P("1 個ごとの拡大率", 100, 0, 400, **RG), "repeater.offset.opacity": P("1 個ごとの不透明度", **RG), "repeater.time_offset": N("1 個ごとの時間差(コマ)", 0, -600, 600, 0.5, False, **RG), "repeater.order": S("重なり順", "back", [("back", "あとの複製が手前"), ("front", "最初が手前")], **RG),
     "repeater.grid.cols": N("列の数(格子)", 4, 1, 256, 1, **RG, optional=True), "repeater.grid.gap": V2("すき間(格子)", [0, 0], **RG, optional=True), "repeater.grid.stagger": B("1 行おきに半分ずらす", **RG, optional=True),
     "repeater.radial.radius": N("半径(円形)", 300, 0, 8000, 1, **RG, optional=True), "repeater.radial.start_angle": A("開始角(円形)", **RG, optional=True), "repeater.radial.sweep": A("範囲(円形)", 360, **RG, optional=True), "repeater.radial.face_center": B("中心を向ける", **RG, optional=True),
@@ -178,7 +193,7 @@ COMMON = {
 }
 MASK = {"shape": S("形", "rect", [("rect", "四角形"), ("rounded_rect", "角丸"), ("ellipse", "円"), ("polygon", "多角形(points)"), ("path", "パス(points・ベジェ)"), ("star", "星"), ("heart", "ハート"), ("flower", "花")]), "x": N("X(箱の左上から)", 0, -8000, 8000, 1), "y": N("Y", 0, -8000, 8000, 1), "w": N("幅", None, 0, 8000, 1), "h": N("高さ", None, 0, 8000, 1),
         "radius": N("角丸", 0, 0, 2000, 1), "feather": FE(), "expansion": N("広げる", 0, -500, 500, 1), "invert": B("反転"), "opacity": P("強さ")}
-BLENDS = [("normal", "通常"), ("add", "加算"), ("screen", "スクリーン"), ("multiply", "乗算"), ("overlay", "オーバーレイ"), ("lighten", "比較(明)"), ("darken", "比較(暗)"), ("difference", "差分"), ("subtract", "減算"), ("exclusion", "除外"), ("hard_light", "ハードライト"), ("soft_light", "ソフトライト"), ("color_dodge", "覆い焼き"), ("color_burn", "焼き込み"), ("linear_burn", "焼き込みリニア")]
+BLENDS = [("normal", "通常"), ("add", "加算"), ("screen", "スクリーン"), ("multiply", "乗算"), ("overlay", "オーバーレイ"), ("lighten", "比較(明)"), ("darken", "比較(暗)"), ("difference", "差分"), ("subtract", "減算"), ("exclusion", "除外"), ("hard_light", "ハードライト"), ("soft_light", "ソフトライト"), ("color_dodge", "覆い焼き"), ("color_burn", "焼き込み"), ("linear_burn", "焼き込みリニア"), ("luminosity", "輝度"), ("color", "カラー(色差)"), ("hue", "色相"), ("saturation", "彩度")]
 EAS = [("linear", "直線"), ("hold", "瞬間移動")]
 jn = {"Quad": "2 次", "Cubic": "3 次", "Quart": "4 次", "Quint": "5 次", "Sine": "サイン", "Expo": "指数", "Circ": "円", "Elastic": "ばね", "Back": "行きすぎ", "Bounce": "はずみ"}
 for k, j in jn.items():
@@ -218,6 +233,29 @@ schema = {"version": 2, "notes": {"keyframe": "数・色・ベクトルの値は
     "aliases": "effect_aliases の左の名前でも同じエフェクトとして読む"},
     "effects": E, "effect_aliases": ALIASES, "mask": MASK, "layer_types": LT, "layer_common": COMMON,
     "blend_modes": [{"value": v, "label": l} for v, l in BLENDS], "easings": [{"value": v, "label": l} for v, l in EAS], "presets": PRESETS}
+def when(table, key, cond_key, values):
+    if key in table: table[key]["when"] = {cond_key: values}
+SH = LT["shape"]["source"]
+for k, kinds in {"sides": ["polygon", "star", "burst"], "inner": ["star", "ring", "flower", "burst"], "start": ["arc", "pie", "ring"], "end": ["arc", "pie", "ring"], "thickness": ["chevron", "cross"],
+                 "head": ["arrow"], "shaft": ["arrow"], "petals": ["flower"], "jitter": ["burst"], "seed": ["burst"], "points": ["line", "path"], "closed": ["path"], "morph_to": ["path"], "morph": ["path"],
+                 "radius": ["rect", "polygon", "star", "path", "bubble"]}.items(): when(SH, k, "kind", kinds)
+PAT_WHEN = {"stagger": ["dots", "halftone"], "slope": ["yagasuri"], "rings": ["seigaiha"], "count": ["rays"], "jitter": ["rays"], "inner": ["rays"], "amplitude": ["waves", "zigzag"], "wavelength": ["waves"],
+            "contrast": ["noise"], "seed": ["noise", "grain", "rays"], "grad_angle": ["halftone"], "grad_length": ["halftone"], "dot_min": ["halftone"], "dot_max": ["halftone"],
+            "line_width": ["stripes", "dots", "grid", "hex", "asanoha", "seigaiha", "shippo", "kagome"], "ratio": ["stripes", "triangles", "uroko", "yagasuri", "seigaiha", "rays", "zigzag"]}
+for k, kinds in PAT_WHEN.items(): when(LT["pattern"]["source"], k, "kind", kinds)
+for side in ("transition_in", "transition_out"):
+    for k, types in {"direction": ["slide"], "distance": ["slide"], "angle": ["wipe", "blinds"], "pitch": ["blinds"], "shape": ["iris"], "from": ["zoom"], "radius": ["blur"], "side": ["clip"],
+                     "feather": ["wipe", "clip", "iris", "radial", "blinds"]}.items(): when(COMMON, f"{side}.{k}", f"{side}.type", types)
+for k in list(COMMON):
+    for m in ("grid", "radial", "random"):
+        if k.startswith(f"repeater.{m}."): when(COMMON, k, "repeater.mode", [m])
+RP = E["repeat"]["params"]
+for k, modes in {"count_y": ["grid"], "gap_y": ["grid"], "spacing_x": ["grid"], "spacing_y": ["grid"], "stagger_rows": ["grid"], "scroll_x": ["grid"], "scroll_y": ["grid"], "mirror": ["grid"],
+                 "angle": ["line", "circle"], "radius": ["circle"], "sweep": ["circle"], "rotate": ["circle"], "both": ["line"],
+                 "area_x": ["random"], "area_y": ["random"], "seed": ["random"], "random_rotation": ["random"], "scale_min": ["random"], "scale_max": ["random"]}.items(): when(RP, k, "mode", modes)
+when(E["iris"]["params"], "sides", "shape", ["star", "polygon"]); when(E["iris"]["params"], "inner", "shape", ["star"]); when(E["mask_shape"]["params"], "radius", "shape", ["rect"])
+schema["notes"]["when"] = "when: {\"<項目名>\": [値...]} = 同じ一覧の中のその項目が、どれかの値のときだけ効く(layer_common では点つきの道そのまま。例 transition_in.type / repeater.mode)。値が * = その項目が書かれているとき。編集画面が関係ない項目を隠すための目安で、エンジンは見ない"
+schema["notes"]["scope"] = "type: scope = 数(下の N 層。0 = 下すべて)か、レイヤー id の配列。type: layers = レイヤー id の配列。type: numbers = 数の配列"
 import os
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'schema.json')
 json.dump(schema, open(out, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

@@ -258,7 +258,10 @@ export function rasterShape(s, rs) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const p of pts) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]) }
   const bb = { x0, y0, x1, y1 }
-  const pad = sw * (join === 'miter' ? 2 : cap === 'square' ? 0.75 : 0.5) + 2
+  // _halo: {width, color} = 形の外側の縁取り(stroke_outline を形のラスタライズに畳み込んだもの。scene.js の haloOf)
+  const halo = s._halo && closed && num(s._halo.width, 0) > 0 ? s._halo : null
+  const hw = halo ? num(halo.width, 0) : 0
+  const pad = (sw + 2 * hw) * (join === 'miter' ? 2 : cap === 'square' ? 0.75 : 0.5) + 2
   const rx = Math.floor(x0 - pad), ry = Math.floor(y0 - pad)
   const rw = Math.ceil(x1 + pad) - rx, rh = Math.ceil(y1 + pad) - ry
   rs = Math.min(rs, MAX_TEX / rw, MAX_TEX / (rh * (dual ? 2 : 1)))
@@ -271,6 +274,13 @@ export function rasterShape(s, rs) {
   }
   ctx.setTransform(rs, 0, 0, rs, -rx * rs, -ry * rs)
   const fill = makeFill(ctx, fillDef, bb)
+  if (halo) {
+    // 形(塗り + 線)を hw だけ太らせた形を、縁の色でいちばん下に描く
+    ctx.beginPath(); trace(pts, true)
+    if (holes) for (const hl of holes) trace(hl, true)
+    ctx.strokeStyle = halo.color; ctx.lineWidth = sw + 2 * hw; ctx.lineJoin = join === 'miter' ? 'miter' : 'round'
+    ctx.stroke()
+  }
   if (fill && pts.length > 2) {
     ctx.beginPath(); trace(pts, true)
     if (holes) for (const hl of holes) trace(hl, true)

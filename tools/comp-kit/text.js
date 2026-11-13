@@ -415,7 +415,12 @@ function stage(def, n, layerId) {
   if (!def) return null
   const fromDef = def.from || def.to || def
   let ranks
-  if (Array.isArray(def.ranks)) ranks = Array.from({ length: n }, (_, i) => +def.ranks[i] || 0) // 順番を表で指定
+  if (Array.isArray(def.ranks)) ranks = Array.from({ length: n }, (_, i) => +def.ranks[i] || 0) // 順番を表で指定(i 文字目が何番目に出るか)
+  else if (Array.isArray(def.sequence)) {
+    // 出る順に文字の番号を並べた表(sequence[k] = k 番目に出る文字)。表に無い文字は最後にまとめて出る
+    ranks = new Array(n).fill(def.sequence.length)
+    def.sequence.forEach((ci, k) => { if (ci >= 0 && ci < n && ranks[ci] === def.sequence.length) ranks[ci] = k })
+  }
   else ranks = charRanks(n, def.order || 'forward', (def.seed ?? strHash(String(layerId))) | 0)
   return {
     stagger: num(def.stagger, 2), dur: Math.max(1e-6, num(def.duration, 12)), e: def.e || 'easeOut', at: def.at, ranks,

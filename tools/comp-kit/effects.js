@@ -28,6 +28,13 @@ const F = {
       acc += (S(p + uDir * uOffB.x) + S(p - uDir * uOffB.x)) * uWB.x;
       gl_FragColor = acc;
     }`,
+  // 小さなぼかしを 1 回で(斜め 4 点。各点は線形補間の 1 回読み)。σ = uD 画素にあたる
+  blur4: HEAD + /* glsl */ `
+    uniform float uD;
+    void main(){
+      vec2 p = P();
+      gl_FragColor = (S(p + vec2(uD, uD)) + S(p + vec2(-uD, uD)) + S(p + vec2(uD, -uD)) + S(p - vec2(uD, uD))) * 0.25;
+    }`,
   bright: HEAD + /* glsl */ `
     uniform float uThreshold;
     void main(){
@@ -103,6 +110,17 @@ const F = {
       float outer = clamp(ao - c.a, 0.0, 1.0);
       vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
       base = vec4(mix(base.rgb, uColor.rgb * max(base.a, inner), inner), max(base.a, inner));
+      float oa = (uOnly > 0.5 ? outer : ao) * uColor.a;
+      gl_FragColor = base + vec4(uColor.rgb * oa, oa) * (1.0 - base.a);
+    }`,
+  // 細い外側の縁取りを 1 パスで(広げる + 仕上げ。8 方向)。dilate → outline の 2 パスと同じ式
+  outline_thin: HEAD + /* glsl */ `
+    uniform vec4 uColor; uniform float uOnly, uWidth;
+    void main(){
+      vec2 p = P(); vec4 c = texture2D(tSrc, vUv); float ao = c.a;
+      for (float i = 0.0; i < 8.0; i += 1.0){ float t = i * 0.7853982; ao = max(ao, S(p + vec2(cos(t), sin(t)) * uWidth).a); }
+      float outer = clamp(ao - c.a, 0.0, 1.0);
+      vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
       float oa = (uOnly > 0.5 ? outer : ao) * uColor.a;
       gl_FragColor = base + vec4(uColor.rgb * oa, oa) * (1.0 - base.a);
     }`,
@@ -191,6 +209,19 @@ const F = {
       if (uInvP > 0.5) { float a = (p.x / uRes.x) * 6.2831853, r = (1.0 - p.y / uRes.y) * uR; gl_FragColor = S(uC + vec2(sin(a), -cos(a)) * r); }
       else { float a = fract(atan(q.x, -q.y) / 6.2831853), r = length(q) / uR; gl_FragColor = r > 1.0 ? vec4(0.0) : S(vec2(a * uRes.x, (1.0 - r) * uRes.y)); }
     }`,
+  // 周辺ボケ光量: 中心から離れるほど、ぼかした絵に寄せて暗くする。色ずれは外向きに R と B をずらす
+  vblur: HEAD + /* glsl */ `
+    uniform sampler2D tBlur; uniform vec2 uC, uInv; uniform float uR, uSoft, uAmt, uShift; uniform vec4 uColor;
+    vec4 Bl(vec2 p){ return texture2D(tBlur, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)); }
+    void main(){
+      vec2 p = P(); vec2 q = (p - uC) * uInv;
+      float k = smoothstep(uR, uR + uSoft + 1e-4, length(q) * 0.70711);
+      vec4 c = texture2D(tSrc, vUv), b = Bl(p);
+      if (uShift > 0.0) { vec2 d = normalize(q + 1e-6) * uShift * k; b = vec4(Bl(p - d).r, b.g, Bl(p + d).b, b.a); }
+      vec4 o = mix(c, b, k);
+      float dk = k * uAmt * uColor.a;
+      gl_FragColor = vec4(mix(o.rgb, uColor.rgb * o.a, dk), o.a);
+    }`,
   sharpen: HEAD + /* glsl */ `
     uniform float uAmt;
     void main(){ vec2 p = P(); vec4 c = S(p);
@@ -199,6 +230,8 @@ const F = {
 }
 
 const D2R = Math.PI / 180
+// ぼかしを縮小して掛け始める σ(画素)。被写界深度は 1 枚ごとに掛かって重いので、早めに縮小する
+export const BLUR_THR = 3.5, DOF_THR = 1.2
 const dirOf = (deg) => [Math.sin(deg * D2R), -Math.cos(deg * D2R)]
 const pct = (v, d) => { const x = num(v, d); return x > 1.0001 ? x / 100 : x } // 0〜1 でも 0〜100 でも受ける
 const V2 = () => new THREE.Vector2(), V4 = () => new THREE.Vector4()
@@ -226,7 +259,10 @@ const PAD = {
   mirror: () => 0,
   polar: () => 0,
   sharpen: () => 0,
+  vignette_blur: () => 0,
 }
+// まわりの画素だけで決まるパス(あとに続く切り抜きの範囲 + はみ出しぶんだけ描けば、同じ絵になる)
+export const LOCAL_PASS = new Set(['blur', 'glow', 'rgb_shift', 'drop_shadow', 'inner_shadow', 'stroke_outline', 'outline', 'directional_blur', 'long_shadow', 'feather', 'sharpen'])
 export const isPass = (type) => type in PAD
 export const PASS_TYPES = Object.keys(PAD)
 
@@ -251,11 +287,12 @@ export class Effects {
   // ガウスぼかし。大きい半径は縮小してから掛ける(ソフトウェア GL でも重くならないように)。
   // dir = [x,y] を渡すとその向きだけ
   // keepSmall = 縮小したままの RT を返す(呼び出し側が、小さい RT を引き伸ばして使えるとき)
-  blur(src, radius, dirX = 1, dirY = 1, dir = null, keepSmall = false) {
+  // thr = 縮小を始める σ(画素)。小さいほど早く縮小する(被写界深度のぼかしは 1.8、ふつうは 3.5)
+  blur(src, radius, dirX = 1, dirY = 1, dir = null, keepSmall = false, thr = BLUR_THR) {
     const g = this.g
     if (!(radius > 0.05)) { const d = g.acquire(src.width, src.height); g.copy(src.texture, d); return d }
     let ds = 1
-    while (radius / 2 / ds > 3.5 && ds < 16) ds *= 2
+    while (radius / 2 / ds > thr && ds < 16) ds *= 2
     let cur = src, own = false
     for (let s = 2; s <= ds; s *= 2) {
       const nx = g.acquire(Math.ceil(src.width / s), Math.ceil(src.height / s))
@@ -264,6 +301,8 @@ export class Effects {
       cur = nx; own = true
     }
     const sigma = Math.max(0.3, radius / 2 / ds)
+    // 被写界深度の小さなぼかし(縮小しない大きさ): 2 方向 × 11 回読みの代わりに、4 回読みの 1 パスで済ませる
+    if (thr < BLUR_THR && ds === 1 && !dir && dirX > 0 && dirY > 0) return this.run1('blur4', { uD: 1 }, src, { uD: sigma })
     // 重み: w(i) = exp(-i²/2σ²)。(1,2)(3,4)…(9,10) を 1 組ずつにまとめ、合計が 1 になるよう割る
     const w = (i) => Math.exp((-0.5 * i * i) / (sigma * sigma))
     const offs = [], ws = []
@@ -319,7 +358,7 @@ export class Effects {
         const r = num(p.radius, 10) * rs
         if (r < 0.05) return null
         const dir = p.direction // 'h' | 'v' で片方向だけ
-        return this.blur(src, r, dir === 'v' ? 0 : 1, dir === 'h' ? 0 : 1, null, !!info.small)
+        return this.blur(src, r, dir === 'v' ? 0 : 1, dir === 'h' ? 0 : 1, null, !!info.small, p.dof ? DOF_THR : BLUR_THR)
       }
       case 'directional_blur': {
         const r = num(p.length, 40) * rs
@@ -371,6 +410,12 @@ export class Effects {
         const w = Math.max(0, num(p.width ?? p.size, 4) * rs)
         if (w <= 0.01) return null
         const pos = p.position || 'outer'
+        const soft0 = num(p.blur ?? p.softness, 0) * rs
+        if (pos === 'outer' && w <= 2.5 && soft0 <= 1.5) {
+          // 細い縁(名札の枠・文字の細い縁など): 1 パスで済ませる
+          const m1 = this.mat('outline_thin', { uColor: V4(), uOnly: 0, uWidth: 1 })
+          return this.run1('outline_thin', null, src, { uWidth: w, uOnly: p.only || num(p.mix, 100) < 0 ? 1 : 0, uColor: m1.uniforms.uColor.value.set(c[0], c[1], c[2], c[3] * clamp(num(p.opacity, 100) / 100, 0, 1)) })
+        }
         const wo = pos === 'inner' ? 0 : pos === 'center' ? w / 2 : w, wi = pos === 'inner' ? w : pos === 'center' ? w / 2 : 0
         let ao = wo > 0 ? this.dilate(src, wo, false) : null
         const ai = wi > 0 ? this.dilate(src, wi, true) : null
@@ -458,6 +503,21 @@ export class Effects {
       }
       case 'polar':
         return this.run1('polar', { uC: V2(), uR: 1, uInvP: 0 }, src, { uC: this.v2.set(cx, cy), uR: Math.max(1, Math.min(b[2] - b[0], b[3] - b[1]) / 2), uInvP: p.invert ? 1 : 0 })
+      case 'vignette_blur': {
+        // amount = 周辺の暗さ %、blur = 周辺のぼかし px、radius = 効き始める位置(%。箱の対角の半分が 100)、softness = 効ききるまでの幅 %
+        const br = Math.max(0, num(p.blur, 8)) * rs
+        const bl = br > 0.05 ? this.blur(src, br) : null
+        const c = toColor(p.color ?? '#000000')
+        const m = this.mat('vblur', { tBlur: null, uC: V2(), uInv: V2(), uR: 0.5, uSoft: 0.5, uAmt: 0.5, uShift: 0, uColor: V4() })
+        m.uniforms.uInv.value.set(2 / Math.max(1, b[2] - b[0]), 2 / Math.max(1, b[3] - b[1]))
+        const out = this.run1('vblur', null, src, {
+          tBlur: (bl || src).texture, uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs),
+          uR: clamp(num(p.radius, 50) / 100, 0, 2), uSoft: Math.max(0, num(p.softness, 50)) / 100, uAmt: clamp(num(p.amount, 60) / 100, 0, 1),
+          uShift: Math.max(0, num(p.color_shift, 0)) * rs, uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
+        })
+        g.release(bl)
+        return out
+      }
       case 'sharpen':
         return this.run1('sharpen', { uAmt: 0 }, src, { uAmt: num(p.amount, 50) / 100 })
     }

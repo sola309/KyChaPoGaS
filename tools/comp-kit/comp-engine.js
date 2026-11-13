@@ -8,7 +8,7 @@ import { Effects } from './effects.js'
 import { Assets, canvasTexture } from './assets.js'
 import { CompScene, BLEND_FRAG, MATTE_FRAG, MIX_FRAG, ModelStore } from './scene.js'
 import { spriteCanvas } from './particles.js'
-import { evalProp } from './props.js'
+import { evalProp, evalVec } from './props.js'
 
 export class CompEngine {
   // opts:
@@ -41,7 +41,32 @@ export class CompEngine {
       playing: false,
       pending: [],
       fontEpoch: 0,
-      invalidate() { if (env.mode !== 'capture') self.opts.onInvalidate?.() },
+      showGuides: true, // 下絵(guide)レイヤーをプレビューに出すか(comp:guides で切り替える)
+      curLayer: null,   // いま描いている・準備しているレイヤー(いちばん上のコンポジションでの id。知らせに添える)
+      // 困りごとを呼び出し側へ知らせる(素材が無い・知らない種類・シェーダの失敗)。同じ内容は 1 回だけ、1 秒に 12 件まで
+      reported: new Set(), repN: 0, repT: 0, repDropped: 0,
+      report(level, message, layerId) {
+        const cb = self.opts.onError
+        if (!cb) return
+        message = String(message).slice(0, 400)
+        const lid = layerId === undefined ? env.curLayer : layerId
+        const key = `${level}|${lid ?? ''}|${message}`
+        if (env.reported.has(key)) return
+        if (env.reported.size > 2000) env.reported.clear()
+        env.reported.add(key)
+        const now = typeof performance !== 'undefined' ? performance.now() : 0
+        if (now - env.repT > 1000) {
+          if (env.repDropped) { const n = env.repDropped; env.repDropped = 0; try { cb({ level: 'warn', message: `ほかに ${n} 件の知らせを省いた` }) } catch { /* 呼び出し側の失敗は無視 */ } }
+          env.repT = now; env.repN = 0
+        }
+        if (++env.repN > 12) { env.repDropped++; env.reported.delete(key); return }
+        const m = { level: level === 'error' ? 'error' : 'warn', message }
+        if (lid != null) m.layer_id = String(lid)
+        try { cb(m) } catch { /* 呼び出し側の失敗は無視 */ }
+      },
+      epoch: 0,    // 素材・書体・入れ子が読めるたびに進む(入れ子の絵の使い回しを無効にする)
+      drawTick: 0, // 描いたコマの通し番号
+      invalidate() { env.epoch++; if (env.mode !== 'capture') self.opts.onInvalidate?.() },
       sprites: new Map(),
       sprite(kind) {
         let t = env.sprites.get(kind)
@@ -84,8 +109,9 @@ export class CompEngine {
             (comp) => {
               if (!comp || !comp.data) throw new Error('empty')
               if (typeof comp.data === 'string') comp = { ...comp, data: JSON.parse(comp.data) }
-              e.scene = new CompScene(env, { ...comp, id: comp.id ?? id }); e.state = 'ready'; env.invalidate()
-            }).catch((err) => { e.state = 'error'; console.warn(`[comp-engine] comp ${id} を読めない:`, err) })
+              e.scene = new CompScene(env, { ...comp, id: comp.id ?? id }); e.scene.isChild = true; e.state = 'ready'; env.invalidate()
+            }).catch((err) => { e.state = 'error'; console.warn(`[comp-engine] comp ${id} を読めない:`, err); env.report('error', `入れ子のコンポジション ${id} を読めない`, e.layer) })
+          e.layer = env.curLayer
           this.items.set(key, e)
         }
         if (e.state === 'loading') env.pending.push(e.promise)
@@ -95,6 +121,12 @@ export class CompEngine {
     this.scene = null
     this.frame = 0
     this.fontFaces = new Set()
+    // シェーダを作れなかったとき(three の既定の長いログの代わりに、要点だけ出して知らせる)
+    renderer.debug.onShaderError = (gl, program, vs, fs) => {
+      const log = (gl.getShaderInfoLog(fs) || gl.getShaderInfoLog(vs) || gl.getProgramInfoLog(program) || '').trim().split('\n')[0]
+      console.error('[comp-engine] シェーダを作れない:', log)
+      env.report('error', `シェーダを作れない: ${log}`)
+    }
   }
 
   get width() { return this.scene ? this.scene.W : 0 }
@@ -120,19 +152,24 @@ export class CompEngine {
       this.fontFaces.add(key)
       try {
         const url = typeof ft.url === 'string' && ft.url.startsWith('/') && !ft.url.startsWith('//') ? this.env.apiBase + ft.url : ft.url
-        // 別名(aliases: 日本語の書体名など)でも引けるよう、同じファイルを名前ごとに登録する
-        for (const fam of [ft.family, ...(Array.isArray(ft.aliases) ? ft.aliases : [])]) {
-          const face = new FontFace(fam, `url("${url}")`, { weight: String(ft.weight || 'normal'), style: ft.style || 'normal' })
-          document.fonts.add(await face.load())
+        // 別名(aliases: 日本語の書体名・「Noto Sans JP Bold」のような太さつきの名前)でも引けるよう、同じファイルを名前ごとに登録する
+        const names = [...new Set([ft.family, ...(Array.isArray(ft.aliases) ? ft.aliases : [])].filter((x) => typeof x === 'string' && x))]
+        const desc = { weight: String(ft.weight || 'normal'), style: ft.style || 'normal' }
+        const first = await new FontFace(names[0], `url("${url}")`, desc).load()
+        document.fonts.add(first)
+        for (const fam of names.slice(1)) {
+          // 別名の登録に失敗しても、ほかの名前は生かす
+          try { document.fonts.add(await new FontFace(fam, `url("${url}")`, desc).load()) } catch (err) { console.warn(`[comp-engine] 書体の別名を登録できない: ${fam}`, err) }
         }
         this.env.fontEpoch++
-      } catch (err) { console.warn(`[comp-engine] 書体を読めない: ${ft.family}`, err) }
+      } catch (err) { console.warn(`[comp-engine] 書体を読めない: ${ft.family}`, err); this.env.report('error', `書体を読めない: ${ft.family}`, null) }
     }))
     this.env.fonts.clear()
   }
 
   // comp = {id?, width, height, fps, duration_frames, data}
   async load(comp) {
+    this.env.reported.clear()
     this.scene?.dispose()
     this.scene = new CompScene(this.env, normalize(comp))
     this.resize()
@@ -170,6 +207,7 @@ export class CompEngine {
       this.draw(f)
     } catch (err) {
       console.warn('[comp-engine] renderFrame', err)
+      env.report('error', `描画に失敗: ${err && err.message || err}`)
     }
   }
   // 同期で描く(プレビューの再生ループ用)
@@ -178,11 +216,14 @@ export class CompEngine {
     if (!s) return
     this.frame = f
     this.env.pending.length = 0
+    this.env.drawTick++
     g.setScissor(null)
     const acc = s.render(f, [String(s.comp.id ?? '')])
     g.setScissor(null)
     g.copy(acc.texture, null)
     g.release(acc)
+    // 入れ子の絵のうち、このコマで使わなかったものを手放す
+    for (const e of this.env.comps.items.values()) e.scene?.sweepCache()
     g.gc()
   }
 
@@ -201,12 +242,31 @@ export class CompEngine {
     this.env.playing = !!on
     if (!on) this.env.assets.pauseAll()
   }
-  // ドラッグ中の仮の値。value = null で解除
+  // ドラッグ中の仮の値(transform.position / scale / rotation)。value = null でその項目を解除
   setOverride(id, path, value) {
-    if (!this.scene || path !== 'transform.position') return
-    if (value == null) this.scene.overrides.delete(String(id))
-    else this.scene.overrides.set(String(id), { position: value })
+    const key = { 'transform.position': 'position', 'transform.scale': 'scale', 'transform.rotation': 'rotation' }[path]
+    if (!this.scene || !key) return
+    const o = this.scene.overrides.get(String(id)) || {}
+    if (value == null) delete o[key]; else o[key] = value
+    if (Object.keys(o).length) this.scene.overrides.set(String(id), o); else this.scene.overrides.delete(String(id))
     this.scene.resetStamps()
+  }
+  // 下絵(guide)レイヤーをプレビューに出すか
+  setGuides(show) { this.env.showGuides = show !== false }
+  // レイヤーの定義(編集画面むけ。読むだけ)
+  layerDef(id) { return this.scene?.layers.get(String(id))?.def ?? null }
+  // いっしょに動かすと二重に動くレイヤー(親・効いているグループが ids に入っているもの)を除く
+  dragRoots(ids) {
+    const sc = this.scene
+    if (!sc) return []
+    const set = new Set(ids.map(String))
+    return [...set].filter((id) => {
+      const L = sc.layers.get(id)
+      if (!L || L.def.locked) return false
+      for (let p = L.def.parent, n = 0; p != null && n < 32; n++) { if (set.has(String(p))) return false; p = sc.layers.get(String(p))?.def.parent }
+      if (L.groups && L.groups.some((G) => set.has(G.id) && sc.active(G, this.frame))) return false
+      return true
+    })
   }
   clearOverrides() {
     if (!this.scene) return
@@ -219,12 +279,14 @@ export class CompEngine {
     if (!L) return undefined
     let v = L.def
     for (const k of path.split('.')) v = v?.[k]
-    if (path === 'transform.position') {
+    const ok = { 'transform.position': 'position', 'transform.scale': 'scale', 'transform.rotation': 'rotation' }[path]
+    if (ok) {
       const o = this.scene.overrides.get(String(id))
-      if (o) return o.position
-      if (v === undefined) return [this.scene.W / 2, this.scene.H / 2, 0]
+      if (o && o[ok] != null) return o[ok]
+      if (v === undefined) return ok === 'position' ? [this.scene.W / 2, this.scene.H / 2, 0] : ok === 'scale' ? [100, 100, 100] : 0
     }
-    return evalProp(v, f, this.scene.fps)
+    // position は {x, y, z} の分け書きもあるので evalVec で読む
+    return ok === 'position' ? evalVec(v, f, this.scene.fps) : evalProp(v, f, this.scene.fps)
   }
   isKeyframed(id, path) {
     let v = this.scene?.layers.get(String(id))?.def
@@ -236,6 +298,7 @@ export class CompEngine {
   invalidateComp(id) {
     const e = this.env.comps.items.get(String(id))
     if (e) { e.scene?.dispose(); this.env.comps.items.delete(String(id)) }
+    this.env.epoch++ // この子を含む、ほかの入れ子の絵の使い回しも無効にする
   }
 
   dispose() {

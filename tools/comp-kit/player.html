@@ -44,6 +44,9 @@
   let frame = 0, playing = false, selected = []
   let playT0 = 0, playF0 = 0, raf = 0, dirty = false
   let view = { x: 0, y: 0, s: 1 } // プレビューでの置き場所(CSS px)と倍率
+  let guide = { safe: false, grid: false } // 重ね描きの目安(comp:overlay)
+  let hot = null // ポインタが乗っているつまみ(描くときに強調する)
+  let overlayInk = false // 重ね描きの canvas に何か描いてあるか
 
   const post = (m) => { if (window.parent && window.parent !== window) window.parent.postMessage(m, '*') }
   const fps = () => (comp && comp.fps) || 30
@@ -76,6 +79,8 @@
     eng = new CompEngine(canvas, {
       mode, apiBase, scale: mode === 'capture' ? 1 : (scaleQ > 0 ? scaleQ : 1),
       onInvalidate: () => { if (!playing) invalidate() },
+      // 素材が無い・知らない種類・シェーダの失敗などを親へ知らせる(エンジン側で重複を除き、数も抑えてある)
+      onError: (m) => post({ type: 'comp:error', ...m }),
     })
     window.__compEngine = eng
     // プロジェクトの書体(boot.fonts: [{family, url, weight}])は、最初の 1 コマより前に読み終える
@@ -87,6 +92,7 @@
       window.addEventListener('resize', () => { layout(); invalidate() })
       window.addEventListener('message', onMessage)
       bindPointer()
+      bindKeys()
     }
     await eng.renderFrame(frame)
     drawOverlay()
@@ -178,30 +184,113 @@
       case 'comp:invalidate': eng.invalidateComp(m.comp_id); show(frame); break
       // 書体の追加(追加): {fonts:[{family,url,weight}]}
       case 'comp:fonts': eng.loadFonts(m.fonts).then(() => show(frame)); break
+      // 下絵(guide)レイヤーを出す・隠す(追加)
+      case 'comp:guides': eng.setGuides(m.show !== false); show(frame); break
+      // 重ね描きの目安(追加): safe = セーフフレーム(90% / 80%)、grid = 三分割の線
+      case 'comp:overlay': guide = { safe: !!m.safe, grid: !!m.grid }; drawOverlay(); break
       case 'comp:quality': autoScale = !(m.scale > 0); if (m.scale > 0) eng.setScale(m.scale); else layout(); show(frame); break
     }
   }
 
-  // ---- 選択枠 ----
+  // ---- キー入力を親へ渡す ----
+  // iframe にフォーカスがある間のキー入力は、すべて親へ知らせる(ショートカットを決めるのは親。ここでは何もしない)。
+  // ブラウザの既定の動き(保存ダイアログ・スクロールなど)だけ止める
+  function bindKeys() {
+    window.addEventListener('keydown', (ev) => {
+      const mod = ev.ctrlKey || ev.metaKey
+      const k = String(ev.key || '').toLowerCase()
+      if ((mod && 'szyadg'.includes(k) && k.length === 1) || (!mod && [' ', 'arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'backspace', 'delete', 'tab', 'home', 'end'].includes(k))) ev.preventDefault()
+      post({ type: 'comp:key', key: ev.key, code: ev.code, ctrl: ev.ctrlKey, shift: ev.shiftKey, alt: ev.altKey, meta: ev.metaKey, repeat: ev.repeat })
+    })
+  }
+
+  // ---- 選択枠・つまみ・目安 ----
+  const HANDLE = 7, ROT_OFF = 26 // つまみの大きさ・回転つまみの上辺からの距離(CSS px)
+  const X = (p) => view.x + p[0] * view.s, Y = (p) => view.y + p[1] * view.s
+  // つまみの位置(CSS px)。1 枚だけ選んでいるときに出す。→ [{kind:'scale'|'rotate', ax, ay, x, y}]
+  //   ax, ay: -1 = 左・上の辺、0 = 中央、1 = 右・下の辺
+  function handlesOf(b) {
+    const q = b.corners.map((p) => [X(p), Y(p)])
+    const mid = (a, c) => [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2]
+    const out = [
+      { kind: 'scale', ax: -1, ay: -1, p: q[0] }, { kind: 'scale', ax: 1, ay: -1, p: q[1] }, { kind: 'scale', ax: 1, ay: 1, p: q[2] }, { kind: 'scale', ax: -1, ay: 1, p: q[3] },
+      { kind: 'scale', ax: 0, ay: -1, p: mid(q[0], q[1]) }, { kind: 'scale', ax: 1, ay: 0, p: mid(q[1], q[2]) }, { kind: 'scale', ax: 0, ay: 1, p: mid(q[2], q[3]) }, { kind: 'scale', ax: -1, ay: 0, p: mid(q[3], q[0]) },
+    ]
+    // 回転つまみ: 上辺の中央から、箱の外へ ROT_OFF だけ離した所
+    const top = mid(q[0], q[1]), bot = mid(q[3], q[2])
+    let ux = top[0] - bot[0], uy = top[1] - bot[1]
+    const ul = Math.hypot(ux, uy)
+    if (ul > 1e-3) { ux /= ul; uy /= ul } else { ux = 0; uy = -1 }
+    out.push({ kind: 'rotate', ax: 0, ay: -2, p: [top[0] + ux * ROT_OFF, top[1] + uy * ROT_OFF], from: top })
+    return out
+  }
+  const canTransform = (id) => { const d = eng.layerDef(id); return !!d && !d.locked && d.type !== 'camera' }
+  // (cx, cy)(CSS px)にあるつまみ。無ければ null
+  function handleAt(cx, cy) {
+    if (selected.length !== 1 || playing || !canTransform(selected[0])) return null
+    const b = eng.layerBounds(selected[0], frame)
+    if (!b) return null
+    let best = null, bd = HANDLE + 3
+    for (const h of handlesOf(b)) {
+      const d = Math.hypot(h.p[0] - cx, h.p[1] - cy)
+      if (d < bd) { bd = d; best = h }
+    }
+    return best ? { ...best, id: selected[0], bounds: b } : null
+  }
   function drawOverlay() {
     if (mode !== 'preview') return
-    const ctx = overlay.getContext('2d')
+    // willReadFrequently: CPU で持つ canvas にする(GPU の canvas は、消しただけのコマが画面に反映されないことがあった)
+    const ctx = overlay.getContext('2d', { willReadFrequently: true })
     const dpr = window.devicePixelRatio || 1
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, overlay.width, overlay.height)
+    // 何も描かないコマ(選択なし・目安なし)は、canvas を作り直して確実に消す(clearRect だけのコマは画面に反映されないことがある)
+    const nothing = !selected.length && !guide.safe && !guide.grid
+    if (nothing) { if (overlayInk) { overlay.width = overlay.width; overlayInk = false } return }
+    overlayInk = true
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    const X = (p) => view.x + p[0] * view.s, Y = (p) => view.y + p[1] * view.s
+    // 目安: セーフフレーム(外 = 90% アクションセーフ、内 = 80% タイトルセーフ)と三分割の線
+    if (guide.safe || guide.grid) {
+      const W = comp.width, H = comp.height
+      const line = (pts, dash) => {
+        ctx.beginPath()
+        pts.forEach((p, i) => (i ? ctx.lineTo(X(p), Y(p)) : ctx.moveTo(X(p), Y(p))))
+        ctx.setLineDash([]); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke()
+        ctx.setLineDash(dash || []); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke()
+        ctx.setLineDash([])
+      }
+      if (guide.grid) for (const t of [1 / 3, 2 / 3]) { line([[W * t, 0], [W * t, H]]); line([[0, H * t], [W, H * t]]) }
+      if (guide.safe) {
+        for (const [k, dash] of [[0.05, null], [0.1, [6, 4]]]) line([[W * k, H * k], [W * (1 - k), H * k], [W * (1 - k), H * (1 - k)], [W * k, H * (1 - k)], [W * k, H * k]], dash)
+        line([[W / 2 - 12, H / 2], [W / 2 + 12, H / 2]]); line([[W / 2, H / 2 - 12], [W / 2, H / 2 + 12]])
+      }
+    }
+    const single = selected.length === 1 && !playing
     for (const id of selected) {
       const b = eng.layerBounds(id, frame)
       if (!b) continue
       const q = b.corners
+      const col = b.three_d ? '#ffb347' : '#4fc3ff'
       ctx.beginPath()
       q.forEach((p, i) => (i ? ctx.lineTo(X(p), Y(p)) : ctx.moveTo(X(p), Y(p))))
       ctx.closePath()
       ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.stroke()
-      ctx.lineWidth = 1.5; ctx.strokeStyle = b.three_d ? '#ffb347' : '#4fc3ff'; ctx.stroke()
-      ctx.fillStyle = '#fff'
-      for (const p of q) { ctx.fillRect(X(p) - 3.5, Y(p) - 3.5, 7, 7); ctx.strokeRect(X(p) - 3.5, Y(p) - 3.5, 7, 7) }
+      ctx.lineWidth = 1.5; ctx.strokeStyle = col; ctx.stroke()
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = col
+      if (single && canTransform(id)) {
+        // つまみ: 四隅と辺の中央(拡大)、上辺の外(回転)
+        for (const h of handlesOf(b)) {
+          const on = hot && hot.kind === h.kind && hot.ax === h.ax && hot.ay === h.ay
+          const r = (on ? HANDLE + 2 : HANDLE) / 2
+          if (h.kind === 'rotate') {
+            ctx.beginPath(); ctx.moveTo(h.from[0], h.from[1]); ctx.lineTo(h.p[0], h.p[1]); ctx.lineWidth = 1.5; ctx.stroke()
+            ctx.beginPath(); ctx.arc(h.p[0], h.p[1], r + 1, 0, Math.PI * 2); ctx.fillStyle = on ? col : '#fff'; ctx.fill(); ctx.stroke()
+          } else {
+            ctx.fillStyle = on ? col : '#fff'
+            ctx.fillRect(h.p[0] - r, h.p[1] - r, r * 2, r * 2); ctx.lineWidth = 1.5; ctx.strokeRect(h.p[0] - r, h.p[1] - r, r * 2, r * 2)
+          }
+        }
+      } else for (const p of q) { ctx.fillRect(X(p) - 3, Y(p) - 3, 6, 6); ctx.lineWidth = 1.5; ctx.strokeRect(X(p) - 3, Y(p) - 3, 6, 6) }
       if (b.anchor) {
         const ax = X(b.anchor), ay = Y(b.anchor)
         ctx.beginPath(); ctx.moveTo(ax - 8, ay); ctx.lineTo(ax + 8, ay); ctx.moveTo(ax, ay - 8); ctx.lineTo(ax, ay + 8)
@@ -212,12 +301,50 @@
     }
   }
 
-  // ---- クリックで選択、ドラッグで移動 ----
+  // ---- クリックで選択、ドラッグで移動・拡大・回転 ----
+  // どのドラッグも、iframe の中では仮の値(setOverride)で描き、親へ comp:edit を送る(動かしている間 final:false、離したら final:true)。
+  // 親が保存して comp:set を送り返すと確定する。
   function bindPointer() {
     let drag = null
     const toComp = (ev) => [(ev.clientX - view.x) / view.s, (ev.clientY - view.y) / view.s]
-    stage.addEventListener('pointerdown', (ev) => {
+    const inStage = (ev) => { const [x, y] = toComp(ev); return x >= 0 && y >= 0 && x <= comp.width && y <= comp.height }
+    const r1 = (v) => Math.round(v * 10) / 10
+    const v3 = (v, d) => [0, 1, 2].map((i) => (Array.isArray(v) ? (typeof v[i] === 'number' ? v[i] : i === 1 && v.length === 1 ? v[0] : d) : typeof v === 'number' ? v : d))
+    const rot3 = (v) => (Array.isArray(v) ? (v.length >= 3 ? [+v[0] || 0, +v[1] || 0, +v[2] || 0] : [0, 0, +v[v.length - 1] || 0]) : [0, 0, +v || 0])
+    const cursorOf = (h) => {
+      if (!h) return ''
+      if (h.kind === 'rotate') return 'grab'
+      // 辺の向き(画面上)から、近い向きの矢印を選ぶ
+      const q = h.bounds.corners, c = [(q[0][0] + q[2][0]) / 2, (q[0][1] + q[2][1]) / 2]
+      const a = ((Math.atan2((h.p[1] - view.y) / view.s - c[1], (h.p[0] - view.x) / view.s - c[0]) * 180) / Math.PI + 360) % 180
+      return a < 22.5 || a >= 157.5 ? 'ew-resize' : a < 67.5 ? 'nwse-resize' : a < 112.5 ? 'ns-resize' : 'nesw-resize'
+    }
+    // つまみは画面の外(コンポジションの外側)にも出るので、窓全体で受ける
+    window.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 0) return
+      window.focus()
+      const h = handleAt(ev.clientX, ev.clientY)
+      if (h) {
+        ev.preventDefault()
+        const b = h.bounds, an = b.anchor || [(b.corners[0][0] + b.corners[2][0]) / 2, (b.corners[0][1] + b.corners[2][1]) / 2]
+        if (h.kind === 'rotate') {
+          const p = toComp(ev)
+          drag = { mode: 'rotate', id: h.id, an, a0: Math.atan2(p[1] - an[1], p[0] - an[0]), base: rot3(eng.valueAt(h.id, 'transform.rotation', frame)), moved: false, value: null, sx: ev.clientX, sy: ev.clientY }
+        } else {
+          // 箱の軸(画面上の向き)と、つかんだ点の anchor からの位置
+          const q = b.corners
+          const ux = [q[1][0] - q[0][0], q[1][1] - q[0][1]], uy = [q[3][0] - q[0][0], q[3][1] - q[0][1]]
+          const hp = [(h.p[0] - view.x) / view.s, (h.p[1] - view.y) / view.s]
+          // 元の値が 2 個([x, y])なら 2 個で返す。z を動かすのは 3D レイヤーだけ(2D では z に意味が無いので、そのまま)
+          const sv = eng.valueAt(h.id, 'transform.scale', frame), def = eng.layerDef(h.id)
+          drag = { mode: 'scale', id: h.id, an, ux, uy, hp, ax: h.ax, ay: h.ay, base: v3(sv, 100), n: Array.isArray(sv) && sv.length === 2 ? 2 : 3, z3d: !!(def && (def.three_d || def.type === 'model')),
+            moved: false, value: null, sx: ev.clientX, sy: ev.clientY }
+        }
+        hot = h
+        stage.setPointerCapture(ev.pointerId)
+        return
+      }
+      if (!inStage(ev)) return
       const [x, y] = toComp(ev)
       // すでに選んでいるレイヤーの枠の中なら、そのレイヤーを優先(下にあっても動かせる)
       let id = eng.pick(x, y, frame)
@@ -225,25 +352,69 @@
       if (keep && !ev.shiftKey && !ev.altKey) id = keep
       if (id == null) selected = []
       else if (ev.shiftKey) selected = selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]
-      else selected = [id]
+      else if (!(keep && selected.length > 1)) selected = [id] // 複数選択の中をつかんだときは、選択を保ったままみんな動かす
       post({ type: 'comp:select', ids: selected })
       drawOverlay()
       if (id == null || !selected.includes(id) || playing) return
-      const base = eng.valueAt(id, 'transform.position', frame)
-      const b3 = [0, 1, 2].map((i) => (Array.isArray(base) && typeof base[i] === 'number' ? base[i] : 0))
-      drag = { id, sx: ev.clientX, sy: ev.clientY, base: b3, n: Array.isArray(base) && base.length >= 3 ? 3 : 2, moved: false, value: null }
+      // 動かす相手: 選んでいる全部(親・グループもいっしょに選んでいる子は、親について動くので除く)
+      const items = eng.dragRoots(selected).map((lid) => {
+        const base = eng.valueAt(lid, 'transform.position', frame)
+        return { id: lid, base: [0, 1, 2].map((i) => (Array.isArray(base) && typeof base[i] === 'number' ? base[i] : 0)), n: Array.isArray(base) && base.length >= 3 ? 3 : 2, value: null }
+      })
+      if (!items.length) return
+      drag = { mode: 'move', items, sx: ev.clientX, sy: ev.clientY, moved: false }
       stage.setPointerCapture(ev.pointerId)
     })
-    stage.addEventListener('pointermove', (ev) => {
-      if (!drag) return
-      const dx = (ev.clientX - drag.sx) / view.s, dy = (ev.clientY - drag.sy) / view.s
+    window.addEventListener('pointermove', (ev) => {
+      if (!drag) {
+        // つまみの上に来たら形を変える
+        const h = handleAt(ev.clientX, ev.clientY)
+        const was = hot
+        hot = h
+        document.body.style.cursor = cursorOf(h)
+        if (!!was !== !!h || (was && h && (was.ax !== h.ax || was.ay !== h.ay))) drawOverlay()
+        return
+      }
       if (!drag.moved && Math.hypot(ev.clientX - drag.sx, ev.clientY - drag.sy) < 3) return
       drag.moved = true
-      const d = eng.screenDelta(drag.id, frame, dx, dy)
-      const r = (v) => Math.round(v * 10) / 10
-      const n = drag.n === 3 || Math.abs(d[2]) > 1e-6 ? 3 : 2
-      drag.value = [r(drag.base[0] + d[0]), r(drag.base[1] + d[1]), r(drag.base[2] + d[2])].slice(0, n)
-      eng.setOverride(drag.id, 'transform.position', drag.value)
+      if (drag.mode === 'move') {
+        const dx = (ev.clientX - drag.sx) / view.s, dy = (ev.clientY - drag.sy) / view.s
+        for (const it of drag.items) {
+          const d = eng.screenDelta(it.id, frame, dx, dy)
+          const n = it.n === 3 || Math.abs(d[2]) > 1e-6 ? 3 : 2
+          it.value = [r1(it.base[0] + d[0]), r1(it.base[1] + d[1]), r1(it.base[2] + d[2])].slice(0, n)
+          eng.setOverride(it.id, 'transform.position', it.value)
+        }
+      } else if (drag.mode === 'scale') {
+        // ポインタと、つかんだ点を、anchor を原点に箱の軸で測り直して比を取る
+        const p = toComp(ev), { ux, uy, an, hp } = drag
+        const det = ux[0] * uy[1] - ux[1] * uy[0]
+        const dec = (v) => (Math.abs(det) < 1e-9 ? [0, 0] : [((v[0] - an[0]) * uy[1] - (v[1] - an[1]) * uy[0]) / det, (ux[0] * (v[1] - an[1]) - ux[1] * (v[0] - an[0])) / det])
+        const a = dec(p), a0 = dec(hp)
+        let fx = Math.abs(a0[0]) > 1e-4 ? a[0] / a0[0] : 1, fy = Math.abs(a0[1]) > 1e-4 ? a[1] / a0[1] : 1
+        if (drag.ax === 0) fx = 1
+        if (drag.ay === 0) fy = 1
+        if (drag.ax !== 0 && drag.ay !== 0 && !ev.shiftKey) {
+          // 四隅: 縦横比を保つ(Shift で自由)。つかんだ点へ向かう向きの成分で倍率を決める
+          const hx = hp[0] - an[0], hy = hp[1] - an[1], hl = hx * hx + hy * hy
+          const f = hl > 1e-6 ? ((p[0] - an[0]) * hx + (p[1] - an[1]) * hy) / hl : 1
+          fx = fy = f
+        }
+        const b = drag.base
+        drag.value = [r1(b[0] * fx), r1(b[1] * fy), drag.z3d && drag.ax !== 0 && drag.ay !== 0 && !ev.shiftKey ? r1(b[2] * fx) : b[2]].slice(0, drag.n)
+        eng.setOverride(drag.id, 'transform.scale', drag.value)
+      } else {
+        const p = toComp(ev)
+        let z = drag.base[2] + ((Math.atan2(p[1] - drag.an[1], p[0] - drag.an[0]) - drag.a0) * 180) / Math.PI
+        // 何周も回せるよう、前の値に近い側へ寄せる
+        const prev = drag.value ? drag.value[2] : drag.base[2]
+        while (z - prev > 180) z -= 360
+        while (z - prev < -180) z += 360
+        if (ev.shiftKey) z = Math.round(z / 15) * 15
+        drag.value = [drag.base[0], drag.base[1], r1(z)]
+        drag.snapped = ev.shiftKey
+        eng.setOverride(drag.id, 'transform.rotation', drag.value)
+      }
       show(frame)
       sendEdit(false)
     })
@@ -251,15 +422,21 @@
       if (!drag) return
       try { stage.releasePointerCapture(ev.pointerId) } catch {}
       // 仮の値は、親が comp:set で確定した文書を送り返してくるまで残す
-      if (drag.moved && drag.value) sendEdit(true)
+      if (drag.moved) sendEdit(true)
       drag = null
+      drawOverlay()
     }
-    stage.addEventListener('pointerup', finish)
-    stage.addEventListener('pointercancel', finish)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
     function sendEdit(final) {
-      const m = { type: 'comp:edit', id: drag.id, path: 'transform.position', value: drag.value, final }
-      if (eng.isKeyframed(drag.id, 'transform.position')) { m.keyframed = true; m.frame = frame }
-      post(m)
+      const send = (id, path, value) => {
+        if (!value) return
+        const m = { type: 'comp:edit', id, path, value, final }
+        if (eng.isKeyframed(id, path)) { m.keyframed = true; m.frame = frame }
+        post(m)
+      }
+      if (drag.mode === 'move') for (const it of drag.items) send(it.id, 'transform.position', it.value)
+      else send(drag.id, drag.mode === 'scale' ? 'transform.scale' : 'transform.rotation', drag.value)
     }
   }
   function inQuad(b, x, y) {

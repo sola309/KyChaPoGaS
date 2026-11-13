@@ -15,7 +15,7 @@ import { canvasTexture } from './assets.js'
 import { ModelStore } from './model.js'
 import { patternUniforms } from './pattern.js'
 import { INLINE, opsGlsl, MAX_OP_VEC4, MAX_OP_TEX } from './ops.js'
-import { isPass } from './effects.js'
+import { isPass, BLUR_THR, DOF_THR, LOCAL_PASS } from './effects.js'
 
 const D2R = Math.PI / 180
 const DEFAULT_FOV = 39.6 // AE の 50mm 相当(水平画角)
@@ -24,6 +24,7 @@ const KNOWN = new Set([...DRAWABLE, 'null', 'camera', 'group'])
 const SHADER_BLEND = {
   multiply: 0, overlay: 1, lighten: 2, darken: 3, difference: 4, normal: 5, add: 6, screen: 7,
   subtract: 8, exclusion: 9, hard_light: 10, soft_light: 11, color_dodge: 12, color_burn: 13, linear_burn: 14,
+  luminosity: 15, color: 16, hue: 17, saturation: 18,
 }
 const MB_SAMPLES = 16, MB_SHUTTER = 0.5 // モーションブラー: 180° シャッター。motion_blur に数を書くとその回数
 const MAX_DEPTH = 8
@@ -34,6 +35,15 @@ const SKIP = new Set(['offset', 'aviutl_script'])
 const BLEND_FRAG = /* glsl */ `
 uniform sampler2D tBase, tSrc; uniform float uOpacity; uniform int uMode; varying vec2 vUv;
 vec3 ov(vec3 b, vec3 s){ return mix(2.0 * b * s, 1.0 - 2.0 * (1.0 - b) * (1.0 - s), step(0.5, b)); }
+// 輝度・色・色相・彩度(W3C の non-separable。輝度の重みは 0.3 / 0.59 / 0.11)
+float bLum(vec3 c){ return dot(c, vec3(0.3, 0.59, 0.11)); }
+vec3 bClip(vec3 c){ float l = bLum(c), n = min(c.r, min(c.g, c.b)), x = max(c.r, max(c.g, c.b));
+  if (n < 0.0) c = l + (c - l) * l / max(l - n, 1e-6);
+  if (x > 1.0) c = l + (c - l) * (1.0 - l) / max(x - l, 1e-6);
+  return c; }
+vec3 bSetLum(vec3 c, float l){ return bClip(c + (l - bLum(c))); }
+float bSat(vec3 c){ return max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b)); }
+vec3 bSetSat(vec3 c, float s){ float n = min(c.r, min(c.g, c.b)), x = max(c.r, max(c.g, c.b)); return x > n ? (c - n) * s / (x - n) : vec3(0.0); }
 void main(){
   vec4 d = texture2D(tBase, vUv), s = texture2D(tSrc, vUv) * uOpacity;
   vec3 cd = d.a > 1e-5 ? d.rgb / d.a : vec3(0.0), cs = s.a > 1e-5 ? s.rgb / s.a : vec3(0.0);
@@ -52,6 +62,10 @@ void main(){
   else if (uMode == 12) B = min(cd / max(1.0 - cs, vec3(1e-4)), vec3(1.0));
   else if (uMode == 13) B = 1.0 - min((1.0 - cd) / max(cs, vec3(1e-4)), vec3(1.0));
   else if (uMode == 14) B = max(cd + cs - 1.0, vec3(0.0));
+  else if (uMode == 15) B = bSetLum(cd, bLum(cs));                       // luminosity: 輝度は上、色は下
+  else if (uMode == 16) B = bSetLum(cs, bLum(cd));                       // color: 色は上、輝度は下
+  else if (uMode == 17) B = bSetLum(bSetSat(cs, bSat(cd)), bLum(cd));    // hue
+  else if (uMode == 18) B = bSetLum(bSetSat(cd, bSat(cs)), bLum(cd));    // saturation
   else B = cs;
   // W3C の合成式(乗算済みで出す)
   vec3 co = s.rgb * (1.0 - d.a) + d.rgb * (1.0 - s.a) + s.a * d.a * B;
@@ -111,6 +125,9 @@ export class CompScene {
     if (this.warned.has(key)) return
     this.warned.add(key)
     console.warn('[comp-engine]', ...msg)
+    // 呼び出し側(編集画面)へも知らせる。描けなかった・読めなかったは error、未対応の種類などは warn
+    const text = msg.map((x) => (x instanceof Error ? x.message : String(x))).join(' ')
+    this.env.report?.(/^(draw|fxerr|prep|cycle)/.test(key) ? 'error' : 'warn', (this.isChild ? `(入れ子 comp ${this.comp?.id ?? '?'})` : '') + text)
   }
 
   // 文書の差し替え。id と type が同じレイヤーはキャッシュ(テクスチャなど)を引き継ぐ。
@@ -141,7 +158,7 @@ export class CompScene {
       }
       L.def = def
       L.stamp = NaN; L.dStamp = NaN; L.mvpStamp = NaN; L.xf.stamp = NaN
-      L.rsHint = 0; L.fxHint = 0; L.tv = undefined
+      L.rsHint = 0; L.fxHint = 0; L.tv = undefined; L.halo = undefined
       L.index = this.order.length
       L.groups = null; L.cams = null
       next.set(id, L)
@@ -182,6 +199,7 @@ export class CompScene {
     for (const L of this.layers.values()) this.disposeLayer(L)
     this.layers.clear(); this.order = []
     this.clearMattes()
+    this.sweepCache(true)
   }
   videoKey(L) { return `${this.comp.id ?? 'c'}:${L.id}` }
   // 行列などのコマごとの覚えを捨てる(ドラッグ中の仮の値を入れたとき)
@@ -198,7 +216,8 @@ export class CompScene {
   active(L, f) {
     const d = L.def
     if (d.visible === false || !this.inRange(L, f)) return false
-    if (d.guide && this.env.mode === 'capture') return false // 下絵: 書き出しには出さない
+    // 下絵: 書き出し・入れ子の中では出さない。プレビューでも comp:guides {show:false} で隠せる
+    if (d.guide && (this.env.mode === 'capture' || this.isChild || this.env.showGuides === false)) return false
     if (this.anySolo && !d.solo && L.type !== 'camera' && L.type !== 'null' && L.type !== 'group') return false
     return true
   }
@@ -214,11 +233,9 @@ export class CompScene {
 
   // ---- 変形 ----
   tr(L, key, f, dflt) {
-    if (key === 'position') {
-      const o = this.overrides.get(L.id)
-      if (o && o.position) return o.position
-      return evalVec(L.def.transform?.position, f, this.fps, dflt)
-    }
+    const o = this.overrides.size ? this.overrides.get(L.id) : null
+    if (o && o[key] != null) return o[key]
+    if (key === 'position') return evalVec(L.def.transform?.position, f, this.fps, dflt)
     return evalProp(L.def.transform?.[key], f, this.fps, dflt)
   }
   // 登場・退場(transition_in / transition_out)。→ そのコマでの「見えている割合」など
@@ -340,7 +357,7 @@ export class CompScene {
         tg = [a.x, a.y, a.z]
       }
     } else if ((s.target ?? L.def.target) != null) tg = vec(evalProp(s.target ?? L.def.target, f, this.fps), 3, 0)
-    const hasPos = L.def.transform?.position != null || this.overrides.has(L.id)
+    const hasPos = L.def.transform?.position != null || this.overrides.get(L.id)?.position != null
     // 位置を書いていないカメラ: 注視点があればその正面(距離 = zoom)、なければ既定の位置
     const dpos = tg && !hasPos && tl ? [tg[0], tg[1], tg[2] - zoom] : [this.W / 2, this.H / 2, -zoom]
     const X = this.xform(L, f)
@@ -547,8 +564,12 @@ export class CompScene {
     const s = L.def.source || {}
     const box = (w, h) => ({ x: -w / 2, y: -h / 2, w, h })
     switch (L.type) {
-      case 'solid':
-      case 'pattern': return box(num(evalProp(s.width, f, this.fps), this.W), num(evalProp(s.height, f, this.fps), this.H))
+      case 'pattern': {
+        // cols / rows(升目の数)を書いたときは、size × 個数が箱の大きさになる(AviUtl の市松模様N)
+        const sz = num(evalProp(s.size, f, this.fps), 0), c = num(evalProp(s.cols, f, this.fps), 0), r = num(evalProp(s.rows, f, this.fps), 0)
+        return box(num(evalProp(s.width, f, this.fps), c > 0 && sz > 0 ? c * sz : this.W), num(evalProp(s.height, f, this.fps), r > 0 && sz > 0 ? r * sz : this.H))
+      }
+      case 'solid': return box(num(evalProp(s.width, f, this.fps), this.W), num(evalProp(s.height, f, this.fps), this.H))
       case 'adjustment': return box(this.W, this.H)
       case 'null':
       case 'group': return box(100, 100)
@@ -637,8 +658,29 @@ export class CompScene {
     L.cache[slot] = n
     return n
   }
+  // シェイプの先頭の stroke_outline(外側・ぼかしなし・動かない値)は、形のラスタライズに畳み込める(RT もパスも要らない)。
+  // 閉じた形で、色が不透明なときだけ(半透明だと重なりの濃さが変わるので)。→ {width, color} か null
+  haloOf(L) {
+    if (L.halo !== undefined) return L.halo
+    L.halo = null
+    const d = L.def, e = Array.isArray(d.effects) ? d.effects[0] : null, s = d.source || {}
+    if (L.type !== 'shape' || !e || e.enabled === false || (e.type !== 'stroke_outline' && e.type !== 'outline')) return null
+    const p = e.params || {}
+    const plain = (v) => v == null || typeof v !== 'object'
+    if (!Object.values(p).every(plain)) return null
+    if ((p.position && p.position !== 'outer') || num(p.blur ?? p.softness, 0) > 0 || p.only || num(p.mix, 100) < 0 || num(p.opacity, 100) < 100 || p.variant) return null
+    const w = num(p.width ?? p.size, 4), c = toColor(p.color ?? '#000000')
+    if (!(w > 0) || c[3] < 0.999) return null
+    const kind = s.kind || 'rect'
+    if (['line', 'path', 'arc', 'polyline'].includes(kind) || s.dash || s.trim || s.join === 'bevel' || s.morph_to) return null
+    const opaque = (v) => v == null || v === 'none' || (typeof v === 'string' && toColor(v)[3] >= 0.999)
+    if (!opaque(s.fill) || !opaque(s.stroke)) return null
+    return (L.halo = { width: w, color: p.color ?? '#000000' })
+  }
   shapeRaster(L, f) {
     const s = evalAll(L.def.source, f, this.fps)
+    const halo = this.haloOf(L)
+    if (halo) s._halo = halo
     const rs = this.rasterScale(L)
     // 模様の塗りはシェーダが出すので、模様の値が動いても作り直さない
     const key = rs + JSON.stringify(s, (k, v) => (k === 'fill' && isPatternFill(v) ? 'P' : v))
@@ -729,6 +771,8 @@ export class CompScene {
       }
       case 'pattern': {
         const sp = evalAll(src, f, this.fps)
+        // origin: "top_left"(cols / rows を書いたときは既定)= 模様の原点を箱の左上に置く(左上の升が 1 色目)
+        if (sp.origin === 'top_left' || (sp.origin == null && (sp.cols != null || sp.rows != null))) { const o = vec(sp.offset, 2, 0); sp.offset = [o[0] + rect.x, o[1] + rect.y] }
         C.pattern = L.cache.patU = patternUniforms(sp, L.cache.patU ?? undefined)
         C.edge = true
         break
@@ -797,7 +841,7 @@ export class CompScene {
         let cf = (this.srcFrame(L, f) / this.fps) * e.scene.fps
         cf = this.fitFrame(L, cf, e.scene.duration)
         if (cf < -1e-6 || cf >= e.scene.duration) return null
-        const rt = e.scene.render(cf, [...stack, e.id])
+        const rt = e.scene.renderCached(cf, [...stack, e.id])
         C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true
         break
       }
@@ -870,10 +914,11 @@ export class CompScene {
   // そのコマで効く列(評価済み): 自分の effects → 効いているグループの effects(内側から)→ transition → 被写界深度
   chain(L, f) {
     const out = []
+    const folded = this.haloOf(L) ? L.def.effects[0] : null // 形に畳み込んだ縁取りは、列から外す
     const add = (list, ff, own) => {
       if (!Array.isArray(list)) return
       for (const e of list) {
-        if (!e || e.enabled === false || (own && e.type === 'offset')) continue
+        if (!e || e.enabled === false || (own && e.type === 'offset') || e === folded) continue
         if (SKIP.has(e.type) || !(e.type in INLINE || isPass(e.type) || GEO.has(e.type))) {
           // 対応していない種類は黙って飛ばす(取り込みで残した aviutl_script など。名前ごとに 1 回だけ知らせる)
           if (e.type === 'aviutl_script') this.warn('avs' + e.name, `未対応の AviUtl スクリプト: ${e.name}`)
@@ -898,7 +943,7 @@ export class CompScene {
       if (cam.dof) {
         const d = this.viewDepth(L, f)
         const r = Math.min(cam.dof.max, (cam.dof.aperture * Math.abs(d - cam.dof.focus)) / Math.max(d, cam.dof.focus * 0.1, 1))
-        if (r > 0.4) out.push({ type: 'blur', p: { radius: r } })
+        if (r > 0.4) out.push({ type: 'blur', p: { radius: r, dof: true } })
       }
     }
     return out
@@ -917,6 +962,7 @@ export class CompScene {
       internalAdd: C.internalAdd, screenContent: C.screen, masks: C.screen ? null : this.maskData(L, f, C.rect), maskOrigin: [C.rect.x, C.rect.y],
       ops: [], data: null, opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, hidden: false, planes: null,
       space: 'layer', buf: null, res: 1, temps: C.temp ? [C.temp] : [], worldCopies: false,
+      ext: C.screen || !C.ink ? null : { ...C.ink }, // いまの絵の範囲(線の太さ・縁取りのはみ出しも含む。決まらなければ null)
     }
   }
   freeState(S) {
@@ -930,7 +976,7 @@ export class CompScene {
   opCtx(S) {
     const self = this, L = S.L, f = S.f
     return {
-      rect: S.rect, f, fps: this.fps, pad: 0, shift: null, tex: null, hide: false,
+      rect: S.rect, ext: S.ext === undefined ? S.rect : S.ext, f, fps: this.fps, pad: 0, shift: null, tex: null, hide: false,
       // 画像にアルファが無いか(全部不透明か)。小さく縮めて 1 回だけ調べる
       opaque(e) {
         if (e.opaque === undefined) {
@@ -958,7 +1004,7 @@ export class CompScene {
           if (!e || !e.scene || S.stack.includes(e.id) || S.stack.length >= MAX_DEPTH) return null
           const cf = (n / self.fps) * e.scene.fps
           if (cf < 0 || cf >= e.scene.duration) return null
-          const rt = e.scene.render(p.loop ? cf % e.scene.duration : cf, [...S.stack, e.id])
+          const rt = e.scene.renderCached(p.loop ? cf % e.scene.duration : cf, [...S.stack, e.id])
           S.temps.push(rt)
           return { tex: rt.texture, w: e.scene.W, h: e.scene.H, flipY: true }
         }
@@ -983,6 +1029,8 @@ export class CompScene {
   addOp(S, type, p) {
     const reg = INLINE[type]
     if (S.n4 + reg.n > MAX_OP_VEC4 || (reg.tex && S.opTex.length >= MAX_OP_TEX)) this.flush(S, 0)
+    // 並べた絵どうしが重なっているときは、1 枚にまとめてから掛ける(1 個ずつに掛けると、重なった所の濃さが変わる)
+    else if (S.stage === 1 && S.copies && S.copies.length > 1 && this.copiesOverlap(S)) this.flush(S, 0)
     S.data ??= (S.L.opData ??= new Float32Array(MAX_OP_VEC4 * 4))
     const ctx = this.opCtx(S)
     // transition の clip は % で来るので px に直す
@@ -992,10 +1040,26 @@ export class CompScene {
     const ok = reg.pack(p, ctx, S.data, i)
     if (ctx.hide) S.hidden = true
     if (ok === false) return
-    if (S.stage === 0 && !S.copies && S.space === 'layer') this.notePlanes(S, type, i)
+    // アルファを足す op(枠・重ねる素材・透明度の反転)が後ろに来たら、切り抜きで四角形を切りつめる近道は使えない
+    if (reg.alpha && (!reg.addsAlpha || reg.addsAlpha(p))) {
+      S.planes = null; S.noPlanes = true
+      // すでに RT に描き出してあって、その RT が(切り抜きで残る範囲に縮めたので)箱より小さいとき: 四角形を箱まで広げる(外は透明)
+      if (S.buf && S.space === 'layer' && S.quad) {
+        const q = S.quad, r = S.ext || ctx.rect
+        const ext = Math.max(q.x - r.x, q.y - r.y, r.x + r.w - (q.x + q.w), r.y + r.h - (q.y + q.h))
+        if (ext > 0) S.inkPad = Math.max(S.inkPad, ext + (ctx.pad || 0) + 1)
+      }
+    }
+    else if (S.stage === 0 && !S.copies && S.space === 'layer' && !S.noPlanes) this.notePlanes(S, type, i)
     S.ops.push({ type, stage: S.stage, slot: reg.tex ? S.opTex.length : 0 })
     if (reg.tex) S.opTex.push(ctx.tex)
     S.n4 += reg.n
+    if (S.ext) {
+      // 絵の範囲: crop は切ったあとの箱との重なり、外へ出る枠はそのぶん広げる
+      const e = S.ext, r = ctx.rect
+      if (r !== S.rect) { const x0 = Math.max(e.x, r.x), y0 = Math.max(e.y, r.y); S.ext = { x: x0, y: y0, w: Math.max(0, Math.min(e.x + e.w, r.x + r.w) - x0), h: Math.max(0, Math.min(e.y + e.h, r.y + r.h) - y0) } }
+      else if (ctx.pad) { const pd = ctx.pad - 1, x0 = Math.min(e.x, r.x - pd), y0 = Math.min(e.y, r.y - pd); S.ext = { x: x0, y: y0, w: Math.max(e.x + e.w, r.x + r.w + pd) - x0, h: Math.max(e.y + e.h, r.y + r.h + pd) - y0 } }
+    }
     S.rect = ctx.rect
     if (ctx.pad) S.inkPad = Math.max(S.inkPad, ctx.pad)
     if (ctx.shift) this.addGeo(S, [{ m: new THREE.Matrix4().makeTranslation(ctx.shift[0], ctx.shift[1], 0), op: 1 }], false)
@@ -1039,6 +1103,27 @@ export class CompScene {
     }
     return poly
   }
+  // 複製した絵どうしが重なるか(箱で判定。多すぎるときは「重なる」とみなす)。すき間なしの格子は重ならない扱い
+  copiesOverlap(S) {
+    if (S.overlapOf === S.copies) return S.overlap
+    S.overlapOf = S.copies
+    const b = S.baseInk ?? S.ink, cs = S.copies
+    if (S.multi || !b || cs.length > 400) return (S.overlap = !S.tiled)
+    if (S.tiled) return (S.overlap = false)
+    const box = cs.map((c) => {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (let k = 0; k < 4; k++) {
+        _v.set(k === 0 || k === 3 ? b.x : b.x + b.w, k < 2 ? b.y : b.y + b.h, 0).applyMatrix4(c.m)
+        x0 = Math.min(x0, _v.x); y0 = Math.min(y0, _v.y); x1 = Math.max(x1, _v.x); y1 = Math.max(y1, _v.y)
+      }
+      return [x0, y0, x1, y1]
+    })
+    for (let i = 0; i < box.length; i++) for (let j = i + 1; j < box.length; j++) {
+      const A = box[i], B = box[j]
+      if (A[0] < B[2] - 0.01 && B[0] < A[2] - 0.01 && A[1] < B[3] - 0.01 && B[1] < A[3] - 0.01) return (S.overlap = true)
+    }
+    return (S.overlap = false)
+  }
   opsOf(S) {
     let sig = ''
     for (const o of S.ops) sig += o.type + o.stage + o.slot + ','
@@ -1059,6 +1144,16 @@ export class CompScene {
       S.copies = out
     }
     if (countsAsStage) S.stage = 1
+    if (S.ext && countsAsStage) {
+      // 絵の範囲も、足した変換で写した箱ぜんぶを含む箱にする
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      const b = S.ext
+      for (const c of list) for (let k = 0; k < 4; k++) {
+        _v.set(k === 0 || k === 3 ? b.x : b.x + b.w, k < 2 ? b.y : b.y + b.h, 0).applyMatrix4(c.m)
+        x0 = Math.min(x0, _v.x); y0 = Math.min(y0, _v.y); x1 = Math.max(x1, _v.x); y1 = Math.max(y1, _v.y)
+      }
+      S.ext = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }
+    }
     // 絵の範囲: 複製した四隅をぜんぶ含む箱
     if (S.ink) {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
@@ -1081,7 +1176,8 @@ export class CompScene {
       const h = !!(p.horizontal ?? p.h ?? (!vv && !extra))
       if (h || vv) {
         const m = new THREE.Matrix4().makeTranslation(cx, cy, 0).multiply(_m.makeScale(h ? -1 : 1, vv ? -1 : 1, 1)).multiply(_m.makeTranslation(-cx, -cy, 0))
-        this.addGeo(S, [{ m, op: 1 }], false)
+        // このあとに書いた切り抜き・模様つきの色は、反転した「あと」の絵の座標で効く(効果の順番どおり)
+        this.addGeo(S, [{ m, op: 1 }], true)
       }
       if (p.luma) this.addOp(S, 'invert', { amount: 100, luma_only: true })
       if (p.hue) this.addOp(S, 'color', { hue: 180 })
@@ -1102,6 +1198,15 @@ export class CompScene {
       const a = num(p.angle, 90) * D2R, dx = Math.sin(a), dy = -Math.cos(a)
       const pitch = num(p.gap_x ?? p.gap, 0) || Math.abs(dx) * r.w + Math.abs(dy) * r.h
       for (let i = p.both ? -(n - 1) : 0; i < n; i++) list.push({ m: T(dx * pitch * i, dy * pitch * i), op: 1 })
+    } else if (mode === 'random') {
+      // ばらまく(AviUtl のランダム配置)。種が同じなら毎回同じ配置。area = ばらまく範囲の幅・高さ px(中心は元の位置)
+      const n = clamp(Math.round(num(p.count_x ?? p.count, 10)), 1, MAX_COPIES)
+      const ar = vec(p.area ?? [num(p.area_x, 400), num(p.area_y, 400)], 2, 400), seed = num(p.seed, 1) | 0
+      const rot = num(p.random_rotation, 0), s0 = num(p.scale_min, 100), s1 = num(p.scale_max, 100)
+      for (let i = 0; i < n; i++) {
+        const sc = (s0 + (s1 - s0) * rand01(seed, i, 5)) / 100
+        list.push({ m: T((rand01(seed, i, 1) - 0.5) * ar[0], (rand01(seed, i, 2) - 0.5) * ar[1], (rand01(seed, i, 4) * 2 - 1) * rot, sc), op: 1 })
+      }
     } else if (mode === 'circle') {
       const n = clamp(Math.round(num(p.count_x ?? p.count, 8)), 1, MAX_COPIES)
       const rad = num(p.radius, 200), st = num(p.angle ?? p.rotation, 0), sw = num(p.sweep ?? p.arc, 360)
@@ -1129,13 +1234,16 @@ export class CompScene {
       }
       // すき間なしで並べるときは、1 枚ごとの縁のぼかしをやめる(継ぎ目に線が出ないように)
       if (Math.abs(gx) < 1e-6 && Math.abs(gy) < 1e-6) S.noEdge = true
+      const single = !S.copies || S.copies.length === 1
       this.addGeo(S, list)
+      S.tiled = single && gx >= -1e-6 && gy >= -1e-6 // すき間が 0 以上の格子 = 重ならない
       S.rect = { x: cx - tw / 2, y: cy - th / 2, w: tw, h: th }
       // 流す・段違いのときは外へはみ出すので、全体の箱で切る
       if (wrap || S.noEdge) { this.addOp(S, 'crop', { top: 1e-9 }); if (S.ink) S.ink = { ...S.rect } }
       return
     }
     this.addGeo(S, list)
+    S.tiled = false
     if (S.ink) S.rect = { ...S.ink }
   }
 
@@ -1143,17 +1251,48 @@ export class CompScene {
   orthoFor(r, out) {
     return out.set(2 / r.w, 0, 0, -1 - (2 * r.x) / r.w, 0, -2 / r.h, 0, 1 + (2 * r.y) / r.h, 0, 0, 0, 0, 0, 0, 0, 1)
   }
+  // これから掛ける重いエフェクトの「あと」に書いてある切り抜きを先読みして、残る範囲の半平面を返す(無ければ null)。
+  // 全面の絵に影・縁を付けてから細い帯に切る、という作りで、RT を帯 + はみ出しぶんの大きさにできる。
+  // 先読みできるのは: まわりの画素だけで決まるパス(LOCAL_PASS)と色の op だけをはさんで続く clip_line / crop / mask / iris
+  futurePlanes(S, chain, i) {
+    if (S.buf || S.copies || S.stage !== 0 || S.space !== 'layer' || !S.ink) return null
+    const fxs = this.env.effects
+    const tmp = { data: (this._fp ??= new Float32Array(32)), planes: [] }
+    let pad = 0
+    for (let j = i; j < chain.length; j++) {
+      const e = chain[j], reg = INLINE[e.type]
+      if (isPass(e.type)) {
+        // blur の variant は別のパスへ回るので、ここでは先読みをやめる
+        if (!LOCAL_PASS.has(e.type) || e.p.variant) break
+        pad += fxs.pad(e.type, e.p, S.rect) + 2
+        continue
+      }
+      if (!reg) break // 形のエフェクト(flip / repeat)から先は読まない
+      if (reg.alpha && (!reg.addsAlpha || reg.addsAlpha(e.p))) break
+      if (reg.tex || e.p._pct) { if (reg.mask) break; continue } // 画像のマスクは読み込みの都合があるので先読みしない
+      if (e.type === 'clip_line' || e.type === 'crop' || e.type === 'clip' || e.type === 'mask_shape' || e.type === 'mask' || e.type === 'iris') {
+        const ctx = { rect: S.rect, ext: S.ext, f: S.f, fps: this.fps, pad: 0, shift: null }
+        tmp.data.fill(0)
+        const n0 = tmp.planes.length
+        if (reg.pack(e.p, ctx, tmp.data, 0) !== false) this.notePlanes(tmp, e.type === 'clip' ? 'crop' : e.type, 0)
+        for (let k = n0; k < tmp.planes.length; k++) tmp.planes[k][3] += pad // はみ出しぶんだけ外まで描く
+        if (ctx.rect !== S.rect || ctx.shift) break // crop は箱を変えるので、そこまで
+      }
+    }
+    return tmp.planes.length ? tmp.planes : null
+  }
   // たまった ops・複製を RT に描き出して、「RT を 1 枚貼るだけ」の状態にする。pad = このあとのパスがはみ出す量(レイヤーの px)
   // scale = RT の解像度に掛ける倍率(このあと大きくぼかすときは、はじめから粗く描く)
-  flush(S, pad, scale = 1) {
+  flush(S, pad, scale = 1, future = null) {
     const g = this.env.gfx, L = S.L
     if (S.buf && !S.n4 && !S.copies && !S.masks) return
     const sc = g.scissor
     g.setScissor(null)
-    // 切り抜きで残る範囲だけを RT にする
+    // 切り抜きで残る範囲だけを RT にする(future = このあと切る範囲の先読み)
     let ink = S.ink
-    if (ink && S.planes && S.planes.length && !S.copies && S.space === 'layer') {
-      const poly = this.clipRect(ink, S.planes, 2)
+    const planes = future && !S.copies ? [...(S.planes || []), ...future] : S.planes
+    if (ink && planes && planes.length && !S.copies && S.space === 'layer') {
+      const poly = this.clipRect(ink, planes, 2)
       if (!poly) { S.hidden = true; g.setScissor(sc); return }
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
       for (const q of poly) { x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]) }
@@ -1177,7 +1316,7 @@ export class CompScene {
       this.freeState(S)
       Object.assign(S, {
         tex: rt.texture, uvRect: [0, 1, 1, 0], quad: { x: 0, y: 0, w: this.W, h: this.H }, ink: null, edge: false, multi: false, batch: null, pattern: null, dual: false, tint: null,
-        toSrgb: false, internalAdd: false, masks: null, ops: [], opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, space: 'screen', buf: rt, res: this.env.rs * scale, baseInk: null, planes: null,
+        toSrgb: false, internalAdd: false, masks: null, ops: [], opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, space: 'screen', buf: rt, res: this.env.rs * scale, baseInk: null, planes: null, noPlanes: false, tiled: false,
       })
     } else {
       let res = (S.buf ? S.res : this.fxRes(L)) * scale
@@ -1198,7 +1337,7 @@ export class CompScene {
       this.freeState(S)
       Object.assign(S, {
         tex: rt.texture, uvRect: [0, 1, 1, 0], quad: reg, ink: reg, edge: false, multi: false, batch: null, pattern: null, dual: false, tint: null,
-        toSrgb: false, internalAdd: false, masks: null, ops: [], opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, space: 'layer', buf: rt, res, baseInk: null, planes: null,
+        toSrgb: false, internalAdd: false, masks: null, ops: [], opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, space: 'layer', buf: rt, res, baseInk: null, planes: null, noPlanes: false, tiled: false,
       })
     }
     g.setScissor(sc)
@@ -1226,10 +1365,17 @@ export class CompScene {
       if (e.type === 'blur' && (!S.buf || S.n4 || S.copies)) {
         const r0 = (num(e.p.radius, 10) * (S.buf ? S.res : S.ink && S.space === 'layer' ? this.fxRes(S.L) : this.env.rs)) / 2
         let ds = 1
-        while (r0 / ds > 3.5 && ds < 16) ds *= 2
-        if (ds >= 4) lo = 2 / ds
+        const thr = e.p.dof ? DOF_THR : BLUR_THR
+        while (r0 / ds > thr && ds < 16) ds *= 2
+        // 被写界深度: ぼかしが使う解像度そのもので描き出す(縮小のパスが要らない)。ふつうのぼかしは、その 2 倍まで
+        // (式で描く模様は粗く描くとモアレが出るので、2 倍の大きさで描いてから縮める)
+        if (e.p.dof && !S.pattern) {
+          lo = 1 / ds
+          // 粗く描いて引き伸ばすぶんだけ、すでにぼけている(σ ≒ 0.45 × 倍率)。そのぶんを引いて掛ける
+          if (ds > 1) { const sg = Math.sqrt(Math.max(0.09, (r0 / ds) ** 2 - 0.2)); e = { type: 'blur', p: { ...e.p, radius: (e.p.radius * sg) / (r0 / ds) } } }
+        } else if (ds >= 4) lo = 2 / ds
       }
-      this.flush(S, pad, lo)
+      this.flush(S, pad, lo, LOCAL_PASS.has(e.type) && !S.noPlanes ? this.futurePlanes(S, chain, i) : null)
       if (S.hidden || !S.buf) break
       const res = S.res
       let b
@@ -1246,6 +1392,8 @@ export class CompScene {
       try { out = fxs.apply(e.type, e.p, S.buf, { res, f: S.f, fps: this.fps, rect: b, H: this.H, W: this.W, small: true }) } catch (err) { this.warn('fxerr' + e.type, 'effect', e.type, err) }
       g.setScissor(sc)
       if (out) {
+        // 縁・影・ぼかしではみ出したぶん、絵の範囲を広げる
+        if (S.ext) { const pd = fxs.pad(e.type, e.p, S.rect); if (pd > 0) S.ext = { x: S.ext.x - pd, y: S.ext.y - pd, w: S.ext.w + 2 * pd, h: S.ext.h + 2 * pd } }
         if (out.width !== S.buf.width) S.res *= out.width / S.buf.width // ぼかしは縮小したまま返してくる
         if (!S.borrow) g.release(S.buf); S.borrow = false; S.buf = out; S.tex = out.texture
       }
@@ -1744,10 +1892,14 @@ export class CompScene {
   // 非同期の素材を読み始める(capture ではこれで積まれた Promise を待つ)
   prepare(f, stack = []) {
     const env = this.env
+    const top = !this.isChild
     for (const L of this.order) {
       const isMatte = this.matteSources.has(L.id)
       if (!(isMatte ? this.inRange(L, f) : this.active(L, f))) continue
       const s = L.def.source || {}
+      if (top) env.curLayer = L.id
+      // 取り込みで「素材が無い」と印を付けたレイヤー(何も描かない)。編集画面へは 1 回だけ知らせる
+      if (L.def.missing && s.asset_id == null && !s.url && !L.toldMissing) { L.toldMissing = true; env.report?.('warn', `素材が無い: ${String(L.def.missing).slice(0, 200)}`, top ? L.id : undefined) }
       try {
         const tl = this.lt(L, f)
         if (L.type === 'image' || L.type === 'sequence' || (L.type === 'video' && s.sequence)) this.imageEntry(L, tl)
@@ -1777,6 +1929,7 @@ export class CompScene {
         }
       } catch (err) { this.warn('prep' + L.id, 'prepare', L.id, err) }
     }
+    if (top) env.curLayer = null
   }
   prepareComp(cid, sec, stack, L) {
     const e = this.env.comps.get(cid)
@@ -1784,6 +1937,35 @@ export class CompScene {
       let cf = sec * e.scene.fps
       if (L) cf = this.fitFrame(L, cf, e.scene.duration)
       e.scene.prepare(cf, [...stack, e.id])
+    }
+  }
+
+  // 入れ子の子として描く: 同じコマ(同じ素材の読み込み状態・同じ大きさ)の絵は使い回す。
+  //   1 コマの中で同じ子を 2 回使うとき(マット元でもあり自分も映る・同じ時刻で 2 回置く)と、
+  //   子のコマが前のコマと同じとき(freeze・time_remap の止め・子が終わりで止まっている)に効く。
+  // 返す RT は共有物(__keep)。呼び出し側が release しても戻らない。使われなかったコマの終わりに sweepCache が片づける
+  renderCached(f, stack = []) {
+    const env = this.env
+    const key = `${f}|${env.epoch}|${env.fontEpoch}|${this.bufSize().join('x')}`
+    const fc = (this.fcache ??= new Map())
+    let c = fc.get(key)
+    if (!c) {
+      const rt = this.render(f, stack)
+      if (fc.size >= 4) return rt // 1 コマに何回も違う時刻で描くとき(モーションブラーなど)は、ためこまない
+      rt.__keep = true
+      fc.set(key, (c = { rt, used: 0 }))
+    }
+    c.used = env.drawTick
+    return c.rt
+  }
+  // このコマで使われなかった絵を手放す(all = 全部)
+  sweepCache(all = false) {
+    if (!this.fcache) return
+    for (const [key, c] of this.fcache) {
+      if (!all && c.used === this.env.drawTick) continue
+      c.rt.__keep = false
+      this.env.gfx.release(c.rt)
+      this.fcache.delete(key)
     }
   }
 
@@ -1796,12 +1978,15 @@ export class CompScene {
     g.clear(acc)
     const bg = this.comp.data?.bg
     if (bg) { const c = toColor(bg, [0, 0, 0, 1]); g.fill(acc, c[0], c[1], c[2], 1) }
+    const top = !this.isChild
     for (const L of this.drawList(f).slice()) {
+      if (top) this.env.curLayer = L.id
       try {
         if (L.type === 'adjustment') acc = this.adjust(acc, L, f)
         else this.composite(acc, L, f, stack)
       } catch (err) { g.setScissor(null); this.warn('draw' + L.id, `レイヤー ${L.id} を描けない:`, err) }
     }
+    if (top) this.env.curLayer = null
     this.clearMattes()
     g.setScissor(sc0)
     return acc

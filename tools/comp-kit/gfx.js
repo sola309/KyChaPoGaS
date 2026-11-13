@@ -276,7 +276,7 @@ export class Gfx {
     return rt
   }
   release(rt) {
-    if (!rt) return
+    if (!rt || rt.__keep) return // __keep = 入れ子の絵の使い回し中(持ち主が手放すまで戻さない)
     this.live--
     rt.__used = this.tick
     let list = this.pool.get(rt.__key)

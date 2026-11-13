@@ -21,7 +21,9 @@
 | `examples/*.json` | 例(下の表) |
 | `test/render_test.py` | 描画テスト(コマの書き出し・動画・`--bench`) |
 | `test/check_test.py` | 数値の約束(50% 赤・画像 100%・決定論・プレビュー = 書き出し) |
-| `test/schema_test.py` | schema.json の全項目がエンジンで通るか(警告なしで描けるか・値を変えると絵が変わるか) |
+| `test/schema_test.py` | schema.json の全項目がエンジンで通るか。エフェクトの全項目(256 個)・レイヤーの source・共通項目を「効き目が見える場面」で動かし、絵が変わらなければ NG |
+| `test/order_test.py` | エフェクトが書いた順に掛かるか。軽いエフェクト + flip / repeat の順番つきの全部の組(812 組)を、1 個ずつ RT に描く手本と比べる。先読みの切り抜きも |
+| `test/player_test.py` | player.html と親の間の postMessage(選択・移動・拡大・回転・複数選択・キー・知らせ・下絵・目安)を、iframe に本物のマウスとキーを送って確かめる |
 
 配信は `comp-kit` と `mg-libs` を同じ URL(`/api/comps/engine/`)に平らに並べる。
 - どの応答にも `Access-Control-Allow-Origin: *` が要る(キャプチャのページは `set_content` で作るのでオリジンが無い。モジュール・画像・動画のコマ・書体すべて CORS 扱い)。
@@ -37,22 +39,29 @@ SwiftShader(書き出しと同じ GL)・1920×1080 での 1 コマあたりの�
 | 01 kinetic_type | 文字アニメ | 8 | 12 | 14 |
 | 02 shapes_parent_blend | シェイプ・親子・ブレンド | 27 | 22 | 28 |
 | 03 camera_3d | 3D カメラ | 29 | 15 | 20 |
-| 04 mask_matte_fx | マスク・マット・エフェクト | 18 | 47 | 53 |
+| 04 mask_matte_fx | マスク・マット・エフェクト | 18 | 36 | 40 |
 | 05 particles_adjustment | 粒子・調整レイヤー | 8 | 78 | 82 |
-| 06 nested | 入れ子 | 6 | 137 | 170 |
+| 06 nested | 入れ子 | 6 | 110 | 143 |
 | 07 patterns | 模様 20 種(流れるものも) | 41 | 21 | 26 |
 | 08 repeater_shapes | 複製(500 個を 1 回の描画)・シェイプの形 | 40 | 36 | 39 |
 | 09 transitions | 登場・退場 10 種 | 30 | 32 | 57 |
 | 10 text | 縦書き・カウンター・runs・タイプライター・座布団・円周 | 14 | 34 | 45 |
 | 11 character_card | 参考作品ふうのキャラ紹介(斜めクリッピングの帯・網点・名札) | 19 | 88 | 98 |
-| 12 petals_3d_dof | 3D の花びら 5 層 + 被写界深度 | 11 | 186 | 203 |
-| 13 title_sequence | 19 秒・151 層(同時に 40〜60 層)。矢じりの列 48 枚、名札、3D の札 36 枚 + 被写界深度、扇の切り替え | 151 | 133 | 277 |
+| 12 petals_3d_dof | 3D の花びら 5 層 + 被写界深度 | 11 | 74 | 81 |
+| 13 title_sequence | 19 秒・151 層(同時に 40〜60 層)。矢じりの列 48 枚、名札、3D の札 36 枚 + 被写界深度、扇の切り替え | 151 | 104 | 169 |
 
 速さの勘どころ:
 - 切る・色・位置の足し算だけのレイヤーは RT を使わず 1 回の描画で済む(13 の矢じり 48 枚で 25 ms ほど)。
 - 重いエフェクトは 1 個につきパス 1〜6 回。RT の大きさ(= レイヤーの箱 × 拡大率)に比例する。太い縁取り・大きなぼかしは縮小して掛ける。
-- 被写界深度は 3D レイヤー 1 枚ごとにぼかしを掛けるので、枚数に比例して重い(12・13 の後半)。粒子は画面大の RT になる。
-- 入れ子は子を画面大の RT に描く(06)。同じ子を別の時刻で 2 回置くと 2 回描く。
+- 被写界深度は 3D レイヤー 1 枚ごとにぼかしを掛ける。ぼかしが使う解像度(σ が 1.2 画素になるまで 1/2・1/4…に縮めた大きさ)でレイヤーを直接描き、
+  縮小のパスを省く。小さなぼかし(σ ≤ 1.2 画素)は 4 回読みの 1 パス。式で描く模様だけはモアレを避けて 2 倍の大きさで描いてから縮める(12 が 186 → 74 ms)。
+- 入れ子は子を画面大の RT に描く(06)。同じ子の同じコマは使い回す(`renderCached`): 1 コマの中で 2 回使うとき(マット元でもあり自分も映る・同じ時刻で 2 回置く)と、
+  子のコマが前のコマと同じとき(freeze・time_remap の止め)。素材・書体が読めるたび、子を読み直すたびに無効になる。別の時刻で 2 回置けば 2 回描く。
+- 重いエフェクトのあとに切り抜きが続くとき(全面の絵に影・縁 → 細い帯に切る)は、あとの切り抜きを先読みして、帯 + はみ出しぶんだけを RT に描く。
+  先読みできるのは、まわりの画素だけで決まるパス(blur / glow / drop_shadow / stroke_outline など)と色の op だけをはさんで続く `clip_line` `crop` `mask_shape` `iris`。
+- シェイプの先頭の `stroke_outline`(外側・ぼかしなし・動かない値・不透明な色・閉じた形)は、形のラスタライズに畳み込む(RT もパスも使わない)。
+  それ以外の細い縁(幅 2.5px 以下)は 1 パス。太い縁は「広げる → 仕上げ」の 2 パス以上。
+- 取り込んだ comp 12(キャラ羅列紹介。入れ子 + 太い縁取り 12 枚 + 影 12 枚)は 13 コマの平均 211 → 124 ms、最大 434 → 276 ms。
 
 ## テスト
 
@@ -75,6 +84,7 @@ $PY tools/comp-kit/test/schema_test.py      # schema.json の全項目
 boot: `{ comp:{id,name,width,height,fps,duration_frames,data}, mode:'preview'|'capture', apiBase, engineBase:'/api/comps/engine/', fonts:[{family,url,weight,style,aliases}] }`
 
 - `fonts`: プロジェクトの書体。`url` の `/...` は apiBase から。読み終えてから最初の 1 コマを描く(capture でも同じ)。
+  `aliases`(日本語の書体名「あんずもじ」・太さつきの名前「Noto Sans JP Bold」など)は、同じファイルを別名の family としても登録する(文書がどの名前で書いていても引ける)。
 
 - capture: canvas は width×height px・余白 0・背景透明。`window.__madAssetsReady`、`window.seek(tMs)`(素材がそろって描き終わってから解決)。
   `document.querySelector('canvas').toDataURL('image/png')` はストレートアルファの PNG になる。
@@ -89,10 +99,12 @@ boot: `{ comp:{id,name,width,height,fps,duration_frames,data}, mode:'preview'|'c
 | `comp:set` | `{comp}` 文書の差し替え(ドラッグ中の仮の値を消して描き直す) |
 | `comp:seek` | `{frame}` |
 | `comp:play` | `{playing, frame?}` 実時間で再生(コマ単位・最後で頭に戻る) |
-| `comp:select` | `{ids:[...]}` 選択枠を出す |
-| `comp:invalidate` | `{comp_id}` 入れ子の子を読み直す(追加) |
-| `comp:quality` | `{scale}` 描く解像度の倍率。0 で自動(追加) |
-| `comp:fonts` | `{fonts}` 書体を足して描き直す(追加) |
+| `comp:select` | `{ids:[...]}` 選択枠を出す。1 枚だけのときは拡大・回転のつまみも出る |
+| `comp:invalidate` | `{comp_id}` 入れ子の子を読み直す |
+| `comp:quality` | `{scale}` 描く解像度の倍率。0 で自動 |
+| `comp:fonts` | `{fonts}` 書体を足して描き直す |
+| `comp:guides` | `{show: boolean}` 下絵(`guide: true`)のレイヤーを出す・隠す。既定は出す(書き出し・入れ子の中では、もともと出ない) |
+| `comp:overlay` | `{safe: boolean, grid: boolean}` 重ね描きの目安。safe = セーフフレーム(実線 = 90% アクションセーフ、破線 = 80% タイトルセーフ、中心の十字)、grid = 三分割の線。絵には焼かれない |
 
 iframe → 親
 
@@ -100,10 +112,29 @@ iframe → 親
 |---|---|
 | `comp:ready` | `{width,height,fps,duration_frames,frame}` |
 | `comp:frame` | `{frame}` 再生中 |
-| `comp:select` | `{ids}` クリックで選択(Shift で追加・解除、何もない所 = `[]`) |
-| `comp:edit` | `{id, path:'transform.position', value, final}` ドラッグで移動。position がキーフレームなら `keyframed:true, frame` がつき、value はそのコマでの値 |
+| `comp:select` | `{ids}` クリックで選択(Shift で追加・解除、何もない所 = `[]`)。複数選択の中の 1 枚をつかんだときは、選択を変えずに全部を動かす |
+| `comp:edit` | `{id, path, value, final, keyframed?, frame?}`(下) |
+| `comp:key` | `{key, code, ctrl, shift, alt, meta, repeat}` iframe にフォーカスがある間の keydown をすべて知らせる。iframe の中ではショートカットを何も処理しない |
+| `comp:error` | `{level: 'warn' \| 'error', message, layer_id?}` 困りごとの知らせ(下) |
 
-ドラッグ中の値は iframe の中だけの仮の値。親が保存して `comp:set` を送り返すと確定する。
+**`comp:edit`**: ドラッグで変形したとき。動かしている間は `final: false`、離したとき `final: true` を 1 回。その項目がキーフレームなら `keyframed: true, frame` がつき、`value` はそのコマでの値。
+
+| path | value | 操作 |
+|---|---|---|
+| `transform.position` | `[x, y]` か `[x, y, z]`(元が 3 個・または 3D で奥行きが動いたとき) | レイヤーをドラッグ。複数選択なら **レイヤーごとに 1 通**(親・効いているグループもいっしょに選んでいる子は、親について動くので送らない) |
+| `transform.scale` | `[x, y, z]`(%)。文書の値が 2 個(`[x, y]`)なら `[x, y]` | つまみ 8 個。四隅 = 縦横比を保つ(x・y に同じ倍率。z は 3D レイヤーのときだけいっしょに動き、2D では元の値のまま)、Shift で自由。辺の中央 = その軸だけ。基準は anchor。反対側へ越えると負(裏返し) |
+| `transform.rotation` | `[x, y, z]`(度。いつも 3 個。動くのは z) | 上辺の外の丸いつまみ。anchor を中心に回す。Shift で 15° 刻み。何周でも回せる(360 を超える値も出る) |
+
+- つまみは **1 枚だけ選んでいるとき** に出る(ロックしたレイヤー・カメラには出ない)。再生中は出ない。コンポジションの外(iframe の余白)にはみ出したつまみもつかめる。
+- どの値も 0.1 刻みに丸める。ドラッグ中の値は iframe の中だけの仮の値(`setOverride`)。親が保存して `comp:set` を送り返すと確定する(送り返さなければ仮の値のまま表示が残る)。
+- 矢印キーでの移動などは親の仕事(`comp:key` を受けて文書を書き換え、`comp:set` を送る)。
+- `comp:key`: ブラウザの既定の動きは、Ctrl / Cmd + S・Z・Y・A・D・G と、修飾なしの Space・矢印・Backspace・Delete・Tab・Home・End だけ止める(それ以外は止めない)。
+
+**`comp:error`**: 素材が読めない・見つからない(`error`。画像・動画・動画のコマ・素材情報・書体・入れ子のコンポジション)、取り込みで `missing` と印を付けたレイヤー(`warn`)、
+知らない種類(レイヤー種別・エフェクト・ブレンド・transition・AviUtl スクリプト。`warn`)、レイヤーを描けなかった・エフェクトの失敗・シェーダを作れない・入れ子の循環(`error`)。
+`layer_id` は、いちばん上のコンポジションでのレイヤー(入れ子の中の出来事は、それを置いているレイヤー)。分からないときは付かない。
+同じ内容(level + layer_id + message)は 1 回だけ、1 秒に 12 件まで(あふれた分は次の機会に「ほかに N 件」の 1 通)。`comp:set` では消えない(文書を読み込み直す `load` で消える)。
+エンジンを直接使うときは `new CompEngine(canvas, { onError: ({level, message, layer_id}) => ... })`。
 
 ## 文書の読み方(仕様に書いていない所の決め)
 
@@ -126,6 +157,20 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - model: `{"asset_id"|"url", "height": px, "light": {"intensity","ambient","color","direction"}}`。常に 3D。
 - `motion_blur: true`(16 回)または回数。前後 1/4 コマずつを足し込む。軽いエフェクトは 1 回ごとに、重いエフェクトは足し込んだあとの絵に掛かる。
 - `source.url` の `/...` は apiBase からの道として読む。
+- **エフェクトは書いた順に掛かる**(`order_test.py`)。軽いエフェクトはシェーダの中でまとめるが、結果は「1 個ずつ順に掛けた絵」と同じ:
+  - `flip` / `repeat` のあとに書いた切り抜き・色は、反転・並べた **あと** の絵の座標で効く(反転 → 斜めクリッピングで影を作る、など)。
+  - 並べた絵どうしが重なっているときは、1 枚にまとめてから次を掛ける(すき間 0 以上の格子は重ならないので、まとめずに済む)。
+  - アルファを足す・読むもの(`invert_alpha`・`border`・`overlay_source` の over / under)は、それまでの切り抜きを済ませてから掛かる。
+    効く範囲は「いまの絵の範囲」(レイヤーの箱 + 線の太さ・縁取りのはみ出し。`crop` のあとは切ったあとの箱)の中だけ。
+  - RT に描き出すと、完全に透明な画素の色は残らない(乗算済みで持つため)。切り抜き → 重いエフェクト → `invert_alpha` では、切った所は黒く出る。
+- `fill` の `keep_luma: true` は、輝度(Y。BT.601)をそのままに色差(Cb・Cr)だけ指定色のものにする(AviUtl の「輝度を保持する」)。`false` は `amount` % のベタ塗り。
+  `tint` は別物で、指定色 × 輝度(暗い色を指定すると暗くなる)。
+- `overlay_source` の `replace_color` は、素材のアルファに関係なく色を丸ごと置き換える(素材が半透明の PNG でも混ぜない。素材の外・完全に透明な所は元の色のまま)。
+- `pattern` の `cols` / `rows`: 升目の数。書くと箱の大きさが `size × 個数` になり、模様の原点が箱の左上に来る(左上の升が `colors[0]`)。`origin: "top_left"` だけでも原点を左上にできる。
+- `repeat` の `mode: "random"`: `count` 個を `area_x` × `area_y`(px。中心は元の位置)にばらまく。`seed` が同じなら同じ配置。`random_rotation`(± 度)、`scale_min` `scale_max`(%)。
+- `per_char.ranks: [..]` = i 文字目が何番目に出るか(同じ番号は同時)。`per_char.sequence: [..]` = 出る順に文字の番号(0 始まり)を並べたもの。どちらも `order` より優先。
+- `blend`: `luminosity`(輝度は上・色は下)、`color`(色は上・輝度は下)、`hue`、`saturation` を足した(W3C の式。重みは 0.3 / 0.59 / 0.11)。
+- `vignette_blur`(重い): 周辺へ向かってぼかし + 暗くする。`amount`(暗さ %)`blur`(px)`radius`(効き始め。箱の対角の半分 = 100)`softness` `color_shift`(px。外向きに R・B をずらす)`color` `cx` `cy`。
 
 ## 仕様との差・できていないこと
 

@@ -200,12 +200,17 @@ R.opacity = {
 // ---- 色 ----
 R.fill = {
   n: 2,
-  color: `s.rgb = mix(s.rgb, $1.y > 0.5 ? $0.rgb * OL(s.rgb) : $0.rgb, $1.x);`,
-  pack(p, ctx, o, i, keep = false) {
+  // $1.y: 0 = ベタ塗り / 1 = 色 × 輝度(tint)/ 2 = 輝度(Y)はそのまま、色差(Cb・Cr)だけ指定色のものにする(AviUtl の「輝度を保持する」)
+  color: `{ vec3 fc = $0.rgb;
+    if ($1.y > 1.5) { vec2 cc = OCBCR($0.rgb); float y = dot(s.rgb, vec3(0.299, 0.587, 0.114));
+      fc = clamp(vec3(y + 1.402 * cc.y, y - 0.344136 * cc.x - 0.714136 * cc.y, y + 1.772 * cc.x), 0.0, 1.0); }
+    else if ($1.y > 0.5) fc = $0.rgb * OL(s.rgb);
+    s.rgb = mix(s.rgb, fc, $1.x); }`,
+  pack(p, ctx, o, i, tint = false) {
     const c = toColor(p.color ?? '#ffffff')
     const am = pct(p.amount, 100) * c[3]
     if (am <= 0) return false
-    put(o, i, c[0], c[1], c[2], 1); put(o, i + 4, am, (p.keep_luma ?? keep) ? 1 : 0)
+    put(o, i, c[0], c[1], c[2], 1); put(o, i + 4, am, tint ? (p.keep_luma === false ? 0 : 1) : p.keep_luma ? 2 : 0)
   },
 }
 R.tint = { ...R.fill, pack: (p, ctx, o, i) => R.fill.pack(p, ctx, o, i, true) }
@@ -257,7 +262,14 @@ R.invert = {
   n: 1, color: `s.rgb = mix(s.rgb, $0.y > 0.5 ? s.rgb + (1.0 - 2.0 * OL(s.rgb)) : 1.0 - s.rgb, $0.x); s.rgb = clamp(s.rgb, 0.0, 1.0);`,
   pack(p, ctx, o, i) { put(o, i, pct(p.amount, 100), p.luma_only ? 1 : 0) },
 }
-R.invert_alpha = { n: 1, color: `s.a = mix(s.a, 1.0 - s.a, $0.x);`, pack(p, ctx, o, i) { put(o, i, pct(p.amount, 100)) } }
+// 絵の範囲(ctx.ext = 線の太さ・縁取りのはみ出しも含めた、いまの絵の箱)。決まらない絵(粒子など)は無限大
+const extOf = (ctx) => { const e = ctx.ext; return e ? [e.x, e.y, e.x + e.w, e.y + e.h] : [-1e7, -1e7, 1e7, 1e7] }
+// 透明度の反転は、絵の範囲の中だけ(その外まで不透明にしない)
+R.invert_alpha = {
+  n: 2, alpha: true,
+  color: `{ vec2 q = max($1.xy - $P, $P - $1.zw); s.a = mix(s.a, 1.0 - s.a, $0.x * OAA(max(q.x, q.y), 0.0, px)); }`,
+  pack(p, ctx, o, i) { put(o, i, pct(p.amount, 100)); put(o, i + 4, ...extOf(ctx)) },
+}
 R.levels = {
   n: 2,
   color: `s.rgb = mix(vec3($1.x), vec3($1.y), pow(clamp((s.rgb - $0.x) / max($0.y - $0.x, 1e-4), 0.0, 1.0), vec3($0.z)));`,
@@ -353,7 +365,7 @@ R.gradient_overlay = {
 }
 R.gradient = R.gradient_overlay
 R.border = {
-  n: 3,
+  n: 3, alpha: true,
   color: `{ vec2 q = max($0.xy - $P, $P - $0.zw); float d = max(q.x, q.y); float k = OAA(d, 0.0, px) * (1.0 - OAA(d + $2.x, 0.0, px)) * $1.a; s = OOVER(s, $1.rgb, k); }`,
   pack(p, ctx, o, i) {
     const r = ctx.rect, w = Math.max(0, num(p.width, 4))
@@ -378,15 +390,19 @@ R.noise = {
 
 // 別の素材(画像・動画・コンポジション)をレイヤーの絵に重ねる / 色だけ置き換える
 R.overlay_source = {
-  n: 2, tex: true,
+  n: 3, tex: true, alpha: true,
+  // アルファが増えるのは over / under だけ(色の置き換え・輝度をアルファに、は増えない)
+  addsAlpha: (p) => !(p.mode === 'replace_color' || p.mode === 'luma_to_alpha'),
+  // 重ねる素材は、いまの絵の範囲の中だけに出る(AviUtl と同じ。絵の外へはみ出さない)
   color: `{ vec2 uv = ($P - $0.xy) / (2.0 * $0.zw) + 0.5; bool outb = uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0;
     if ($1.w > 0.5) { uv = fract(uv); outb = false; }
+    if ($P.x < $2.x || $P.y < $2.y || $P.x > $2.z || $P.y > $2.w) outb = true;
     if ($1.z > 0.5) uv.y = 1.0 - uv.y;
-    vec4 t = outb ? vec4(0.0) : texture2D($T, uv) * $1.y;
-    vec3 tc = t.a > 1e-5 ? t.rgb / t.a : vec3(0.0);
+    vec4 t0 = outb ? vec4(0.0) : texture2D($T, uv); vec4 t = t0 * $1.y;
+    vec3 tc = t0.a > 1e-5 ? t0.rgb / t0.a : vec3(0.0);
     if ($1.x < 0.5) s = OOVER(s, tc, t.a);
     else if ($1.x < 1.5) { float a = s.a + t.a * (1.0 - s.a); s = vec4(a > 1e-5 ? (s.rgb * s.a + tc * t.a * (1.0 - s.a)) / a : s.rgb, a); }
-    else if ($1.x < 2.5) s.rgb = mix(s.rgb, tc, t.a);
+    else if ($1.x < 2.5) s.rgb = mix(s.rgb, tc, clamp(t0.a * 64.0, 0.0, 1.0) * $1.y);
     else s.a *= outb ? 0.0 : OL(t.rgb); }`,
   pack(p, ctx, o, i) {
     const e = ctx.overlay(p)
@@ -396,6 +412,7 @@ R.overlay_source = {
     if (p.fit) { w = r.w; h = r.h }
     put(o, i, r.x + r.w / 2 + num(p.x, 0), r.y + r.h / 2 + num(p.y, 0), Math.max(1e-3, w / 2), Math.max(1e-3, h / 2))
     put(o, i + 4, { over: 0, under: 1, replace_color: 2, luma_to_alpha: 3 }[p.mode] ?? 0, pct(p.opacity, 100), e.flipY ? 1 : 0, p.repeat || p.tile ? 1 : 0)
+    put(o, i + 8, ...extOf(ctx))
     ctx.tex = e.tex
   },
 }
@@ -404,15 +421,24 @@ export const INLINE = R
 export const isInline = (type) => type in R
 
 // op の並び → GLSL。list: [{type, stage(0 = 複製の前の座標 / 1 = 後), slot(テクスチャの番号)}]
+// 書いた順に評価する。切る・隠す op は m に掛けてためておき、アルファを足す・読む色の op(alpha: true。
+// invert_alpha・border・overlay_source)の手前で s.a に掛けてから続ける。残りは最後に全体へ掛ける
+// (掛け算どうしは順番を変えても同じなので、ふつうの並びでは今までと 1 ビットも変わらない)。
 export function opsGlsl(list) {
-  let n4 = 0, mask = '', color = '', ntex = 0
+  let n4 = 0, mask = '', color = '', ntex = 0, pending = false
   for (const op of list) {
     const r = R[op.type]
     const base = n4
     const sub = (src) => (op.stage ? src.replace(/\bpx\b/g, 'pxG') : src)
       .replace(/\$(\d)/g, (_, k) => `uOp[${base + +k}]`).replace(/\$P/g, op.stage ? 'pG' : 'pL').replace(/\$T/g, `uOpTex${op.slot | 0}`)
-    if (r.mask) mask = sub(r.mask) + '\n' + mask // 後ろの op から順に(どの順でも結果は同じ)
-    if (r.color) color += sub(r.color) + '\n'
+    if (r.mask) {
+      if (color) { color += sub(r.mask) + '\n'; pending = true } // 色の op のあと: その場で計算して m にためる
+      else mask += sub(r.mask) + '\n'
+    }
+    if (r.color) {
+      if (r.alpha && (mask || pending)) { color += 's.a *= m; m = 1.0;\n'; pending = false }
+      color += sub(r.color) + '\n'
+    }
     if (r.tex) ntex = Math.max(ntex, (op.slot | 0) + 1)
     n4 += r.n
   }

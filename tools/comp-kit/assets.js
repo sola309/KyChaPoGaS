@@ -36,6 +36,7 @@ export class Assets {
     let e = this.images.get(url)
     if (!e) {
       e = { state: 'loading', tex: null, w: 0, h: 0, transient, used: 0, promise: null }
+      const layer = this.env.curLayer
       const img = new Image()
       img.crossOrigin = 'anonymous'
       img.decoding = 'sync'
@@ -53,6 +54,7 @@ export class Assets {
         img.onerror = () => {
           e.state = 'error'
           console.warn('[comp-engine] 画像を読めない:', url)
+          this.env.report?.('error', `${transient === true ? '動画のコマ' : '画像'}を読めない: ${url.length > 160 ? url.slice(0, 160) + '…' : url}`, layer)
           res()
         }
       })
@@ -82,10 +84,11 @@ export class Assets {
     let e = this.metas.get(assetId)
     if (!e) {
       e = { state: 'loading', data: null, promise: null }
+      const layer = this.env.curLayer
       const get = this.env.opts.assetMeta || ((id) => fetch(`${this.env.apiBase}/api/assets/${id}`).then((r) => (r.ok ? r.json() : null)))
       e.promise = Promise.resolve().then(() => get(assetId)).then(
-        (d) => { e.data = d; e.state = d ? 'ready' : 'error'; this.env.invalidate() },
-        () => { e.state = 'error' })
+        (d) => { e.data = d; e.state = d ? 'ready' : 'error'; if (!d) this.env.report?.('error', `素材 ${assetId} が見つからない`, layer); this.env.invalidate() },
+        () => { e.state = 'error'; this.env.report?.('error', `素材 ${assetId} の情報を読めない`, layer) })
       this.metas.set(assetId, e)
     }
     if (e.state === 'loading') this.env.pending.push(e.promise)
@@ -111,7 +114,8 @@ export class Assets {
         // シーク中に次の要求が来ていたら続けて飛ぶ
         if (v.paused && e.want >= 0 && Math.abs(v.currentTime - e.want) > 0.02) v.currentTime = e.want
       })
-      v.addEventListener('error', () => console.warn('[comp-engine] 動画を読めない:', url))
+      const layer = this.env.curLayer
+      v.addEventListener('error', () => { console.warn('[comp-engine] 動画を読めない:', url); this.env.report?.('error', `動画を読めない: ${url.length > 160 ? url.slice(0, 160) + '…' : url}`, layer) })
       this.videos.set(key, e)
     }
     return e
