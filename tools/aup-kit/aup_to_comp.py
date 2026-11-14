@@ -159,6 +159,8 @@ def em_factor(name):
 
 
 CAM_ROLL_SIGN = 1      # カメラの rotation.z の向き(エンジンの決めに合わせる。完成動画と見比べて決めた)
+CAM_FOV_ZOOM_K = float(os.environ.get('CAM_FOV_ZOOM_K', '1.17'))   # 視野角つきのカメラの寄りの補正(1 = 縦の画角そのまま)。1.17 は実測: 視野角つきは S30 のりんごの床(視野角 50)だけで、完成版 3900 のタイルの大きさに合わせた(式の根拠は無い)
+CAM_TARGET_TILT_SIGN = float(os.environ.get('CAM_TARGET_TILT', '1'))   # オートターゲットの目印が X/Y 軸で傾いているとき、カメラが回り込む向き(S30 の 3900 コマ目 = 床の奥が画面の上、で確かめた)
 CAM_TILT_WITH_TARGET = float(os.environ.get('CAM_TILT', '-1'))   # オートターゲットのときの「傾き」の向き(S40 の 5520 コマ目で確かめた)
 BLEND = {'通常': 'normal', '加算': 'add', '減算': 'subtract', '乗算': 'multiply', 'スクリーン': 'screen',
          'オーバーレイ': 'overlay', '比較(明)': 'lighten', '比較(暗)': 'darken', '輝度': 'luminosity',
@@ -1615,8 +1617,8 @@ class SceneBuilder:
             L = self.base_layer(c, 'shape')
             src = {'kind': 'rect', 'width': int(min(4096, 2 * max(t3 + [200]) + 200)), 'height': int(min(2304, 3 * max(t0 + [100]) + 200)), 'fill': '#00000000'}
             c._pre_fx = [self.fx('lens_flare', {
-                'radius': cv.prop(0, 'track0', lambda v: round(v * 0.6, 3)), 'intensity': cv.prop(0, 'track1', lambda v: round(v * 1.5, 3)),
-                'streak_length': cv.prop(0, 'track3'), 'streak_width': cv.prop(0, 'track0', lambda v: round(4 + v / 40, 3)),
+                'radius': cv.prop(0, 'track0', lambda v: round(v * 0.8, 3)), 'intensity': cv.prop(0, 'track1', lambda v: round(v * 2.6, 3)),
+                'streak_length': cv.prop(0, 'track3'), 'streak_width': cv.prop(0, 'track0', lambda v: round(4 + v / 5, 3)),
                 'rays': int(prm.get('h_num', 1) or 0), 'angle': 90, 'color': col_param(prm.get('f_col'), '#ffffff'),
                 'core': round(200 * float(prm.get('c_alp', 0.5) or 0), 3), 'aviutl': dict(prm, track2=K(2))})]
             self.rep['notes']['カスタムオブジェクト フレア → lens_flare(値の読みは推測)'] += 1
@@ -1629,8 +1631,8 @@ class SceneBuilder:
             sz = float(prm.get('size', 100) or 100) / 100
             src = {'seed': c.id % 9973 + 1, 'emitter': {
                 'sprite': 'soft', 'blend': 'normal', 'emit': 'box', 'position': [0, 0, 0], 'area': [round(self.W * 1.15), round(self.H * 1.15), 0],
-                'rate': 14, 'burst': 60, 'life': 5, 'life_random': 0.3, 'speed': round(70 * sp, 2), 'speed_random': 0.5, 'direction': 180, 'spread': 24,
-                'size': [round(30 * sz, 2), round(30 * sz, 2)], 'size_random': 0.7, 'opacity': [95, 0], 'color': col_param(prm.get('col'), '#ffffff')},
+                'rate': 18, 'burst': 80, 'life': 5, 'life_random': 0.3, 'speed': round(70 * sp, 2), 'speed_random': 0.5, 'direction': 180, 'spread': 24,
+                'size': [round(46 * sz, 2), round(46 * sz, 2)], 'size_random': 0.75, 'opacity': [95, 0], 'color': col_param(prm.get('col'), '#ffffff')},
                 'aviutl': dict(prm, **{f'track{i}': K(i) for i in range(4)})}
             self.rep['effects_mapped']['particles.snow'] += 1
             self.rep['notes']['カスタムオブジェクト 雪 → particles(数・速さ・大きさは見た目からの推測)'] += 1
@@ -1684,6 +1686,9 @@ class SceneBuilder:
             if fov or cv.is_anim(0, '視野角'):
                 src['fov_v'] = cv.prop(0, '視野角')
                 del src['zoom']
+                if fov and not cv.is_anim(0, '視野角'):
+                    # エンジンは fov_v を読まない(zoom が無いと既定の画角 39.6° = 2.4 倍の寄りになっていた)→ 縦の画角から zoom に直す
+                    src['zoom'] = round(CAM_FOV_ZOOM_K * H2 / math.tan(math.radians(fov) / 2), 2)
             if cv.const(0, '目標ﾚｲﾔ'):
                 src['target_layer_no'] = cv.const(0, '目標ﾚｲﾔ')
             if cv.const(0, '深度ぼけ'):
@@ -1728,7 +1733,9 @@ class SceneBuilder:
                                 t = None
                             else:
                                 t = self.chain_pos(u, f_)
-                                p = [t[0], t[1], t[2] - d]
+                                # 目印が X 軸・Y 軸で傾いていたら、カメラは目印の面の法線の向きへ「カメラ距離」だけ離れる(= 床を斜めから見る。S30 のりんごの床 3854〜3923)
+                                ax, ay = math.radians(self.chain_rot_axis(u, f_, 'X軸回転')), math.radians(self.chain_rot_axis(u, f_, 'Y軸回転'))
+                                p = [t[0] - CAM_TARGET_TILT_SIGN * d * math.sin(ay) * math.cos(ax), t[1] + CAM_TARGET_TILT_SIGN * d * math.sin(ax), t[2] - d * math.cos(ax) * math.cos(ay)]
                             pk.append((f_, [round(p[0] + W2, 3), round(p[1] + H2, 3), round(p[2], 3)], None))
                             # カメラの向きは目印の回転に合わせる(目印が -54 度なら、画面は時計回りに 54 度回って見える)
                             tilt = Conv.eval_keys(cv.scalar(0, '傾き'), f_)
@@ -1795,6 +1802,15 @@ class SceneBuilder:
                 for i, n in enumerate(('X', 'Y', 'Z')):
                     p[i] += Conv.eval_keys(cv.scalar(fi, n), f)
         return p
+
+    def chain_rot_axis(self, u, f, name):
+        """オブジェクトの f コマ目の 拡張描画の X軸回転 / Y軸回転(度)。無ければ 0。"""
+        cv = Conv(u, {'ease': collections.Counter(), 'ignore_mid': 0, 'baked': 0})
+        r = 0.0
+        for fi, fl in enumerate(u.o['filters']):
+            if fl['name'] == '拡張描画':
+                r += Conv.eval_keys(cv.scalar(fi, name), f)
+        return r
 
     def chain_rot(self, u, f):
         """オブジェクトの f コマ目の Z 回転(度)。"""
@@ -2021,6 +2037,51 @@ class SceneBuilder:
         return data, dur
 
 
+def _radial_profile(loc, n=96):
+    """絵のアルファから、箱の中心 → 輪郭(いちばん外の不透明な画素)までの距離を n 方向(真上から時計回り)ぶん。測れなければ None。"""
+    if not loc or not os.path.exists(loc):
+        return None
+    try:
+        from PIL import Image
+        im = Image.open(loc).convert('RGBA')
+        k = max(im.size) / 320.0 if max(im.size) > 320 else 1.0
+        if k > 1:
+            im = im.resize((max(1, round(im.size[0] / k)), max(1, round(im.size[1] / k))))
+        a = im.split()[3].load()
+        w, h = im.size
+        cx, cy = (w - 1) / 2, (h - 1) / 2
+        rmax = int(math.hypot(w, h) / 2) + 1
+        out = []
+        for i in range(n):
+            t = 2 * math.pi * i / n
+            dx, dy = math.sin(t), -math.cos(t)
+            r = 0.0
+            for q in range(rmax * 2, 0, -1):
+                x, y = int(round(cx + dx * q / 2)), int(round(cy + dy * q / 2))
+                if 0 <= x < w and 0 <= y < h and a[x, y] > 127:
+                    r = q / 2
+                    break
+            out.append(round(r * k, 1))
+        return out if min(out) > 0 else None
+    except Exception:
+        return None
+
+
+def _asset_file(self, asset_id):
+    """素材番号 → ファイル(project の /api/assets の file_path。new_image_path と同じ控えを使う)。"""
+    if asset_id is None or not self.mats or not getattr(self.mats, 'api', None) or not getattr(self.mats, 'rebuild', False):
+        return None
+    cache = getattr(self.mats, '_asset_paths', None)
+    if cache is None:
+        try:
+            with urllib.request.urlopen(f"{self.mats.api}/api/assets/?project_id={self.mats.project_id}", timeout=60) as r:
+                cache = {a['id']: a.get('file_path') for a in json.load(r)}
+        except Exception:
+            cache = {}
+        self.mats._asset_paths = cache
+    return cache.get(asset_id)
+
+
 def _spread_markers(self, out):
     """effects に残した印を、効く相手へ配る。
     _motion_blur: 付いていたレイヤー(グループなら対象の絵)の motion_blur にする。
@@ -2072,6 +2133,13 @@ def _spread_markers(self, out):
             if L.get('out', spans[-1][1]) > spans[-1][1]:
                 ks.append({'f': spans[-1][1], 'v': 0})
             merged[name] = {'k': ks}
+        # 道のりで刻む: 相手が画像なら、(作り直しモードの)新しい絵のアルファから「中心 → 輪郭の距離」を 96 方向ぶん測って dash_path に渡す。
+        # 道のりの始まりは左端・時計回り(完成版 1204 の六角形で、破線が 左の角 → 右上の辺 → 下の辺 に出ているのを見て決めた。推測)
+        prof = _radial_profile(self.asset_file((L.get('source') or {}).get('asset_id')))
+        if prof:
+            merged['dash_path'] = prof
+            merged['dash_start'] = 270
+            self.rep['notes']['輪郭の破線: 新しい絵の輪郭から道のりの表(dash_path)を作った'] += 1
         for x in L['effects']:
             if x.get('type') == 'trace_outline':
                 x['params'].update(merged)
@@ -2079,6 +2147,7 @@ def _spread_markers(self, out):
 
 
 SceneBuilder.spread_markers = _spread_markers
+SceneBuilder.asset_file = _asset_file
 
 
 def AM_BLEND(i):

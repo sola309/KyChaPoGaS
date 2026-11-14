@@ -376,6 +376,8 @@
 - 内側の影: `inner_shadow`(`x` `y` `blur` `opacity` `color`)。白い `color` + 小さい `x` `y` で、縁の内側の光にもなる。
 - 動きに尾を引かせる: レイヤーに `"motion_blur": {"samples": 10, "shutter": 1, "phase": -1}`(1 コマ前からいままでを重ねる)。`true` だけなら前後 1/4 コマずつ。
 - 字が寄ってくる: text の `tracking` を `{"k": [{"f": 0, "v": 1000, "e": "outExpo"}, {"f": 16, "v": 0}]}`。
+- 筆文字ふうの題字: text に `{"type": "brush_ink", "params": {"weight": 2.2, "unevenness": 1.6, "uneven_size": 46, "roughness": 1.0, "rough_size": 12}}`(文字 64〜100 px むけ。大きい字は値も比例で大きく)。かすれは `dry: 40, dry_angle: 180`。
+- 輪郭の破線を辺に沿って刻む: 六角形なら `trace_outline` に `dash_sides: 6, dash_vertex: 90, dash_start: 270`(左の角から時計回り)。形が決まらない絵は `dash_path`(中心 → 輪郭の距離を 64〜128 方向ぶん)。
 - 破線: shape の線は `"dash": [28, 16]`(`dash_offset` を動かすと流れる)。画像・文字の輪郭は `trace_outline` の `dash_period`(1 周に対する %)`dash_gap`。
 
 ### 立ち絵を少し動かす(puppet。まばたき・口・髪ゆれ・首ふり)

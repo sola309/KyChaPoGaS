@@ -69,7 +69,7 @@ def doc(name, n, layers, bg=None, fps=FPS, w=W, h=H):
 # ---------------------------------------------------------------- 人物の置き方(v3): mannequin / puppet / bone
 # 3D モデルの人物の所(B11 キャラ紹介・B14 屋上・B25c ポッキーゲーム)を何で置くか。AUP_PEOPLE=mannequin R/rec.sh B11 で元のマネキンに戻せる。
 #   mannequin = mesh の関節つきの人形(色だけ) / puppet = 2D の立ち絵をパーツ分解した puppet レイヤー / bone = puppet + 関節(ボーン)のポーズ(書式が出るまでは puppet と同じ)
-PEOPLE = os.environ.get('AUP_PEOPLE', 'puppet')
+PEOPLE = os.environ.get('AUP_PEOPLE', 'auto')      # 既定 auto = 関節(bones.json)のあるパペットは bone、無ければ puppet、パペットが無ければ mannequin。puppet = 関節を使わない
 P2D_JSON = '/tmp/claude-1000/sakura-rebuild/P2D/puppets.json'      # 担当 KEY が衣装ごとに作ったパペットの表(順に増える)
 BONE_USAGE = '/tmp/claude-1000/sakura-rebuild/PUP/BONE_USAGE.md'   # 関節(ボーン)の書式(担当 PUP)。あれば bone 版を組める
 _PUP_API = os.environ.get('AUP_API', 'http://127.0.0.1:8002')
@@ -145,6 +145,11 @@ def find_puppet(sym, view=None):
 def has_bones(pid):
     """そのパペットに関節(bones.json。担当 PUP の make_bones.py が作る)があるか。"""
     return os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'backend', 'data', 'puppets', pid, 'bones.json'))
+
+
+def use_bones(pid):
+    """このパペットで関節のポーズを付けるか(AUP_PEOPLE が auto / bone で、bones.json があるとき)。"""
+    return PEOPLE in ('auto', 'bone') and has_bones(pid)
 
 
 def psway(n, amp, per, ph=0.0, base=0.0, step=8):

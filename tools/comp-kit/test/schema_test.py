@@ -178,7 +178,11 @@ def fx_fixtures(mask_url, ov_url):
         "gradient_overlay": {"per": {"cx": {"ctx": {"angle": 90}}, "width": {"value": 60}}},
         "overlay_source": {"base": {"url": ov_url}, "skip": {"asset_id": A}, "per": {
             "tile": {"ctx": {"scale": 40}}, "anchor": {"ctx": {"scale": 40}, "value": "top_left"}, "start": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 40}, "speed": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 3}}},
-        "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}, "dash_period": {"ctx": {"dash_gap": 5}, "value": 20}, "dash_gap": {"ctx": {"dash_period": 20}, "value": 10}}},
+        "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}, "dash_period": {"ctx": {"dash_gap": 5}, "value": 20}, "dash_gap": {"ctx": {"dash_period": 20}, "value": 10},
+                                  "dash_sides": {"ctx": {"dash_period": 20, "dash_gap": 10}, "value": 4}, "dash_vertex": {"ctx": {"dash_period": 20, "dash_gap": 10, "dash_sides": 4}, "value": 30},
+                                  "dash_path": {"ctx": {"dash_period": 20, "dash_gap": 10}, "value": [10, 30, 10, 30, 10, 30, 10, 30, 10, 30, 10, 30]}, "dash_start": {"ctx": {"dash_period": 20, "dash_gap": 10, "dash_sides": 4}, "value": 20},
+                                  "dash_reverse": {"ctx": {"dash_period": 20, "dash_gap": 5, "dash_sides": 5, "dash_start": 20}}}},
+        "brush_ink": {"per": {"dry_angle": {"ctx": {"dry": 80}}, "dry_length": {"ctx": {"dry": 80}, "value": 20}, "dry_size": {"ctx": {"dry": 80}, "value": 12}, "dry": {"value": 80}, "softness": {"value": 30}, "uneven_size": {"value": 9}, "rough_size": {"value": 30}}},
         "halftone": {"per": {"self_mask": {"ctx": {"bg": "#ffffff"}}}},
         "mirror": {"per": {"cy": {"ctx": {"angle": 30}}}},
         "polar": {"per": {"clamp": {"ctx": {"scale": 50}}, "center_width": {"value": 30}}},

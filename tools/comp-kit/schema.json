@@ -2389,6 +2389,152 @@
      "max": 100,
      "step": 1,
      "animatable": true
+    },
+    "dash_sides": {
+     "type": "number",
+     "label": "道のりで刻む: 正多角形の角の数(0 = 角度で刻む。円は 0 のままでよい)",
+     "default": 0,
+     "min": 0,
+     "max": 64,
+     "step": 1,
+     "animatable": false
+    },
+    "dash_vertex": {
+     "type": "angle",
+     "label": "道のりで刻む: 角のひとつの向き(真上から時計回り)",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": false
+    },
+    "dash_path": {
+     "type": "numbers",
+     "label": "道のりで刻む: 中心から輪郭までの距離の並び(真上から時計回りに等間隔。8 個以上)",
+     "default": null,
+     "animatable": false,
+     "optional": true
+    },
+    "dash_start": {
+     "type": "angle",
+     "label": "道のりの始まりの向き(dash_sides / dash_path のとき)",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true
+    },
+    "dash_reverse": {
+     "type": "bool",
+     "label": "反時計回りに進む(dash_sides / dash_path のとき)",
+     "default": false,
+     "animatable": false
+    }
+   }
+  },
+  "brush_ink": {
+   "label": "筆文字ふう(太さのむら・縁のゆれ・かすれ)",
+   "group": "縁・影",
+   "cheap": false,
+   "params": {
+    "weight": {
+     "type": "number",
+     "label": "太らせる(負で細らせる)",
+     "default": 0,
+     "min": -20,
+     "max": 40,
+     "step": 0.1,
+     "animatable": true
+    },
+    "unevenness": {
+     "type": "number",
+     "label": "太さのむら ±",
+     "default": 2,
+     "min": 0,
+     "max": 40,
+     "step": 0.1,
+     "animatable": true
+    },
+    "uneven_size": {
+     "type": "number",
+     "label": "むらの大きさ",
+     "default": 40,
+     "min": 1,
+     "max": 2000,
+     "step": 1,
+     "animatable": true
+    },
+    "roughness": {
+     "type": "number",
+     "label": "縁のゆれ",
+     "default": 1.5,
+     "min": 0,
+     "max": 60,
+     "step": 0.1,
+     "animatable": true
+    },
+    "rough_size": {
+     "type": "number",
+     "label": "ゆれの細かさ",
+     "default": 8,
+     "min": 0.5,
+     "max": 500,
+     "step": 0.5,
+     "animatable": true
+    },
+    "dry": {
+     "type": "percent",
+     "label": "かすれ",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
+    },
+    "dry_angle": {
+     "type": "angle",
+     "label": "筆の向き(90 = 横、180 = 縦)",
+     "default": 90,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true
+    },
+    "dry_length": {
+     "type": "number",
+     "label": "かすれの筋の長さ",
+     "default": 120,
+     "min": 1,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "dry_size": {
+     "type": "number",
+     "label": "かすれの筋の太さ",
+     "default": 4,
+     "min": 0.5,
+     "max": 200,
+     "step": 0.5,
+     "animatable": true
+    },
+    "softness": {
+     "type": "percent",
+     "label": "縁のやわらかさ",
+     "default": 3,
+     "min": 0,
+     "max": 45,
+     "step": 1,
+     "animatable": true
+    },
+    "seed": {
+     "type": "number",
+     "label": "種",
+     "default": 1,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false
     }
    }
   },

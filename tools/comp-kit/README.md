@@ -305,6 +305,12 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - `motion_blur` は `{"samples": 回数, "shutter": 足し込む幅(コマ。既定 0.5), "phase": 幅の始まり(既定 -0.5 = 前後に半分ずつ。-1 = 手前へ尾を引く)}` でも書ける。`true`・回数だけのときは今までどおり。
   AviUtl の モーションブラー(間隔・分解能)は `{"samples": 分解能, "shutter": 間隔, "phase": -1}` と読んだ(推測)。
 - 字間は text の `tracking`(px。キーフレーム可)、輪郭の破線は shape の `dash: [線, すき間]` + `dash_offset`、画像・文字の輪郭の破線は `trace_outline` の `dash_period` `dash_gap`(どれも前からある。例 16 に見本)。
+- `trace_outline` を **道のりで刻む**(破線・`progress` とも): `dash_sides`(正多角形の角の数。`dash_vertex` = 角のひとつの向き・度)か、`dash_path`(真上から時計回りに等間隔の向きでの「箱の中心 → 輪郭の距離」の並び。8 個以上、64〜128 個がよい)を書く。
+  `dash_start`(度)= 道のり 0 の向き、`dash_reverse` = 反時計回り。書かなければ今までどおり角度で刻む(1 バイトも変わらない)。表は CPU で 256 等分に作って小さなテクスチャで渡す(決定論)。
+  中心から見て輪郭が 1 本に決まる形(円・多角形・星の外周など)向け。入り組んだ形・穴は扱えない。AviUtl 取り込みでは、新しい絵のアルファから `dash_path` を測って渡す。
+- `brush_ink`(重い): 文字・線を筆ふうにする。`weight`(太らせる px。負で細らせる)`unevenness`(太さのむら ± px)`uneven_size`(むらの大きさ px)`roughness`(縁のゆれ px)`rough_size`(ゆれの細かさ px)
+  `dry`(かすれ %)`dry_angle`(筆の向き。90 = 横、180 = 縦)`dry_length` `dry_size`(かすれの筋の長さ・太さ px)`softness`(縁 %)`seed`。
+  ぼかしたアルファを、場所ごとに違うしきい値で切り直す作り(角が丸まる・細い線は太さの 0.8 倍くらいまで動かせる)。模様は箱の左上に固定。文字ごとアニメ(per_char)の文字には画面の px で掛かる。
 
 ## 仕様との差・できていないこと
 

@@ -148,6 +148,26 @@ const F = {
       vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
       gl_FragColor = vec4(uColor.rgb * a, a) + base * (1.0 - a);
     }`,
+  // 輪郭追跡(道のりで刻む版)。tTab = 角度 → 輪郭の道のり(0〜1)の表(横 256・R,G に 16bit)。破線・progress を道のりで刻む
+  trace2: HEAD + /* glsl */ `
+    uniform sampler2D tOut, tIn, tTab; uniform vec4 uColor; uniform float uOnly, uProgress, uT0, uPerim, uSgn; uniform vec2 uC, uDash;
+    float TB(float i){ vec4 v = texture2D(tTab, vec2((mod(i, 256.0) + 0.5) / 256.0, 0.5)); return (v.r * 255.0 * 256.0 + v.g * 255.0) / 65535.0; }
+    void main(){
+      vec4 c = texture2D(tSrc, vUv);
+      float band = clamp(texture2D(tOut, vUv).a - texture2D(tIn, vUv).a, 0.0, 1.0);
+      vec2 q = P() - uC;
+      float a = fract(atan(q.x, -q.y) / 6.2831853) * 256.0, i0 = floor(a);
+      float v0 = TB(i0), v1 = i0 >= 255.0 ? 1.0 : TB(i0 + 1.0);
+      float t = fract((mix(v0, v1, a - i0) - uT0) * uSgn);
+      float k = uProgress >= 1.0 ? 1.0 : uProgress <= 0.0 ? 0.0 : clamp((uProgress - t) * uPerim + 0.5, 0.0, 1.0);
+      if (uDash.x > 0.0 && uDash.y > 0.0) {
+        float u = fract(t / uDash.x) * uDash.x;
+        k *= clamp((uDash.x - uDash.y - u) * uPerim + 0.5, 0.0, 1.0) * clamp(min(u, uDash.x - u) * uPerim + 0.5, 0.0, 1.0);
+      }
+      float al = band * k * uColor.a;
+      vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
+      gl_FragColor = vec4(uColor.rgb * al, al) + base * (1.0 - al);
+    }`,
   radial_blur: HEAD + /* glsl */ `
     uniform vec2 uC; uniform float uAmt, uSpin;
     void main(){
@@ -338,6 +358,28 @@ const F = {
       float e = clamp((1.0 - r) * min(uRad.x, uRad.y), 0.0, 1.0);
       gl_FragColor = mix(own, o, e);
     }`,
+  // 筆文字ふう: 太さのむら(ぼかしたアルファを、場所ごとに違うしきい値で切り直す)+ 縁のゆれ(ノイズでずらして読む)+ かすれ(向きに沿った細長いノイズで抜く)
+  brush: HEAD + /* glsl */ `
+    uniform sampler2D tBlur; uniform vec2 uOrg, uDir; uniform vec4 uA, uB, uD;   // uA = weight, uneven, unevenSize, blurR / uB = rough, roughSize, soft, seed / uD = dry, dryLen, drySize, 0
+    vec4 Bl(vec2 p){ return texture2D(tBlur, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)); }
+    void main(){
+      vec2 p = P(); vec2 g = p - uOrg; float sd = uB.w * 9.7;
+      vec2 d = (vec2(VN(g / uB.y + sd), VN(g / uB.y + vec2(41.3, 17.1) + sd)) - 0.5) * 2.0 * uB.x;
+      vec4 bl = Bl(p + d);
+      float n = VN(g / uA.z + vec2(7.7, 3.1) + sd);
+      float xx = (uA.x + uA.y * (n * 2.0 - 1.0)) / (1.41421 * uA.w); float e2 = exp(2.5 * xx);
+      float th = clamp(0.5 - 0.5 * (e2 - 1.0 / e2) / (e2 + 1.0 / e2), 0.06, 0.94);   // ぼかした縁(σ = uA.w)を xx だけ外へ動かすしきい値(erf の近似)
+      float sf = min(uB.z, th * 0.8);
+      float a = smoothstep(th - sf, th + sf, bl.a);
+      if (uD.x > 0.0) {
+        float al = dot(g, uDir), ac = g.x * uDir.y - g.y * uDir.x;
+        float sn = VN(vec2(al / uD.y, ac / uD.z) + sd + 3.3) * 0.6 + VN(vec2(al / uD.y * 2.3, ac / uD.z * 0.5) + sd + 19.1) * 0.4;
+        float lim = 1.0 - uD.x * 0.75;
+        float pch = smoothstep(0.35, 0.6, VN(g / (uD.y * 1.2) + sd + 50.5));   // かすれは所どころに固まって出る
+        a *= 1.0 - pch * smoothstep(lim - 0.03, lim + 0.05, sn);
+      }
+      gl_FragColor = vec4(unpm(bl) * a, a);
+    }`,
   // 減色(パレット): いちばん近い色に置き換える(RGB の距離)
   palette: HEAD + /* glsl */ `
     uniform vec3 uPal[32]; uniform float uN, uAmt;
@@ -384,6 +426,7 @@ const PAD = {
   lens_flare: () => 0,
   refract: () => 0,
   palette: () => 0,
+  brush_ink: (p) => Math.max(0, num(p.weight, 0)) + Math.abs(num(p.unevenness, 2)) + Math.abs(num(p.roughness, 1.5)) + 2,
 }
 // [最小, 最大] の組(数 1 個なら ± その数)
 function rng(v, a, b) { return Array.isArray(v) ? [num(v[0], a), num(v[1] ?? v[0], b)] : v == null ? [a, b] : [-Math.abs(num(v, 0)), Math.abs(num(v, 0))] }
@@ -392,6 +435,43 @@ function rngPos(v, a, b) { return Array.isArray(v) ? [num(v[0], a), num(v[1] ?? 
 export const LOCAL_PASS = new Set(['blur', 'glow', 'rgb_shift', 'drop_shadow', 'inner_shadow', 'stroke_outline', 'outline', 'directional_blur', 'long_shadow', 'feather', 'sharpen'])
 export const isPass = (type) => type in PAD
 export const PASS_TYPES = Object.keys(PAD)
+
+// 角度(真上から時計回り。256 等分)→ 輪郭の道のり(0〜1)の表。正多角形は式で、dash_path は渡された半径の並び(または道のりの並び)から作る
+const tabCache = new Map()
+function pathTable(p, bw, bh) {
+  const sides = Math.round(num(p.dash_sides, 0)), path = Array.isArray(p.dash_path) && p.dash_path.length >= 8 ? p.dash_path : null
+  if (!(sides >= 3) && !path) return null
+  const key = (path ? 'p' + path.join(',') : 's' + sides + ',' + num(p.dash_vertex, 0)) + '|' + Math.round(bw) + 'x' + Math.round(bh)
+  let e = tabCache.get(key)
+  if (e) return e
+  const N = 256, rad = new Float64Array(N)
+  if (path) {
+    // dash_path = 等間隔の角度(真上から時計回り)での「中心から輪郭までの距離」(単位は自由。箱の短い辺の半分に合わせる必要はない)
+    const n = path.length
+    for (let i = 0; i < N; i++) { const x = (i / N) * n, j = Math.floor(x), u = x - j; rad[i] = Math.max(1e-6, num(path[j % n], 1) * (1 - u) + num(path[(j + 1) % n], 1) * u) }
+  } else {
+    const v0 = num(p.dash_vertex, 0) * D2R, st = (2 * Math.PI) / sides
+    for (let i = 0; i < N; i++) { let d = (((i / N) * 2 * Math.PI - v0) % st + st) % st; rad[i] = Math.cos(st / 2) / Math.cos(d - st / 2) }
+  }
+  const cum = new Float64Array(N + 1)
+  let scale = 0
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * 2 * Math.PI, a1 = ((i + 1) / N) * 2 * Math.PI, r0 = rad[i], r1 = rad[(i + 1) % N]
+    cum[i + 1] = cum[i] + Math.hypot(Math.sin(a1) * r1 - Math.sin(a0) * r0, Math.cos(a1) * r1 - Math.cos(a0) * r0)
+    scale = Math.max(scale, r0)
+  }
+  const tot = cum[N] || 1
+  const data = new Uint8Array(N * 4)
+  const val = (i) => cum[i] / tot
+  for (let i = 0; i < N; i++) { const q = Math.round(val(i) * 65535); data[i * 4] = q >> 8; data[i * 4 + 1] = q & 255; data[i * 4 + 3] = 255 }
+  const tex = new THREE.DataTexture(data, N, 1, THREE.RGBAFormat, THREE.UnsignedByteType)
+  tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.needsUpdate = true
+  // perim = 1 周の長さ(RT の px。破線の端を 1 画素でならすのに使う): 半径の最大を箱の短い辺の半分とみなす
+  e = { tex, perim: (tot / (scale || 1)) * (Math.min(bw, bh) / 2), at: (deg) => { const x = ((((deg / 360) % 1) + 1) % 1) * N, j = Math.floor(x); const a = val(j), b2 = j + 1 >= N ? 1 : val(j + 1); return a + (b2 - a) * (x - j) } }
+  if (tabCache.size > 64) tabCache.clear()
+  tabCache.set(key, e)
+  return e
+}
 
 export class Effects {
   constructor(gfx) {
@@ -570,6 +650,19 @@ export class Effects {
         const m = this.mat('trace', { tOut: null, tIn: null, uColor: V4(), uOnly: 0, uProgress: 1, uStart: 0, uC: V2(), uDash: V2() })
         // 破線: dash_period(1 周に対する %)・dash_gap(すき間 %)。書かなければ・0 以下なら実線。すき間 >= 周期なら何も描かない
         const dp = Math.max(0, num(p.dash_period, 0)) / 100, dg = dp > 0 ? clamp(num(p.dash_gap, 0) / 100, 0, dp) : 0
+        // 道のりで刻む: dash_sides(正多角形の角の数。dash_vertex = 角のひとつの向き・度)か dash_path(角度 → 道のりの表)を書いたとき。
+        // dash_start(度。真上から時計回り)= 道のり 0 の位置、dash_reverse = 反時計回りに進む。書かなければ下の、今までどおり角度で刻む式
+        const tab = pathTable(p, b[2] - b[0], b[3] - b[1])
+        if (tab) {
+          const m2 = this.mat('trace2', { tOut: null, tIn: null, tTab: null, uColor: V4(), uOnly: 0, uProgress: 1, uT0: 0, uPerim: 1, uSgn: 1, uC: V2(), uDash: V2() })
+          const out2 = this.run1('trace2', null, src, {
+            uDash: m2.uniforms.uDash.value.set(dp, dg), tTab: tab.tex, uSgn: p.dash_reverse ? -1 : 1, uT0: tab.at(num(p.dash_start, 0)) + (p.dash_reverse ? -1 : 1) * num(p.start, 0) / 100, uPerim: Math.max(1, tab.perim),
+            tOut: ao.texture, tIn: ai.texture, uOnly: p.only_line ? 1 : 0, uProgress: clamp(num(p.progress, 100) / 100, 0, 1),
+            uC: this.v2.set(cx, cy), uColor: m2.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
+          })
+          g.release(ao); g.release(ai)
+          return out2
+        }
         const out = this.run1('trace', null, src, {
           uDash: m.uniforms.uDash.value.set(dp, dg),
           tOut: ao.texture, tIn: ai.texture, uOnly: p.only_line ? 1 : 0, uProgress: clamp(num(p.progress, 100) / 100, 0, 1),
@@ -724,6 +817,22 @@ export class Effects {
           uAb: clamp(num(p.aberration, 0) / 100, 0, 1), uHl: clamp(num(p.highlight, 0) / 100, 0, 2), uShade: clamp(num(p.shade, 0) / 100, 0, 1), uSize: Math.max(0.5, num(p.size, 6) * rs), uSeed: num(p.seed, 1),
           uTint: m.uniforms.uTint.value.set(t[0], t[1], t[2], ta),
         })
+      }
+      case 'brush_ink': {
+        // 文字・線を筆ふうにする。weight = 太らせる px(負で細らせる)、unevenness = 太さのむら ± px(uneven_size = むらの大きさ px)、
+        // roughness = 縁のゆれ px(rough_size = ゆれの細かさ px)、dry = かすれ %(dry_angle = 筆の向き。90 = 横、dry_length・dry_size = かすれの筋の長さ・太さ px)、softness = 縁のやわらかさ %、seed
+        const wgt = num(p.weight, 0) * rs, un = Math.abs(num(p.unevenness, 2)) * rs
+        const br = Math.max(1.2 * rs, (Math.abs(wgt) + un) / 1.3) // ぼかしの σ(px)。太さを動かす量の 0.8 倍くらい(細い線が消えないように小さく)
+        const bl = this.blur(src, br * 2)
+        const m = this.mat('brush', { tBlur: null, uOrg: V2(), uDir: V2(), uA: V4(), uB: V4(), uD: V4() })
+        const dd = dirOf(num(p.dry_angle, 90))
+        m.uniforms.uDir.value.set(dd[0], dd[1])
+        m.uniforms.uA.value.set(wgt, un, Math.max(1, num(p.uneven_size, 40) * rs), br)
+        m.uniforms.uB.value.set(num(p.roughness, 1.5) * rs, Math.max(0.5, num(p.rough_size, 8) * rs), clamp(num(p.softness, 3) / 100, 0.005, 0.45), num(p.seed, 1))
+        m.uniforms.uD.value.set(clamp(num(p.dry, 0) / 100, 0, 1), Math.max(1, num(p.dry_length, 120) * rs), Math.max(0.5, num(p.dry_size, 4) * rs), 0)
+        const out = this.run1('brush', null, src, { tBlur: bl.texture, uOrg: this.v2.set(b[0], b[1]) })
+        g.release(bl)
+        return out
       }
       case 'palette': {
         // colors = 使う色(2〜32 色)。いちばん近い色に置き換える。amount = 強さ %

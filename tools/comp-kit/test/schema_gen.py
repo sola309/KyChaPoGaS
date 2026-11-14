@@ -75,7 +75,13 @@ fx("inner_shadow", "内側シャドー", G4, {"distance": N("距離", 6, 0, 500,
     "x": N("ずれ X(書くと 距離・角度 より優先)", None, -500, 500, 1, optional=True), "y": N("ずれ Y(書くと 距離・角度 より優先)", None, -500, 500, 1, optional=True)}, False)
 fx("long_shadow", "ロングシャドー", G4, {"length": N("長さ", 100, 0, 2000, 1), "angle": A("角度", 135), "color": C("色", "#000000"), "opacity": P("濃さ", 50), "fade": P("先を薄く", 0)}, False)
 fx("trace_outline", "輪郭追跡", G4, {"progress": P("描画度"), "width": N("線幅", 8, 1, 100, 1), "start": P("開始点", 0), "threshold": N("閾値", 128, 1, 254, 1), "color": C("色", "#ffffff"), "only_line": B("輪郭のみ"),
-    "dash_period": P("破線の周期(1 周に対する %。0 = 実線)", 0), "dash_gap": P("破線のすき間(%。周期より小さく)", 0)}, False)
+    "dash_period": P("破線の周期(1 周に対する %。0 = 実線)", 0), "dash_gap": P("破線のすき間(%。周期より小さく)", 0),
+    "dash_sides": N("道のりで刻む: 正多角形の角の数(0 = 角度で刻む。円は 0 のままでよい)", 0, 0, 64, 1, False), "dash_vertex": A("道のりで刻む: 角のひとつの向き(真上から時計回り)", 0, animatable=False),
+    "dash_path": {"type": "numbers", "label": "道のりで刻む: 中心から輪郭までの距離の並び(真上から時計回りに等間隔。8 個以上)", "default": None, "animatable": False, "optional": True},
+    "dash_start": A("道のりの始まりの向き(dash_sides / dash_path のとき)", 0), "dash_reverse": B("反時計回りに進む(dash_sides / dash_path のとき)")}, False)
+fx("brush_ink", "筆文字ふう(太さのむら・縁のゆれ・かすれ)", G4, {"weight": N("太らせる(負で細らせる)", 0, -20, 40, 0.1), "unevenness": N("太さのむら ±", 2, 0, 40, 0.1), "uneven_size": N("むらの大きさ", 40, 1, 2000, 1),
+    "roughness": N("縁のゆれ", 1.5, 0, 60, 0.1), "rough_size": N("ゆれの細かさ", 8, 0.5, 500, 0.5), "dry": P("かすれ", 0), "dry_angle": A("筆の向き(90 = 横、180 = 縦)", 90), "dry_length": N("かすれの筋の長さ", 120, 1, 4000, 1),
+    "dry_size": N("かすれの筋の太さ", 4, 0.5, 200, 0.5), "softness": P("縁のやわらかさ", 3, 0, 45), "seed": N("種", 1, 0, 9999, 1, False)}, False)
 fx("feather", "縁をぼかす", G4, {"radius": N("幅", 10, 0, 300, 1)}, False)
 # --- ぼかし・光 ---
 fx("blur", "ぼかし", G5, {"radius": N("範囲", 10, 0, 500, 1)}, False)

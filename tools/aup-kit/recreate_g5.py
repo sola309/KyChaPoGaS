@@ -205,18 +205,35 @@ def s06(ctx):
 # 見た形: 陰のない紫(#4b2857)一色のソウルジェム。窓は明るい灰色で、中に縦書きの題字「さくらの空 / アプリコットの愛」+ 小さな英字 + 桃色の桜(題字は画面に固定)。
 # 0〜30 大写しから引く(窓の上に 3 本の帯がかかっていて、わきへ回って消える)→ 44〜140 右へ 20° 傾いて止まる(中心 (940,520)・全高 1010px)。
 # 148〜158 紫 → くすんだ桃色・帯が戻る → 156〜172 正面を向いて寄る → 172〜 窓の大写し(灰白の面に紙吹雪がうすく映り、右の縁に桃色の玉の列)。
+def _sakura_pts(R):
+    """桜の印(花びら 5 枚・先に切れ込み)の輪郭。R = 中心から花びらの先まで。"""
+    half = [(0.05, 0.10), (0.20, 0.34), (0.30, 0.56), (0.33, 0.74), (0.27, 0.90), (0.15, 1.0), (0.07, 0.93), (0.0, 0.82)]     # (横, 外向き)。右半分を根元 → 切れ込み
+    pet = [(-x, y) for x, y in half] + [(x, y) for x, y in reversed(half[:-1])]
+    pts = []
+    for k in range(5):
+        a = math.radians(72 * k)
+        for x, y in pet:
+            pts.append([round(R * (x * math.cos(a) + y * math.sin(a)), 1), round(R * (x * math.sin(a) - y * math.cos(a)), 1)])
+    return pts
+
+
 @reg('aux:S07_logo', 'S07a', 'text(縦書きの題字)+ shape(桜)')
 def s07_logo(ctx):
     n = 1
     ink = '#2b2224'
 
-    def col(id, text, size, x, y, **kw):
-        return layer(id, 'text', n, dict({'text': text, 'font': 'APJapanesefont', 'size': size, 'fill': ink, 'writing': 'vertical', 'stroke': ink, 'stroke_width': 1.8}, **kw), pos=[x, y])
+    # 筆ふうの線 = FX の brush_ink(R/FX/BRUSH_USAGE.md の組み。「空」「愛」は約 1.5 倍・「の」「ッ」は 0.8 倍)。
+    # 位置は完成版 5730 の題字の組み(FX が測った)を、窓の中の位置(1258〜1330 で見て 108px 上)へずらしたもの
+    BR = {'type': 'brush_ink', 'params': {'weight': 0.7, 'unevenness': 1.2, 'uneven_size': 50, 'roughness': 0.9, 'rough_size': 12, 'dry': 0, 'seed': 4}}
+
+    def col(id, runs, x, y, size=100, tracking=-24):
+        return layer(id, 'text', n, {'text': ''.join(r['text'] for r in runs), 'runs': runs, 'font': 'APJapanesefont', 'size': size, 'fill': ink,
+                                     'writing': 'vertical', 'valign': 'top', 'tracking': tracking}, pos=[x, y], effects=[BR])
     return doc('部品 S07 題字', n, [
-        col('t1', 'さくらの空', 80, 1034, 385),
-        col('t2', 'アプリコットの愛', 64, 914, 462),
-        layer('en', 'text', n, {'text': 'A love for Sakura Kyoko', 'font': 'Noto Sans JP', 'weight': 400, 'size': 17, 'fill': ink, 'tracking': 1.5}, transform={'position': [960, 410], 'rotation': [0, 0, 90]}),
-        layer('sakura', 'shape', n, {'kind': 'flower', 'width': 132, 'height': 132, 'fill': '#f1b9c2', 'sides': 5}, transform={'position': [1024, 622], 'rotation': [0, 0, 12]}),
+        col('t1', [{'text': 'さくら'}, {'text': 'の', 'size': 80}, {'text': '空', 'size': 146}], 1034, 178),
+        col('t2', [{'text': 'アプリコ'}, {'text': 'ッ', 'size': 72}, {'text': 'ト'}, {'text': 'の', 'size': 72}, {'text': '愛', 'size': 140}], 904, 200, size=90, tracking=-25),   # 窓の中では左の列が 210〜710 に収まる
+        layer('en', 'text', n, {'text': 'A love for Sakura Kyoko', 'font': 'Noto Serif JP', 'weight': 400, 'size': 20, 'fill': ink, 'tracking': 1}, transform={'position': [962, 427], 'rotation': [0, 0, 90]}),
+        layer('sakura', 'shape', n, {'kind': 'path', 'closed': True, 'points': _sakura_pts(68), 'fill': '#f6b9c4'}, transform={'position': [1034, 640], 'rotation': [0, 0, 8]}),
     ])
 
 

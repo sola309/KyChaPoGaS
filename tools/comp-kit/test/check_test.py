@@ -233,6 +233,25 @@ def main():
         ok("refract(レンズ): 中をふくらませる(中心は同じ色・半径の中は中心寄りの色・外はそのまま)",
            near(le.getpixel((100, 100)), plain_im.getpixel((100, 100)), 6) and near(le.getpixel((120, 100)), plain_im.getpixel((110, 100)), 40) and not near(le.getpixel((120, 100)), plain_im.getpixel((120, 100)), 12) and le.getpixel((146, 100)) == plain_im.getpixel((146, 100)),
            f"{le.getpixel((120, 100))} 元 {plain_im.getpixel((120, 100))} 中心寄り {plain_im.getpixel((110, 100))}")
+        # 道のりで刻む破線: 200×100 の長方形(1 周 600px)。周期 1/6・すき間 1/12 → 道のり 0〜50px が線、50〜100px がすき間…。始まりは真上(上辺のまん中)・時計回り
+        import math as _m
+        prof = [min(100 / max(1e-9, abs(_m.sin(2 * _m.pi * i / 180))), 50 / max(1e-9, abs(_m.cos(2 * _m.pi * i / 180)))) for i in range(180)]
+        dq = lambda **p_: shot(comp([{"id": "s", "type": "solid", "in": 0, "out": 10, "transform": {"position": [150, 100]}, "source": {"color": "#ff0000", "width": 200, "height": 100},  # noqa: E731
+                                      "effects": [{"type": "trace_outline", "params": {"width": 6, "color": "#ffffff", "only_line": True, "dash_period": 100 / 6, "dash_gap": 100 / 12, **p_}}]}], w=300))
+        im = dq(dash_path=prof)
+        on = [im.getpixel(q)[3] for q in ((175, 50), (250, 75), (225, 150), (125, 150), (50, 125))]      # 道のり 25・175・325・425・525 = 線
+        off = [im.getpixel(q)[3] for q in ((225, 50), (250, 125), (175, 150), (75, 150), (50, 75))]      # 道のり 75・225・375・475・575 = すき間
+        ok("trace_outline の dash_path: 長方形でも道のりどおりに刻む(線 50px・すき間 50px)", min(on) > 200 and max(off) < 30, f"{on} {off}")
+        im = shot(comp([{"id": "s", "type": "shape", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"kind": "polygon", "sides": 4, "width": 140, "height": 140, "fill": "#ff0000"},
+                         "effects": [{"type": "trace_outline", "params": {"width": 6, "color": "#ffffff", "only_line": True, "dash_period": 25, "dash_gap": 12.5, "dash_sides": 4, "dash_vertex": 0}}]}]))
+        on = [im.getpixel(q)[3] for q in ((118, 48), (152, 118))]; off = [im.getpixel(q)[3] for q in ((152, 82), (48, 118))]   # ひし形(角が真上): 各辺の前半が線・後半がすき間
+        ok("trace_outline の dash_sides: 正多角形の辺に沿って刻む", min(on) > 200 and max(off) < 30, f"{on} {off}")
+        tx = lambda fxs=None: comp([{"id": "t", "type": "text", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"text": "空", "font": "Noto Sans JP", "weight": 400, "size": 120, "fill": "#000000"},  # noqa: E731
+                                     **({"effects": fxs} if fxs else {})}])
+        cnt = lambda im_: sum(1 for y in range(0, 200, 2) for x in range(0, 200, 2) if im_.getpixel((x, y))[3] > 128)  # noqa: E731
+        t0 = cnt(shot(tx())); t1 = cnt(shot(tx([{"type": "brush_ink", "params": {"weight": 3, "unevenness": 0, "roughness": 0}}]))); t2 = cnt(shot(tx([{"type": "brush_ink", "params": {"weight": -1.5, "unevenness": 0, "roughness": 0}}])))
+        t3 = cnt(shot(tx([{"type": "brush_ink", "params": {"weight": 3, "unevenness": 0, "roughness": 0, "dry": 90, "dry_length": 30}}])))
+        ok("brush_ink: weight 正で太る・負で細る・dry でかすれて減る", t1 > t0 * 1.25 and t2 < t0 * 0.9 and t3 < t1 * 0.95 and t0 > 300, f"元 {t0} 太 {t1} 細 {t2} かすれ {t3}")
         MV = {"k": [{"f": 0, "v": [60, 100]}, {"f": 4, "v": [140, 100]}]}
         mbc = lambda mb: comp([{"id": "s", "type": "solid", "in": 0, "out": 10, "transform": {"position": MV}, "source": {"color": "#ff0000", "width": 20, "height": 20}, "motion_blur": mb}])  # noqa: E731
         m0 = shot(mbc(True), 2); m1 = shot(mbc({"samples": 16, "shutter": 0.5, "phase": -0.5}), 2); m2 = shot(mbc({"samples": 16, "shutter": 1, "phase": -1}), 2)
@@ -286,6 +305,17 @@ def main():
         got = asyncio.run(grab(comp([mesh([{"geometry": "plane", "size": [120, 80], "material": {"type": "basic", "texture": {"comp_id": 9960}}}])]), [0, 10], base))
         dmax = max(max(abs(a_ - b_) for a_, b_ in zip(px(got[f]).crop(inbox).tobytes(), px(ref[f]).crop(inbox).tobytes())) for f in (0, 10))
         ok("mesh: comp をテクスチャにした板 = comp レイヤー(向き・色・時刻が同じ)", dmax <= 1 and px(got[0]).tobytes() != px(got[10]).tobytes() and outside(px(got[0])) == 0, f"最大の差 {dmax}")
+        # 子の comp が mesh を含むとき(子の描画が、使い回しのカメラを書き換える)でも、親の mesh の大きさ・位置は変わらない
+        subm2 = {"id": 9961, "name": "meshsub2", "width": 120, "height": 80, "fps": 30, "duration_frames": 30, "data": {"version": 1, "bg": "#204060", "layers": [
+            {"id": "m", "type": "mesh", "in": 0, "out": 30, "transform": {"position": [60, 40, 0]}, "source": {"unlit": True, "objects": [{"geometry": "box", "size": [30, 30, 30], "rotation": [20, 30, 0], "material": {"color": "#ffffff"}}]}}]}}
+        (tmpm / "meshsub2.json").write_text(json.dumps(subm2), encoding="utf-8")
+        def nest(tex):
+            return comp([mesh([{"geometry": "plane", "size": [60, 40], "position": [-50, -60, 0], "material": {"type": "basic", "color": "#00ff00", **tex}},
+                               {"geometry": "box", "size": [50, 50, 2], "position": [40, 40, 0], "material": {"type": "basic", "color": "#ff0000"}}], unlit=True)])
+        def reds(im_): return [(x, y) for y in range(200) for x in range(200) if im_.getpixel((x, y))[0] > 200 and im_.getpixel((x, y))[1] < 60 and im_.getpixel((x, y))[3] > 200]
+        r0 = reds(px(asyncio.run(grab(nest({}), [0], base))[0]))
+        r1 = reds(px(asyncio.run(grab(nest({"texture": {"comp_id": 9961}}), [0], base))[0]))
+        ok("mesh: mesh 入りの comp をテクスチャにしても、親のカメラは変わらない(隣の箱の画素が同じ)", len(r0) > 2000 and r0 == r1, f"箱の画素 {len(r0)} → {len(r1)}")
         rt.EXTRA_DIR = old_extra
         # 立体文字の輪郭: 厚み 0・光なしの白い文字は、テキストレイヤーの文字とほぼ同じ形(大きさ・面積)
         tx = px(asyncio.run(grab(comp([{"id": "t", "type": "text", "in": 0, "out": 60, "transform": {"position": [100, 100]}, "source": {"text": "愛あ", "font": "Noto Sans JP", "weight": 700, "size": 80, "fill": "#ffffff"}}]), [0], base))[0])

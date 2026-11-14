@@ -72,7 +72,7 @@ def slots(i, m):
     return []
 
 
-def run_jobs(reqs, fn, chunk=10):
+def run_jobs(reqs, fn, chunk=int(os.environ.get('CHUNK', 10))):
     """reqs = [(tag, args)] → {tag: (job_id, asset_id)}。chunk 個ずつ積んで待つ。"""
     res = {}
     for a in range(0, len(reqs), chunk):

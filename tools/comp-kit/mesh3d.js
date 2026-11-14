@@ -1384,19 +1384,25 @@ export class MeshStore {
     // カメラ(model.js と同じ。平行投影のカメラにも合わせる)
     let c
     const near = Math.max(1, cam.zoom * 0.01), far = cam.zoom * 100
-    if (cam.ortho) {
-      c = this.ortho
-      c.left = -scene.W / 2; c.right = scene.W / 2; c.top = scene.H / 2; c.bottom = -scene.H / 2; c.near = near; c.far = far
-    } else {
-      c = this.camera
-      c.fov = (2 * Math.atan(scene.H / 2 / cam.zoom) * 180) / Math.PI
-      c.aspect = scene.W / scene.H; c.near = near; c.far = far
+    // カメラは MeshStore で 1 個を使い回す。texture.comp_id の子が mesh を含むと、sync() の中で子の render() が同じカメラを書き換えるので、
+    // 子を描いたあと(sync のあと)にもう一度入れ直す(入れ直さないと、親が子のカメラ = 子の大きさ・画角で描かれてずれる)
+    const camMat = new THREE.Matrix4().copy(FLIP).multiply(cam.world).multiply(FLIP)
+    const setCam = () => {
+      if (cam.ortho) {
+        c = this.ortho
+        c.left = -scene.W / 2; c.right = scene.W / 2; c.top = scene.H / 2; c.bottom = -scene.H / 2; c.near = near; c.far = far
+      } else {
+        c = this.camera
+        c.fov = (2 * Math.atan(scene.H / 2 / cam.zoom) * 180) / Math.PI
+        c.aspect = scene.W / scene.H; c.near = near; c.far = far
+      }
+      c.updateProjectionMatrix()
+      c.matrix.copy(camMat)
+      c.matrixWorld.copy(c.matrix)
+      c.matrixWorldInverse.copy(c.matrixWorld).invert()
+      c.matrixWorldNeedsUpdate = false
     }
-    c.updateProjectionMatrix()
-    c.matrix.copy(FLIP).multiply(cam.world).multiply(FLIP)
-    c.matrixWorld.copy(c.matrix)
-    c.matrixWorldInverse.copy(c.matrixWorld).invert()
-    c.matrixWorldNeedsUpdate = false
+    setCam()
     st.holder.matrix.copy(FLIP).multiply(scene.drawWorld(L, f)).multiply(FLIP)
     st.holder.matrixWorldNeedsUpdate = true
     st.root.updateMatrixWorld()
@@ -1405,6 +1411,7 @@ export class MeshStore {
     let rt = null
     try {
       this.sync(ctx, s.objects, st.nodes, st.holder)
+      setCam()
       st.root.updateMatrixWorld()
       for (const n of ctx.instanced) this.updateInstances(n, ctx)
       // 光: direction は文書の座標で「光の来る方向」(model と同じ)

@@ -228,13 +228,13 @@ def _b11_bone_pose(n, grp):
     if grp == 2:      # 左手を上げて振る・右手は少し開く
         return {'pose': {'shoulder_l': 122, 'elbow_l': w(16, 44, 30), 'shoulder_r': 28}}
     if grp == 3:      # 右こぶしを胸の前・左手は少し開く
-        return {'pose': {'shoulder_r': 18, 'elbow_r': [-128, 0.9], 'shoulder_l': w(2, 130, 26)}}
+        return {'pose': {'shoulder_r': 32, 'elbow_r': [-158, 0.85], 'shoulder_l': w(2, 130, 26)}}
     return {'pose': {'shoulder_l': 44, 'elbow_l': [96, 0.95], 'shoulder_r': 26}}      # 左手を肩の高さでピース(手の形は変わらない)
 
 
 def _mk_b11(sym, tag, key, n, grp, colors, outfit):
     g = find_puppet(sym)
-    bone = PEOPLE == 'bone' and g is not None and has_bones(g['puppet_id'])      # 関節は、そのパペットに bones.json があるときだけ
+    bone = g is not None and use_bones(g['puppet_id'])      # 関節は、そのパペットに bones.json があるときだけ
     if g:
         how = (f'仮: 2D の立ち絵 + パーツ分解(puppet レイヤー {g["puppet_id"]} = 表の {g["key"]}。新しく生成した立ち絵・ユーザー未確認)。頭の位置と大きさは完成版に合わせた。'
                f'動き = 呼吸・髪ゆれ・首ふり・体の傾き・まばたき{"・関節のポーズ" if bone else ""}。腕のポーズ・体の回転は絵のまま(出せない)。AUP_PEOPLE=mannequin でマネキンに戻る')

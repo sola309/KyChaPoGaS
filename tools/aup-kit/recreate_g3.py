@@ -178,6 +178,9 @@ def kyoko(pos, colors, outfit, pose=None, preset='stand', rot=0, h=220, phase=No
 # ---- v3: 2D の立ち絵 + パーツ分解(puppet)を、3D の舞台の中に板で立てる ----
 # パペット 1 体 = 透明の comp 1 個(aux:P2D_<puppet_id>)→ mesh の板のテクスチャ(comp_id)に貼る(舞台の奥行きの中に立つ = 柵の前後が正しく出る)。
 _P2D_SEEN = {}
+# 屋上に並ぶ子のポーズ(関節。完成版 3580: G = 右手でピース・C = 両手を広げる・A = 右手を腰・E = こぶしを胸・D = 左手を振る。F・H は立ち姿のまま = H の駆けるポーズは 2D では出せない)
+ROOF_POSE = {'G': {'pose': {'shoulder_r': 44, 'elbow_r': [96, 0.95], 'shoulder_l': 20}}, 'C': {'pose': {'shoulder_l': 55, 'shoulder_r': 55}}, 'A': {'pose_preset': 'hand_on_hip', 'pose_amount': 1, 'pose': {'shoulder_l': 14}},
+             'E': {'pose': {'shoulder_r': 32, 'elbow_r': [-158, 0.85], 'shoulder_l': 22}}, 'D': {'pose': {'shoulder_l': 122, 'elbow_l': psway(245, 16, 44, 0, 30), 'shoulder_r': 26}}, 'F': {'pose': {'shoulder_l': 16, 'shoulder_r': 16}}}
 
 
 def _p2d_comp(g, n=245):
@@ -189,7 +192,8 @@ def _p2d_comp(g, n=245):
 
         @reg(key, 'B13p', f'仮: puppet レイヤー {g["puppet_id"]} を 1 体置いた透明の comp(屋上の板に貼る。新しく生成した立ち絵・ユーザー未確認)', placeholder=True)
         def _f(ctx, g=g, cw=cw, ch=ch):
-            L = [puppet_layer('p', n, g, [g['head'][0], g['head'][1]], g['head_h'], seed=len(g['puppet_id']) % 7, turn=0.18, wind=0.25)]
+            src = dict(ROOF_POSE.get(str(g.get('key')), {})) if use_bones(g['puppet_id']) else {}      # 関節のあるパペットは完成版のポーズに寄せる
+            L = [puppet_layer('p', n, g, [g['head'][0], g['head'][1]], g['head_h'], seed=len(g['puppet_id']) % 7, turn=0.18, wind=0.25, source=src)]
             return doc('仮: 2D 立ち絵 + 分解 ' + g['puppet_id'], n, L, w=cw, h=ch)
     return key
 
