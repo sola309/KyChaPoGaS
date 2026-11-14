@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Asset } from '../api/client'
 import { assetsApi, assetKind } from '../api/client'
@@ -79,6 +79,9 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
       sortMode === 'old' ? a.id - b.id :
       a.name.localeCompare(b.name))
   }, [assets, kindFilter, genFilter, query, sortMode, showIntermediate])
+
+  const visibleIds = useMemo(() => visible.map(a => a.id), [visible])
+  const { listRef, rowRef, win } = useRowWindow(visibleIds)
 
   const load = async () => {
     const list = await assetsApi.list(projectId)
@@ -217,19 +220,119 @@ export function AssetPanel({ projectId, onAssetsChange }: Props) {
         </div>
       </div>
 
-      {/* Asset list */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+      {/* Asset list(見えている行と前後だけ描く。並び・見た目は全部描いたときと同じ) */}
+      <div ref={listRef} className="flex-1 overflow-y-auto px-2 pb-2" style={{ overflowAnchor: 'none' }} data-asset-list data-asset-count={visible.length}>
         {visible.length === 0 && (
           <p className="text-center text-zinc-600 text-xs mt-6">
             {assets.length === 0 ? 'アセットなし' : '条件に合うアセットなし'}
           </p>
         )}
-        {visible.map(asset => (
-          <AssetCard key={asset.id} asset={asset} onDelete={handleDelete} currentProjectId={projectId} />
-        ))}
+        {visible.length > 0 && (
+          <div style={{ height: win.total, paddingTop: win.top, boxSizing: 'border-box' }}>
+            <div className="space-y-1">
+              {visible.slice(win.start, win.end).map(asset => (
+                <div key={asset.id} data-vrow={asset.id} ref={rowRef}>
+                  <AssetCard asset={asset} onDelete={handleDelete} currentProjectId={projectId} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
+}
+
+// ── 一覧の窓かけ(仮想化)────────────────────────────────────────────────
+// 行の高さは一定でない(バッジが折り返すと高くなる)。描いた行の高さを測って覚え、まだ測っていない行は見積もりで並べる。
+const ROW_GAP = 4          // space-y-1
+const ROW_EST = 52         // 測る前の見積もり(サムネイル 36 + 上下 12 + 少し)
+const OVERSCAN_PX = 600    // 見えている範囲の上下に余分に描く分
+
+function useRowWindow(ids: number[]) {
+  const listRef = useRef<HTMLDivElement>(null)
+  const heights = useRef(new Map<number, number>())
+  const [view, setView] = useState({ top: 0, h: 0 })
+  const [rev, setRev] = useState(0)                     // 高さを測り直したら描き直す
+  const pendingShift = useRef(0)                        // 見えている範囲より上の行の高さが変わった分(スクロール位置をずらして、見ている所を動かさない)
+  const offsetsRef = useRef<Float64Array>(new Float64Array(1))
+  const idsRef = useRef(ids); idsRef.current = ids
+
+  // 行の上端の位置(offsets[i])。offsets[n] が全体の高さ + すき間
+  const offsets = useMemo(() => {
+    void rev
+    const hs = heights.current
+    let est = ROW_EST
+    if (hs.size) { let sum = 0; for (const v of hs.values()) sum += v; est = sum / hs.size }
+    const o = new Float64Array(ids.length + 1)
+    for (let i = 0; i < ids.length; i++) o[i + 1] = o[i] + (hs.get(ids[i]) ?? est) + ROW_GAP
+    return o
+  }, [ids, rev])
+  offsetsRef.current = offsets
+
+  // スクロール位置と見えている高さ
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    let raf = 0
+    const upd = () => {
+      raf = 0
+      setView(v => (v.top === el.scrollTop && v.h === el.clientHeight ? v : { top: el.scrollTop, h: el.clientHeight }))
+    }
+    const on = () => { if (!raf) raf = requestAnimationFrame(upd) }
+    upd()
+    el.addEventListener('scroll', on, { passive: true })
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(on) : null
+    ro?.observe(el)
+    return () => { el.removeEventListener('scroll', on); ro?.disconnect(); if (raf) cancelAnimationFrame(raf) }
+  }, [])
+
+  // 行の高さを測る(描いた行だけ。あとから高さが変わる = 解析のバッジが届く、なども拾う)
+  const roRef = useRef<ResizeObserver | null>(null)
+  if (roRef.current == null && typeof ResizeObserver !== 'undefined') {
+    roRef.current = new ResizeObserver(entries => {
+      const el = listRef.current
+      let changed = false
+      for (const en of entries) {
+        const row = en.target as HTMLElement
+        const id = Number(row.dataset.vrow)
+        const h = row.offsetHeight
+        if (!(h > 0) || !row.isConnected) continue      // 隠れている(引き出しを閉じている)ときの 0 は覚えない
+        const old = heights.current.get(id)
+        if (old != null && Math.abs(old - h) < 0.5) continue
+        // 見えている範囲より上の行なら、変わった分だけスクロール位置を送る
+        if (el) {
+          const i = idsRef.current.indexOf(id)
+          const prev = i >= 0 ? offsetsRef.current[i + 1] - offsetsRef.current[i] - ROW_GAP : h
+          if (i >= 0 && offsetsRef.current[i] + prev <= el.scrollTop) pendingShift.current += h - prev
+        }
+        heights.current.set(id, h)
+        changed = true
+      }
+      if (changed) setRev(r => r + 1)
+    })
+  }
+  useEffect(() => () => roRef.current?.disconnect(), [])
+  // 行が消えたら測るのもやめる(React 19: ref の後始末)
+  const rowRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    roRef.current?.observe(el)
+    return () => { roRef.current?.unobserve(el) }
+  }, [])
+  useLayoutEffect(() => {
+    const el = listRef.current
+    if (el && pendingShift.current) { el.scrollTop += pendingShift.current; pendingShift.current = 0 }
+  }, [rev])
+
+  // 描く範囲
+  const n = ids.length
+  const lo = view.top - OVERSCAN_PX, hi = view.top + Math.max(view.h, 200) + OVERSCAN_PX
+  let a = 0, b = n
+  while (a < b) { const m = (a + b) >> 1; if (offsets[m + 1] <= lo) a = m + 1; else b = m }
+  const start = Math.min(a, Math.max(0, n - 1))
+  let end = start
+  while (end < n && offsets[end] < hi) end++
+  return { listRef, rowRef, win: { start, end, top: offsets[start], total: Math.max(0, offsets[n] - ROW_GAP) } }
 }
 
 /** サムネイルクリックで開く原寸プレビュー。画像はそのまま、動画は再生できる。

@@ -33,6 +33,9 @@ import { I2VSelPopover } from './I2VSelPopover'
 import { RhythmLane } from './RhythmLane'
 import { MotionBudgetLane } from './MotionBudgetLane'
 import { MB_ROWS, MB_ALL, MB_COMPACT } from './motionBudgetRows'
+import { timelinePreload, preloadKey } from './preload'
+import { TouchClipBar } from './TouchClipBar'
+import { useCoarse } from '../../hooks/usePhoneUi'
 
 const LABEL_WIDTH = 112  // px — must match TrackLane w-28 (7rem = 112px)
 const MIN_TIMELINE_SECS = 60
@@ -95,6 +98,8 @@ export function Timeline({ projectId, fps, assets }: Props) {
   })))
 
   const scrollRef      = useRef<HTMLDivElement>(null)
+  // 👆 指で触る機械: 選んだクリップの「開く / 消す」の帯を出す(ダブルクリックの代わり。PC では出ない)
+  const coarse = useCoarse()
 
   // 再生追従: プレイヘッドが可視範囲から出たらスクロールして追いかける
   // (停止中に手でスクロールして離れても、currentFrameが動かない限り介入しない)
@@ -124,6 +129,14 @@ export function Timeline({ projectId, fps, assets }: Props) {
     }
   }, [pixelsPerFrame])
   const containerRef   = useRef<HTMLDivElement>(null)
+  const [tlVisible, setTlVisible] = useState(true)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!coarse || !el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setTlVisible(el.offsetParent !== null))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [coarse])
     const [boardSheetOpen, setBoardSheetOpen] = useState(false)   // 🎬 コンテ表
   const [storyOpen, setStoryOpen] = useState(false)             // 📜 ストーリー
 const [showRenderDialog, setShowRenderDialog] = useState(false)
@@ -181,7 +194,12 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   const { beats } = useAnalysisStore()
   const remoteUsers = useCollabStore(s => s.others)
 
-  useEffect(() => { loadTimeline(projectId, fps) }, [projectId, fps])
+  useEffect(() => {
+    // 📱 スマホの確認用タイムラインから切り替えた直後は、ProjectView がもう読んでいる(読み直すと元に戻すの履歴が消える)。PC では常に読む
+    if (timelinePreload.key === preloadKey(projectId, fps)) { timelinePreload.key = null; return }
+    timelinePreload.key = null
+    loadTimeline(projectId, fps)
+  }, [projectId, fps])
 
   // ── カット割りの空き自動補完 & ピン画像の追従 ──────────────────────────
   // ・ピン移動/カット端スライドで隣カットとの間に空き(≥1フレーム)ができたら、
@@ -616,6 +634,10 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
   const undoLabel = undoStack.length > 0 ? undoStack[undoStack.length - 1].label : ''
   const redoLabel = redoStack.length > 0 ? redoStack[redoStack.length - 1].label : ''
 
+  // 帯は、このタイムラインが見えているときだけ(スマホの確認用・プレビューだけの並びでは隠れている)
+  // 調整パネル(字幕・撮影・雨・単色/ぼかし)を開いているあいだは出さない(パネルの下に隠れて押せないので)
+  const touchBar = coarse && !CAPTURE && selectedClipId !== null && tlVisible && !showInspector && filterEditId == null
+
   return (
     <div
       ref={containerRef}
@@ -623,6 +645,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
       tabIndex={0}
       onKeyDown={handleKeyDown}
     >
+      {touchBar && <TouchClipBar assets={assets} />}
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-800 bg-zinc-900 flex-shrink-0 flex-nowrap overflow-x-auto [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap [&>span]:flex-shrink-0 [&>div]:flex-shrink-0 max-sm:px-2 max-sm:[&>button]:py-1.5">
         <button
@@ -1209,7 +1232,7 @@ const [showRenderDialog, setShowRenderDialog] = useState(false)
       <div className={CAPTURE ? 'overflow-hidden' : 'flex-1 overflow-auto'} ref={scrollRef}
         onPointerDown={handlePinchDown} onPointerMove={handlePinchMove}
         onPointerUp={handlePinchUp} onPointerCancel={handlePinchUp}
-        style={{ touchAction: 'pan-x pan-y' }}>
+        style={touchBar ? { touchAction: 'pan-x pan-y', paddingBottom: 60 } : { touchAction: 'pan-x pan-y' }}>
         {/* w-max: 各行の包含ブロックを中身(ラベル112px + タイムライン全幅)まで広げる。
             これが無いと行の幅がスクロール表示域までしか無く、ラベル列の
             sticky left-0 に可動域が生まれないため、横スクロールで左に隠れてしまう。 */}

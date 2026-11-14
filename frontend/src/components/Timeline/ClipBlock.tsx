@@ -475,6 +475,8 @@ export const ClipBlock = memo(function ClipBlock({ clip, asset, pixelsPerFrame, 
           : ri?.low ? { outline: '2px solid rgb(220 38 38)', outlineOffset: '-2px' } : {}),
       }}
       onDoubleClick={() => {
+        // 👆 指で触る機械: 2 度押しでは開かない・消さない(選んだクリップの下の帯「開く / 消す」= TouchClipBar から)
+        if (COARSE) return
         if (isComp) { openCompEditor(compAttrs.comp_id); return }   // 🎞 消さずに編集画面を開く
         if (isCredit) { openCredit(); return }          // 🔤 字幕は消さない(素材なしのクリップは下の「削除」に落ちる)
         if (isSatsuei) { openSatsuei(); return }

@@ -18,6 +18,10 @@ interface Props {
   onSelect: (id: number) => void
 }
 
+// 👆 指で触る機械では 2 度押しで消さない(選んだピンの下の帯「消す」= TouchClipBar から、確認つき)
+const COARSE = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+  && window.matchMedia('(pointer: coarse)').matches
+
 export const RefClipBlock = memo(function RefClipBlock({ clip, asset, pixelsPerFrame, trackHeight, selected, onSelect }: Props) {
   const moveClip = useTimelineStore(s => s.moveClip)
   const deletePin = useTimelineStore(s => s.deletePin)
@@ -74,7 +78,7 @@ export const RefClipBlock = memo(function RefClipBlock({ clip, asset, pixelsPerF
         ${selected ? 'ring-2 ring-purple-300' : ''}`}
       style={{ left, width: PIN_WIDTH, height: trackHeight - 4, touchAction: 'none' }}
       onPointerDown={handlePointerDown}
-      onDoubleClick={() => deletePin(clip.id)}   // Imageトラックは相方ピンごと(カット単位で)消す
+      onDoubleClick={() => { if (!COARSE) deletePin(clip.id) }}   // Imageトラックは相方ピンごと(カット単位で)消す
       title={`${asset?.name ?? 'ref'} @ ${(clip.start_frame / 30).toFixed(2)}s — ダブルクリックでカット(ピン2本)を削除`}
     >
       {clip.asset_id != null ? (

@@ -292,7 +292,11 @@ export function FilterLayerPopover({ clipId, fps, onClose }: { clipId: number; f
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => { void deleteClip(clip.id); onClose() }} disabled={locked}
+          <button onClick={() => {
+                    // 指で触る機械では押し間違えやすいので確かめる(PC は今までどおり。Ctrl+Z で戻せる)
+                    if (window.matchMedia?.('(pointer: coarse)').matches && !window.confirm('このレイヤーを消しますか？')) return
+                    void deleteClip(clip.id); onClose()
+                  }} disabled={locked}
                   className="text-xs px-2 py-1 rounded bg-red-900 hover:bg-red-800 text-red-200 disabled:opacity-40">✕ このレイヤーを削除</button>
           <p className="text-[9px] text-zinc-600 ml-auto">
             キーは「クリップ先頭からのフレーム」。キー間は直線、最初のキーより前・最後のキーより後は端の値で保持。

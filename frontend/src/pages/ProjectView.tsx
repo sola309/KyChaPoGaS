@@ -13,6 +13,10 @@ import { useCollab } from '../hooks/useCollab'
 import { CollabBar } from '../components/CollabBar'
 import { CAPTURE } from '../capture'
 import { useCompListStore, openCompEditor } from '../components/CompEditor/compList'
+import { ReviewTimeline } from '../components/Timeline/ReviewTimeline'
+import { timelinePreload, preloadKey } from '../components/Timeline/preload'
+import { useAnalysisStore } from '../store/analysisStore'
+import { usePhoneUi, loadPref, savePref } from '../hooks/usePhoneUi'
 
 // 🎞 コンポジション編集画面は開いたときに読み込む(本体のバンドルを重くしない)
 const CompEditor = lazy(() => import('../components/CompEditor/CompEditor').then(m => ({ default: m.CompEditor })))
@@ -56,6 +60,28 @@ export function ProjectView() {
   }, [])
   const previewOnly = previewOnlyPick ?? touchUi.short
   const hideTimeline = previewOnly && touchUi.coarse && !CAPTURE
+
+  // 📱 スマホ(幅 640px 以下・横持ち)では、編集用のタイムラインの代わりに「確認用タイムライン」(カットの帯だけ)を出す。
+  // 並びは 3 つ: プレビューだけ(上の hideTimeline。見出しの「⛶ 大きく」) / 確認用(既定) / 編集用(「✎ 編集する」で切り替え・覚える)。
+  // 編集用のタイムラインは重いので、スマホでは「編集する」を押すまで作らない(一度作ったら、隠すだけで残す)。PC では今までどおり常に在る。
+  const phone = usePhoneUi() && !CAPTURE
+  const [phoneTl, setPhoneTl] = useState<'review' | 'edit'>(() => (loadPref('kychapogas:phoneTimeline') === 'edit' ? 'edit' : 'review'))
+  const pickPhoneTl = (m: 'review' | 'edit') => { setPhoneTl(m); savePref('kychapogas:phoneTimeline', m) }
+  const reviewMode = phone && phoneTl === 'review'
+  const [editTlMounted, setEditTlMounted] = useState(!reviewMode)
+  useEffect(() => { if (!reviewMode) setEditTlMounted(true) }, [reviewMode])
+  // 編集用のタイムラインがまだ無いあいだは、ここでタイムライン(と、置いてある素材の解析 = 拍など)を読む
+  const pidForTl = activeProject?.id, fpsForTl = activeProject?.fps
+  useEffect(() => {
+    if (editTlMounted || pidForTl == null || fpsForTl == null) return
+    timelinePreload.key = preloadKey(pidForTl, fpsForTl)
+    void useTimelineStore.getState().loadTimeline(pidForTl, fpsForTl).then(() => {
+      const an = useAnalysisStore.getState()
+      const ids = [...new Set(useTimelineStore.getState().clips.map(c => c.asset_id).filter((x): x is number => x != null))]
+        .filter(id => !an.curves[id] && !an.beats[id] && !an.loading[id])
+      if (ids.length) void an.loadAnalysisBatch(ids)
+    }).catch(() => { timelinePreload.key = null })
+  }, [editTlMounted, pidForTl, fpsForTl])
 
   // 🎞 コンポジション: 一覧(comp クリップの名前と「古い」印用)を読み、合図で編集画面を開く
   const [compEditor, setCompEditor] = useState<{ compId: number | null } | null>(null)
@@ -216,9 +242,24 @@ export function ProjectView() {
           <PreviewPlayer assets={assets} onAsset={addAsset} />
         </div>
 
+        {/* 📱 確認用タイムライン(スマホ): カットの帯だけ。編集用は下(「✎ 編集する」で切り替え) */}
+        {reviewMode && !hideTimeline && (
+          <div className="flex-shrink-0">
+            <ReviewTimeline fps={activeProject.fps} assets={assets} onEdit={() => pickPhoneTl('edit')} />
+          </div>
+        )}
+        {phone && !reviewMode && !hideTimeline && (
+          <div className="flex-shrink-0 flex items-center gap-2 px-2 h-10 bg-zinc-900 border-t border-zinc-800" data-edit-timeline-bar>
+            <button type="button" onClick={() => pickPhoneTl('review')} data-review-back
+                    className="h-9 px-3 rounded border border-purple-500 bg-purple-800 text-white text-[13px] whitespace-nowrap"
+                    style={{ touchAction: 'manipulation' }}>◀ 確認用にもどる</button>
+            <span className="text-[12px] text-zinc-400 truncate">✎ 編集用タイムライン</span>
+          </div>
+        )}
+
         {/* Drag divider */}
         <div
-          className={`h-2 lg:h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors ${hideTimeline ? 'hidden' : ''}`}
+          className={`h-2 lg:h-1.5 flex-shrink-0 bg-zinc-800 hover:bg-purple-700 cursor-row-resize transition-colors ${hideTimeline || reviewMode ? 'hidden' : ''}`}
           style={{ touchAction: 'none' }}
           title="タイムラインの高さを調整"
           onPointerDown={handleDividerPointerDown}
@@ -226,7 +267,8 @@ export function ProjectView() {
 
         {/* Timeline */}
         {/* 🎥 撮影用モード: タイムラインは中身の高さ(全レーン・全トラック)。残りをプレビューに */}
-        <div className={`flex-shrink-0 border-t border-zinc-800 ${hideTimeline ? 'hidden' : ''}`}
+        {editTlMounted && (
+        <div className={`flex-shrink-0 border-t border-zinc-800 ${hideTimeline || reviewMode ? 'hidden' : ''}`}
              style={{ height: CAPTURE ? 'auto' : touchUi.short ? `min(${timelineH}px, 36dvh)` : timelineH }}>
           <Timeline
             projectId={activeProject.id}
@@ -234,6 +276,7 @@ export function ProjectView() {
             assets={assets}
           />
         </div>
+        )}
       </div>
 
       {/* Right panel: Assets / Generate / Jobs */}

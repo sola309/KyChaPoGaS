@@ -187,3 +187,12 @@ body.comp-touch [data-comp-editor] [data-comp-timeline] [data-reorder-handle] { 
 @media (pointer: coarse) and (max-width: 640px) {
   input:not([type]), input[type=text], input[type=search], input[type=number], input[type=password], input[type=url], select, textarea { font-size: 16px; }
 }
+
+/* 📱 スマホのプレビューの「⚙ そのほかの操作」の中(PreviewPlayer)。PC の 1 行に並ぶ同じボタンを、指で押せる大きさにして折り返す。
+ * このメニューはスマホの並びのときしか出ないので、PC には効かない。 */
+[data-preview-menu] > button { min-height: 44px; min-width: 44px; padding: 0 12px; margin: 0; font-size: 13px; line-height: 1.2; white-space: nowrap; touch-action: manipulation; }
+[data-preview-menu] > span { margin: 0; max-width: 100%; font-size: 12px; line-height: 1.4; }
+[data-preview-menu-row] button { min-height: 44px; min-width: 44px; font-size: 18px; touch-action: manipulation; }
+[data-preview-menu-row] input[type=range] { width: 120px; height: 32px; }
+[data-preview-menu-row] input:not([type=range]) { width: 76px; min-height: 40px; }
+[data-preview-menu-row] span { font-size: 13px; }

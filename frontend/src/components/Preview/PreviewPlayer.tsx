@@ -44,6 +44,7 @@ import './creditDebug'
 import { CAPTURE, captureState } from '../../capture'
 import { RingOverlay, RingToggleButton } from './RingTool'
 import { FrameJump, VolumeControl } from './PlayheadControls'
+import { usePhoneUi } from '../../hooks/usePhoneUi'
 
 interface Props {
   assets: Asset[]
@@ -199,6 +200,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   const { activeProject } = useProjectStore()
   const videoRef  = useRef<HTMLVideoElement>(null)
   const [playing, setPlaying] = useState(false)
+  // 📱 スマホ(幅 640px 以下・横持ち)では操作部を専用の並びにする(PC・タブレットは今までどおり)
+  const phone = usePhoneUi() && !CAPTURE
+  const [phoneMenu, setPhoneMenu] = useState(false)
   const [loadedAssetId, setLoadedAssetId] = useState<number | null>(null)
   // 高画質Blob到着時にsrc選択effectを再評価させるカウンタ(再生中の画質アップグレード用)
   const [vidTierBump, setVidTierBump] = useState(0)
@@ -1928,6 +1932,8 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
   }, [])
 
   const togglePlay = () => { unlockAudioPool(); setPlaying(p => !p) }
+  const phoneMax = Math.max(1, lastClipEnd - 1)
+  const phoneBtn = 'h-11 w-12 flex-shrink-0 rounded-md bg-zinc-800 text-zinc-100 text-[16px] flex items-center justify-center active:bg-zinc-700 touch-manipulation'
 
   // 🔤 字幕パネルの「▶ 出現から再生」: from から再生して to(含まない)の手前で止める
   useEffect(() => {
@@ -1976,6 +1982,121 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       setCapturing(false)
     }
   }
+
+  // 操作部の「残りのボタン」(素材名・キーフレーム化・差分・コピー・保存・軽量・プレビズ・撮影・歌詞・指輪・ガイド・解像度)。
+  // PC では今までどおり 1 行に並べ、📱 スマホでは ⚙ のメニューの中に出す(中身は同じもの)
+  const extraControls = (
+    <>
+          {activeAsset && (
+            <span className="text-zinc-500 text-[10px] truncate ml-2 max-w-[120px]">
+              {activeAsset.name}
+            </span>
+          )}
+
+          {isVideoAsset && (
+            <button
+              onClick={captureFrame}
+              disabled={capturing}
+              className="ml-2 text-[10px] px-2 py-0.5 rounded bg-amber-800 hover:bg-amber-700 text-amber-100 disabled:opacity-40"
+              title="現在のフレームを抽出してRef（I2Vキーフレーム）に追加"
+            >{capturing ? '抽出中…' : '📷 キーフレーム化'}</button>
+          )}
+
+          <button
+            onClick={() => { setDiffMode(v => !v); motionHistRef.current = [] }}
+            className={`text-[10px] px-2 py-0.5 rounded ${diffMode ? 'bg-rose-900 text-rose-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            title="差分再生: フレーム間差分を表示し画面全体の動き量を数値化（カット=スパイク/カメラ=持続山）"
+          >🔍 差分</button>
+          {diffMode && (
+            <span className="flex items-center gap-1 text-[10px] text-rose-200 bg-zinc-900 rounded px-1.5 py-0.5">
+              動き <span ref={motionTextRef} className="font-mono w-9 text-right">0.0</span>
+              <canvas ref={sparkRef} width={120} height={18} className="rounded bg-zinc-950" />
+            </span>
+          )}
+
+          <button
+            onClick={async () => {
+              const cv = compRef.current
+              if (!cv) return
+              const blob: Blob | null = await new Promise(res => cv.toBlob(res, 'image/png'))
+              if (!blob) return
+              try {
+                // secure context(https/localhost)ではクリップボードへ直接コピー
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                useUIStore.getState().pushToast('現在フレームをクリップボードにコピーしました', 'success')
+              } catch {
+                // Tailscale等のhttpアクセスではclipboard APIが使えない → 新規タブで開いて長押し/右クリックコピー
+                const url = URL.createObjectURL(blob)
+                window.open(url, '_blank')
+                useUIStore.getState().pushToast('この環境は直接コピー不可のため画像を開きました(長押し/右クリックでコピー)', 'info')
+              }
+            }}
+            className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+            title="現在の合成フレームを画像としてクリップボードへコピー"
+          >📋 コピー</button>
+          <button
+            onClick={async () => {
+              const cv = compRef.current
+              if (!cv) return
+              const blob: Blob | null = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.95))
+              if (!blob) return
+              const f = useTimelineStore.getState().currentFrame
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `frame_${String(f).padStart(5, '0')}.jpg`
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+              setTimeout(() => URL.revokeObjectURL(url), 10000)
+            }}
+            className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+            title="現在の合成フレームを JPEG として保存(ダウンロード)"
+          >💾 保存</button>
+
+          <button
+            onClick={() => setLightPreview(v => !v)}
+            className={`ml-auto text-[10px] px-2 py-0.5 rounded ${lightPreview ? 'bg-emerald-800 text-emerald-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            title="軽量プレビュー: 描画解像度を下げて動作を軽く（書き出し画質は不変）"
+          >⚡ {lightPreview ? '軽量' : '高画質'}</button>
+          <button
+            onClick={() => setPrevizMode(v => !v)}
+            className={`text-[11px] px-2 py-0.5 rounded ${previzMode
+              ? 'bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
+            title="🎞プレビズ: ベース映像をノイズ表現に置き換え、カットごとの移動/フラッシュ/暗転設定(カット割りを右クリック)を確かめる"
+          >🎞</button>
+
+          <button
+            onClick={() => setGradeOn(v => !v)}
+            className={`text-[10px] px-2 py-0.5 rounded ${gradeOn
+              ? 'bg-violet-800 hover:bg-violet-700 text-violet-100'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            title="撮影(共通グレード): 書き出し時の統一処理(黒締め/ビネット/グレイン)をプレビューでも近似表示。OFFは素の絵"
+          >🎛 {gradeOn ? '撮影' : '素'}</button>
+
+          <button
+            onClick={() => setShowLyrics(v => { localStorage.setItem('kychapogas:lyrics', v ? 'off' : 'on'); return !v })}
+            className={`text-[10px] px-2 py-0.5 rounded ${showLyrics
+              ? 'bg-sky-800 hover:bg-sky-700 text-sky-100'
+              : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            title="歌詞オーバーレイ: 再生位置のカットの歌詞を字幕位置に重ねる(ピンのattrs_jsonが唯一の正)。撮影確認時は切る"
+          >🎤 {showLyrics ? '歌詞' : '歌詞'}</button>
+
+          {!CAPTURE && <RingToggleButton />}
+
+          <button
+            onClick={cycleGuide}
+            className={`text-[10px] px-2 py-0.5 rounded ${guideMode !== 'off' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+            title="フレーム枠ガイド: なし → 三分割 → セーフエリア"
+          >⊞ {guideMode === 'off' ? 'ガイド' : guideMode === 'thirds' ? '三分割' : 'セーフ'}</button>
+
+          {/* 解像度は見出しにも出ているので、広い画面だけ(番号・音量の欄のぶん場所をあける) */}
+          <span className="text-[10px] text-zinc-600 max-2xl:hidden">
+            {projW}×{projH}
+          </span>
+    </>
+  )
 
   return (
     <div className="flex flex-col h-full bg-black select-none">
@@ -2174,6 +2295,61 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
       </div>
 
       {/* Controls */}
+      {phone ? (
+        /* 📱 スマホ: 全幅のスライダー + ◀コマ / ▶⏸ / コマ▶ + コマ・時刻 + ⚙(残りはメニュー) */
+        <div className="flex-shrink-0 bg-zinc-900 border-t border-zinc-800 px-3 pt-1 pb-1.5 flex flex-wrap items-center gap-x-1.5 landscape:py-1" data-preview-phone-controls>
+          {/* 縦持ち: スライダーが上の段いっぱい。横持ち(背が低い): ボタンとコマの間に入れて 1 段にする */}
+          <input type="range" className="comp-range basis-full min-w-0 landscape:basis-0 landscape:flex-1 landscape:order-2 landscape:mx-1.5" min={0} max={phoneMax} step={1} value={Math.min(currentFrame, phoneMax)}
+                 aria-label="再生位置" data-preview-scrub
+                 style={{ '--p': `${(Math.min(currentFrame, phoneMax) / phoneMax) * 100}%` } as React.CSSProperties}
+                 onChange={e => { if (playing) setPlaying(false); setCurrentFrame(Number(e.target.value)) }} />
+            <button type="button" className={phoneBtn} aria-label="1 コマ戻る" data-preview-step="-1"
+                    onClick={() => { if (playing) setPlaying(false); setCurrentFrame(Math.max(0, currentFrame - 1)) }}>◀<span className="text-[12px] ml-0.5">コマ</span></button>
+            <button type="button" className={`${phoneBtn} !w-14 !text-[22px] bg-purple-800 text-white active:bg-purple-700`}
+                    aria-label={playing ? '一時停止' : '再生'} data-preview-play onClick={togglePlay}>{playing ? '⏸' : '▶'}</button>
+            <button type="button" className={phoneBtn} aria-label="1 コマ進む" data-preview-step="1"
+                    onClick={() => { if (playing) setPlaying(false); setCurrentFrame(Math.min(phoneMax, currentFrame + 1)) }}><span className="text-[12px] mr-0.5">コマ</span>▶</button>
+            <span className="flex-1 min-w-0 flex flex-col items-end leading-tight font-mono tabular-nums whitespace-nowrap landscape:flex-none landscape:order-3" data-preview-frame={currentFrame}>
+              <span className="text-[14px] text-yellow-300">{currentFrame}<span className="text-zinc-500 text-[12px]"> / {phoneMax} f</span></span>
+              <span className="text-[12px] text-zinc-400">
+                {String(Math.floor(currentFrame / projectFps / 60)).padStart(2, '0')}:
+                {String(Math.floor(currentFrame / projectFps) % 60).padStart(2, '0')}:
+                {String(currentFrame % projectFps).padStart(2, '0')}
+              </span>
+            </span>
+            <button type="button" className={`${phoneBtn} landscape:order-4 ${phoneMenu ? 'bg-purple-800 text-white' : ''}`} aria-label="そのほかの操作" aria-expanded={phoneMenu}
+                    data-preview-menu-open onClick={() => setPhoneMenu(v => !v)}>⚙</button>
+          {phoneMenu && (
+            <div className="fixed inset-0 z-[90] flex flex-col justify-end bg-black/50" onClick={() => setPhoneMenu(false)}>
+              <div className="bg-zinc-900 border-t border-zinc-700 rounded-t-xl px-3 pt-2 max-h-[75dvh] overflow-y-auto"
+                   style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom))' }}
+                   onClick={e => e.stopPropagation()} role="dialog" aria-label="プレビューの操作">
+                <div className="flex items-center mb-1">
+                  <span className="text-[13px] text-zinc-300">⚙ プレビューの操作</span>
+                  <button type="button" className={`${phoneBtn} ml-auto`} aria-label="閉じる" onClick={() => setPhoneMenu(false)}>✕</button>
+                </div>
+                <div className="flex items-center gap-3 flex-wrap py-1" data-preview-menu-row>
+                  <button type="button" className={`${phoneBtn} !w-auto px-3 !text-[13px]`} onClick={goToStart}>⏮ 先頭へ</button>
+                  <FrameJump
+                    currentFrame={currentFrame}
+                    maxFrame={Math.max(0, lastClipEnd - 1)}
+                    onJump={f => setCurrentFrame(f)}
+                  />
+                  <VolumeControl
+                    volume={previewVolume}
+                    muted={previewMuted}
+                    onVolume={setPreviewVolume}
+                    onMuted={setPreviewMuted}
+                  />
+                </div>
+                <div className="flex items-center gap-2 flex-wrap py-2" data-preview-menu>
+                  {extraControls}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-t border-zinc-800 flex-shrink-0 overflow-x-auto max-sm:px-2 [&>button]:flex-shrink-0 [&>button]:whitespace-nowrap max-sm:[&>button]:py-1.5 [&>span]:flex-shrink-0">
         <button
           onClick={goToStart}
@@ -2199,115 +2375,9 @@ export function PreviewPlayer({ assets, onAsset }: Props) {
           onMuted={setPreviewMuted}
         />
 
-        {activeAsset && (
-          <span className="text-zinc-500 text-[10px] truncate ml-2 max-w-[120px]">
-            {activeAsset.name}
-          </span>
-        )}
-
-        {isVideoAsset && (
-          <button
-            onClick={captureFrame}
-            disabled={capturing}
-            className="ml-2 text-[10px] px-2 py-0.5 rounded bg-amber-800 hover:bg-amber-700 text-amber-100 disabled:opacity-40"
-            title="現在のフレームを抽出してRef（I2Vキーフレーム）に追加"
-          >{capturing ? '抽出中…' : '📷 キーフレーム化'}</button>
-        )}
-
-        <button
-          onClick={() => { setDiffMode(v => !v); motionHistRef.current = [] }}
-          className={`text-[10px] px-2 py-0.5 rounded ${diffMode ? 'bg-rose-900 text-rose-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          title="差分再生: フレーム間差分を表示し画面全体の動き量を数値化（カット=スパイク/カメラ=持続山）"
-        >🔍 差分</button>
-        {diffMode && (
-          <span className="flex items-center gap-1 text-[10px] text-rose-200 bg-zinc-900 rounded px-1.5 py-0.5">
-            動き <span ref={motionTextRef} className="font-mono w-9 text-right">0.0</span>
-            <canvas ref={sparkRef} width={120} height={18} className="rounded bg-zinc-950" />
-          </span>
-        )}
-
-        <button
-          onClick={async () => {
-            const cv = compRef.current
-            if (!cv) return
-            const blob: Blob | null = await new Promise(res => cv.toBlob(res, 'image/png'))
-            if (!blob) return
-            try {
-              // secure context(https/localhost)ではクリップボードへ直接コピー
-              await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-              useUIStore.getState().pushToast('現在フレームをクリップボードにコピーしました', 'success')
-            } catch {
-              // Tailscale等のhttpアクセスではclipboard APIが使えない → 新規タブで開いて長押し/右クリックコピー
-              const url = URL.createObjectURL(blob)
-              window.open(url, '_blank')
-              useUIStore.getState().pushToast('この環境は直接コピー不可のため画像を開きました(長押し/右クリックでコピー)', 'info')
-            }
-          }}
-          className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-          title="現在の合成フレームを画像としてクリップボードへコピー"
-        >📋 コピー</button>
-        <button
-          onClick={async () => {
-            const cv = compRef.current
-            if (!cv) return
-            const blob: Blob | null = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.95))
-            if (!blob) return
-            const f = useTimelineStore.getState().currentFrame
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = `frame_${String(f).padStart(5, '0')}.jpg`
-            document.body.appendChild(a)
-            a.click()
-            a.remove()
-            setTimeout(() => URL.revokeObjectURL(url), 10000)
-          }}
-          className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-          title="現在の合成フレームを JPEG として保存(ダウンロード)"
-        >💾 保存</button>
-
-        <button
-          onClick={() => setLightPreview(v => !v)}
-          className={`ml-auto text-[10px] px-2 py-0.5 rounded ${lightPreview ? 'bg-emerald-800 text-emerald-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          title="軽量プレビュー: 描画解像度を下げて動作を軽く（書き出し画質は不変）"
-        >⚡ {lightPreview ? '軽量' : '高画質'}</button>
-        <button
-          onClick={() => setPrevizMode(v => !v)}
-          className={`text-[11px] px-2 py-0.5 rounded ${previzMode
-            ? 'bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100'
-            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'}`}
-          title="🎞プレビズ: ベース映像をノイズ表現に置き換え、カットごとの移動/フラッシュ/暗転設定(カット割りを右クリック)を確かめる"
-        >🎞</button>
-
-        <button
-          onClick={() => setGradeOn(v => !v)}
-          className={`text-[10px] px-2 py-0.5 rounded ${gradeOn
-            ? 'bg-violet-800 hover:bg-violet-700 text-violet-100'
-            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          title="撮影(共通グレード): 書き出し時の統一処理(黒締め/ビネット/グレイン)をプレビューでも近似表示。OFFは素の絵"
-        >🎛 {gradeOn ? '撮影' : '素'}</button>
-
-        <button
-          onClick={() => setShowLyrics(v => { localStorage.setItem('kychapogas:lyrics', v ? 'off' : 'on'); return !v })}
-          className={`text-[10px] px-2 py-0.5 rounded ${showLyrics
-            ? 'bg-sky-800 hover:bg-sky-700 text-sky-100'
-            : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          title="歌詞オーバーレイ: 再生位置のカットの歌詞を字幕位置に重ねる(ピンのattrs_jsonが唯一の正)。撮影確認時は切る"
-        >🎤 {showLyrics ? '歌詞' : '歌詞'}</button>
-
-        {!CAPTURE && <RingToggleButton />}
-
-        <button
-          onClick={cycleGuide}
-          className={`text-[10px] px-2 py-0.5 rounded ${guideMode !== 'off' ? 'bg-zinc-700 text-zinc-100' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
-          title="フレーム枠ガイド: なし → 三分割 → セーフエリア"
-        >⊞ {guideMode === 'off' ? 'ガイド' : guideMode === 'thirds' ? '三分割' : 'セーフ'}</button>
-
-        {/* 解像度は見出しにも出ているので、広い画面だけ(番号・音量の欄のぶん場所をあける) */}
-        <span className="text-[10px] text-zinc-600 max-2xl:hidden">
-          {projW}×{projH}
-        </span>
+        {extraControls}
       </div>
+      )}
     </div>
   )
 }
