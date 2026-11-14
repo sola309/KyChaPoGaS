@@ -122,8 +122,23 @@ def sh(id, n, kind, w, h, fill, pos, rot=0, **src):
     return layer(id, 'shape', n, s, transform={'position': list(pos), 'rotation': [0, 0, rot]})
 
 
-@reg('aux:B25_chara', 'B25c', '仮: マネキン(mesh の mannequin。パーカー姿の横顔・右手を口もとへ・ポニーテールが後ろへなびく)。元絵 = 3D モデルの杏子', placeholder=True)
+_B25_SIDE = find_puppet('A', 'side')      # 横顔のパペット(担当 KEY が作れば表に入る)。無ければマネキン
+
+
+def _b25c_puppet():
+    """横顔の 2D の立ち絵 + パーツ分解。目印(1 巡目と同じ): 頭の中心 ≈ (560, 380)・頭の高さ ≈ 450・口 = (760, 520)。髪は風で後ろ(左)へなびく。
+    出せない物: ポッキーを持つ手の動き・顔の向きの変化(絵のまま)。"""
+    n, w, h = 170, 1400, 1800
+    g = _B25_SIDE
+    L = [puppet_layer('fig', n, g, [560, 380], 450, seed=2, wind=-0.9, sway=1.5, turn=0.08)]
+    return doc(f'仮: 2D 立ち絵 + 分解 B25 杏子の横顔({g["puppet_id"]})', n, L, w=w, h=h)
+
+
+@reg('aux:B25_chara', 'B25c', (f'仮: 2D の横顔の立ち絵 + パーツ分解(puppet {_B25_SIDE["puppet_id"]}。新しく生成した絵・ユーザー未確認)。髪が風で後ろへなびく・呼吸・まばたき。手の動き・顔の向きは絵のまま' if _B25_SIDE else
+     '仮: マネキン(mesh の mannequin。パーカー姿の横顔・右手を口もとへ・ポニーテールが後ろへなびく)。元絵 = 3D モデルの杏子' + ('' if PEOPLE == 'mannequin' else '。横顔のパペットがまだ無いのでマネキンのまま')), placeholder=True)
 def b25c(ctx):
+    if _B25_SIDE:
+        return _b25c_puppet()
     # 元は パーカー姿の杏子の 3D モデル(横顔〜斜め。ポッキーをくわえ、右手を添える)。口 = (760, 520)・頭の中心 ≈ (560, 380)・頭の高さ ≈ 450(1 巡目の影絵と同じ目印)
     n = 170
     w, h = 1400, 1800
@@ -135,7 +150,7 @@ def b25c(ctx):
     fig = {'geometry': 'mannequin', 'position': [0, 0, 0], 'rotation': [0, 60, 0], 'body': {'height': Hh, 'heads': HEADS, 'thickness': 0.95, 'shoulder': 0.95},
            'colors': {'skin': '#f7dcc8', 'hair': '#a5324c', 'ribbon': '#2a2226', 'eyes': '#8a2030', 'top': '#8fa695', 'bottom': '#55698f'},
            'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.1}, 'outfit': {'sleeves': 1, 'pants': 0.1},
-           'outline': {'width': 5, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand',
+           'face': False, 'outline': {'width': 5, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand',
            'pose': {'shoulder_r': [70, 20, 6], 'elbow_r': [95, 0], 'hand_r': 'fist', 'head': [sw(1.5, 0.2, -4), sw(2, 0.0), 0], 'chest': [sw(1.0, 0.3, 2), 0, 0],
                     'pony_1': [sw(5, 0.0, 14), sw(4, 0.3), 0], 'pony_2': [sw(7, 0.15, 22), sw(5, 0.45), 0], 'pony_3': [sw(9, 0.3, 14), sw(6, 0.6), 0]}}   # 髪は風で後ろへなびく
     L = [

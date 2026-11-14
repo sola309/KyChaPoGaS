@@ -610,4 +610,8 @@ Live2D のように、1 枚の立ち絵を意味ごとの透過レイヤーに�
 - **描き方**: パペットのキャンバス大の RT に z 順で重ね、その 1 枚を image レイヤーと同じ道(transform・effects・マスク・マット・親子・3D・ブレンド)に流す。
 - **限界**: 腕・脚は曲げられない(See-Through の層が腕 1 枚・脚 1 枚で、関節の位置も無い)。首ふりは ±0.42 rad まで。表情の切り替え・視線の描き差分は未対応。
   絵の質は分解しだい(口が数画素・腕が服と 1 枚、など)。新しいパペットは `POST /api/puppet/decompose`(GPU 約 7 分)。
-- **次の候補**(調査 2026-11-14、未導入・許可待ち): See-Through の層に DWPose の骨と頂点スキニングを足す(Stretchy Studio の方式)と腕・脚が曲げられる。
+- **腕・脚のボーン**(2026-11-14 追加): `tools/pose-kit/make_bones.py` がパペットの層(handwear・legwear・footwear・topwear・bottomwear)の形から関節(肩・ひじ・手首・股・ひざ・足首・腰・首)を測り、
+  ボーンと層ごとの格子・頂点ウェイトを `bones.json`(+ 配信用の写し `bones.png`)に書く。姿勢推定(ComfyUI 標準の SDPose。`pose_sdpose.py`)の点があれば、層の中心線の上へ寄せて使う。
+  puppet.js はそれを読んで線形ブレンドのスキニング(頂点 = Σ ウェイト × ボーンの行列 × 元の位置)で曲げる。腕・脚の層は左右に分けて 2 回描く(シェーダの `uClip`)。
+  書式: `source.pose_preset / pose_phase / pose_amount / pose_ground / pose: {関節: 度 | [度, 長さの倍率]}`。プリセットは mesh レイヤーのマネキンの角度の表(写し)を、正面からの平行投影で 2D の回転 + 見かけの長さに直す。
+  `bones.png` が無いパペットは、これまでと 1 画素も変わらない(読みに行って 404 なら無視)。

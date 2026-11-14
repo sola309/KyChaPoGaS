@@ -8,6 +8,7 @@
   1. 不透明度 50% の赤 → 画素が rgba(255,0,0,128)(ストレートアルファで出る)
   2. 画像を 100% で置く → 元の画素と 1 バイトも違わない(軽いエフェクト・位置の足し算を付けても同じ)
   2f. puppet レイヤー: 動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定
+  2g. puppet のボーン: 肩 90° で腕が真横・動かさない姿 = PNG・決定論・preset wave で腕が上がる
   2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度・マネキン(手先の位置・ひじ 90 度・角度のキーフレーム・歩きの位相)
   3. 決定論: コマを描く順を変えても同じ絵(md5)
   4. プレビュー経路 = 書き出し経路(同じ GL なら同じ絵)
@@ -363,6 +364,46 @@ def main():
             w0, w1 = (px(asyncio.run(grab(pl(breath=0, sway=2, wind=v), [20], base))[20]) for v in (-1, 1))
             top_same = w0.crop((0, 0, 400, 45)).tobytes() == w1.crop((0, 0, 400, 45)).tobytes()
             ok("puppet: 風を変えても髪の根元(頭頂)は動かず、毛先は動く", top_same and w0.crop((0, 250, 400, 400)).tobytes() != w1.crop((0, 250, 400, 400)).tobytes())
+
+        # 2g. puppet のボーン(bones.png のある kyoko_parka_r2。無ければ飛ばす)
+        try:
+            import urllib.request
+            urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_parka_r2/layer/bones.png", timeout=10).read()
+            manb = json.loads(urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_parka_r2/manifest", timeout=10).read())
+        except Exception:  # noqa: BLE001
+            manb = None
+            print("  -- puppet のボーン: 本番に kyoko_parka_r2 の bones.png が無いので飛ばす")
+        if manb:
+            import struct
+            raw = Image.open(io.BytesIO(urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_parka_r2/layer/bones.png", timeout=10).read())).convert("RGB").tobytes()
+            bj = json.loads(raw[4:4 + struct.unpack(">I", raw[:4])[0]].decode("utf-8"))["joints"]
+            pb = lambda **src: comp([{"id": "p", "type": "puppet", "in": 0, "out": 120, "transform": {"position": [320, 320], "scale": [50, 50]}, "source": {"puppet_id": "kyoko_parka_r2", "breath": 0, "sway": 0, **src}}], 640, 640, dur=120)  # noqa: E731
+            at = lambda im_, p_: im_.getpixel((int(round(p_[0] / 2)), int(round(p_[1] / 2))))  # noqa: E731  キャンバスの px → 画面(50%)
+            mint = lambda c_: c_[3] > 200 and c_[1] > c_[0] + 15 and c_[2] > c_[0] + 8  # noqa: E731  パーカーの袖の色
+            sh, el = bj["shoulder_l"], bj["elbow_l"]
+            ulen = ((el[0] - sh[0]) ** 2 + (el[1] - sh[1]) ** 2) ** 0.5
+            r0 = px(asyncio.run(grab(pb(), [0], base))[0])
+            r1 = px(asyncio.run(grab(pb(pose={"shoulder_l": 90}), [0], base))[0])
+            side_pt = (sh[0] + ulen * 0.9, sh[1])  # 肩から真横(画面の右)へ上腕の長さの 9 割
+            ok("puppet のボーン: shoulder_l 90° で左腕(画面の右)が真横へ出る", mint(at(r0, el)) and not mint(at(r0, side_pt)) and mint(at(r1, side_pt)), f"元のひじ {at(r0, el)}・真横(前 {at(r0, side_pt)} → 後 {at(r1, side_pt)})")
+            # 何も動かさないとき、ボーンつきでも絵は PNG を重ねたもの(左右に分けた層・格子が絵を壊していない)
+            flatb = Image.new("RGBA", tuple(manb["canvas"]))
+            for ly in sorted(manb["layers"], key=lambda x: x["z"]):
+                flatb.alpha_composite(Image.open(io.BytesIO(urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_parka_r2/layer/{ly['file']}", timeout=20).read())).convert("RGBA"))
+            cropb = [440, 300, 840, 700]
+            gotb = px(asyncio.run(grab(comp([{"id": "p", "type": "puppet", "in": 0, "out": 10, "transform": {"position": [200, 200]}, "source": {"puppet_id": "kyoko_parka_r2", "crop": cropb, "breath": 0, "sway": 0}}], 400, 400), [3], base))[3])
+            difb = [max(abs(x - y) for x, y in zip(p1, p2)) if p1[3] > 250 and p2[3] > 250 else abs(p1[3] - p2[3]) for p1, p2 in zip(gotb.getdata(), flatb.crop(tuple(cropb)).getdata())]
+            nb3 = sum(1 for v in difb if v > 3)
+            ok("puppet のボーン: 動かさない姿 = PNG を重ねた絵(差 3 超えは 0.5% 未満)", nb3 < len(difb) * 0.005, f"最大の差 {max(difb)}・差 3 超え {nb3} 画素")
+            wk = pb(pose_preset="walk", pose_phase={"k": [{"f": 0, "v": 0}, {"f": 100, "v": 2}]}, pose={"elbow_r": {"k": [{"f": 0, "v": 0}, {"f": 100, "v": -60}]}})
+            w1 = asyncio.run(grab(wk, [4, 33, 71], base)); w2 = asyncio.run(grab(wk, [71, 4, 33], base))
+            ok("puppet のボーン: 決定論(walk + 関節のキー。描く順を変えても同じ絵・コマごとに違う絵)", all(w1[f] == w2[f] for f in (4, 33, 71)) and len({hashlib.md5(w1[f]).digest() for f in (4, 33, 71)}) == 3)
+            # wave: 右手(画面の左)が肩より上へ上がる
+            wv = px(asyncio.run(grab(pb(pose_preset="wave"), [0], base))[0])
+            shr = bj["shoulder_r"]
+            up = sum(1 for y in range(int(shr[1] / 2) - 110, int(shr[1] / 2) - 30) for x in range(int(shr[0] / 2) - 130, int(shr[0] / 2) - 20) if mint(wv.getpixel((x, y)))) 
+            up0 = sum(1 for y in range(int(shr[1] / 2) - 110, int(shr[1] / 2) - 30) for x in range(int(shr[0] / 2) - 130, int(shr[0] / 2) - 20) if mint(r0.getpixel((x, y))))
+            ok("puppet のボーン: preset wave で右腕(画面の左)が肩より上に来る", up > up0 + 150, f"肩より上の袖の画素 {up0} → {up}")
 
         # 3. 決定論 / 4. プレビュー一致
         exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter", "puppet_01_idle"]

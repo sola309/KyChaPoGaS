@@ -6307,6 +6307,230 @@
      "animatable": false,
      "optional": true,
      "group": "ゆれ"
+    },
+    "pose_preset": {
+     "type": "select",
+     "label": "姿勢のプリセット(マネキンと同じ名前。ボーンつきのパペットだけ)",
+     "default": "stand",
+     "options": [
+      {
+       "value": "stand",
+       "label": "stand"
+      },
+      {
+       "value": "a_pose",
+       "label": "a_pose"
+      },
+      {
+       "value": "t_pose",
+       "label": "t_pose"
+      },
+      {
+       "value": "idle",
+       "label": "idle"
+      },
+      {
+       "value": "walk",
+       "label": "walk"
+      },
+      {
+       "value": "run",
+       "label": "run"
+      },
+      {
+       "value": "wave",
+       "label": "wave"
+      },
+      {
+       "value": "sit",
+       "label": "sit"
+      },
+      {
+       "value": "hand_on_hip",
+       "label": "hand_on_hip"
+      },
+      {
+       "value": "peace",
+       "label": "peace"
+      },
+      {
+       "value": "lean_forward",
+       "label": "lean_forward"
+      },
+      {
+       "value": "cheer",
+       "label": "cheer"
+      }
+     ],
+     "animatable": true,
+     "optional": true,
+     "group": "ボーン"
+    },
+    "pose_phase": {
+     "type": "number",
+     "label": "プリセットの位相(0〜1 で 1 周。walk・wave のくり返し)",
+     "default": 0,
+     "min": -1000,
+     "max": 1000,
+     "step": 0.01,
+     "animatable": true,
+     "optional": true,
+     "group": "ボーン"
+    },
+    "pose_amount": {
+     "type": "number",
+     "label": "プリセットの効き(0 = 立ち姿 〜 1)",
+     "default": 1,
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "optional": true,
+     "group": "ボーン"
+    },
+    "pose_ground": {
+     "type": "bool",
+     "label": "足先を地面の高さに保つ(walk・run は書かなくても有効)",
+     "default": false,
+     "animatable": false,
+     "optional": true,
+     "group": "ボーン"
+    },
+    "pose": {
+     "type": "object",
+     "label": "関節の角度(度。腕・脚は正 = 外へ開く、waist・neck は正 = 時計回り。[角度, 長さの倍率] も可)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "ボーン",
+     "fields": {
+      "waist": {
+       "type": "angle",
+       "label": "腰(上半身)",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "neck": {
+       "type": "angle",
+       "label": "首",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "shoulder_l": {
+       "type": "angle",
+       "label": "肩 左(画面の右)",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "shoulder_r": {
+       "type": "angle",
+       "label": "肩 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "elbow_l": {
+       "type": "angle",
+       "label": "ひじ 左",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "elbow_r": {
+       "type": "angle",
+       "label": "ひじ 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "wrist_l": {
+       "type": "angle",
+       "label": "手首 左",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "wrist_r": {
+       "type": "angle",
+       "label": "手首 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "hip_l": {
+       "type": "angle",
+       "label": "股 左",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "hip_r": {
+       "type": "angle",
+       "label": "股 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "knee_l": {
+       "type": "angle",
+       "label": "ひざ 左",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "knee_r": {
+       "type": "angle",
+       "label": "ひざ 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "ankle_l": {
+       "type": "angle",
+       "label": "足首 左",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      },
+      "ankle_r": {
+       "type": "angle",
+       "label": "足首 右",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true
+      }
+     }
     }
    },
    "default_source": {
@@ -8317,6 +8541,13 @@
          "default": null,
          "animatable": true,
          "optional": true
+        },
+        "guide": {
+         "type": "color",
+         "label": "顔の当たり線(省略 = 肌より少し濃い色)",
+         "default": null,
+         "animatable": true,
+         "optional": true
         }
        },
        "when": {
@@ -8453,8 +8684,19 @@
       },
       "face": {
        "type": "bool",
-       "label": "目を描く",
+       "label": "目を描く(切る = のっぺらぼう)",
        "default": true,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "face_guide": {
+       "type": "bool",
+       "label": "顔の当たり線(ごく薄い十字: 顔の中心線と目の高さ)",
+       "default": false,
        "animatable": false,
        "when": {
         "geometry": [

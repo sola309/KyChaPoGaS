@@ -63,6 +63,7 @@ def main():
 
     used_assets = collections.defaultdict(set)      # asset_id -> {(comp_id, layer id)}
     used_comps = collections.OrderedDict()
+    puppets = collections.defaultdict(set)      # puppet_id -> {(comp_id, layer id)}
     data_urls = []
     ext_urls = []
     fonts = collections.Counter()
@@ -83,6 +84,8 @@ def main():
                 for k, v in o.items():
                     if k == 'asset_id' and isinstance(v, int) and v > 0:
                         used_assets[v].add((cid, lid))
+                    elif k == 'puppet_id' and isinstance(v, str):
+                        puppets[v].add((cid, lid))
                     elif k == 'comp_id' and isinstance(v, int):
                         walk(v, f'comp {cid} / {lid}')
                     elif k in ('font', 'font_family') and isinstance(v, str):
@@ -135,6 +138,8 @@ def main():
 
     rows = []
     kinds = collections.Counter()
+    mp = os.path.join(SAKURA, 'rebuild', 'measured.json')
+    measured = json.load(open(mp, encoding='utf-8')) if os.path.exists(mp) else {}
 
     def origin(x, depth=0):
         """素材の出どころ → (分類, 説明, 入力にした素材の番号の並び)"""
@@ -187,6 +192,8 @@ def main():
         if m and m in orig_md5:
             violations.append(f'素材 {aid}({p})は元素材 {orig_md5[m]} と同じファイル(md5 一致)')
         k, how, ins = origin(x)
+        if (repl.get(aid) or {}).get('key') in measured:
+            how = '【※測: 元の絵を機械で測った数値(周期・向き)を使用。画素は不使用】' + how
         check_inputs(ins, aid)
         if k == 'unknown':
             violations.append(f'素材 {aid} の出どころが分からない({how})')
@@ -194,6 +201,38 @@ def main():
         rows.append({'asset_id': aid, 'path': p, 'kind': k, 'how': how, 'uses': len(used_assets[aid]), 'w': x.get('width'), 'h': x.get('height'),
                      'status': (repl.get(aid) or {}).get('status', '仮' if k == 'placeholder' else ''), 'for': (repl.get(aid) or {}).get('key') or ph.get(aid, '')})
 
+    # パペット(パーツ分解した立ち絵): 層の PNG が元素材と同じファイルでないこと、出どころ(P2D/puppets.json・既存のアプリ生成パペット)を並べる
+    PUP_DIR = '/home/kigarashi309/workspace/projects/KyChaPoGaS/repo/backend/data/puppets'
+    prov = {}
+    for pp in ('/tmp/claude-1000/sakura-rebuild/P2D/puppets.json', os.path.join(SAKURA, 'rebuild', 'puppets.json')):
+        if os.path.exists(pp):
+            for kk, vv in json.load(open(pp, encoding='utf-8')).items():
+                if isinstance(vv, dict) and vv.get('puppet_id'):
+                    prov[vv['puppet_id']] = dict(vv, key=kk)
+    pup_rows = []
+    for pid_, where in sorted(puppets.items()):
+        d = os.path.join(PUP_DIR, pid_)
+        n = 0
+        if not os.path.isdir(d):
+            violations.append(f'パペット {pid_} のフォルダが無い')
+        else:
+            for root, _dd, files in os.walk(d):
+                for fn in files:
+                    if fn.lower().endswith(('.png', '.jpg', '.webp')):
+                        n += 1
+                        m = md5(os.path.join(root, fn))
+                        if m in orig_md5:
+                            violations.append(f'パペット {pid_} の {fn} は元素材 {orig_md5[m]} と同じファイル')
+        pr = prov.get(pid_)
+        src = (f"立ち絵 = 素材 {pr.get('asset_id') or pr.get('src_asset_id') or pr.get('元の素材番号')}(project {pid} の WAI 生成)→ See-Through 分解 → rig_compiler" if pr
+               else '既存のパペット(過去にアプリで生成・分解した物。今回の元素材ではない)' if pid_.startswith('kyoko') else '出どころ未記録')
+        if pr:
+            sa = pr.get('asset_id') or pr.get('src_asset_id') or pr.get('元の素材番号')
+            if isinstance(sa, int) and sa not in assets:
+                violations.append(f'パペット {pid_} の元の立ち絵(素材 {sa})がプロジェクト {pid} に無い')
+        elif not pid_.startswith('kyoko'):
+            violations.append(f'パペット {pid_} の出どころが分からない')
+        pup_rows.append((pid_, n, len(where), src))
     ok = not violations
     res = {'project_id': pid, 'root': a.root, 'comps_used': len(used_comps), 'assets_used': len(rows), 'kinds': dict(kinds),
            'data_urls': len(data_urls), 'ext_urls': len(ext_urls), 'violations': violations, 'orig_files_hashed': len(orig_md5), 'ok': ok}
@@ -212,6 +251,11 @@ def main():
             'placeholder': '仮の板(置き換え先がまだ無い)', 'derived': 'アプリの加工ジョブ(切り抜きなど)の結果', 'unknown': '出どころ不明(違反)'}
     for k, n in sorted(kinds.items(), key=lambda kv: -kv[1]):
         lines.append(f'| {k} | {n} | {mean.get(k, "")} |')
+    ms = [r for r in rows if '※測' in str(r['how'])]
+    lines += ['', f'## ※測: 元の絵を機械で測った数値を使った素材({len(ms)} 個・ユーザーの判断待ち)', '',
+              '柄の周期・向きを、点検用スクリプトで元の絵の自己相関から数値にして使った(元の画素は入っていない)。'] + [f"- 素材 {r['asset_id']}: {r.get('for', '')}" for r in ms]
+    lines += ['', f'## パペット(パーツ分解した立ち絵。{len(pup_rows)} 体)', '', '| puppet_id | 絵の数 | 使う所 | 出どころ |', '|---|---|---|---|']
+    lines += [f'| {a_} | {b_} | {c_} | {d_} |' for a_, b_, c_, d_ in pup_rows] or ['| (なし) | | | |']
     lines += ['', '## data URL(文書に埋まった絵・モデル)', '', '| comp | レイヤー | 場所 | 種類 | 大きさ(字数) |', '|---|---|---|---|---|']
     for d in data_urls:
         lines.append(f"| {d['comp']} {used_comps.get(d['comp'], '')} | {d['layer']} | {d['key']} | {d['mime']} | {d['bytes']} |")

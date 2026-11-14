@@ -211,10 +211,10 @@ def s07_logo(ctx):
     ink = '#2b2224'
 
     def col(id, text, size, x, y, **kw):
-        return layer(id, 'text', n, dict({'text': text, 'font': 'APJapanesefont', 'size': size, 'fill': ink, 'writing': 'vertical'}, **kw), pos=[x, y])
+        return layer(id, 'text', n, dict({'text': text, 'font': 'APJapanesefont', 'size': size, 'fill': ink, 'writing': 'vertical', 'stroke': ink, 'stroke_width': 1.8}, **kw), pos=[x, y])
     return doc('部品 S07 題字', n, [
-        col('t1', 'さくらの空', 74, 1032, 372),
-        col('t2', 'アプリコットの愛', 64, 912, 468),
+        col('t1', 'さくらの空', 80, 1034, 385),
+        col('t2', 'アプリコットの愛', 64, 914, 462),
         layer('en', 'text', n, {'text': 'A love for Sakura Kyoko', 'font': 'Noto Sans JP', 'weight': 400, 'size': 17, 'fill': ink, 'tracking': 1.5}, transform={'position': [960, 410], 'rotation': [0, 0, 90]}),
         layer('sakura', 'shape', n, {'kind': 'flower', 'width': 132, 'height': 132, 'fill': '#f1b9c2', 'sides': 5}, transform={'position': [1024, 622], 'rotation': [0, 0, 12]}),
     ])
@@ -262,6 +262,10 @@ def s07(ctx):
         # (mesh の texture に mesh 入りの comp を貼ると親のカメラが狂うので、2D で重ねて窓の luma マットで切る。灰色の窓に乗算)
         (layer('face13', 'comp', n, {'comp_id': s13}, t1=172, start=1184, blend='multiply', matte={'layer': 'facem', 'mode': 'luma'}, pos=[960, 540]) if s13 else
          layer('logo', 'comp', n, {'comp_id': ctx.comp('aux:S07_logo'), 'transparent': True}, t1=160, start=0, speed=0, matte={'layer': 'facem', 'mode': 'luma'}, pos=[960, 540])),
+        # 73〜160(完成版 1257〜1344): シーン 13 の題字(シーン 14 の動画)が素材なしで出ないので、自前の題字(aux:S07_logo。フリーフォント)を窓の中に重ねる。
+        # 位置は完成版 1258〜1330 を見て合わせた(右の列 x1035・y180〜600、左の列 x915・y210〜705、桜 (1035,615))。画面に固定
+        *([layer('logo2', 'comp', n, {'comp_id': ctx.comp('aux:S07_logo'), 'transparent': True}, t0=73, t1=160, start=0, speed=0, matte={'layer': 'facem', 'mode': 'luma'}, pos=[960, 540])]
+          if s13 and ctx.comp('aux:S07_logo') else []),
         layer('facem', 'mesh', n, {'unlit': True, 'objects': [one(True)]}, pos=[960, 540, 0], t1=172),
         layer('gem', 'mesh', n, {'unlit': True, 'objects': [one(False)]}, pos=[960, 540, 0], t1=172),
     ]

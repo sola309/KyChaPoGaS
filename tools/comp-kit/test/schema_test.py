@@ -240,9 +240,13 @@ SRC_BASE["mesh"] = {"light": {"shadows": True, "shadow_area": 600}, "objects": [
 # puppet: 本番の既存のパペット(kyoko_flat = 全身 / kyoko_portrait = 描き差分つき)の顔のまわりを crop で映して、項目を 1 つずつ動かす
 SRC_BASE["puppet"] = {"puppet_id": "kyoko_flat", "crop": [483, 90, 803, 270]}
 _PP = {"puppet_id": "kyoko_portrait", "crop": [501, 480, 821, 660]}
+_PB = {"puppet_id": "kyoko_parka_r2", "crop": [400, 300, 720, 480]}
 SRC_CTX["puppet"] = {"puppet_id": {"_value": "kyoko_portrait"}, "crop": {"_value": [400, 60, 720, 240]}, "hide": {"_value": ["front hair"]},
     "auto_blink": {"blink_interval": 0.4, "blink_seed": 1}, "blink_interval": {"auto_blink": True, "blink_interval": 0.4, "_value": 9}, "blink_seed": {"auto_blink": True, "blink_interval": 0.4, "_value": 2},
-    "vowel": {**_PP, "mouth": 0.9, "_value": "i"}, "head_tilt": {"_value": 8}, "body_lean": {"_value": 5}, "sway_seed": {"_value": 7}, "sway_lag": {"head_turn": {"k": [{"f": 14, "v": -1}, {"f": 22, "v": 1}]}, "_value": 0.4}}
+    "vowel": {**_PP, "mouth": 0.9, "_value": "i"}, "head_tilt": {"_value": 8}, "body_lean": {"_value": 5}, "sway_seed": {"_value": 7}, "sway_lag": {"head_turn": {"k": [{"f": 14, "v": -1}, {"f": 22, "v": 1}]}, "_value": 0.4},
+    # ボーン: bones.png のあるパペット(kyoko_parka_r2)の右腕(画面の左)のあたりを映す
+    "pose_preset": {**_PB, "_value": "wave"}, "pose_phase": {**_PB, "pose_preset": "walk", "_value": 0.25}, "pose_amount": {**_PB, "pose_preset": "cheer", "_value": 0.5},
+    "pose_ground": {**_PB, "pose_preset": "walk", "pose_phase": 0.25, "pose_ground": True, "_value": False}}
 SRC_CTX["mesh"] = {"light.direction": {"_value": [0.8, -1, -0.3]}}
 
 # mesh の objects の 1 件の項目: 土台の箱(MESH_OBJ)に前提を重ねてから、その項目を動かす。どの項目も、絵が変わらなければ NG
@@ -304,7 +308,7 @@ def mesh_ctx(tex_a, tex_b):
         "instances.emit_duration": _in(0.9, velocity=[100, 0, 0]), "instances.colors": _in(["#102030", "#f0c812", "#ff00aa"]), "instances.fade_in": _in(2), "instances.fade_out": _in(0.8, lifetime=1),
         "instances.fade_mode": _in("scale", fade_in=2), "instances.time_offset": _in(1, velocity=[60, 20, 0]),
         # マネキン(関節つきの人形)
-        "style": _mq(_value="stick"), "face": _mq(), "self_light": _mq(_value=1.5), "preset": _mq(_value="wave"), "phase": _mq(preset="walk", _value=0.3),
+        "style": _mq(_value="stick"), "face": _mq(), "face_guide": _mq(face=False), "colors.guide": _mq(face=False, face_guide=True), "self_light": _mq(_value=1.5), "preset": _mq(_value="wave"), "phase": _mq(preset="walk", _value=0.3),
         "preset_b": _mq(preset_mix=1, _value="cheer"), "phase_b": _mq(preset_b="walk", preset_mix=1, _value=0.3), "preset_mix": _mq(preset_b="cheer", _value=1),
         "pose": _mq(_value={"shoulder_l": [0, 0, 90], "head": [0, 40, 0]}), "ground": _mq(pose={"offset": [0, -0.2, 0]}, _value=True),
         "body.height": _mq(_value=100), "body.heads": _mq(_value=4), "body.thickness": _mq(_value=1.7), "body.shoulder": _mq(_value=1.6), "body.hip": _mq(_value=1.7), "body.arm_length": _mq(_value=1.5), "body.leg_length": _mq(_value=0.6),

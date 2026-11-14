@@ -399,6 +399,9 @@
 - 新しい立ち絵から作る: 全身・正面・腕を体から離さず下ろした絵(`arms at sides, straight-on view, symmetrical, flat color, simple background`)を 1 枚作り、
   `POST /api/puppet/decompose {"project_id", "asset_id", "puppet_id", "name"}`(GPU を約 7 分占有。ほかの生成と重ねない)→ できた id を `puppet_id` に書く。
 - 書いたら 12 コマおきに `thumb` で見る(顔の部品のずれ・髪の根元・首の継ぎ目)。
+- **腕・脚を動かす(ボーンつきのパペットだけ)**: `repo/backend/.venv/bin/python repo/tools/pose-kit/make_bones.py repo/backend/data/puppets/<id>` を 1 回走らせると(数秒)、関節とウェイト(`bones.json` / `bones.png`)ができる。
+  あとは `"pose_preset": "wave"`(マネキンと同じ名前)+ `"pose_phase"`(0〜1 で 1 周)+ `"pose_amount"`(0〜1。キーで出入り)、または関節を直接 `"pose": {"shoulder_l": 40, "elbow_l": -70}`(度。腕・脚は正 = 外へ開く、`_l` = 画面の右)。
+  正面の立ち絵 1 枚を曲げるだけなので、手前・奥への動き(歩きの脚・座る)は縮むだけで、手の形・体の向きは変わらない。使える範囲は `tools/comp-kit/README.md` の「腕・脚のボーン」。
 
 ### レシピを組み合わせるコツ
 

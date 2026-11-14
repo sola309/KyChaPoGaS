@@ -32,8 +32,9 @@ const VERT = /* glsl */ `
 uniform vec2 uSize; varying vec2 vUv;
 void main(){ vUv = uv; gl_Position = vec4(position.x / uSize.x * 2.0 - 1.0, 1.0 - position.y / uSize.y * 2.0, 0.0, 1.0); }`
 const FRAG = /* glsl */ `
-uniform sampler2D uMap; uniform float uOpacity; varying vec2 vUv;
-void main(){ gl_FragColor = texture2D(uMap, vUv) * uOpacity; }`
+uniform sampler2D uMap; uniform float uOpacity; uniform vec2 uSize; uniform vec3 uClip; varying vec2 vUv;
+// uClip = (a, b, c): 元の絵の位置 (x, y) で a·x + b·y + c > 0 の側だけ描く(腕・脚の層を左右に分ける)。既定 (0, 0, 1) = 全部
+void main(){ gl_FragColor = texture2D(uMap, vUv) * (uOpacity * clamp(dot(vec3(vUv * uSize, 1.0), uClip) + 0.5, 0.0, 1.0)); }`
 
 // 古い manifest(sway の分類なし)むけの名前からの推定
 function fallbackSway(name, group) {
@@ -42,6 +43,132 @@ function fallbackSway(name, group) {
   if (group === 'fronthair') return { type: 'hair', pin: 'head', amp: 0.32 }
   if (name === 'bottomwear') return { type: 'cloth', pin: 'body', amp: 0.42 }
   return null
+}
+
+// bones.png = bones.json の写し(tools/pose-kit/make_bones.py が作る。長さ 4 バイト + UTF-8 の JSON を RGB の画素に詰めた PNG)。
+// いまの /api/puppet/<id>/layer/ は .png しか返さないので、この形で読む。無い・読めないときは null(ボーンなし = いままでどおり)
+async function loadBones(url) {
+  try {
+    const r = await fetch(url)
+    if (!r.ok) return null
+    const bmp = await createImageBitmap(await r.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' })
+    const cv = document.createElement('canvas')
+    cv.width = bmp.width; cv.height = bmp.height
+    const g = cv.getContext('2d', { willReadFrequently: true })
+    g.drawImage(bmp, 0, 0)
+    const d = g.getImageData(0, 0, cv.width, cv.height).data
+    const n = cv.width * cv.height, raw = new Uint8Array(n * 3)
+    for (let i = 0; i < n; i++) { raw[i * 3] = d[i * 4]; raw[i * 3 + 1] = d[i * 4 + 1]; raw[i * 3 + 2] = d[i * 4 + 2] }
+    const len = ((raw[0] << 24) | (raw[1] << 16) | (raw[2] << 8) | raw[3]) >>> 0
+    if (!len || len > raw.length - 4) return null
+    const b = JSON.parse(new TextDecoder().decode(raw.subarray(4, 4 + len)))
+    return b && b.joints && Array.isArray(b.bones) ? b : null
+  } catch { return null }
+}
+
+// ---- ボーンの姿勢 ----
+// 関節の角度(度)は画面の中の回転。腕・脚は「正 = 外へ開く(体から離れる向き)」で左右とも同じ意味、waist・neck は「正 = 画面で時計回り」。
+// _l = 本人の左 = 画面の右(mesh レイヤーのマネキンと同じ)。値を [角度, 長さの倍率] と書くと、ボーンの向きに縮める(手前・奥へ振った腕や脚の見かけ)。
+const POSE_JOINTS = ['waist', 'neck', 'shoulder_l', 'shoulder_r', 'elbow_l', 'elbow_r', 'wrist_l', 'wrist_r', 'hip_l', 'hip_r', 'knee_l', 'knee_r', 'ankle_l', 'ankle_r']
+export const PUPPET_PRESETS = ['stand', 'a_pose', 't_pose', 'idle', 'walk', 'run', 'wave', 'sit', 'hand_on_hip', 'peace', 'lean_forward', 'cheer']
+// マネキン(mesh3d.js の mqPreset)と同じ角度の表(あちらは持ち主が別なので写し。直すときは両方)。ph = 位相(0〜1 で 1 周)
+function mqPreset(name, ph) {
+  const th = ph * TAU, s = Math.sin(th), c = Math.cos(th)
+  const P = { shoulder_l: [0, 0, 6], shoulder_r: [0, 0, 6], elbow_l: [8, 0, 0], elbow_r: [8, 0, 0] }
+  switch (name) {
+    case 'a_pose': P.shoulder_l = [0, 0, 35]; P.shoulder_r = [0, 0, 35]; P.elbow_l = [0, 0, 0]; P.elbow_r = [0, 0, 0]; break
+    case 't_pose': P.shoulder_l = [0, 0, 90]; P.shoulder_r = [0, 0, 90]; P.elbow_l = [0, 0, 0]; P.elbow_r = [0, 0, 0]; break
+    case 'idle':
+      P.root = [0, 0, 0.8 * s]; P.chest = [1.2 * s, 0, -0.8 * s]; P.head = [0, 0, 1.5 * s]
+      P.shoulder_l = [0, 0, 8 + s]; P.shoulder_r = [0, 0, 8 - s]; P.elbow_l = [10, 0, 0]; P.elbow_r = [10, 0, 0]
+      break
+    case 'walk': case 'run': {
+      const k = name === 'run' ? 1 : 0
+      const hipA = 26 + 18 * k, knA = 48 + 42 * k, armA = 20 + 22 * k
+      P.root = [3 + 9 * k, -5 * s, 0]; P.chest = [2 * k, 9 * s, 0]; P.head = [-4 * k, -4 * s, 0]
+      P.hip_l = [hipA * s + 8 * k, 0, 2]; P.hip_r = [-hipA * s + 8 * k, 0, 2]
+      P.knee_l = [4 + 14 * k + knA * Math.max(0, c), 0, 0]; P.knee_r = [4 + 14 * k + knA * Math.max(0, -c), 0, 0]
+      P.ankle_l = [-6 * s, 0, 0]; P.ankle_r = [6 * s, 0, 0]
+      P.shoulder_l = [-armA * s, 0, 7]; P.shoulder_r = [armA * s, 0, 7]
+      P.elbow_l = [15 + 65 * k + 10 * Math.max(0, -s), 0, 0]; P.elbow_r = [15 + 65 * k + 10 * Math.max(0, s), 0, 0]
+      P.ground = true
+      break
+    }
+    case 'wave': P.shoulder_r = [0, -90, 84]; P.elbow_r = [82 + 26 * s, 0, 0]; P.head = [0, 0, -4]; break
+    case 'sit':
+      P.hip_l = [88, 0, 4]; P.hip_r = [88, 0, 4]; P.knee_l = [88, 0, 0]; P.knee_r = [88, 0, 0]
+      P.shoulder_l = [28, 10, 6]; P.shoulder_r = [28, 10, 6]; P.elbow_l = [55, 0, 0]; P.elbow_r = [55, 0, 0]
+      break
+    case 'hand_on_hip': P.shoulder_r = [-22, 62, 46]; P.elbow_r = [98, 0, 0]; P.root = [0, 0, 2.5]; P.chest = [0, 0, -2.5]; break
+    case 'peace':
+      P.shoulder_r = [25, -75, 62]; P.elbow_r = [128, 0, 0]; P.head = [0, 0, -7]
+      P.shoulder_l = [-22, 62, 46]; P.elbow_l = [98, 0, 0]
+      break
+    case 'lean_forward':
+      P.hip_l = [14, 0, 2]; P.hip_r = [14, 0, 2]
+      P.shoulder_l = [-48, 30, 10]; P.shoulder_r = [-48, 30, 10]; P.elbow_l = [25, 0, 0]; P.elbow_r = [25, 0, 0]
+      break
+    case 'cheer': P.shoulder_l = [0, -90, 152]; P.shoulder_r = [0, -90, 152]; P.elbow_l = [22, 0, 0]; P.elbow_r = [22, 0, 0]; break
+  }
+  return P
+}
+const _e3 = new THREE.Euler(), _v3 = new THREE.Vector3()
+function mqQuat(name, a) {
+  const x = (a?.[0] || 0) * DEG, y = (a?.[1] || 0) * DEG, z = (a?.[2] || 0) * DEG, side = name.endsWith('_l') ? 1 : -1
+  if (name === 'root' || name === 'spine' || name === 'chest') _e3.set(x, y, -z, 'YXZ')
+  else if (name.startsWith('shoulder') || name.startsWith('hip') || name.startsWith('wrist')) _e3.set(-x, -side * y, side * z, 'ZXY')
+  else if (name.startsWith('elbow')) _e3.set(-x, -side * y, 0, 'YXZ')
+  else if (name.startsWith('knee')) _e3.set(x, 0, 0, 'XYZ')
+  else _e3.set(x, -side * y, 0, 'YXZ') // ankle
+  return new THREE.Quaternion().setFromEuler(_e3)
+}
+// マネキンの姿勢(3D)→ 各ボーンの画面上の向き(rad)と見かけの長さ(0〜1)。正面から見た平行投影
+function presetDirs(P) {
+  const out = {}
+  const qRoot = mqQuat('root', P.root), qChest = qRoot.clone().multiply(mqQuat('spine', P.spine)).multiply(mqQuat('chest', P.chest))
+  const put = (name, q) => { _v3.set(0, -1, 0).applyQuaternion(q); out[name] = [Math.atan2(-_v3.y, _v3.x), Math.hypot(_v3.x, _v3.y)] }
+  for (const s of ['l', 'r']) {
+    const ua = qChest.clone().multiply(mqQuat('shoulder_' + s, P['shoulder_' + s])), fa = ua.clone().multiply(mqQuat('elbow_' + s, P['elbow_' + s]))
+    put('upper_arm_' + s, ua); put('forearm_' + s, fa); put('hand_' + s, fa.clone().multiply(mqQuat('wrist_' + s, P['wrist_' + s])))
+    const th = qRoot.clone().multiply(mqQuat('hip_' + s, P['hip_' + s])), sh = th.clone().multiply(mqQuat('knee_' + s, P['knee_' + s]))
+    put('thigh_' + s, th); put('shin_' + s, sh); out['foot_' + s] = out['shin_' + s]
+  }
+  return out
+}
+const wrapPi = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a }
+const _presetCache = new Map()
+// preset → {ボーン: [親に対する回転(rad), 長さの倍率], lean, waist, neck(rad), ground}。立ち姿(stand)との差で出す
+function presetLocal(name, ph) {
+  const key = name + '|' + Math.round(ph * 1e5)
+  let r = _presetCache.get(key)
+  if (r) return r
+  const P = mqPreset(name, ph), A = presetDirs(P), B = presetDirs(mqPreset('stand', 0))
+  const tz = (k) => (P[k]?.[2] || 0) * DEG
+  r = { bones: {}, lean: tz('root'), waist: tz('spine') + tz('chest'), neck: tz('neck') + tz('head'), ground: !!P.ground }
+  const g = {}, sc = {}
+  for (const k of Object.keys(A)) {
+    sc[k] = clamp(A[k][1] / Math.max(1e-3, B[k][1]), 0.3, 1.1)
+    // ほぼ手前・奥を向いたボーンは画面上の向きが定まらないので、回転を弱める
+    g[k] = wrapPi(A[k][0] - B[k][0]) * sstep(A[k][1] / 0.3)
+  }
+  for (const s of ['l', 'r']) {
+    r.bones['upper_arm_' + s] = [g['upper_arm_' + s] - r.lean - r.waist, sc['upper_arm_' + s]]
+    r.bones['forearm_' + s] = [wrapPi(g['forearm_' + s] - g['upper_arm_' + s]), sc['forearm_' + s]]
+    r.bones['hand_' + s] = [wrapPi(g['hand_' + s] - g['forearm_' + s]), sc['hand_' + s]]
+    r.bones['thigh_' + s] = [g['thigh_' + s] - r.lean, sc['thigh_' + s]]
+    r.bones['shin_' + s] = [wrapPi(g['shin_' + s] - g['thigh_' + s]), sc['shin_' + s]]
+    r.bones['foot_' + s] = [0, 1]
+  }
+  if (_presetCache.size > 4000) _presetCache.clear()
+  _presetCache.set(key, r)
+  return r
+}
+// 関節 j のまわりで、向き (dx, dy)(単位)に s 倍に縮めてから ang 回す
+function boneLocal(j, dx, dy, ang, s) {
+  const k = s - 1, co = Math.cos(ang), si = Math.sin(ang)
+  const a0 = 1 + k * dx * dx, b0 = k * dx * dy, c0 = k * dx * dy, d0 = 1 + k * dy * dy
+  const a = co * a0 - si * b0, b = si * a0 + co * b0, c = co * c0 - si * d0, d = si * c0 + co * d0
+  return [a, b, c, d, j[0] - a * j[0] - c * j[1], j[1] - b * j[0] - d * j[1]]
 }
 
 // アニメらしい非対称のまばたき: 速く閉じる → 少し保つ → ゆっくり開く(p = 0〜1)
@@ -78,9 +205,11 @@ export class PuppetStore {
       const layer = this.env.curLayer
       e.promise = fetch(`${base}/manifest`).then((r) => (r.ok ? r.json() : null)).then((man) => {
         if (!man || !Array.isArray(man.layers)) throw new Error('manifest')
-        this.build(e, man)
-        e.state = 'ready'
-        this.env.invalidate()
+        return loadBones(`${base}/layer/bones.png`).then((bones) => {
+          this.build(e, man, bones)
+          e.state = 'ready'
+          this.env.invalidate()
+        })
       }).catch(() => {
         e.state = 'error'
         console.warn('[comp-engine] パペットを読めない:', base)
@@ -115,7 +244,7 @@ export class PuppetStore {
     g.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
     g.setIndex(idx)
     const mat = new THREE.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG, uniforms: { uMap: { value: null }, uOpacity: { value: 1 }, uSize: { value: new THREE.Vector2(cw, ch) } },
+      vertexShader: VERT, fragmentShader: FRAG, uniforms: { uMap: { value: null }, uOpacity: { value: 1 }, uSize: { value: new THREE.Vector2(cw, ch) }, uClip: { value: new THREE.Vector3(0, 0, 1) } },
       depthTest: false, depthWrite: false, transparent: true, toneMapped: false, side: THREE.DoubleSide,
       blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor, blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     })
@@ -124,8 +253,12 @@ export class PuppetStore {
     return { mesh, base, pos, nx, ny, box: [l, t, r, b] }
   }
 
-  build(e, man) {
+  build(e, man, bones = null) {
     e.man = man
+    e.bones = bones
+    const skinsOf = new Map()
+    if (bones) for (const sk of bones.skins || []) { if (!skinsOf.has(sk.layer)) skinsOf.set(sk.layer, []); skinsOf.get(sk.layer).push(sk) }
+    e.lower = new Set(bones?.lower_layers || [])
     const cw = num(man.canvas?.[0], 1280), ch = num(man.canvas?.[1], 1280)
     e.size = [cw, ch]
     const rg = man.rig || {}
@@ -169,8 +302,20 @@ export class PuppetStore {
       // 描き差分(口・まぶた)は前髪のすぐ下に入れる
       if (ly.group === 'fronthair' && !patchesIn) { e.parts.push(...patches); patchesIn = true }
       const [nx, ny] = st === 'hair' ? [18, 22] : st === 'cloth' ? [12, 14] : st === 'neck' ? [6, 12] : face ? [12, 12] : [2, 2]
+      const common = { url: this.layerUrl(e, ly.file), name: ly.name, group: ly.group, depth: num(ly.depth, 0.5), sway, bbox: ly.bbox, phase: (strHash(String(ly.name)) % 6283) / 1000 }
+      const sks = skinsOf.get(ly.name)
+      if (sks) {
+        // ボーンで曲げる層(bones.json の格子とウェイト)。腕・脚は左右 1 枚ずつ(同じ PNG を uClip で分けて描く)
+        for (const sk of sks) {
+          const g = sk.grid, p = this.grid(e, [g.box[0] + 3, g.box[1] + 3, g.box[2] - 3, g.box[3] - 3], g.nx, g.ny)
+          Object.assign(p, common, { kind: 'skin', skin: sk, nb: sk.bones.length })
+          if (Array.isArray(sk.clip)) p.mesh.material.uniforms.uClip.value.set(sk.clip[0], sk.clip[1], sk.clip[2])
+          e.parts.push(p)
+        }
+        continue
+      }
       const p = this.grid(e, ly.bbox, nx, ny)
-      Object.assign(p, { kind: st || (face ? 'face' : 'body'), url: this.layerUrl(e, ly.file), name: ly.name, group: ly.group, depth: num(ly.depth, 0.5), sway, bbox: ly.bbox, phase: (strHash(String(ly.name)) % 6283) / 1000 })
+      Object.assign(p, common, { kind: st || (face ? 'face' : 'body') })
       e.parts.push(p)
       if (ly.group === 'mouth') {
         // 手続きの口の中(描き差分が無いとき): 暗い楕円 + 歯 + 舌。口のレイヤーのすぐ上
@@ -248,19 +393,88 @@ export class PuppetStore {
       breath: num(evalProp(br.amount, f, fps), 1), breathPeriod: Math.max(0.3, num(evalProp(br.period, f, fps), 4)),
       sway: num(evalProp(sw.amount, f, fps), 1), wind: num(evalProp(sw.wind, f, fps), 0), speed: num(evalProp(sw.speed, f, fps), 1),
       lag: Math.max(0, num(evalProp(sw.lag, f, fps), 0.16)), seed: num(sw.seed, 0),
+      bone: e.bones ? this.boneParams(s, f, fps) : null,
     }
+  }
+  // ボーンの値: pose_preset(マネキンと同じ名前)+ pose_phase(0〜1)+ pose_amount(0〜1 = 立ち姿からどれだけ寄せるか)に、pose: {関節: 度 か [度, 長さの倍率]} を足す
+  boneParams(s, f, fps) {
+    const ps = s.pose && typeof s.pose === 'object' ? s.pose : null
+    const name = evalProp(s.pose_preset, f, fps)
+    const b = { preset: typeof name === 'string' && PUPPET_PRESETS.includes(name) ? name : null, phase: num(evalProp(s.pose_phase, f, fps), 0),
+      amount: clamp(num(evalProp(s.pose_amount, f, fps), 1), 0, 1), ground: s.pose_ground, ang: {}, len: {}, any: false }
+    if (b.preset === 'stand' || b.amount <= 0) b.preset = null
+    if (b.preset) b.any = true
+    if (ps) for (const j of POSE_JOINTS) {
+      if (ps[j] === undefined || ps[j] === null) continue
+      const v = evalProp(ps[j], f, fps)
+      const a = num(v, 0), l = Array.isArray(v) && typeof v[1] === 'number' ? clamp(v[1], 0.1, 2) : 1
+      if (a !== 0 || l !== 1) { b.ang[j] = a * DEG; b.len[j] = l; b.any = true }
+    }
+    return b
+  }
+  // ボーンの行列(FK)。→ {lean, waist, neck(足すぶん・rad), build(body) → {名前: 行列}}
+  boneMats(e, bq, body) {
+    const B = e.bones, J = B.joints
+    const pr = bq.preset ? presetLocal(bq.preset, bq.phase) : null, k = bq.amount
+    // M = 頂点に掛ける行列(縮みを含む)、F = 子が乗る枠(縮みを含まない。親が縮んでも子の形はつぶれず、関節の位置だけが動く)
+    const M = { pelvis: body }, F = { pelvis: body }
+    for (const b of B.bones) {
+      if (b.name === 'pelvis') continue
+      const parM = M[b.parent] || body, parF = F[b.parent] || body, j = J[b.joint]
+      if (!j) { M[b.name] = parM; F[b.name] = parF; continue }
+      if (b.name === 'chest') { const a = (bq.ang.waist || 0) + (pr ? pr.waist * k : 0); M.chest = F.chest = a ? mul(parF, rig(j[0], j[1], a, 1, 1, 0, 0)) : parF; continue }
+      const t = J[b.to] || [j[0], j[1] + 1]
+      let dx = t[0] - j[0], dy = t[1] - j[1]
+      const L = Math.hypot(dx, dy) || 1
+      dx /= L; dy /= L
+      const side = b.name.endsWith('_l') ? 1 : -1
+      const pb = pr?.bones[b.name]
+      const ang = (pb ? pb[0] * k : 0) - side * (bq.ang[b.angle] || 0)
+      const len = (pb ? 1 + (pb[1] - 1) * k : 1) * (bq.len[b.angle] ?? 1)
+      // 枠: 親の枠の上で関節のまわりに回し、関節が「縮んだ親」の上の位置に来るよう平行移動
+      let fr = ang ? mul(parF, rig(j[0], j[1], ang, 1, 1, 0, 0)) : parF
+      if (parM !== parF) {
+        fr = fr.slice()
+        fr[4] += parM[0] * j[0] + parM[2] * j[1] + parM[4] - (fr[0] * j[0] + fr[2] * j[1] + fr[4])
+        fr[5] += parM[1] * j[0] + parM[3] * j[1] + parM[5] - (fr[1] * j[0] + fr[3] * j[1] + fr[5])
+      }
+      F[b.name] = fr
+      M[b.name] = len !== 1 ? mul(fr, boneLocal(j, dx, dy, 0, len)) : fr
+    }
+    // 足を地面に付ける(walk・run、または pose_ground: true): いちばん低い足先が立ち姿の高さに来るよう、全体を上下にずらす
+    if (bq.ground === true || (bq.ground !== false && pr?.ground && k > 0)) {
+      let rest = -1e9, now = -1e9
+      for (const s of ['l', 'r']) for (const [bn, jn] of [['foot_' + s, 'toe_' + s], ['shin_' + s, 'ankle_' + s]]) {
+        const m = M[bn], j = J[jn]
+        if (!m || !j) continue
+        rest = Math.max(rest, body[1] * j[0] + body[3] * j[1] + body[5]); now = Math.max(now, m[1] * j[0] + m[3] * j[1] + m[5])
+      }
+      const dy = rest > -1e8 ? (rest - now) * (bq.ground === true ? 1 : k) : 0
+      if (dy) for (const n of Object.keys(M)) { const m = M[n].slice(); m[5] += dy; M[n] = m }
+    }
+    return { M, neck: (bq.ang.neck || 0) + (pr ? pr.neck * k : 0), waist: (bq.ang.waist || 0) + (pr ? pr.waist * k : 0) }
   }
   // 体と頭の行列
   pose(e, q) {
     const S = e.S, [hx, hy] = e.piv.head, [bx, by] = e.piv.body
     const br = Math.sin((q.t / q.breathPeriod) * TAU) * q.breath
     const bob = -2.2 * S * br
+    const headDx = q.shift[0] * S, headDy = bob * 0.5 + q.nod * 16 * S + q.shift[1] * S
+    if (q.bone && q.bone.any) {
+      // ボーンあり: 体(腰)→ 胸(腰の関節で曲がる)→ 頭。腕・脚は boneMats の行列
+      const pr = q.bone.preset ? presetLocal(q.bone.preset, q.bone.phase) : null
+      const lean = q.lean + (pr ? pr.lean * q.bone.amount : 0)
+      const bm = this.boneMats(e, q.bone, rig(bx, by, lean, 1, 1 + 0.007 * br, q.turn * 7 * S, bob * 0.5))
+      const body = bm.M.pelvis, chest = bm.M.chest || body
+      const rideX = chest[0] * hx + chest[2] * hy + chest[4] - hx, rideY = chest[1] * hx + chest[3] * hy + chest[5] - hy
+      const head = rig(hx, hy, q.tilt + lean + bm.waist + bm.neck, 1, 1, headDx + rideX, headDy + rideY)
+      return { body, chest, M: bm.M, head, yawPhi: q.turn * YAW_MAX, yawCx: hx + headDx + rideX }
+    }
     const body = rig(bx, by, q.lean, 1, 1 + 0.007 * br, q.turn * 7 * S, bob * 0.5)
     // 頭は体の首の付け根に乗る
     const rideX = body[0] * hx + body[2] * hy + body[4] - hx, rideY = body[1] * hx + body[3] * hy + body[5] - hy
-    const headDx = q.shift[0] * S, headDy = bob * 0.5 + q.nod * 16 * S + q.shift[1] * S
     const head = rig(hx, hy, q.tilt + q.lean, 1, 1, headDx + rideX, headDy + rideY)
-    return { body, head, yawPhi: q.turn * YAW_MAX, yawCx: hx + headDx + rideX }
+    return { body, chest: body, M: null, head, yawPhi: q.turn * YAW_MAX, yawCx: hx + headDx + rideX }
   }
 
   // → sRGB の値・乗算済みの RT(キャンバス大。上が v = 1)。呼び出し側が release。まだ読めていなければ null
@@ -275,7 +489,9 @@ export class PuppetStore {
     const q2 = lagF > 0 ? this.params(e, s, f - lagF, fps) : q
     const po2 = lagF > 0 ? this.pose(e, q2) : po
     const S = e.S, R = e.headR
-    const { head, body, yawPhi, yawCx } = po
+    const { head, body, chest, yawPhi, yawCx } = po
+    // 腰から下の層(bones.json の lower_layers)は体(腰)、それ以外は胸に乗る。ボーンが無ければ胸 = 体
+    const baseOf = (p) => (e.lower.has(p.name) ? body : chest), baseOf2 = (p) => (e.lower.has(p.name) ? po2.body : po2.chest)
     const yawX = (x, phi, cx) => {
       if (phi === 0) return x
       const xl = x - cx, u = clamp(xl / R, -1, 1)
@@ -363,14 +579,14 @@ export class PuppetStore {
         for (let i = 0; i < n; i++) {
           const x = base[i * 2], y = base[i * 2 + 1]
           const w = sstep((p.bbox[3] - y) / span)
-          const bxv = body[0] * x + body[2] * y + body[4], byv = body[1] * x + body[3] * y + body[5]
+          const bxv = chest[0] * x + chest[2] * y + chest[4], byv = chest[1] * x + chest[3] * y + chest[5]
           const hxv = yawX(head[0] * x + head[2] * y + head[4], yawPhi, yawCx) + npx, hyv = head[1] * x + head[3] * y + head[5] + npy
           pos[i * 3] = bxv + (hxv - bxv) * w
           pos[i * 3 + 1] = byv + (hyv - byv) * w
         }
       } else if (p.kind === 'hair' || p.kind === 'cloth') {
         const onHead = p.sway.pin !== 'body'
-        const m = onHead ? head : body, m2 = onHead ? po2.head : po2.body
+        const m = onHead ? head : baseOf(p), m2 = onHead ? po2.head : baseOf2(p)
         const amp = num(p.sway.amp, 1) * q.sway, pinY = num(p.sway.pinY, p.kind === 'hair' ? 0.22 : 0.28)
         const top = p.bbox[1], span = Math.max(1, p.bbox[3] - p.bbox[1])
         // 首ふりへの乗り方: 前髪は顔といっしょ、後ろ髪は半分ほど、布は乗らない
@@ -400,8 +616,33 @@ export class PuppetStore {
           pos[i * 3] = X
           pos[i * 3 + 1] = Y + (yawAmt ? hpy * yawAmt : 0)
         }
+      } else if (p.kind === 'skin') {
+        // ボーンのスキニング: 頂点 = Σ ウェイト × ボーンの行列 × 元の位置
+        const sk = p.skin, nb = p.nb, W = sk.weights, base0 = baseOf(p)
+        const Ms = sk.bones.map((bn) => (po.M && po.M[bn]) || (bn === 'chest' ? chest : bn === 'pelvis' ? body : base0))
+        // すそのゆれ(布と分類された層だけ。ボーンの変形の上に足す)
+        const cloth = p.sway?.type === 'cloth' ? num(p.sway.amp, 1) * q.sway : 0
+        const top = p.bbox[1], span = Math.max(1, p.bbox[3] - p.bbox[1]), pinY = num(p.sway?.pinY, 0.28)
+        const gu = cloth ? gust(p.phase) + Math.sin(q.t * 3.9 * sp + p.phase * 3.1) * 0.27 : 0
+        for (let i = 0; i < n; i++) {
+          const x = base[i * 2], y = base[i * 2 + 1]
+          let X = 0, Y = 0, ws = 0
+          for (let k = 0; k < nb; k++) {
+            const w = W[i * nb + k]
+            if (!w) continue
+            const m = Ms[k]
+            X += w * (m[0] * x + m[2] * y + m[4]); Y += w * (m[1] * x + m[3] * y + m[5]); ws += w
+          }
+          if (ws > 0) { X /= ws; Y /= ws } else { X = base0[0] * x + base0[2] * y + base0[4]; Y = base0[1] * x + base0[3] * y + base0[5] }
+          if (cloth) {
+            const swing = sstep((clamp((y - top) / span, 0, 1) - pinY) / Math.max(1e-3, 1 - pinY)) * cloth
+            X += (gu * 26 + Math.sin(y * 0.02 - q.t * 7.2 * sp + x * 0.013 + p.phase) * 4) * S * swing
+          }
+          pos[i * 3] = X
+          pos[i * 3 + 1] = Y
+        }
       } else {
-        const m = p.group === 'head' ? head : body
+        const m = p.group === 'head' ? head : baseOf(p)
         for (let i = 0; i < n; i++) {
           const x = base[i * 2], y = base[i * 2 + 1]
           pos[i * 3] = m[0] * x + m[2] * y + m[4]

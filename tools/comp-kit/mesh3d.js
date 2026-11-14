@@ -896,6 +896,12 @@ function buildMannequin(e) {
     }
     // 頭
     ball('head', C.skin, [0, d.ry, 0], [d.rx, d.ry, d.rz])
+    if (e.face_guide) {
+      // 顔の当たり線: 顔の中心線(縦)と目の高さの線(横)。頭より少しだけ大きい薄い円盤のふち = ごく薄い十字
+      const gm = { type: 'basic', color: col.guide ?? '#cfa898' }
+      put('head', MQ_SPH, null, [0, d.ry, 0], [d.rx * 0.012, d.ry * 1.004, d.rz * 1.004], null, null, gm)
+      put('head', MQ_SPH, null, [0, d.ry * 0.9, 0], [d.rx * 1.0, d.ry * 0.012, d.rz * 1.0], null, null, gm)
+    }
     if (e.face !== false && e.face !== 0) for (const sx of [-1, 1]) put('head', MQ_SPH, C.eyes, [sx * d.rx * 0.4, d.ry * 0.86, d.rz * 0.9], [d.rx * 0.13, d.ry * 0.2, d.rz * 0.06], null, null, { type: 'basic', color: C.eyes })
   }
   // 髪

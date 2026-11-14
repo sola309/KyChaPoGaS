@@ -201,20 +201,57 @@ def _b11_doc(tag, n, grp, colors, outfit):
            'body': {'height': g['height'], 'heads': g['heads'], 'thickness': 0.95, 'shoulder': 0.95},
            'colors': {'skin': SKIN, 'hair': HAIR, 'ribbon': '#1c1a1e', 'eyes': '#8a2030', **colors},
            'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.05}, 'outfit': outfit,
-           'outline': {'width': 3, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand', 'pose': pose}
+           'face': False, 'outline': {'width': 3, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand', 'pose': pose}   # 顔は描かない(のっぺらぼう)
     L = [layer('fig', 'mesh', n, {'light': {'ambient': 1.5, 'intensity': 1.3, 'direction': [-0.4, -0.8, -1]}, 'objects': [fig]}, pos=[g['x'], g['feet_y'], 0])]
     return doc(f'再現 B11 杏子立ち絵 {tag}(仮: マネキン)', n, L)
 
 
-def _mk_b11(tag, key, n, grp, colors, outfit):
-    @reg(key, 'B11', '仮: マネキン(mesh の mannequin。体格・ポーズ・服の色を完成版に合わせた関節つきの人形)。元絵 = 杏子の 3D モデルの書き出し', placeholder=True)
+def _b11_puppet_doc(tag, n, grp, g, bone=False):
+    """2D の立ち絵 + パーツ分解(puppet レイヤー)。頭の中心・頭の高さをマネキン(= 完成版に合わせた値)と同じにして置く。
+    出せる動き = 呼吸・髪と服のゆれ・小さい首ふり・かしげ・体の傾き・まばたき。出せない = 腕のポーズ(手を腰・手を振る・こぶしを胸・ピース)と体の回転(絵のポーズのまま)。"""
+    G = B11_GEOM
+    hh = G['height'] / G['heads']
+    head = [G['x'], G['feet_y'] - G['height'] + hh / 2]
+    src = {}
+    if bone:
+        src.update(_b11_bone_pose(n, grp))
+    L = [puppet_layer('fig', n, g, head, hh, seed=grp, wind=0.15, source=src)]
+    return doc(f'再現 B11 杏子立ち絵 {tag}(仮: 2D 立ち絵 + 分解{" + 関節" if bone else ""} {g["puppet_id"]})', n, L)
+
+
+def _b11_bone_pose(n, grp):
+    """関節(ボーン)のポーズ(担当 PUP の BONE_USAGE.md の書式: pose_preset / pose_amount / pose。腕と脚は 正 = 外へ開く、[角度, 長さの倍率])。
+    パペットに bones.json が無ければ効かない(エラーにはならず puppet と同じ絵)。完成版の 4 組のポーズを 2D の曲げで近づける。"""
+    w = lambda amp, per, base=0.0, ph=0.0: psway(n, amp, per, ph, base)      # noqa: E731
+    if grp == 1:      # 右手を腰・左手を斜め下へ広げる
+        return {'pose_preset': 'hand_on_hip', 'pose_amount': 1, 'pose': {'shoulder_l': w(3, 120, 42), 'elbow_l': 6}}
+    if grp == 2:      # 左手を上げて振る・右手は少し開く
+        return {'pose': {'shoulder_l': 122, 'elbow_l': w(16, 44, 30), 'shoulder_r': 28}}
+    if grp == 3:      # 右こぶしを胸の前・左手は少し開く
+        return {'pose': {'shoulder_r': 18, 'elbow_r': [-128, 0.9], 'shoulder_l': w(2, 130, 26)}}
+    return {'pose': {'shoulder_l': 44, 'elbow_l': [96, 0.95], 'shoulder_r': 26}}      # 左手を肩の高さでピース(手の形は変わらない)
+
+
+def _mk_b11(sym, tag, key, n, grp, colors, outfit):
+    g = find_puppet(sym)
+    bone = PEOPLE == 'bone' and g is not None and has_bones(g['puppet_id'])      # 関節は、そのパペットに bones.json があるときだけ
+    if g:
+        how = (f'仮: 2D の立ち絵 + パーツ分解(puppet レイヤー {g["puppet_id"]} = 表の {g["key"]}。新しく生成した立ち絵・ユーザー未確認)。頭の位置と大きさは完成版に合わせた。'
+               f'動き = 呼吸・髪ゆれ・首ふり・体の傾き・まばたき{"・関節のポーズ" if bone else ""}。腕のポーズ・体の回転は絵のまま(出せない)。AUP_PEOPLE=mannequin でマネキンに戻る')
+    else:
+        how = ('仮: マネキン(mesh の mannequin。体格・ポーズ・服の色を完成版に合わせた関節つきの人形)。元絵 = 杏子の 3D モデルの書き出し'
+               + ('' if PEOPLE == 'mannequin' else f'。この衣装({sym})のパペットがまだ無いのでマネキンのまま'))
+
+    @reg(key, 'B11', how, placeholder=True)
     def _f(ctx):
+        if g:
+            return _b11_puppet_doc(tag, n, grp, g, bone)
         return _b11_doc(tag, n, grp, colors, outfit)
     return _f
 
 
-for _a in _B11:
-    _mk_b11(*_a)
+for _i, _a in enumerate(_B11):
+    _mk_b11('ABCDEFGH'[_i], *_a)
 
 
 # ---------------------------------------------------------------- P01 背景の写真(仮の板)

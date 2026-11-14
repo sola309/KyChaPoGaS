@@ -37,6 +37,8 @@ def main():
             repl[k] = dict(v, table=os.path.basename(p)[8:-5])
     for p in sorted(glob.glob(os.path.join(SAKURA, 'rebuild', 'desc_*.json'))):
         desc.update(json.load(open(p, encoding='utf-8')))
+    mp = os.path.join(SAKURA, 'rebuild', 'measured.json')
+    meas = json.load(open(mp, encoding='utf-8')) if os.path.exists(mp) else {}
     rmap = json.load(open(os.path.join(SAKURA, 'recreate_map.json'), encoding='utf-8')).get(str(a.project_id), {})
     extra = json.load(open(a.extra, encoding='utf-8')) if a.extra else {}
 
@@ -61,7 +63,7 @@ def main():
             px = f'{int(w * s0 / 100)}×{int(h * s0 / 100)}'
         except Exception:
             pass
-        rows.append((-(frames or 0), i, f"| {i} | {key[-58:]} | {desc.get(key, '')[:70]} | {'・'.join(s.split(' ')[0][:14] for s in u.get('scenes', [])[:3])} | "
+        rows.append((-(frames or 0), i, f"| {i}{' ※測' if key in meas else ''} | {key[-58:]} | {desc.get(key, '')[:70]} | {'・'.join(s.split(' ')[0][:14] for s in u.get('scenes', [])[:3])} | "
                      f"{u.get('first', '')}–{u.get('last', '')}({frames}) | {w}×{h} → 画面で最大 約 {px} | {kind} | {st} | {how[:110].replace('|', '/')} {('/ ' + note[:60]) if note else ''} |"))
     rows.sort()
 
@@ -84,6 +86,9 @@ def main():
           '| # | 元の素材(相対パスの末尾) | 何が映っているか | シーン | コマ(合計) | 大きさ | 区分 | 状態 | 作り方 |', '|---|---|---|---|---|---|---|---|---|']
     L += [r[2] for r in rows]
 
+    L += ['', '## 1b. ※測 = 元の絵を機械で測った数値を使った物(ユーザーの判断待ち)', '',
+          '柄の周期・向きが目で読みきれず、点検用のスクリプトで元の絵の自己相関を取り、その数値(間隔 px・角度)だけを使って描いた。元の画素は入っていない。不可なら目測の値で描き直す。', '',
+          '| 元の素材 | 測り方 |', '|---|---|'] + [f'| {k} | {v} |' for k, v in sorted(meas.items())]
     L += ['', '## 2. 連番・動画(Blender の書き出しなど)→ 作り直した comp', '',
           '| ID | 元(フォルダ・ファイル) | comp | 区分 | 状態 | 作り方 |', '|---|---|---|---|---|---|']
     c2 = collections.Counter()

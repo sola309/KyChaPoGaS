@@ -149,9 +149,9 @@ def figure(pos, color, h=165, name='figure', rot=None):
 ROOF_CAM = dict(
     zoom=1400,
     pos=[(0, (0, -800, 670)), (25, (0, -310, 670), 'easeOutCubic'), (71, (0, -310, 670), 'easeInOutSine'), (101, (0, -141, 163), 'easeOutSine'), (116, (0, -141, 163), 'easeInOutSine'),
-         (143, (0, -230, 10), 'easeInSine'), (165, (-420, -560, -1200), 'easeOutSine'), (188, (-300, -420, -1830), 'easeOutCubic'), (245, (-120, -420, -1850))],
-    tgt=[(0, (0, -508, 2670)), (25, (0, -18, 2670), 'easeOutCubic'), (71, (0, -18, 2670), 'easeInOutSine'), (101, (0, 56, 1500), 'linear'), (116, (0, 56, 1500), 'easeInOutSine'), (143, (0, 0, 1500), 'easeInSine'),
-         (165, (-100, 0, 300), 'easeOutSine'), (188, (-260, 157, -830), 'easeOutCubic'), (245, (-80, 157, -850))],
+         (131, (0, -139, 56), 'linear'), (146, (78, -153, 19), 'easeInOutSine'), (161, (484, -244, 320), 'linear'), (164, (500, -248, 322), 'hold'), (165, (-278, -420, -1832), 'linear'), (188, (-278, -420, -1832), 'easeOutCubic'), (245, (-358, -420, -1832))],
+    tgt=[(0, (0, -508, 2670)), (25, (0, -18, 2670), 'easeOutCubic'), (71, (0, -18, 2670), 'easeInOutSine'), (101, (0, 56, 1500), 'linear'), (116, (0, 56, 1500), 'easeInOutSine'), (131, (0, 64, 1500), 'linear'), (146, (78, 60, 1500), 'easeInOutSine'),
+         (161, (-335, 81, 894), 'linear'), (164, (-319, 77, 896), 'hold'), (165, (-125, 157, -846), 'easeOutSine'), (188, (-238, 157, -846), 'easeOutCubic'), (245, (-318, 157, -846))],
 )
 
 # 3D モデルの杏子たち(仮: マネキン = mesh の mannequin)。足もとの位置は、完成版 3580 の足の画面位置を ROOF_CAM から床へ逆算した値。
@@ -168,14 +168,80 @@ def kyoko(pos, colors, outfit, pose=None, preset='stand', rot=0, h=220, phase=No
     ps.update(pose or {})
     o = {'geometry': 'mannequin', 'position': list(pos), 'rotation': [0, rot, 0], 'body': {'height': h, 'heads': 5.6, 'thickness': 0.95, 'shoulder': 0.95},
          'colors': {'skin': _KSKIN, 'hair': _KHAIR, 'ribbon': '#1c1a1e', 'eyes': '#8a2030', **colors}, 'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.05}, 'outfit': outfit,
-         'outline': {'width': h / 330, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'self_light': 0.35, 'preset': preset, 'pose': ps}
+         'face': False, 'outline': {'width': h / 330, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'self_light': 0.35, 'preset': preset, 'pose': ps}
     if phase is not None:
         o['phase'] = phase
     o.update(kw)
     return o
 
 
-def roof_figures(n):
+# ---- v3: 2D の立ち絵 + パーツ分解(puppet)を、3D の舞台の中に板で立てる ----
+# パペット 1 体 = 透明の comp 1 個(aux:P2D_<puppet_id>)→ mesh の板のテクスチャ(comp_id)に貼る(舞台の奥行きの中に立つ = 柵の前後が正しく出る)。
+_P2D_SEEN = {}
+
+
+def _p2d_comp(g, n=245):
+    """パペットを 1 体だけ置いた透明の comp を登録する(同じパペットは 1 個)。→ 登録のキー"""
+    key = 'aux:P2D_' + g['puppet_id']      # 台帳の ID は B13p(recreate.py は ID の順に作るので、B14 より前に来る名前にしてある)
+    if key not in _P2D_SEEN:
+        _P2D_SEEN[key] = g
+        cw, ch = g['canvas']
+
+        @reg(key, 'B13p', f'仮: puppet レイヤー {g["puppet_id"]} を 1 体置いた透明の comp(屋上の板に貼る。新しく生成した立ち絵・ユーザー未確認)', placeholder=True)
+        def _f(ctx, g=g, cw=cw, ch=ch):
+            L = [puppet_layer('p', n, g, [g['head'][0], g['head'][1]], g['head_h'], seed=len(g['puppet_id']) % 7, turn=0.18, wind=0.25)]
+            return doc('仮: 2D 立ち絵 + 分解 ' + g['puppet_id'], n, L, w=cw, h=ch)
+    return key
+
+
+def board(ctx, g, pos, h, yaw=0):
+    """パペットの comp を貼った板。人物の箱の高さを h(舞台の単位)に、足もとを pos に合わせる。yaw = 板の向き(度。カメラのほうへ向ける)。"""
+    cw, ch = g['canvas']
+    x0, y0, x1, y1 = g['box']
+    k = h / (y1 - y0)
+    return {'geometry': 'plane', 'size': [cw * k, ch * k], 'position': [pos[0] + (cw / 2 - g['head'][0]) * k, pos[1] - (y1 - ch / 2) * k, pos[2]], 'rotation': [0, yaw, 0],
+            'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'comp_id': ctx.comp(_p2d_comp(g)), 'transparent': True}}}
+
+
+# 屋上の人物の衣装の記号(KEY/OUTFITS.md)と向き。パペットがあれば板、無ければマネキン
+ROOF_SYMS = [('A', 'back'), ('G', None), ('C', None), ('F', None), ('A', None), ('E', None), ('H', None), ('D', None), ('B', 'sit')]
+ROOF_PUPPETS = [None if v == 'sit' else find_puppet(s, v) for s, v in ROOF_SYMS]     # 登録の時点で引く(how に書くため)
+for _g in ROOF_PUPPETS:
+    if _g:
+        _p2d_comp(_g)
+
+
+def roof_people_how():
+    names = ['1 人目(後ろ姿 A)', 'G', 'C', 'F', 'A', 'E', 'H', 'D', '座る B']
+    pu = [nm for nm, g in zip(names, ROOF_PUPPETS) if g]
+    mq = [nm for nm, g in zip(names, ROOF_PUPPETS) if not g]
+    return ('。人物は仮: ' + (f'2D 立ち絵 + 分解の板(puppet)= {"・".join(pu)}' if pu else '') + ('、' if pu and mq else '') + (f'マネキン = {"・".join(mq)}' if mq else '')
+            + '(puppet は板なので、回りこみ・腕のポーズは出せない)')
+
+
+def _cam_yaw(x, z):
+    """板をカメラのほうへ向ける角度のキー(ROOF_CAM の位置のキーの時刻ごと)。"""
+    ks = []
+    for k in ROOF_CAM['pos']:
+        f, (cx, cy, cz) = k[0], k[1]
+        ks.append((f, round(math.degrees(math.atan2(cx - x, -(cz - z))), 2)) + tuple(k[2:]))
+    return kf(*ks)
+
+
+def roof_figures(n, ctx=None):
+    F = _roof_mannequins(n)
+    if ctx is None:
+        return F
+    for i, g in enumerate(ROOF_PUPPETS):
+        if not g:
+            continue
+        m = F[i]
+        px, py, pz = m['position']
+        F[i] = board(ctx, g, (px, py, pz), m['body']['height'], yaw=_cam_yaw(px, pz) if i == 0 else 0)
+    return F
+
+
+def _roof_mannequins(n):
     HOOD = ({'top': '#8fb3a6', 'bottom': '#55698f', 'socks': '#2a2630', 'shoes': '#2a2630'}, {'sleeves': 1, 'pants': 0.1, 'socks': 0.85})
     wave = {'k': [dict(f=f, v=round(48 + 14 * math.sin(2 * math.pi * f / 44), 2)) for f in range(0, n + 8, 8)]}
     F = [
@@ -196,13 +262,13 @@ def roof_figures(n):
         kyoko((112, 0, -1253), {'top': '#b12c3d', 'bottom': '#b12c3d', 'skirt': '#e87a5a', 'shoes': _KSKIN}, {'sleeves': 0, 'pants': 0.06, 'skirt': 1.1, 'skirt_flare': 0.6},
               pose={'shoulder_l': [0, -90, 118], 'elbow_l': wave, 'hand_l': 'open', 'shoulder_r': [0, 0, 26]}, rot=8, n=n, seed=7),
         # ベンチに座る魔法少女(槍を持つ)
-        kyoko((300, -58, -1690), {'top': '#a32f48', 'bottom': '#a32f48', 'skirt': '#e68aa8', 'socks': '#3b2233', 'shoes': '#7a2338'}, {'sleeves': 0, 'pants': 0.08, 'skirt': 0.62, 'skirt_flare': 0.9, 'socks': 1.55, 'boots': 0.9},
-              preset='sit', pose={'shoulder_l': [50, 0, 20], 'elbow_l': 70, 'hand_l': 'fist'}, rot=-150, h=200, n=n, seed=8),
+        kyoko((-167, -52, -1493), {'top': '#a32f48', 'bottom': '#a32f48', 'skirt': '#e68aa8', 'socks': '#3b2233', 'shoes': '#7a2338'}, {'sleeves': 0, 'pants': 0.08, 'skirt': 0.62, 'skirt_flare': 0.9, 'socks': 1.55, 'boots': 0.9},
+              preset='sit', pose={'shoulder_l': [50, 0, 20], 'elbow_l': 70, 'hand_l': 'fist'}, rot=-45, h=200, n=n, seed=8),
     ]
     return F
 
 
-def roof_parts(n, parts, figures=False):
+def roof_parts(n, parts, figures=False, ctx=None):
     """parts: bg, city, fence, sc1, sc2, sc3, stand の組"""
     P = set(parts)
     O = []
@@ -237,14 +303,14 @@ def roof_parts(n, parts, figures=False):
         O.append({'geometry': 'box', 'size': [7, 170, 7], 'position': [0, -145, -1510], 'material': mat('#9a9a5c'),
                   'instances': {'count': 45, 'layout': 'grid', 'grid': [45, 1, 1], 'spacing': [80, 0, 0]}})
         O.append(box((3600, 7, 7), (0, -230, -1510), '#9a9a5c'))
-        for bx in (130, 420):
-            O.append(box((230, 12, 420), (bx, -110, -1740), '#6f5a44'))
+        for bx in (-180, -20):                                                                                 # ベンチ(完成版 3580 の画面位置から逆算: 右下へ斜めに 2 枚)
+            O.append(box((80, 12, 340), (bx, -110, -1510), '#6f5a44', rot=(0, -45, 0)))
         O.append(box((240, 150, 240), (-620, -135, -1760), '#e0b040', material=mat('#e0b040', wireframe=True)))
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
     if figures:
-        O.extend(roof_figures(n))                                                                                # 人物 = 仮: マネキン
-        O.append(box((4, 4, 330), (270, -190, -1700), '#b0343a', rot=(30, 40, 0)))                              # 槍
+        O.extend(roof_figures(n, ctx))                                                                                # 人物 = 仮: マネキン
+        O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                              # 槍
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
     return [cam(n, ROOF_CAM['zoom'], ROOF_CAM['pos'], ROOF_CAM['tgt']), mesh('stage', n, O, light=lt)]
 
@@ -252,7 +318,7 @@ def roof_parts(n, parts, figures=False):
 def _roof(key, lid, parts, n=144, figures=False, bg=None, note=''):
     @reg(key, lid, 'mesh(箱・板・複製)+ camera' + note)
     def f(ctx):
-        return doc('再現 B14 屋上 ' + key.rsplit('/', 1)[-1], n, roof_parts(n, parts, figures), bg=bg)
+        return doc('再現 B14 屋上 ' + key.rsplit('/', 1)[-1], n, roof_parts(n, parts, figures, ctx), bg=bg)
     return f
 
 
@@ -264,7 +330,7 @@ _roof(_S30 + '1.03足場2中', 'B14', ['sc2'])
 _roof(_S30 + '1.03足場3右', 'B14', ['sc3'])
 _roof(_S30 + '1.03フェンス', 'B14', ['fence'])
 _roof(_S30 + '1.03高台足場', 'B14', ['roof'])
-_roof(_S30 + '1.08', 'B14', ['bg', 'roof', 'city', 'sc1', 'sc2', 'sc3', 'fence', 'stand'], n=245, figures=True, bg='#eef0f0', note='。人物は仮: マネキン(mesh の mannequin 9 体。元絵 = 3D モデルの杏子)')
+_roof(_S30 + '1.08', 'B14', ['bg', 'roof', 'city', 'sc1', 'sc2', 'sc3', 'fence', 'stand'], n=245, figures=True, bg='#eef0f0', note=roof_people_how())
 
 
 # ================================================================ B18 廊下(S32 3977-4179)
@@ -280,7 +346,31 @@ COR_KYOKO = [(-150, 900, 150), (160, 1150, 150), (-60, 1500, 130), (60, 1800, 15
              (140, 3000, 150), (-30, 3400, 150), (260, 760, 170), (-270, 820, 170)]
 
 
-def corridor_parts(n, parts):
+# 廊下に並ぶ魔法少女の杏子の絵(Blender の中に板で置いてあった)。2 巡目は、置き換え表の新しく生成した立ち絵(透明の切り抜き。**仮 = ユーザー未確認の生成絵**)を板に貼る。
+# (x, 床からの浮き, z, 高さ)。完成版 4020〜4080 を見て: 手前は大きく(枠の高さの半分ほど)、宙に跳ぶ絵もあり、奥へ向かって小さく密に並ぶ
+COR_PICS = ['13.5_サビ歌情報背景/02-1.png', '13.5_サビ歌情報背景/03-1.png', '13.5_サビ歌情報背景/04-2-1.png', '13.5_サビ歌情報背景/06-1.png', '13.5_サビ歌情報背景/09-2.png', '静止画素材/3.png']
+COR_BOARDS = [(-200, 0, 700, 270), (230, 0, 720, 260), (-60, 0, 900, 250), (110, 0, 950, 240), (-250, 90, 1000, 250), (60, 130, 1150, 220), (190, 60, 1250, 230), (-130, 0, 1300, 220),
+              (0, 0, 1500, 210), (-220, 0, 1700, 220), (220, 0, 1750, 210), (-70, 40, 2000, 200), (90, 0, 2200, 200), (-170, 0, 2500, 200), (160, 30, 2800, 200), (-40, 0, 3100, 200),
+              (60, 0, 3500, 200), (-120, 0, 3900, 200), (120, 0, 4300, 200), (0, 0, 4700, 200)]
+
+
+def corridor_boards(ctx):
+    pics = [v for v in (ctx.asset(k) for k in COR_PICS) if v] if ctx is not None else []
+    O = []
+    for i, (x, lift, z, h) in enumerate(COR_BOARDS):
+        if not pics:                                   # 絵がまだ無いとき(36 など)は影絵の板のまま
+            O.append(figure((x, 195 - lift, z), ('#c6303a', '#a8324a', '#d04858')[i % 3], h=h))
+            continue
+        mg = [v for v in pics if v.get('asset_id') and v is pics[-1]] if len(pics) == len(COR_PICS) else []      # 魔法少女服の立ち絵(静止画素材/3.png)
+        a = mg[0] if mg and i % 2 == 0 else pics[(i * 5 + i // 3) % max(1, len(pics) - (1 if mg else 0))]      # 半分は魔法少女服、残りはほかの衣装の立ち絵
+        h = h * 1.25
+        w = h * a['w'] / a['h']
+        O.append({'geometry': 'plane', 'size': [w, h], 'position': [x, 198 - lift - h / 2, z], 'scale': [-1 if (i % 2) == (1 if x < 0 else 0) else 1, 1, 1],
+                  'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'asset_id': a['asset_id']}}})
+    return O
+
+
+def corridor_parts(n, parts, ctx=None):
     P = set(parts)
     O = []
     L = 5200
@@ -308,15 +398,14 @@ def corridor_parts(n, parts):
         O.append({'geometry': 'cylinder', 'radius': 60, 'height': 8, 'position': [0, -150, L / 2], 'material': mat('#ffffff', type='basic'),
                   'instances': {'count': 13, 'layout': 'grid', 'grid': [1, 1, 13], 'spacing': [0, 0, 400]}})                                         # 天井の灯り
         O.append(box((8, 50, L), (0, -175, L / 2), '#ffffff', material=mat('#ffffff', type='basic')))
-        for i, (x, z, h) in enumerate(COR_KYOKO[:10]):   # 杏子の絵(Blender の中に板で置いてあった)= 仮の板
-            O.append(figure((x, 195, z), ('#c6303a', '#a8324a', '#d04858')[i % 3], h=h * 2.1))
+        O.extend(corridor_boards(ctx))                    # 杏子の絵(仮: 新しく生成した立ち絵を貼った板)
     return [cam(n, COR_CAM['zoom'], COR_CAM['pos'], COR_CAM['tgt']), mesh('corridor', n, O, light={'direction': [0.3, -1, -0.6], 'intensity': 1.2, 'ambient': 1.5})]
 
 
 def _cor(key, parts, n, note=''):
     @reg(key, 'B18', 'mesh(箱・板・複製)+ camera' + note)
     def f(ctx):
-        return doc('再現 B18 廊下 ' + key.rsplit('/', 1)[-1], n, corridor_parts(n, parts))
+        return doc('再現 B18 廊下 ' + key.rsplit('/', 1)[-1], n, corridor_parts(n, parts, ctx))
     return f
 
 
@@ -325,7 +414,7 @@ _cor(_S32 + 'Blender_教室/1.00天井', ['ceil'], 203)
 _cor(_S32 + 'Blender_教室/1.00廊下', ['floor'], 203)
 _cor(_S32 + 'Blender_教室/1.00教室', ['room'], 203)
 _cor(_S32 + 'Blender_教室/1.02教室', ['room'], 203)
-_cor(_S32 + 'Blender_教室/1.03full', ['full'], 203, note='。中の杏子の絵は仮の板')
+_cor(_S32 + 'Blender_教室/1.03full', ['full'], 203, note='。中の杏子の絵 20 枚は仮(新しく生成した魔法少女の立ち絵 6 種 = ユーザー未確認の生成絵 を板に貼った)')
 
 
 # ================================================================ 2D で組む物

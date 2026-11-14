@@ -202,7 +202,15 @@ LT["puppet"] = {"label": "パペット(立ち絵のリグ)", "icon": "🎭", "so
     "breath": N("呼吸の強さ(0 = なし)", 1, 0, 5, 0.05, **g("体")), "breath_period": N("呼吸の周期(秒)", 4, 0.3, 20, 0.1, optional=True, **g("体")),
     "sway": N("髪・布のゆれの強さ(0 = なし)", 1, 0, 5, 0.05, **g("ゆれ")), "wind": N("風(-1 = 左へ 〜 1 = 右へなびく)", 0, -2, 2, 0.01, **g("ゆれ")),
     "sway_speed": N("ゆれの速さ(倍。キーを打たず定数で)", 1, 0, 5, 0.05, False, optional=True, **g("ゆれ")),
-    "sway_lag": N("毛先の遅れ(秒)", 0.16, 0, 1, 0.01, False, optional=True, **g("ゆれ")), "sway_seed": N("ゆれの種", 0, 0, 9999, 1, False, optional=True, **g("ゆれ"))},
+    "sway_lag": N("毛先の遅れ(秒)", 0.16, 0, 1, 0.01, False, optional=True, **g("ゆれ")), "sway_seed": N("ゆれの種", 0, 0, 9999, 1, False, optional=True, **g("ゆれ")),
+    # 腕・脚のボーン(パペットに bones.json / bones.png があるときだけ効く。tools/pose-kit/make_bones.py で作る)
+    "pose_preset": S("姿勢のプリセット(マネキンと同じ名前。ボーンつきのパペットだけ)", "stand", [(x, x) for x in ["stand", "a_pose", "t_pose", "idle", "walk", "run", "wave", "sit", "hand_on_hip", "peace", "lean_forward", "cheer"]], optional=True, animatable=True, **g("ボーン")),
+    "pose_phase": N("プリセットの位相(0〜1 で 1 周。walk・wave のくり返し)", 0, -1000, 1000, 0.01, optional=True, **g("ボーン")),
+    "pose_amount": N("プリセットの効き(0 = 立ち姿 〜 1)", 1, 0, 1, 0.01, optional=True, **g("ボーン")),
+    "pose_ground": B("足先を地面の高さに保つ(walk・run は書かなくても有効)", optional=True, **g("ボーン")),
+    "pose": {"type": "object", "label": "関節の角度(度。腕・脚は正 = 外へ開く、waist・neck は正 = 時計回り。[角度, 長さの倍率] も可)", "default": None, "animatable": False, "optional": True, "group": "ボーン", "fields": {
+        **{j: A(lab, 0) for j, lab in [("waist", "腰(上半身)"), ("neck", "首"), ("shoulder_l", "肩 左(画面の右)"), ("shoulder_r", "肩 右"), ("elbow_l", "ひじ 左"), ("elbow_r", "ひじ 右"), ("wrist_l", "手首 左"), ("wrist_r", "手首 右"),
+                                       ("hip_l", "股 左"), ("hip_r", "股 右"), ("knee_l", "ひざ 左"), ("knee_r", "ひざ 右"), ("ankle_l", "足首 左"), ("ankle_r", "足首 右")]}}}},
     "default_source": {"puppet_id": None}, "default_layer": {}}
 # ---- mesh(手続きの 3D: 箱・球・回転体・押し出し・立体文字・管・破片、その複製)。エンジンは mesh3d.js ----
 def WG(d, *kinds): d["when"] = {"geometry": list(kinds)}; return d
@@ -272,12 +280,12 @@ MESH_OBJ = {
     "body": WG({"type": "object", "label": "体格", "fields": {"height": N("身長(px)", 600, 1, 20000, 1), "heads": N("頭身", 6.5, 2, 12, 0.1), "thickness": N("太さ(倍率)", 1, 0.05, 10, 0.01), "shoulder": N("肩幅(倍率)", 1, 0.2, 4, 0.01),
         "hip": N("腰幅(倍率)", 1, 0.2, 4, 0.01), "arm_length": N("腕の長さ(倍率)", 1, 0.2, 3, 0.01), "leg_length": N("脚の長さ(倍率)", 1, 0.3, 1.4, 0.01)}}, "mannequin"),
     "colors": WG({"type": "object", "label": "色", "fields": {"skin": C("肌", "#f6d9c8"), "top": C("服の上", "#d8d8de"), "bottom": C("服の下", "#5a6278"), "hair": C("髪", "#b5334f"), "shoes": C("靴", "#3a3036"), "ribbon": C("リボン", "#1c1a1e"), "eyes": C("目", "#7a1f2c"),
-        "skirt": C("スカート(省略 = 服の下)", None, optional=True), "sleeves": C("袖(省略 = 服の上)", None, optional=True), "pants": C("ズボン・腰(省略 = 服の下)", None, optional=True), "socks": C("靴下(省略 = 靴)", None, optional=True)}}, "mannequin"),
+        "skirt": C("スカート(省略 = 服の下)", None, optional=True), "sleeves": C("袖(省略 = 服の上)", None, optional=True), "pants": C("ズボン・腰(省略 = 服の下)", None, optional=True), "socks": C("靴下(省略 = 靴)", None, optional=True), "guide": C("顔の当たり線(省略 = 肌より少し濃い色)", None, optional=True)}}, "mannequin"),
     "outfit": WG({"type": "object", "label": "服", "fields": {"sleeves": N("袖の長さ(0 = なし、1 = 手首まで)", 1, 0, 1, 0.01), "pants": N("ズボンの長さ(0 = なし、1 = 足首まで)", 0.2, 0, 1, 0.01), "skirt": N("スカートの長さ(0 = なし。1 = ももの長さ)", 0, 0, 2, 0.01),
         "skirt_flare": N("スカートの広がり", 0.6, 0, 4, 0.01), "socks": N("靴下の長さ(1 = ひざまで、2 = ももの上まで)", 0, 0, 2, 0.01), "boots": N("ブーツの長さ(1 = ひざまで)", 0, 0, 1, 0.01)}}, "mannequin"),
     "hair": WG({"type": "object", "label": "髪", "fields": {"style": S("髪型", "none", [("none", "なし"), ("short", "短い(頭をおおうだけ)"), ("ponytail", "ポニーテール(3 節で揺らせる)")]), "length": N("ポニーテールの長さ(身長に対する割合)", 0.42, 0.01, 2, 0.01),
         "thickness": N("ポニーテールの太さ(倍率)", 1, 0.1, 5, 0.01), "bangs": B("前髪・横の房", True), "ribbon": B("リボン(ポニーテールの根元)", True)}}, "mannequin"),
-    "face": WG(B("目を描く", True), "mannequin"),
+    "face": WG(B("目を描く(切る = のっぺらぼう)", True), "mannequin"), "face_guide": WG(B("顔の当たり線(ごく薄い十字: 顔の中心線と目の高さ)"), "mannequin"),
     "outline": WG({"type": "object", "label": "輪郭線(裏返しの殻)", "default": None, "animatable": False, "optional": True, "fields": {"width": N("太さ(px)", 3, 0, 100, 0.1), "color": C("色", "#2a1a20")}}, "mannequin"),
     "self_light": WG(N("自分で光る割合(暗い場面でも色が見える)", 0, 0, 4, 0.01), "mannequin"),
     "preset": WG(S("ポーズ(プリセット)", "stand", [("stand", "立つ"), ("a_pose", "A の字"), ("t_pose", "T の字"), ("idle", "立って小さく揺れる(phase)"), ("walk", "歩く(phase)"), ("run", "走る(phase)"), ("wave", "手を振る(phase)"), ("sit", "座る"),
