@@ -72,7 +72,8 @@ fx("stroke_outline", "縁取り", G4, {"width": N("サイズ", 4, 0, 200, 1), "c
 fx("drop_shadow", "シャドー", G4, {"distance": N("距離", 12, 0, 1000, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60)}, False)
 fx("inner_shadow", "内側シャドー", G4, {"distance": N("距離", 6, 0, 500, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60)}, False)
 fx("long_shadow", "ロングシャドー", G4, {"length": N("長さ", 100, 0, 2000, 1), "angle": A("角度", 135), "color": C("色", "#000000"), "opacity": P("濃さ", 50), "fade": P("先を薄く", 0)}, False)
-fx("trace_outline", "輪郭追跡", G4, {"progress": P("描画度"), "width": N("線幅", 8, 1, 100, 1), "start": P("開始点", 0), "threshold": N("閾値", 128, 1, 254, 1), "color": C("色", "#ffffff"), "only_line": B("輪郭のみ")}, False)
+fx("trace_outline", "輪郭追跡", G4, {"progress": P("描画度"), "width": N("線幅", 8, 1, 100, 1), "start": P("開始点", 0), "threshold": N("閾値", 128, 1, 254, 1), "color": C("色", "#ffffff"), "only_line": B("輪郭のみ"),
+    "dash_period": P("破線の周期(1 周に対する %。0 = 実線)", 0), "dash_gap": P("破線のすき間(%。周期より小さく)", 0)}, False)
 fx("feather", "縁をぼかす", G4, {"radius": N("幅", 10, 0, 300, 1)}, False)
 # --- ぼかし・光 ---
 fx("blur", "ぼかし", G5, {"radius": N("範囲", 10, 0, 500, 1)}, False)
@@ -110,9 +111,13 @@ FILL = lambda label, default, g: {"type": "fill", "label": label, "default": def
 SHAPE_KINDS = [("rect", "四角形"), ("ellipse", "円"), ("polygon", "多角形"), ("star", "星"), ("line", "線"), ("path", "パス"), ("arc", "円弧"), ("pie", "扇形"), ("ring", "輪"), ("arrow", "矢印"), ("chevron", "矢じり"), ("cross", "十字"), ("heart", "ハート"), ("flower", "花"), ("petal", "花びら"), ("burst", "爆発"), ("bubble", "吹き出し")]
 g = lambda name: {"group": name}
 LT = {}
-LT["image"] = {"label": "画像", "icon": "🖼️", "source": {"asset_id": N("素材", None, anim=False, asset="image", **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {}}
-LT["video"] = {"label": "動画", "icon": "🎞️", "source": {"asset_id": N("素材", None, anim=False, asset="video", **g("素材")), "loop": B("繰り返す", **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {"start": 0, "speed": 1}}
-LT["sequence"] = {"label": "連番画像", "icon": "🎬", "source": {"sequence": {"type": "object", "label": "連番({asset_ids:[...]} か {url_pattern, start, count, fps})", "default": {"asset_ids": []}, "animatable": False, "group": "素材"}, "loop": B("繰り返す", **g("素材"))}, "default_source": {"sequence": {"asset_ids": []}}, "default_layer": {}}
+# 画像・動画・連番の「N px に合わせる」(素材の画素数を知らなくてよい。transform.scale はその上に掛かる)
+FIT = lambda: {"fit": {"type": "object", "label": "大きさを合わせる(px。片方だけ = 縦横比どおり)", "default": None, "animatable": False, "optional": True, "group": "大きさ", "fields": {
+    "width": N("幅 px", None, 1, 16000, 1, optional=True), "height": N("高さ px", None, 1, 16000, 1, optional=True),
+    "mode": S("合わせ方(幅も高さも無し = 画面に)", "contain", [("contain", "収める(全体が見える)"), ("cover", "覆う(はみ出しは切る)"), ("stretch", "引きのばす(縦横比を無視)")])}}}
+LT["image"] = {"label": "画像", "icon": "🖼️", "source": {"asset_id": N("素材", None, anim=False, asset="image", **g("素材")), **FIT()}, "default_source": {"asset_id": None}, "default_layer": {}}
+LT["video"] = {"label": "動画", "icon": "🎞️", "source": {"asset_id": N("素材", None, anim=False, asset="video", **g("素材")), "loop": B("繰り返す", **g("素材")), **FIT()}, "default_source": {"asset_id": None}, "default_layer": {"start": 0, "speed": 1}}
+LT["sequence"] = {"label": "連番画像", "icon": "🎬", "source": {"sequence": {"type": "object", "label": "連番({asset_ids:[...]} か {url_pattern, start, count, fps})", "default": {"asset_ids": []}, "animatable": False, "group": "素材"}, "loop": B("繰り返す", **g("素材")), **FIT()}, "default_source": {"sequence": {"asset_ids": []}}, "default_layer": {}}
 LT["solid"] = {"label": "平面", "icon": "⬛", "source": {"color": C("色", "#ffffff", **g("塗り")), "width": N("幅(省略 = 画面)", None, 1, 8000, 1, optional=True, **g("大きさ")), "height": N("高さ", None, 1, 8000, 1, optional=True, **g("大きさ")), "fill": FILL("塗り(グラデーション・模様)", None, "塗り") | {"optional": True}}, "default_source": {"color": "#ffffff"}, "default_layer": {}}
 LT["pattern"] = {"label": "模様", "icon": "🎴", "source": {**pattern_params(), "width": N("幅(省略 = 画面)", None, 1, 16000, 1, optional=True, **g("大きさ")), "height": N("高さ", None, 1, 16000, 1, optional=True, **g("大きさ")),
     "cols": N("横の升目の数(幅 = 大きさ × 個数。市松など)", None, 1, 1000, 1, False, optional=True, **g("大きさ")), "rows": N("縦の升目の数", None, 1, 1000, 1, False, optional=True, **g("大きさ")),
@@ -138,7 +143,8 @@ LT["text"] = {"label": "テキスト", "icon": "🔤", "source": {"text": T("文
     "counter": {"type": "object", "label": "カウンター", "default": None, "animatable": False, "optional": True, "group": "カウンター", "fields": {"value": N("値", 0, -1e15, 1e15, 1), "start": N("初期値(value が無いとき)", 0, -1e15, 1e15, 1, False), "rate": N("1 秒あたりの増分", 1, -1e9, 1e9, 0.01, False), "decimals": N("小数の桁", 0, 0, 10, 1, False), "pad": N("ゼロ埋めの桁", 0, 0, 20, 1, False),
         "prefix": T("前に付ける文字"), "suffix": T("後ろに付ける文字"), "separator": B("3 桁区切り"), "format": T("形式(number / timecode / hh:mm:ss / mm:ss / mm:ss.cc / ####.##.## のようなひな形)", "number"), "fixed_width": B("数字を等幅に", True), "scramble": P("数字を回す割合", 0)}},
     "visible_chars": N("見せる文字数(タイプライター)", None, 0, 100000, 0.1, optional=True, **g("アニメ")),
-    "arc": {"type": "object", "label": "円周に沿わせる", "default": None, "animatable": False, "optional": True, "group": "円周", "fields": {"radius": N("半径(負 = 下側)", 300, -8000, 8000, 1), "start": A("位置"), "sweep": A("等間隔に配る範囲(省略 = 字幅どおり)", None)}},
+    "arc": {"type": "object", "label": "円周に沿わせる", "default": None, "animatable": False, "optional": True, "group": "円周", "fields": {"radius": N("半径(負 = 下側)", 300, -8000, 8000, 1), "start": A("位置"), "sweep": A("等間隔に配る範囲(省略 = 字幅どおり)", None),
+        "deg_per_px": N("px あたりの角度(度。書くと「字幅 ÷ 半径」の代わりに「文字の横位置 × これ」)", None, -10, 10, 0.001, optional=True)}},
     "per_char": {"type": "object", "label": "文字ごとアニメ", "default": None, "animatable": False, "optional": True, "group": "アニメ", "fields": {"unit": S("単位", "char", [("char", "文字"), ("word", "単語"), ("line", "行")]), "stagger": N("間隔(コマ)", 2, 0, 600, 0.1, False), "duration": N("時間(コマ)", 12, 0.1, 600, 0.1, False),
         "order": S("登場順", "forward", [("forward", "前から"), ("backward", "後ろから"), ("center", "内側から"), ("edges", "外側から"), ("random", "ランダム")]), "e": T("イージング", "easeOut"), "at": N("開始(レイヤーの頭からのコマ)", 0, 0, 100000, 1, False),
         "ranks": {"type": "numbers", "label": "順番の表(i 文字目が何番目に出るか。書くと登場順より優先)", "default": None, "animatable": False, "optional": True},

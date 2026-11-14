@@ -125,13 +125,18 @@ const F = {
       gl_FragColor = base + vec4(uColor.rgb * oa, oa) * (1.0 - base.a);
     }`,
   trace: HEAD + /* glsl */ `
-    uniform sampler2D tOut, tIn; uniform vec4 uColor; uniform float uOnly, uProgress, uStart; uniform vec2 uC;
+    uniform sampler2D tOut, tIn; uniform vec4 uColor; uniform float uOnly, uProgress, uStart; uniform vec2 uC, uDash;
     void main(){
       vec4 c = texture2D(tSrc, vUv);
       float band = clamp(texture2D(tOut, vUv).a - texture2D(tIn, vUv).a, 0.0, 1.0);
       vec2 q = P() - uC;
       float t = fract(atan(q.x, -q.y) / 6.2831853 - uStart);
       float k = uProgress >= 1.0 ? 1.0 : uProgress <= 0.0 ? 0.0 : clamp((uProgress - t) * length(q) * 6.2831853 + 0.5, 0.0, 1.0);
+      // 破線(uDash = 周期・すき間。1 周 = 1)。fract(t / 周期) × 周期 <= 周期 − すき間 の所だけ描く。境目は 1 画素でならす
+      if (uDash.x > 0.0 && uDash.y > 0.0) {
+        float u = fract(t / uDash.x) * uDash.x, px = length(q) * 6.2831853;
+        k *= clamp((uDash.x - uDash.y - u) * px + 0.5, 0.0, 1.0) * clamp(min(u, uDash.x - u) * px + 0.5, 0.0, 1.0);
+      }
       float a = band * k * uColor.a;
       vec4 base = uOnly > 0.5 ? vec4(0.0) : c;
       gl_FragColor = vec4(uColor.rgb * a, a) + base * (1.0 - a);
@@ -437,8 +442,11 @@ export class Effects {
         const w = Math.max(0.5, (num(p.width, 8) * rs) / 2)
         const th = clamp(num(p.threshold, 128) / 255, 0.02, 0.98)
         const ao = this.dilate(src, w, false, th), ai = this.dilate(src, w, true, th)
-        const m = this.mat('trace', { tOut: null, tIn: null, uColor: V4(), uOnly: 0, uProgress: 1, uStart: 0, uC: V2() })
+        const m = this.mat('trace', { tOut: null, tIn: null, uColor: V4(), uOnly: 0, uProgress: 1, uStart: 0, uC: V2(), uDash: V2() })
+        // 破線: dash_period(1 周に対する %)・dash_gap(すき間 %)。書かなければ・0 以下なら実線。すき間 >= 周期なら何も描かない
+        const dp = Math.max(0, num(p.dash_period, 0)) / 100, dg = dp > 0 ? clamp(num(p.dash_gap, 0) / 100, 0, dp) : 0
         const out = this.run1('trace', null, src, {
+          uDash: m.uniforms.uDash.value.set(dp, dg),
           tOut: ao.texture, tIn: ai.texture, uOnly: p.only_line ? 1 : 0, uProgress: clamp(num(p.progress, 100) / 100, 0, 1),
           uStart: num(p.start, 0) / 100, uC: this.v2.set(cx, cy), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
         })

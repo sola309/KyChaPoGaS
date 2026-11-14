@@ -178,7 +178,7 @@ def fx_fixtures(mask_url, ov_url):
         "gradient_overlay": {"per": {"cx": {"ctx": {"angle": 90}}, "width": {"value": 60}}},
         "overlay_source": {"base": {"url": ov_url}, "skip": {"asset_id": A}, "per": {
             "tile": {"ctx": {"scale": 40}}, "anchor": {"ctx": {"scale": 40}, "value": "top_left"}, "start": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 40}, "speed": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 3}}},
-        "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}}},
+        "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}, "dash_period": {"ctx": {"dash_gap": 5}, "value": 20}, "dash_gap": {"ctx": {"dash_period": 20}, "value": 10}}},
         "halftone": {"per": {"self_mask": {"ctx": {"bg": "#ffffff"}}}},
         "mirror": {"per": {"cy": {"ctx": {"angle": 30}}}},
         "glow": {"base": {"threshold": 20}},

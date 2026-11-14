@@ -38,6 +38,10 @@
 - **タイムライン**: 帯のドラッグ = 時刻、端 = 詰める、⠿ = 重なり順。▸ でキーフレームの行。何もない所からドラッグ = 範囲選択(レイヤーの行から始めると帯、キーの行から始めるとキー)。🔍 で名前・種類のしぼり込み、「今だけ」で再生位置にあるレイヤーだけ。group / camera の範囲は字下げされ、⊟ でたたむ。プレビューで選んだレイヤーの行は自動で見える所へスクロールする。
 - **プロパティ**: ◇ = キーフレーム、〰 = ループ・揺れ。□ のついた項目は「書かなければ無し」の機能で、チェックで入切(切 = 項目ごと消す)。エフェクトは「+ 足す…」(組ごと・検索つき)。複数選択では、数値を**ドラッグ**すると全部が同じ量だけ動き、**入力**すると全部が同じ値になる。
 - **プリセット**: 登場・退場・帯・シール風・文字の登場などをボタン 1 つで足す(あとからプロパティで直せる)。
+- **画像・動画の大きさ**: プロパティの「中身」の頭の「↔ 幅に合わせる」「↕ 高さに合わせる」「⛶ 全面を覆う」「▣ 全体を収める」で、コンポジションに合わせた大きさになる(拡大率は 100 % に、位置はまん中に戻る)。
+  好きな px にするなら、その下の「大きさを合わせる(px)」の 幅 px・高さ px に数字を書く(片方だけ = 縦横比どおり)。「元の大きさ」でやめる。
+- **✂ 背景を消す**(画像レイヤー): 「中身」の「✂ 背景を消す」を押すと、背景を消した透過画像が新しい素材としてでき、レイヤーの絵がそれに替わる(数秒。白い背景のアニメ絵が既定。写真などは右の一覧で選ぶ)。
+  元の素材は消えない。「↩ 元の絵に戻す」か Ctrl+Z で戻せる。絵の大きさは変わらないので、位置・拡大率はそのまま。
 - **JSON タブ**: 文書そのもの。下のレシピは、ここの `layers` に貼って「適用」でも試せる。
 
 | キー | 働き |
@@ -311,6 +315,34 @@ print("render:", j["status"], "asset:", call("GET", f"/api/comps/{cid}")["render
 # clip = call("POST", f"/api/comps/{cid}/place", {"start_frame": 0})
 ```
 
+### 背景を消す(切り抜き)を API から
+
+編集画面の「✂ 背景を消す」と同じこと。新しい API は無く、ジョブ `cutout`(`tools/cutout-kit`)を投げて、できた素材の番号をレイヤーに書くだけ。
+
+```python
+# 上の call() の続き。cid = コンポジション、"chara" = 背景を消したい画像レイヤーの id
+comp = call("GET", f"/api/comps/{cid}")
+layer = next(l for l in comp["data"]["layers"] if l["id"] == "chara")
+src_id = layer["source"]["asset_id"]
+# project_id = できた素材を入れるプロジェクト(コンポジションのプロジェクト)。crop: False = 絵の大きさを変えない(位置・拡大率がそのまま合う)
+# model: "isnet-anime"(アニメ絵・既定)/ "birefnet-general"(写真・汎用。重い)。bg: "white"(白い背景の絵。縁の白かぶりと落ち影も取る)/ "none"
+job = call("POST", "/api/jobs/", {"project_id": PID, "job_type": "cutout",
+           "params": {"project_id": PID, "asset_id": src_id, "model": "isnet-anime", "bg": "white", "feather": 1, "crop": False}})
+while True:
+    j = call("GET", f"/api/jobs/{job['id']}")
+    if j["status"] in ("completed", "failed", "cancelled"): break
+    time.sleep(0.7)
+assert j["status"] == "completed", j.get("error_msg")
+layer["source"]["cutout_of"] = layer["source"].get("cutout_of", src_id)   # 控え(「↩ 元の絵に戻す」が読む。絵には効かない)
+layer["source"]["asset_id"] = j["result_asset_ids"][0]
+call("PATCH", f"/api/comps/{cid}", {"data": comp["data"]})
+# 戻すとき: layer["source"]["asset_id"] = layer["source"].pop("cutout_of")
+```
+
+- `POST /api/assets/{id}/cutout {"model", "bg", "feather", "crop"}` でも同じジョブになるが、できた素材は**元の素材のプロジェクト**に入り、`crop` の既定が `true`(透明な余白を切り落とす = 絵の大きさが変わる)。
+  コンポジションのレイヤーを差し替えるなら、上の `POST /api/jobs/` で `project_id` と `crop: false` を明示する。
+- 切り抜きは CPU で数秒(birefnet-general は数十秒)。できた絵は `thumb` で必ず 1 コマ見る(髪の先・白い服が欠けることがある。欠けたら model か bg を変える)。
+
 ### エージェントむけの注意
 
 1. **書いたら必ず 1 コマ見る。** `thumb` で数コマ(頭・動きの途中・終わり)を取り、絵を自分の目で確かめてから「できた」と言う。書式として通っても、画面の外に出ている・透明・時刻がレイヤーの外、はよくある。
@@ -319,6 +351,9 @@ print("render:", j["status"], "asset:", call("GET", f"/api/comps/{cid}")["render
 4. **`in`〜`out` の外では映らない。** キーの `f` はコンポジションのコマ(レイヤーの頭からではない)。例外: `per_char.at` と transition はレイヤーの `in` から。
 5. **知らない項目は消さない。** 取り込んだ文書には `aviutl` などの控えが入っている。読んだ `data` を直して丸ごと返す(作り直さない)。
 6. **エフェクトの名前と項目は schema.json で確かめる。** 知らない `type` は警告つきで飛ばされるだけなので、綴りの誤りに気づきにくい(編集画面のプレビューの下「エンジンからの知らせ」に出る)。
-7. **素材**: `image` `video` は `source.asset_id`(`GET /api/assets/?project_id=N`)。大きさは素材の元の大きさで置かれるので、`transform.scale` で合わせる。
-8. **重さ**: 重いエフェクト・入れ子・被写界深度は枚数に比例して遅い(`tools/comp-kit/README.md` の「例と速さ」)。
-9. 取り込み試験のプロジェクト(36)のコンポジションは参照用。試すときは `duplicate` した写しで。
+7. **素材**: `image` `video` は `source.asset_id`(`GET /api/assets/?project_id=N`)。何も書かなければ素材の元の大きさで置かれる。**大きさは `source.fit` で px で決める**(素材の画素数を調べて `scale` を割り算しなくてよい):
+   `{"fit": {"width": 600}}`(幅 600 px・高さは縦横比どおり)、`{"fit": {"height": 800}}`、`{"fit": {"width": 600, "height": 800, "mode": "cover"}}`(箱を覆う・はみ出しは切る。`contain` = 収める・`stretch` = 引きのばす)、
+   `{"fit": {"mode": "cover"}}`(コンポジションの全面を覆う)。`transform.scale` はその上に掛かる(100 % = 合わせた大きさ)。エフェクトの px(`mask_shape` の幅など)も合わせたあとの大きさで書く。
+8. **背景を消す(切り抜き)**: 既存のジョブ `cutout` を呼び、できた素材にレイヤーを差し替える(下の「背景を消す」の例)。元の素材は残す。
+9. **重さ**: 重いエフェクト・入れ子・被写界深度は枚数に比例して遅い(`tools/comp-kit/README.md` の「例と速さ」)。
+10. 取り込み試験のプロジェクト(36)のコンポジションは参照用。試すときは `duplicate` した写しで。

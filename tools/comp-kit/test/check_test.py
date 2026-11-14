@@ -87,6 +87,40 @@ def main():
             crop = im.crop((100 - 32 + dx, 100 - 24 + dy, 100 + 32 + dx, 100 + 24 + dy))
             ok(f"画像 100%: {name}", crop.tobytes() == src.tobytes())
 
+        # 2a. source.fit(N px に合わせる)。64×48 の画像を 200×200 の画面に置く
+        def span0(im):
+            w, h = im.size
+            pxs = im.load()
+            xs = [x for x in range(w) if any(pxs[x, y][3] > 127 for y in range(h))]
+            ys = [y for y in range(h) if any(pxs[x, y][3] > 127 for x in range(w))]
+            return (xs[0], xs[-1] + 1, ys[0], ys[-1] + 1) if xs and ys else None
+        fitlay = lambda fit, **kw: comp([{"id": "i", "type": "image", "in": 0, "out": 10, "transform": {"position": [100, 100], **kw}, "source": {"url": url, **({"fit": fit} if fit is not None else {})}}])  # noqa: E731
+        plain_png = asyncio.run(grab(fitlay(None), [0], base))[0]
+        for name, fit, kw, want in [
+            ("幅 128 → 128×96", {"width": 128}, {}, (36, 164, 52, 148)),
+            ("高さ 96 → 128×96", {"height": 96}, {}, (36, 164, 52, 148)),
+            ("箱 120×120 contain(既定)→ 120×90", {"width": 120, "height": 120}, {}, (40, 160, 55, 145)),
+            ("箱 120×120 cover → 120×120(はみ出しは切る)", {"width": 120, "height": 120, "mode": "cover"}, {}, (40, 160, 40, 160)),
+            ("箱 120×60 stretch → 120×60", {"width": 120, "height": 60, "mode": "stretch"}, {}, (40, 160, 70, 130)),
+            ("何も書かない contain = 画面に収める → 200×150", {}, {}, (0, 200, 25, 175)),
+            ("mode cover だけ = 画面を覆う → 200×200", {"mode": "cover"}, {}, (0, 200, 0, 200)),
+            ("幅 128 + scale 50% → 64×48(scale は合わせた大きさに掛かる)", {"width": 128}, {"scale": [50, 50]}, (68, 132, 76, 124)),
+        ]:
+            sp = span0(px(asyncio.run(grab(fitlay(fit, **kw), [0], base))[0]))
+            ok(f"fit: {name}", sp == want, str(sp))
+        # 素材と同じ大きさを指定 → fit なしと 1 バイトも違わない(幅だけ・高さだけ・両方)
+        for name, fit in [("幅 64", {"width": 64}), ("高さ 48", {"height": 48}), ("64×48 cover", {"width": 64, "height": 48, "mode": "cover"})]:
+            ok(f"fit: 素材と同じ大きさ({name})= fit なしと同じ絵", px(asyncio.run(grab(fitlay(fit), [0], base))[0]).tobytes() == px(plain_png).tobytes())
+        # cover は中央を映す: 左半分が赤・右半分が緑の 80×40 を 40×40 に cover → 左が赤・右が緑、上下は切れない
+        two = Image.new("RGBA", (80, 40), (255, 0, 0, 255)); two.paste((0, 255, 0, 255), (40, 0, 80, 40)); two.paste((0, 0, 255, 255), (0, 0, 10, 40))
+        b2 = io.BytesIO(); two.save(b2, "PNG")
+        u2 = "data:image/png;base64," + base64.b64encode(b2.getvalue()).decode()
+        im = px(asyncio.run(grab(comp([{"id": "i", "type": "image", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"url": u2, "fit": {"width": 40, "height": 40, "mode": "cover"}}}]), [0], base))[0])
+        ok("fit cover: 中央を映す(左端の青い帯は切れる)", im.getpixel((84, 100)) == (255, 0, 0, 255) and im.getpixel((116, 100)) == (0, 255, 0, 255) and im.getpixel((81, 100)) == (255, 0, 0, 255) and im.getpixel((78, 100))[3] == 0, f"{im.getpixel((81, 100))} {im.getpixel((84, 100))} {im.getpixel((116, 100))}")
+        # fit のあとの crop は合わせたあとの箱から測る(幅 128×96 から左右 14 ずつ → 100×96)
+        sp = span0(px(asyncio.run(grab(comp([{"id": "i", "type": "image", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"url": url, "fit": {"width": 128}}, "effects": [{"type": "crop", "params": {"left": 14, "right": 14}}]}]), [0], base))[0]))
+        ok("fit → crop は合わせたあとの箱の px", sp == (50, 150, 52, 148), str(sp))
+
         # 2b. 箱の決まり(AviUtl 取り込みで見つけたもの。ENGINE_ISSUES B-8 / B-9 / B-11 ほか)
         def span(im, bg=(0, 0, 0)):
             w, h = im.size
@@ -144,6 +178,24 @@ def main():
         ok("vignette_blur circle + brightness: 横と縦で同じ・周辺が +20%", ctr == 128 and abs(rgt - dwn) <= 1 and rgt > 130 and abs(far - (128 + 51)) <= 1, f"{ctr} {rgt} {dwn} {far}")
         im = px(asyncio.run(grab(vg(amount=50), [0], base))[0])
         ok("vignette_blur 既定(箱のだ円): 横と縦で違う", im.getpixel((280, 100))[0] > im.getpixel((200, 180))[0] + 5, f"{im.getpixel((280, 100))[0]} {im.getpixel((200, 180))[0]}")
+
+        # 2c. trace_outline の破線(ENGINE_ISSUES R-2)。100×100 の四角の輪郭、周期 25 %・すき間 12.5 % → 真上から時計回りに 45° ごとに 線・すき間
+        tr = lambda **p: comp([{"id": "s", "type": "solid", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"color": "#ff0000", "width": 100, "height": 100},  # noqa: E731
+                                "effects": [{"type": "trace_outline", "params": {"width": 8, "color": "#ffffff", "only_line": True, **p}}]}])
+        im = px(asyncio.run(grab(tr(dash_period=25, dash_gap=12.5), [0], base))[0])
+        on = [im.getpixel(q)[3] for q in ((121, 50), (150, 121), (79, 150), (50, 79))]      # 22.5° + 90°×n = 線
+        off = [im.getpixel(q)[3] for q in ((150, 79), (121, 150), (50, 121), (79, 50))]     # 67.5° + 90°×n = すき間
+        ok("trace_outline の破線: 線とすき間が交互", min(on) > 200 and max(off) < 30, f"{on} {off}")
+        solid_png = px(asyncio.run(grab(tr(), [0], base))[0]).tobytes()
+        ok("trace_outline: dash_period 0・すき間 0 は実線と同じ絵", px(asyncio.run(grab(tr(dash_period=0, dash_gap=30), [0], base))[0]).tobytes() == solid_png and px(asyncio.run(grab(tr(dash_period=25, dash_gap=0), [0], base))[0]).tobytes() == solid_png)
+        # 2d. 円周の文字の deg_per_px(R-4)。180/π/半径 を書けば既定(字幅 ÷ 半径)と同じ絵、2 倍にすれば文字の間が開く
+        import math
+        oc = lambda **p: comp([{"id": "t", "type": "text", "in": 0, "out": 10, "transform": {"position": [200, 200]}, "source": {"text": "ABCDEFG", "font": "Noto Sans JP", "size": 40, "fill": "#ffffff", "on_circle": {"radius": 120, "rotation": 0, **p}}}], w=400, h=400, bg="#000000")  # noqa: E731
+        g0 = px(asyncio.run(grab(oc(), [0], base))[0]); g1 = px(asyncio.run(grab(oc(deg_per_px=180 / math.pi / 120), [0], base))[0]); g2 = px(asyncio.run(grab(oc(deg_per_px=2 * 180 / math.pi / 120), [0], base))[0])
+        d01 = sum(1 for a_, b_ in zip(g0.tobytes(), g1.tobytes()) if abs(a_ - b_) > 8)
+        s0, s2 = span(g0), span(g2)
+        ok("on_circle.deg_per_px = 180/π/半径 は既定と同じ並び", d01 < 40, f"違う画素 {d01}")
+        ok("on_circle.deg_per_px を 2 倍 → 横に広がる", s2 and s0 and (s2[1] - s2[0]) > (s0[1] - s0[0]) * 1.4, f"{s0} {s2}")
 
         # 3. 決定論 / 4. プレビュー一致
         exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof"]

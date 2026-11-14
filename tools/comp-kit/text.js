@@ -506,7 +506,8 @@ export function fillTextBatch(batch, lay, perChar, t, span, layerId, opt = {}) {
           const sw = num(arc.sweep, 360)
           a = num(arc.start, 0) + (Math.abs(sw) >= 360 ? g.idx / Math.max(1, n) : n > 1 ? g.idx / (n - 1) - 0.5 : 0) * sw
           a *= D2R
-        } else a = num(arc.start, 0) * D2R + (R > 0 ? g.cx : -g.cx) / aR
+        } else if (arc.deg_per_px != null) a = (num(arc.start, 0) + (R > 0 ? g.cx : -g.cx) * num(arc.deg_per_px, 0)) * D2R // 文字の横位置 px × 係数 = 角度(AviUtl の円形配置・文字毎に個別)
+        else a = num(arc.start, 0) * D2R + (R > 0 ? g.cx : -g.cx) / aR
         let rot = a, rad = aR - (R > 0 ? g.cy : -g.cy)
         if (R < 0) { a += Math.PI; rot = a + Math.PI }
         // 文字を自分の中心まわりに回して、円周上へ運ぶ

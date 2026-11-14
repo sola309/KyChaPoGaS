@@ -9,6 +9,7 @@ import { useCompStore } from './store'
 import { PropField, EasingSelect, FieldList } from './PropField'
 import { NumField, Row, Section, btnCls, iconBtnCls, inputCls } from './fields'
 import { commonFor, effectInfo, groupBy, newEffect, optionsOf, typeIcon, typeLabel } from './schema'
+import { SourceTools, skipSourceMemo } from './SourceTools'
 
 const T_POS: ParamDesc = { type: 'vec3', label: '位置', animatable: true }
 const T_ANCHOR: ParamDesc = { type: 'vec3', label: 'アンカー', default: [0, 0, 0], animatable: true }
@@ -339,7 +340,8 @@ export function Inspector() {
       )}
       {hasSource && (
         <Section title={`中身(${typeLabel(schema, layer.type)})`}>
-          <FieldList ids={sel} layer={layer} base="source" descs={srcDescs} />
+          <SourceTools layer={layer} />
+          <FieldList ids={sel} layer={layer} base="source" descs={srcDescs} skip={skipSourceMemo} />
         </Section>
       )}
       {commonGroups.map(([g, descs]) => {

@@ -2302,6 +2302,24 @@
      "label": "輪郭のみ",
      "default": false,
      "animatable": false
+    },
+    "dash_period": {
+     "type": "percent",
+     "label": "破線の周期(1 周に対する %。0 = 実線)",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
+    },
+    "dash_gap": {
+     "type": "percent",
+     "label": "破線のすき間(%。周期より小さく)",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
     }
    }
   },
@@ -3083,6 +3101,56 @@
      "animatable": false,
      "asset": "image",
      "group": "素材"
+    },
+    "fit": {
+     "type": "object",
+     "label": "大きさを合わせる(px。片方だけ = 縦横比どおり)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "大きさ",
+     "fields": {
+      "width": {
+       "type": "number",
+       "label": "幅 px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "height": {
+       "type": "number",
+       "label": "高さ px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "mode": {
+       "type": "select",
+       "label": "合わせ方(幅も高さも無し = 画面に)",
+       "default": "contain",
+       "options": [
+        {
+         "value": "contain",
+         "label": "収める(全体が見える)"
+        },
+        {
+         "value": "cover",
+         "label": "覆う(はみ出しは切る)"
+        },
+        {
+         "value": "stretch",
+         "label": "引きのばす(縦横比を無視)"
+        }
+       ],
+       "animatable": false
+      }
+     }
     }
    },
    "default_source": {
@@ -3108,6 +3176,56 @@
      "default": false,
      "animatable": false,
      "group": "素材"
+    },
+    "fit": {
+     "type": "object",
+     "label": "大きさを合わせる(px。片方だけ = 縦横比どおり)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "大きさ",
+     "fields": {
+      "width": {
+       "type": "number",
+       "label": "幅 px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "height": {
+       "type": "number",
+       "label": "高さ px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "mode": {
+       "type": "select",
+       "label": "合わせ方(幅も高さも無し = 画面に)",
+       "default": "contain",
+       "options": [
+        {
+         "value": "contain",
+         "label": "収める(全体が見える)"
+        },
+        {
+         "value": "cover",
+         "label": "覆う(はみ出しは切る)"
+        },
+        {
+         "value": "stretch",
+         "label": "引きのばす(縦横比を無視)"
+        }
+       ],
+       "animatable": false
+      }
+     }
     }
    },
    "default_source": {
@@ -3137,6 +3255,56 @@
      "default": false,
      "animatable": false,
      "group": "素材"
+    },
+    "fit": {
+     "type": "object",
+     "label": "大きさを合わせる(px。片方だけ = 縦横比どおり)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "大きさ",
+     "fields": {
+      "width": {
+       "type": "number",
+       "label": "幅 px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "height": {
+       "type": "number",
+       "label": "高さ px",
+       "default": null,
+       "min": 1,
+       "max": 16000,
+       "step": 1,
+       "animatable": true,
+       "optional": true
+      },
+      "mode": {
+       "type": "select",
+       "label": "合わせ方(幅も高さも無し = 画面に)",
+       "default": "contain",
+       "options": [
+        {
+         "value": "contain",
+         "label": "収める(全体が見える)"
+        },
+        {
+         "value": "cover",
+         "label": "覆う(はみ出しは切る)"
+        },
+        {
+         "value": "stretch",
+         "label": "引きのばす(縦横比を無視)"
+        }
+       ],
+       "animatable": false
+      }
+     }
     }
    },
    "default_source": {
@@ -4642,6 +4810,16 @@
        "max": 360,
        "step": 1,
        "animatable": true
+      },
+      "deg_per_px": {
+       "type": "number",
+       "label": "px あたりの角度(度。書くと「字幅 ÷ 半径」の代わりに「文字の横位置 × これ」)",
+       "default": null,
+       "min": -10,
+       "max": 10,
+       "step": 0.001,
+       "animatable": true,
+       "optional": true
       }
      }
     },

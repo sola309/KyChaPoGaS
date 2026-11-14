@@ -581,12 +581,12 @@ export class CompScene {
       case 'image':
       case 'sequence': {
         const e = this.imageEntry(L, f)
-        return e && e.state === 'ready' ? box(e.w, e.h) : null
+        return e && e.state === 'ready' ? (s.fit != null ? this.fitBox(L, f, e.w, e.h) : box(e.w, e.h)) : null
       }
       case 'video': {
-        if (s.sequence) { const e = this.imageEntry(L, f); return e && e.state === 'ready' ? box(e.w, e.h) : null }
+        if (s.sequence) { const e = this.imageEntry(L, f); return e && e.state === 'ready' ? (s.fit != null ? this.fitBox(L, f, e.w, e.h) : box(e.w, e.h)) : null }
         const v = this.videoState(L, f, false)
-        return v && v.w ? box(v.w, v.h) : null
+        return v && v.w ? (s.fit != null ? this.fitBox(L, f, v.w, v.h) : box(v.w, v.h)) : null
       }
       case 'shape': return this.shapeRaster(L, f)?.box || null
       case 'text': {
@@ -608,6 +608,32 @@ export class CompScene {
       case 'model': { const h = num(s.height, this.H * 0.5); return box(h, h) }
     }
     return null
+  }
+
+  // source.fit: 素材の画素数を知らなくても「N px に合わせる」。箱(レイヤー空間の大きさ)を変えるだけで、transform.scale はその上に掛かる(100 % = 合わせた大きさ)。
+  //   {width}            幅を N px に(高さは縦横比どおり)        {height}  高さを N px に
+  //   {width, height, mode}  箱に合わせる。contain(既定)= 収まる最大 / cover = 箱を覆い、はみ出しは切る(中央) / stretch = 縦横比を無視
+  //   width も height も書かなければ、箱 = コンポジションの大きさ({"mode":"cover"} = 全面を覆う)
+  // cover の切り方は L.fitUv(素材のどこを映すか)に入れて content() が使う
+  fitBox(L, f, w, h) {
+    const ft = L.def.source.fit, o = ft && typeof ft === 'object' ? ft : {}
+    L.fitUv = null
+    const fw = num(evalProp(o.width, f, this.fps), 0), fh = num(evalProp(o.height, f, this.fps), 0)
+    const mode = typeof ft === 'string' ? ft : o.mode
+    if (!(w > 0 && h > 0)) return { x: -w / 2, y: -h / 2, w, h }
+    let bw = w, bh = h
+    if (fw > 0 && !(fh > 0)) { bw = fw; bh = (h * fw) / w }
+    else if (fh > 0 && !(fw > 0)) { bh = fh; bw = (w * fh) / h }
+    else {
+      const tw = fw > 0 ? fw : this.W, th = fh > 0 ? fh : this.H
+      if (mode === 'stretch') { bw = tw; bh = th }
+      else if (mode === 'cover') {
+        const k = Math.max(tw / w, th / h), u = Math.min(1, tw / (w * k)), v = Math.min(1, th / (h * k))
+        bw = tw; bh = th
+        L.fitUv = [(1 - u) / 2, (1 - v) / 2, (1 + u) / 2, (1 + v) / 2]
+      } else { const k = Math.min(tw / w, th / h); bw = w * k; bh = h * k }
+    }
+    return { x: -bw / 2, y: -bh / 2, w: bw, h: bh }
   }
 
   // 連番: {asset_ids:[...]} または {url_pattern:".../%04d.png", start, count, fps}
@@ -784,12 +810,13 @@ export class CompScene {
       }
       case 'adjustment': C.edge = true; break
       case 'image':
-      case 'sequence': C.texture = this.imageEntry(L, f).tex; C.edge = true; break
+      case 'sequence': C.texture = this.imageEntry(L, f).tex; C.edge = true; if (src.fit != null && L.fitUv) C.uvRect = L.fitUv; break
       case 'video': {
-        if (src.sequence) { C.texture = this.imageEntry(L, f).tex; C.edge = true; break }
+        if (src.sequence) { C.texture = this.imageEntry(L, f).tex; C.edge = true; if (src.fit != null && L.fitUv) C.uvRect = L.fitUv; break }
         const v = this.videoState(L, f)
         if (!v) return null
         C.texture = v.tex; C.edge = true
+        if (src.fit != null && L.fitUv) C.uvRect = L.fitUv
         break
       }
       case 'shape': {
@@ -810,7 +837,7 @@ export class CompScene {
         const pc = src.per_char
         // arc: {radius, start, sweep}。on_circle: {radius, rotation, arc} も同じ意味で読む
         let arc = src.arc ? evalAll(src.arc, f, this.fps) : null
-        if (!arc && src.on_circle) { const oc = evalAll(src.on_circle, f, this.fps); arc = { radius: oc.radius, start: oc.rotation ?? oc.start, sweep: oc.arc ?? oc.sweep } }
+        if (!arc && src.on_circle) { const oc = evalAll(src.on_circle, f, this.fps); arc = { radius: oc.radius, start: oc.rotation ?? oc.start, sweep: oc.arc ?? oc.sweep, deg_per_px: oc.deg_per_px } }
         L.batch ??= new QuadBatch(1)
         fillTextBatch(L.batch, r.lay, pc, f - (L.def.in ?? 0), (L.def.out ?? this.duration) - (L.def.in ?? 0), L.id, {
           visible: src.visible_chars != null ? num(evalProp(src.visible_chars, f, this.fps), 1e9) : undefined, arc,

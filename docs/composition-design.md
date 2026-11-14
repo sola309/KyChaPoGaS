@@ -93,7 +93,7 @@
 
 | type | source |
 |---|---|
-| image | `{"asset_id": N}` または `{"url": "..."}` |
+| image | `{"asset_id": N}` または `{"url": "..."}`。大きさを px で決めるなら `"fit"`(下の「v1.1 の追加(4 回目)」) |
 | video | `{"asset_id": N}` |
 | solid | `{"color": "#rrggbb", "width": W, "height": H}`(省略時はコンポジション大) |
 | shape | `{"kind": "rect"|"ellipse"|"polygon"|"star"|"line"|"path", "width","height", "radius"(角丸), "sides", "inner"(star の内径比), "points"(line/path), "closed", "fill": "#..."|null|{"gradient":...}, "stroke": "#..."|null, "stroke_width", "trim": [0,100]}` 数値・色はプロパティ値 |
@@ -331,3 +331,25 @@ boot に `fonts` を足した。postMessage に `comp:fonts {fonts}` を足し�
 | `repeat`(circle)の `copy_scale` `copy_rotation`、(random)の `spin` `drift_x` `drift_y` | 1 個ずつの拡大・回転、時間で回る・流れる |
 
 **player.html**: つまみの当たり判定は、マウス 10px・指 22px(見た目は同じ)。
+
+### v1.1 の追加(4 回目・2026-11-14): N px に合わせる・切り抜き・破線・px あたりの角度
+
+どれも足しただけで、書かなければ今までどおり(例 14 本 × 5 コマは 1 バイトも変わらない)。確かめ方は `tools/comp-kit/test/check_test.py`。
+
+| 書式 | 意味 |
+|---|---|
+| image・video・sequence の `source.fit: {"width": N}` / `{"height": N}` | 幅(高さ)を N px に。もう一方は縦横比どおり。素材の画素数を調べて `scale` を割り算しなくてよい |
+| `source.fit: {"width": W, "height": H, "mode": "contain" \| "cover" \| "stretch"}` | W×H の箱に合わせる。contain(既定)= 収まる最大 / cover = 覆う(はみ出しは切る・中央を映す)/ stretch = 縦横比を無視 |
+| `source.fit: {"mode": "cover"}`・`{}` | 幅も高さも書かなければ箱 = コンポジションの大きさ(全面を覆う・全体を収める) |
+| `source.cutout_of: N` | 編集画面の「✂ 背景を消す」が書く控え(切り抜く前の素材)。絵には効かない |
+| `trace_outline` の `dash_period` `dash_gap`(%) | 破線。1 周に対する周期とすき間(角度で刻む近似) |
+| text の `on_circle.deg_per_px`(`arc.deg_per_px`) | 角度 = 文字の横位置 px × これ(度)。AviUtl の円形配置(文字毎に個別) |
+
+- `fit` はレイヤーの箱(レイヤー空間での大きさ)を変える。`transform.scale` はその上に掛かる(100 % = 合わせた大きさ)。`anchor`・エフェクト・マスクの px、選択枠も合わせたあとの箱。
+- 切り抜きは新しいエンジンの機能ではなく、既存のジョブ `cutout`(`tools/cutout-kit`。isnet-anime / birefnet-general)を呼ぶだけ。できた透過 PNG は新しい素材になり、
+  レイヤーの `source.asset_id` をそれに差し替える(元の素材は残る)。編集画面は `crop: false`(絵の大きさを変えない)で呼ぶので、位置・拡大・エフェクトはそのまま合う。
+  API からの呼び方は `docs/composition-authoring.md` の 5 章。
+- 編集画面(`frontend/src/components/CompEditor/SourceTools.tsx`): 「中身」の頭に「↔ 幅に合わせる / ↕ 高さに合わせる / ⛶ 全面を覆う / ▣ 全体を収める / 元の大きさ」と「✂ 背景を消す」「↩ 元の絵に戻す」。
+  大きさのワンタップは `fit` を書き、拡大率を 100 % に、位置をまん中に戻す(キーつき・親つきの値は触らない)。どれも取り消し 1 回で戻る。
+- `threshold` の自動判定(大津)は入れていない(`reference/aviutl_mad/ENGINE_ISSUES.md` R-3 に理由)。
+
