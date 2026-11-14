@@ -201,6 +201,63 @@ async def run():
         n3 = await frame.evaluate(ink)
         ok("comp:overlay: セーフフレーム・三分割が出て、消える", n0 == 0 and n1 > 1000 and n2 > n1 + 1000 and n3 == 0, f"{n0} {n1} {n2} {n3}")
         await browser.close()
+
+        # ---- 指(タッチ)では、つまみの当たり判定が 22px に広がる。マウスは 10px のまま ----
+        browser = await p.chromium.launch(args=rt.CHROME_ARGS)
+        ctx = await browser.new_context(viewport={"width": 900, "height": 600}, device_scale_factor=1, has_touch=True)
+        page = await ctx.new_page()
+        page.on("pageerror", lambda e: fails.append(f"pageerror {e}"))
+        await page.set_content(PARENT % (f"{base}/preview/ptest.json?scale=1", VW, VH), wait_until="load")
+        for _ in range(100):
+            if await page.evaluate("window.msgs.some(m => m.type === 'comp:ready')"):
+                break
+            await asyncio.sleep(0.1)
+        cdp = await ctx.new_cdp_session(page)
+
+        async def touch_drag(a, b, steps=6):
+            pt = lambda q: [{"x": q[0], "y": q[1], "id": 1}]  # noqa: E731
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": pt(a)})
+            for i in range(1, steps + 1):
+                await cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": pt((a[0] + (b[0] - a[0]) * i / steps, a[1] + (b[1] - a[1]) * i / steps))})
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+        async def reset():
+            await page.evaluate("window.send({type:'comp:set', comp: %s})" % json.dumps(COMP))
+            await page.evaluate("window.send({type:'comp:select', ids:['A']})")
+            await asyncio.sleep(0.3)
+            await page.evaluate("window.msgs.length = 0")
+
+        # A = 200×100、中心 (320,180)。右下の隅は (420,230)。そこから外へ 18px(CSS px)ずれた所をつかむ
+        off = 18 * math.sqrt(0.5)
+        c0 = P(420, 230)
+        g0 = (c0[0] + off, c0[1] + off)
+        await reset()
+        await touch_drag(g0, (g0[0] + 50 * s, g0[1] + 25 * s))
+        e = last(await msgs(), "transform.scale")
+        ok("指: 隅から 18px ずれてもつまみをつかめる(拡大 [150,150,…])", e is not None and near(e["value"][:2], [150, 150], 2.5) and e["final"] is True, str(e))
+        await reset()
+        await drag(g0, (g0[0] + 50 * s, g0[1] + 25 * s))
+        ms = await msgs()
+        ok("マウス: 同じ 18px ずれではつかめない(10px のまま)", last(ms, "transform.scale") is None, str(last(ms, "transform.scale")))
+        await reset()
+        g1 = (c0[0] + 5, c0[1] + 5)
+        await drag(g1, (g1[0] + 50 * s, g1[1] + 25 * s))
+        e = last(await msgs(), "transform.scale")
+        ok("マウス: 5px ずれならつかめる(今までどおり、つかんだ所へ隅が寄る)", e is not None and near(e["value"][:2], [154.8, 154.8], 2.5), str(e))
+        # 指: 箱のまん中は、つまみではなく移動
+        await reset()
+        await touch_drag(P(320, 180), P(360, 200))
+        ms = await msgs()
+        e = last(ms, "transform.position")
+        ok("指: 箱のまん中は移動", e is not None and near(e["value"][:2], [360, 200], 2.0) and last(ms, "transform.scale") is None, str(e))
+        # 指: 小さいレイヤー(K = 60×60 → 画面で 75px)のまん中も移動のまま(内側は短い辺の 1/4 まで)
+        await page.evaluate("window.send({type:'comp:select', ids:['K']})")
+        await asyncio.sleep(0.3)
+        await page.evaluate("window.msgs.length = 0")
+        await touch_drag(P(120, 180), P(150, 200))
+        ms = await msgs()
+        ok("指: 小さいレイヤーのまん中は移動", last(ms, "transform.position") is not None and last(ms, "transform.scale") is None, str(ms[-2:]))
+        await browser.close()
     srv.shutdown()
     print("\n" + ("すべて OK" if not fails else f"NG {len(fails)} 件: {fails}"))
     sys.exit(1 if fails else 0)

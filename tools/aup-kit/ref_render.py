@@ -260,6 +260,9 @@ class Ref:
                     m = np.clip(0.5 + (wd / 2 - np.abs(d)) / (2 * ft), 0, 1)
                 else:
                     m = np.clip(0.5 - (-wd / 2 - np.abs(d)) / (2 * ft), 0, 1)
+                if p.get('feather_mode') == 'inside' and wd > 0:
+                    # 帯のぼかしは内側だけ(端で 0、cos カーブ)。完成動画の実測(ENGINE_ISSUES B-10)
+                    m = 0.5 - 0.5 * np.cos(np.pi * np.clip((wd / 2 - np.abs(d)) / max(p.get('feather', 0), 1 / s), 0, 1))
                 img[..., 3] *= m
             elif t == 'crop':
                 x0, y0 = xx + w / 2 / s, yy + h / 2 / s

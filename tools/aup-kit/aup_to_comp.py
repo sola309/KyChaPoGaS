@@ -594,8 +594,13 @@ class SceneBuilder:
         if n == '透明度':
             return [self.fx('offset', {'opacity': P('透明度', lambda v: 100 - v)})]
         if n == '斜めクリッピング':
-            return [self.fx('clip_line', {'cx': P('中心X'), 'cy': P('中心Y'), 'angle': P('角度'),
-                                          'width': P('幅'), 'feather': P('ぼかし')})]
+            p = {'cx': P('中心X'), 'cy': P('中心Y'), 'angle': P('角度'), 'width': P('幅'), 'feather': P('ぼかし')}
+            if all(k[1] > 0 for k in cv.scalar(fi, '幅')) and any(k[1] > 1 for k in cv.scalar(fi, 'ぼかし')):
+                # 帯(幅 > 0)のぼかしは、帯の内側だけに付く(端で 0、内へ ぼかし px ぶんを cos カーブで上がる)。完成動画の実測(B-10。
+                # 幅 1000・ぼかし 2000 の帯のまん中が 14.5 %)。片側(幅 = 0)は確かめていないので今までどおり
+                p['feather_mode'] = 'inside'
+                self.rep['notes']['斜めクリッピングの帯 + ぼかし → feather_mode: inside'] += 1
+            return [self.fx('clip_line', p)]
         if n == 'クリッピング':
             p = {'top': P('上'), 'bottom': P('下'), 'left': P('左'), 'right': P('右')}
             if ck.get('中心の位置を変更'):
@@ -691,6 +696,7 @@ class SceneBuilder:
                 elif src2.get('asset_id') is not None:
                     ov = self.asset_size(src2['asset_id'])
                 p.pop('scene_no', None)
+                p.pop('transparent', None)   # 重ねる素材(overlay_source)には無い項目
             if p.get('asset_id') is None and p.get('comp_id') is None:
                 p['missing'] = AM.norm(path)
             # AviUtl の X・Y は「絵の箱の左上に素材の左上を合わせた所からのずれ」(シーン 36 の縁の柄で確かめた:
@@ -702,8 +708,11 @@ class SceneBuilder:
                 p['x'] = cv.calc([(fi, 'X'), (fi, '拡大率')], lambda v: round(v[0] + ow * v[1] / 200 - bw / 2, 3))
                 p['y'] = cv.calc([(fi, 'Y'), (fi, '拡大率')], lambda v: round(v[0] + oh * v[1] / 200 - bh / 2, 3))
                 p['aviutl_xy'] = [cv.const(fi, 'X'), cv.const(fi, 'Y')]
-            elif cv.const(fi, 'X') or cv.const(fi, 'Y') or cv.const(fi, '拡大率') != 100 or cv.is_anim(fi, 'X') or cv.is_anim(fi, 'Y'):
-                self.rep['notes']['画像・動画ファイル合成の位置(箱か素材の大きさが分からず、中心合わせのまま)'] += 1
+            else:
+                # 箱か素材の大きさが取り込みの時点で分からない(文字など): エンジンに左上合わせを任せる(R-6。anchor: top_left)
+                p['anchor'] = 'top_left'
+                p['x'], p['y'] = P('X'), P('Y')
+                self.rep['notes']['画像・動画ファイル合成の位置(大きさが分からない → anchor: top_left)'] += 1
             return [self.fx('overlay_source', p)]
         if n == '画像ループ':
             return [self.fx('repeat', {'mode': 'grid', 'count_x': P('横回数'), 'count_y': P('縦回数'), 'gap_x': 100, 'gap_y': 100,
@@ -1043,6 +1052,11 @@ class SceneBuilder:
             out['start'] = round(c.start, 3)
             out['substituted'] = AM.norm(path)
             self.rep['avi_as_scene'].append((base, sn))
+            if (sn, self.no) in getattr(self.opts, 'avi_dropped', ()):
+                # 相手のシーンも、こちらを書き出した AVI を下に敷いている(循環になるので、その組は捨ててある)。
+                # 元の AVI では相手の絵の下に「こちらの絵」が映っていたので、相手の背景色は塗らず、こちらの下のレイヤーを透かす
+                out['transparent'] = True
+                self.rep['notes']['シーンの AVI → comp: 相手がこちらの AVI を敷いている(循環)ので背景を透かした'] += 1
         elif AM.SEQ_RE.match(base):
             lo = int(min(k[1] for k in pos))
             hi = int(max(max(k[1] for k in pos), p0 + (c.end - c.start) * abs(sp0) / ratio)) + 1
@@ -1136,6 +1150,8 @@ class SceneBuilder:
             if 'comp_id' in vs:
                 L = self.base_layer(c, 'comp')
                 src = {'comp_id': vs['comp_id'], 'substituted': vs.get('substituted')}
+                if vs.get('transparent'):
+                    src['transparent'] = True
             else:
                 L = self.base_layer(c, 'video')
                 src = {'asset_id': vs.get('asset_id')}
@@ -1175,7 +1191,8 @@ class SceneBuilder:
                     L = self.base_layer(c, 'shape')
                     src = {'kind': 'rect', 'width': cv.calc(T3, lambda v: max(0, self.W - v[2])),
                            'height': cv.calc(T3, lambda v: max(0, self.H - v[2])),
-                           'fill': None, 'stroke': col, 'stroke_width': cv.prop(0, 'ライン幅'), 'join': 'miter'}
+                           'fill': None, 'stroke': col, 'stroke_width': cv.prop(0, 'ライン幅'), 'join': 'miter',
+                           'stroke_in_box': True}   # AviUtl の箱は線の外側の縁まで(crop などはそこから測る)
             else:
                 L = self.base_layer(c, 'shape')
                 kd = {1: 'ellipse', 2: 'rect', 3: 'polygon', 4: 'polygon', 5: 'polygon', 6: 'star'}.get(ft, 'rect')
@@ -1187,7 +1204,8 @@ class SceneBuilder:
                 else:
                     src = {'kind': kd, 'width': cv.calc(T3, lambda v: max(0, wf(v) - v[2])),
                            'height': cv.calc(T3, lambda v: max(0, hf(v) - v[2])),
-                           'fill': None, 'stroke': col, 'stroke_width': cv.prop(0, 'ライン幅'), 'join': 'miter'}
+                           'fill': None, 'stroke': col, 'stroke_width': cv.prop(0, 'ライン幅'), 'join': 'miter',
+                           'stroke_in_box': True}   # AviUtl の箱は線の外側の縁まで(crop などはそこから測る)
                 if ft in (3, 4, 5):
                     src['sides'] = ft
                 if ft == 6:
@@ -1371,14 +1389,11 @@ class SceneBuilder:
             p = {'blur': cv.prop(0, 'track0', lambda v: round(diag * v / 10000, 3)),
                  'radius': cv.calc(T4, lambda v: round(inner(v) / hd * 100, 3)),
                  'softness': cv.calc(T4, lambda v: round(max(0.0, outer(v) - inner(v)) / hd * 100, 3)),
-                 'amount': cv.prop(0, 'track1', lambda v: round(min(100.0, abs(v - 100)), 3)),
+                 # 光量 = ぼかした側の明るさ(100 = そのまま・足し算)。エンジンの brightness にそのまま渡す(B-9。前は 色へ混ぜる amount で代用していた)
+                 'amount': 0, 'brightness': cv.prop(0, 'track1'), 'ramp': 'linear',
                  'color': '#000000', 'color_shift': 0}
-            lum = cv.scalar(0, 'track1')
-            if all(k[1] >= 100 for k in lum):
-                p['color'] = '#ffffff'           # 光量 > 100 = 周辺を明るくする
-            elif any(k[1] > 100 for k in lum):
-                self.rep['notes']['周辺ボケ光量の 光量 が 100 をまたいで動く(暗くする側だけにした)'] += 1
-                p['amount'] = cv.prop(0, 'track1', lambda v: round(max(0.0, 100 - v), 3))
+            if not prm.get('adjust'):
+                p['shape'] = 'circle'            # マスクは正円(縦横比補正のときだけ、箱の縦横比のだ円のまま)
             if f0['checks'].get('check0'):
                 cs = prm.get('colshf', 50)
                 p['color_shift'] = cv.prop(0, 'track0', lambda v: round(max(1.0, diag * v / 10000 * cs / 100), 3))
@@ -1599,7 +1614,21 @@ class SceneBuilder:
                 layers[c.id]['matte'] = {'layer': mid, 'mode': 'alpha'}
                 self.rep['layers']['matte_copy'] = len(extra)
             else:
-                layers[c.id]['matte'] = {'layer': src_c.lid, 'mode': 'alpha', 'keep_source': True}
+                # 上の段の物は時間で入れ替わる(同じ段に A → B → C と並ぶ)。その時刻に上にある物で切り、何も無い時刻は切らない(AviUtl と同じ)。
+                # 素材が無い物(missing)はマットにすると全部消えてしまうので外す(その区間は切らずに映る)。
+                same = sorted([u for u in by_layer.get(src_c.layer, []) if u.start <= c.end and u.end >= c.start and u not in controls
+                               and not u.o.get('clip_with_above') and u.id in layers], key=lambda u: u.start)
+                gone = [u for u in same if layers[u.id].get('missing')]
+                same = [u for u in same if u not in gone]
+                if gone:
+                    self.rep['notes']['上のオブジェクトでクリッピング: 素材なしのマット元を外した(その区間は切らない)'] += len(gone)
+                if not same:
+                    continue
+                main = src_c if src_c in same else max(same, key=lambda u: min(u.end, c.end) - max(u.start, c.start))
+                layers[c.id]['matte'] = {'layer': main.lid, 'mode': 'alpha', 'keep_source': True, 'absent': 'show'}
+                if len(same) > 1:
+                    layers[c.id]['matte']['layers'] = [u.lid for u in same]
+                    self.rep['notes']['上のオブジェクトでクリッピング: マット元が時間で入れ替わる(matte.layers)'] += 1
             self.rep['notes']['上のオブジェクトでクリッピング → matte'] += 1
         # グループ制御・カメラ制御の対象
         used_layers = sorted(by_layer)
@@ -1813,6 +1842,7 @@ def avi_edges(doc, drop_disabled=True):
             continue
         edges.add((p, c))
         ok.add((p, c))
+    avi_edges.dropped = {e for e in soft if e not in ok and e not in hard}   # 循環になるので捨てた組(親, 子)
     return ok
 
 
@@ -1864,6 +1894,7 @@ def main():
     a._stack = []
     doc = json.load(open(a.json, encoding='utf-8'))
     a.avi_ok = avi_edges(doc, a.drop_disabled) if a.avi_as_scene else set()
+    a.avi_dropped = avi_edges.dropped if a.avi_as_scene else set()
     sakura = os.path.dirname(os.path.abspath(a.json))
     all_scenes = [s['index'] for s in doc['exedit']['scenes']]
     want = all_scenes if a.all else a.scene

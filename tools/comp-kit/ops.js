@@ -41,12 +41,15 @@ const R = {}
 R.clip_line = {
   n: 2,
   mask: `{ float d = dot($P - $0.xy, $0.zw); float k = $1.y < 0.5 ? OAA(d, $1.z, px) : OAA(abs(d) - $1.x, $1.z, px);
-    if ($1.y > 1.5) k = 1.0 - k; if ($1.w > 0.5) k = 1.0 - k; m *= k; }`,
+    if ($1.w > 1.5) { float t = clamp(($1.y < 0.5 ? -d : $1.x - abs(d)) / max($1.z, px), 0.0, 1.0); k = 0.5 - 0.5 * cos(3.14159265 * t); }
+    if ($1.y > 1.5) k = 1.0 - k; if (mod($1.w, 2.0) > 0.5) k = 1.0 - k; m *= k; }`,
   pack(p, ctx, o, i) {
     // 法線 n = (-sin a, cos a)(a = 0 なら下向き)。幅 0 のときは法線の側(a = 0 なら中心より下)が消える
     const c = cxy(ctx.rect, p), n = dirOf(num(p.angle, 0) + 180), w = num(p.width, 0)
     put(o, i, c[0], c[1], n[0], n[1])
-    put(o, i + 4, Math.abs(w) / 2, w > 0 ? 1 : w < 0 ? 2 : 0, Math.max(0, num(p.feather, 0)), p.invert ? 1 : 0)
+    // feather_mode: 'center'(既定。境目をまん中に、ぼかし幅ぶんを直線で)/ 'inside'(境目で 0、残る側の内側へ ぼかし幅ぶんを cos カーブで上がる。
+    //   AviUtl の斜めクリッピングの帯で実測した形: 幅 1000・ぼかし 2000 だと帯のまん中でも 14.6 % までしか上がらない)
+    put(o, i + 4, Math.abs(w) / 2, w > 0 ? 1 : w < 0 ? 2 : 0, Math.max(0, num(p.feather, 0)), (p.invert ? 1 : 0) + (p.feather_mode === 'inside' ? 2 : 0))
   },
 }
 R.crop = {
@@ -410,7 +413,9 @@ R.overlay_source = {
     const r = ctx.rect, sc = vec(p.scale ?? 100, 2, 100)
     let w = e.w * sc[0] / 100, h = e.h * sc[1] / 100
     if (p.fit) { w = r.w; h = r.h }
-    put(o, i, r.x + r.w / 2 + num(p.x, 0), r.y + r.h / 2 + num(p.y, 0), Math.max(1e-3, w / 2), Math.max(1e-3, h / 2))
+    // anchor: 'top_left' = 箱の左上に素材の左上を合わせた所から x・y だけずらす(AviUtl の画像ファイル合成)。既定は中心どうし
+    const tl = p.anchor === 'top_left' && !p.fit
+    put(o, i, (tl ? r.x + w / 2 : r.x + r.w / 2) + num(p.x, 0), (tl ? r.y + h / 2 : r.y + r.h / 2) + num(p.y, 0), Math.max(1e-3, w / 2), Math.max(1e-3, h / 2))
     put(o, i + 4, { over: 0, under: 1, replace_color: 2, luma_to_alpha: 3 }[p.mode] ?? 0, pct(p.opacity, 100), e.flipY ? 1 : 0, p.repeat || p.tile ? 1 : 0)
     put(o, i + 8, ...extOf(ctx))
     ctx.tex = e.tex

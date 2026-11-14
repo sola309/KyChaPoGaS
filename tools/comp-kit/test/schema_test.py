@@ -156,7 +156,7 @@ def fx_fixtures(mask_url, ov_url):
       skip  … 動かして比べない項目(理由つき)"""
     A = "asset_id は本番の素材が要るので、同じ読み口の url で代用して確かめる"
     return {
-        "clip_line": {"base": {"angle": 30}},
+        "clip_line": {"base": {"angle": 30}, "per": {"feather_mode": {"ctx": {"width": 80, "feather": 60}, "value": "inside"}}},
         "crop": {"base": {"top": 20}, "per": {"feather": {"value": 10}}},
         "blinds": {"base": {"pitch": 40}, "per": {"stagger": {"value": 150}}},
         "radial_wipe": {"base": {"sweep": 200}},
@@ -170,11 +170,14 @@ def fx_fixtures(mask_url, ov_url):
             "radius": {"ctx": {"mode": "circle"}, "value": 60}, "sweep": {"ctx": {"mode": "circle", "radius": 60}, "value": 180}, "rotate": {"ctx": {"mode": "circle", "radius": 60}},
             "area_x": {"ctx": {"mode": "random"}, "value": 150}, "area_y": {"ctx": {"mode": "random"}, "value": 100}, "seed": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}},
             "random_rotation": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 90},
-            "scale_min": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 40}, "scale_max": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 180}}},
+            "scale_min": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 40}, "scale_max": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 180},
+            "spin": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 600}, "drift_x": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 400},
+            "drift_y": {"ctx": {"mode": "random", "area_x": 200, "area_y": 120}, "value": 400},
+            "copy_scale": {"ctx": {"mode": "circle", "radius": 60}, "value": 50}, "copy_rotation": {"ctx": {"mode": "circle", "radius": 60}, "value": 40}}},
         "lightleak": {"base": {"radius": 80, "stretch": 3}},
         "gradient_overlay": {"per": {"cx": {"ctx": {"angle": 90}}, "width": {"value": 60}}},
         "overlay_source": {"base": {"url": ov_url}, "skip": {"asset_id": A}, "per": {
-            "tile": {"ctx": {"scale": 40}}, "start": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 40}, "speed": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 3}}},
+            "tile": {"ctx": {"scale": 40}}, "anchor": {"ctx": {"scale": 40}, "value": "top_left"}, "start": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 40}, "speed": {"ctx": {"url": None, "comp_id": 9001, "scale": 20}, "value": 3}}},
         "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}}},
         "halftone": {"per": {"self_mask": {"ctx": {"bg": "#ffffff"}}}},
         "mirror": {"per": {"cy": {"ctx": {"angle": 30}}}},

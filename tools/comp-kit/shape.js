@@ -314,7 +314,9 @@ export function rasterShape(s, rs) {
     }
   }
   // rect = テクスチャを貼る矩形(線の太さぶん広い)、box = 形そのものの外接矩形(マスク・選択枠の基準)
-  return { canvas, rect: { x: rx, y: ry, w: rw, h: rh }, box: { x: x0, y: y0, w: Math.max(1e-3, x1 - x0), h: Math.max(1e-3, y1 - y0) }, dual }
+  // stroke_in_box: 線の外側の縁までを箱にする(AviUtl の図形 + ライン幅と同じ。crop・マスクなど「箱から測るもの」の基準が線の外側になる)
+  const bg = s.stroke_in_box && hasStroke ? sw / 2 : 0
+  return { canvas, rect: { x: rx, y: ry, w: rw, h: rh }, box: { x: x0 - bg, y: y0 - bg, w: Math.max(1e-3, x1 - x0 + 2 * bg), h: Math.max(1e-3, y1 - y0 + 2 * bg) }, dual }
 }
 
 export { toColor }

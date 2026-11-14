@@ -24,7 +24,7 @@ E = {}
 def fx(type, label, group, params, cheap): E[type] = {"label": label, "group": group, "cheap": cheap, "params": params}
 G1, G2, G3, G4, G5, G6, G7 = "切る・隠す", "位置・並べる", "色", "縁・影", "ぼかし・光", "ゆがみ", "合成"
 # --- 切る・隠す(シェーダで済む) ---
-fx("clip_line", "斜めクリッピング", G1, {"cx": CX(), "cy": CY(), "angle": A("角度"), "width": N("幅(0 = 片側 / 正 = 帯を残す / 負 = 帯を消す)", 0, -4000, 4000, 1), "feather": FE(), "invert": B("反転")}, True)
+fx("clip_line", "斜めクリッピング", G1, {"cx": CX(), "cy": CY(), "angle": A("角度"), "width": N("幅(0 = 片側 / 正 = 帯を残す / 負 = 帯を消す)", 0, -4000, 4000, 1), "feather": FE(), "invert": B("反転"), "feather_mode": S("ぼかしの付き方", "center", [("center", "境目をまん中に(直線)"), ("inside", "内側だけ(境目で 0・cos カーブ。AviUtl の帯)")])}, True)
 fx("crop", "クリッピング(上下左右)", G1, {"top": N("上", 0, 0, 4000, 1), "bottom": N("下", 0, 0, 4000, 1), "left": N("左", 0, 0, 4000, 1), "right": N("右", 0, 0, 4000, 1), "feather": FE(), "recenter": B("中心の位置を変更")}, True)
 fx("blinds", "斜めブラインド", G1, {"ratio": P("残す割合", 50), "pitch": N("縞の幅", 100, 1, 2000, 1), "angle": A("角度", 40), "stagger": P("時間差", 0, 0, 400), "feather": FE(), "phase": N("ずらし", 0, -2000, 2000, 1)}, True)
 fx("clip_sector", "扇クリッピング", G1, {"start": A("基準角"), "sweep": A("拡張角(消す範囲)", 90), "cx": CX(), "cy": CY(), "feather": FE(), "keep": B("扇形のほうを残す")}, True)
@@ -42,7 +42,9 @@ fx("repeat", "並べる(画像ループ・一方向・円形)", G2, {"mode": S("
     "stagger_rows": B("1 行おきに半分ずらす"), "scroll_x": N("流す X", 0, -100000, 100000, 1), "scroll_y": N("流す Y", 0, -100000, 100000, 1), "mirror": B("1 個おきに裏返す"),
     "angle": A("角度(一列の向き・円形の開始角)", 90), "radius": N("半径(円形)", 200, 0, 8000, 1), "sweep": A("範囲(円形)", 360), "rotate": B("中心を向ける(円形)", True), "both": B("両方向(一列)"),
     "area_x": N("ばらまく範囲 幅(ばらまく)", 400, 0, 16000, 1), "area_y": N("ばらまく範囲 高さ(ばらまく)", 400, 0, 16000, 1), "seed": N("乱数の種(ばらまく)", 1, 0, 99999, 1, False),
-    "random_rotation": A("回転のばらつき ±(ばらまく)", 0), "scale_min": P("拡大率 最小(ばらまく)", 100, 0, 1000), "scale_max": P("拡大率 最大(ばらまく)", 100, 0, 1000)}, True)
+    "random_rotation": A("回転のばらつき ±(ばらまく)", 0), "scale_min": P("拡大率 最小(ばらまく)", 100, 0, 1000), "scale_max": P("拡大率 最大(ばらまく)", 100, 0, 1000),
+    "spin": N("回る速さ ± 度/秒(ばらまく)", 0, 0, 3600, 1), "drift_x": N("流れる速さ X ± px/秒(ばらまく)", 0, 0, 10000, 1), "drift_y": N("流れる速さ Y ± px/秒(ばらまく)", 0, 0, 10000, 1),
+    "copy_scale": P("1 個ずつの拡大率(円形)", 100, 0, 1000), "copy_rotation": A("1 個ずつの回転(円形)", 0)}, True)
 # --- 色(シェーダで済む) ---
 fx("fill", "単色化", G3, {"color": C("色", "#ffffff"), "amount": P("強さ"), "keep_luma": B("輝度を保持")}, True)
 fx("tint", "色味を付ける", G3, {"color": C("色", "#ffb347"), "amount": P("強さ")}, True)
@@ -63,7 +65,8 @@ fx("lightleak", "光もれ", G3, {"color": C("色", "#ffb060"), "x": CX(), "y": 
 fx("gradient_overlay", "グラデーション", G3, {"color": C("開始色", "#ffffff"), "color2": C("終了色", "#000000"), "shape": S("形", "linear", [("linear", "線"), ("radial", "円")]), "angle": A("角度"), "cx": CX(), "cy": CY(), "width": N("幅(0 = レイヤーの大きさ)", 0, 0, 8000, 1), "amount": P("強さ"), "blend": S("合成", "normal", BLEND5)}, True)
 fx("border", "枠", G3, {"width": N("太さ", 4, 0, 500, 1), "color": C("色", "#ffffff"), "position": S("位置", "inside", [("inside", "内側"), ("center", "中央"), ("outside", "外側")]), "opacity": P("不透明度")}, True)
 fx("noise", "ノイズ", G3, {"amount": N("量", 10, 0, 100, 1), "seed": N("種", 0, 0, 9999, 1, False), "color": B("色つき"), "animated": B("コマごとに変える", True)}, True)
-fx("overlay_source", "画像・動画・コンポジションの合成", G7, {"asset_id": N("素材", None, anim=False, asset="any"), "mode": S("重ね方", "over", [("over", "上に重ねる"), ("under", "下に敷く"), ("replace_color", "色だけ置き換える"), ("luma_to_alpha", "輝度をアルファに")]), "x": CX(), "y": CY(), "scale": P("拡大率", 100, 0, 1000), "opacity": P("不透明度"), "start": N("再生位置(コマ)", 0, 0, 1000000, 1, False), "speed": N("再生速度", 1, 0, 16, 0.01, False), "tile": B("敷きつめる"), "fit": B("レイヤーの大きさに合わせる")}, True)
+fx("overlay_source", "画像・動画・コンポジションの合成", G7, {"asset_id": N("素材", None, anim=False, asset="any"), "mode": S("重ね方", "over", [("over", "上に重ねる"), ("under", "下に敷く"), ("replace_color", "色だけ置き換える"), ("luma_to_alpha", "輝度をアルファに")]), "x": CX(), "y": CY(), "scale": P("拡大率", 100, 0, 1000), "opacity": P("不透明度"), "start": N("再生位置(コマ)", 0, 0, 1000000, 1, False), "speed": N("再生速度", 1, 0, 16, 0.01, False), "tile": B("敷きつめる"), "fit": B("レイヤーの大きさに合わせる"),
+    "anchor": S("位置の基準", "center", [("center", "中心どうし"), ("top_left", "箱の左上に素材の左上")])}, True)
 # --- 縁・影(RT を使う) ---
 fx("stroke_outline", "縁取り", G4, {"width": N("サイズ", 4, 0, 200, 1), "color": C("色", "#000000"), "blur": N("ぼかし", 0, 0, 200, 1), "position": S("位置", "outer", [("outer", "外側"), ("inner", "内側"), ("center", "中央")]), "opacity": P("不透明度"), "only": B("縁だけ")}, False)
 fx("drop_shadow", "シャドー", G4, {"distance": N("距離", 12, 0, 1000, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60)}, False)
@@ -78,7 +81,9 @@ fx("radial_blur", "放射ブラー", G5, {"amount": N("範囲", 20, 0, 200, 1), 
 fx("glow", "グロー", G5, {"radius": N("拡散", 20, 0, 300, 1), "strength": N("強さ", 1, 0, 5, 0.05), "threshold": P("しきい値", 50)}, False)
 fx("sharpen", "シャープ", G5, {"amount": P("強さ", 50, 0, 400)}, False)
 fx("vignette_blur", "周辺ボケ光量", G5, {"amount": P("周辺の暗さ", 60), "blur": N("周辺のぼかし", 8, 0, 200, 0.5), "radius": P("効き始める位置", 50, 0, 200), "softness": P("効ききるまでの幅", 50, 0, 200),
-    "color_shift": N("周辺の色ずれ", 0, 0, 100, 0.5), "color": C("暗くする色", "#000000"), "cx": CX(), "cy": CY()}, False)
+    "color_shift": N("周辺の色ずれ", 0, 0, 100, 0.5), "color": C("暗くする色", "#000000"), "cx": CX(), "cy": CY(),
+    "shape": S("形", "box", [("box", "箱の縦横比のだ円"), ("circle", "正円")]), "ramp": S("変わり方", "smooth", [("smooth", "なめらか"), ("linear", "まっすぐ")]),
+    "brightness": P("周辺の明るさ(100 = そのまま)", 100, 0, 200)}, False)
 # --- ゆがみ ---
 fx("wave", "波(ラスター)", G6, {"amp": N("振幅", 10, 0, 500, 1), "freq": N("山の数", 4, 0, 100, 0.1), "speed": N("速さ", 1, -20, 20, 0.1), "phase": N("位相", 0, -10, 10, 0.01)}, False)
 fx("raster", "ラスター(波長で指定)", G6, {"amp": N("振幅", 10, 0, 500, 1), "wavelength": N("波長", 200, 2, 4000, 1), "speed": N("速さ", 1, -20, 20, 0.1), "vertical": B("縦")}, False)
@@ -118,6 +123,7 @@ LT["shape"] = {"label": "シェイプ", "icon": "🔷", "source": {"kind": S("�
     "jitter": N("ばらつき(爆発)", 0.2, 0, 1, 0.01, optional=True, **g("形")), "seed": N("種", 1, 0, 9999, 1, False, optional=True, **g("形")), "points": {"type": "points", "label": "頂点(線・パス)", "default": [[-100, 0], [100, 0]], "animatable": True, "optional": True, "group": "形"},
     "closed": B("閉じる(パス)", optional=True, **g("形")), "morph_to": {"type": "points", "label": "変形先の頂点", "default": None, "animatable": False, "optional": True, "group": "形"}, "morph": P("変形の割合", 0, optional=True, **g("形")),
     "fill": FILL("塗り", "#ffffff", "塗り"), "stroke": {"type": "fill", "label": "線の色", "default": None, "animatable": True, "group": "線", "accepts": ["color", "gradient", "none"]}, "stroke_width": N("線の太さ", 0, 0, 500, 0.5, **g("線")),
+    "stroke_in_box": B("線の外側までを箱にする(crop・マスクの基準。AviUtl の図形と同じ)", optional=True, **g("線")),
     "cap": S("線の端", "butt", [("butt", "切り落とし"), ("round", "丸"), ("square", "四角")], **g("線")), "join": S("角", "round", [("round", "丸"), ("miter", "とがり"), ("bevel", "面取り")], **g("線")),
     "trim": V2("描く範囲 %(始・終)", [0, 100], **g("線")), "trim_offset": P("描く範囲のずらし", 0, -100, 100, **g("線")), "dash": {"type": "vec2", "label": "破線(線・すき間)", "default": None, "animatable": False, "optional": True, "group": "線"}, "dash_offset": N("破線のずらし", 0, -10000, 10000, 1, **g("線"))},
     "default_source": {"kind": "rect", "width": 300, "height": 300, "fill": "#e65163"}, "default_layer": {}}
@@ -146,7 +152,8 @@ LT["text"] = {"label": "テキスト", "icon": "🔤", "source": {"text": T("文
         "random": {"type": "object", "label": "文字ごとの乱れ", "fields": {"position": V3("位置", [0, 0, 0]), "rotation": A("回転"), "scale": P("拡大率", 0, 0, 500), "opacity": P("不透明度", 0), "seed": N("種", 1, 0, 9999, 1, False), "amount": P("量")}}}},
     "runs": {"type": "list", "label": "文の途中の書体・サイズ替え", "default": None, "animatable": False, "optional": True, "group": "文字", "item": {"text": T("文字"), "font": T("書体", None, font=True), "size": N("サイズ", None, 1, 2000, 1, False), "weight": N("太さ", None, 100, 900, 100, False), "fill": C("色", None), "baseline_shift": N("上下のずれ", 0, -1000, 1000, 1, False)}}},
     "default_source": {"text": "テキスト", "font": "Noto Sans JP", "weight": 700, "size": 96, "fill": "#ffffff"}, "default_layer": {}}
-LT["comp"] = {"label": "コンポジション", "icon": "🧩", "source": {"comp_id": N("コンポジション", None, anim=False, asset="comp", **g("素材")), "loop": B("繰り返す", **g("素材"))}, "default_source": {"comp_id": None}, "default_layer": {"start": 0, "speed": 1}}
+LT["comp"] = {"label": "コンポジション", "icon": "🧩", "source": {"comp_id": N("コンポジション", None, anim=False, asset="comp", **g("素材")), "loop": B("繰り返す", **g("素材")),
+    "transparent": B("子の背景色を塗らない(下のレイヤーが透ける)", optional=True, **g("素材"))}, "default_source": {"comp_id": None}, "default_layer": {"start": 0, "speed": 1}}
 LT["null"] = {"label": "ヌル(親)", "icon": "✛", "source": {}, "default_source": {}, "default_layer": {}}
 LT["group"] = {"label": "グループ制御", "icon": "🗂️", "source": {}, "default_source": {}, "default_layer": {"scope": 1}}
 LT["camera"] = {"label": "カメラ", "icon": "🎥", "source": {"zoom": N("距離(zoom。AviUtl は 1024)", None, 1, 100000, 1, optional=True, **g("レンズ")), "fov": N("水平画角(zoom が無いとき)", 39.6, 1, 170, 0.1, **g("レンズ")), "ortho": B("平行投影", **g("レンズ")), "target": V3("注視点", None, optional=True, **g("向き")),
@@ -182,7 +189,7 @@ COMMON = {
     "visible": B("表示", True, group="表示"), "locked": B("ロック", group="表示"), "solo": B("ソロ", group="表示"), "guide": B("下絵(書き出しに出さない)", group="表示"),
     "blend": {"type": "select", "label": "合成モード", "default": "normal", "options": "blend_modes", "animatable": False, "group": "合成"}, "three_d": B("3D レイヤー", group="3D"), "billboard": B("いつもカメラを向く", group="3D"), "double_sided": B("裏面も描く", True, group="3D"),
     "motion_blur": B("モーションブラー", group="合成"), "parent": T("親レイヤー", None, layer=True, optional=True, group="変形"), "clip_to": T("このレイヤーの形で切り抜く(相手も映る)", None, layer=True, optional=True, group="合成"),
-    "matte.layer": T("トラックマット", None, layer=True, optional=True, group="合成"), "matte.mode": S("マットの種類", "alpha", [("alpha", "アルファ"), ("alpha_inv", "アルファ反転"), ("luma", "ルミナンス"), ("luma_inv", "ルミナンス反転")], optional=True, group="合成"), "matte.keep_source": B("マット元も映す", optional=True, group="合成"),
+    "matte.layer": T("トラックマット", None, layer=True, optional=True, group="合成"), "matte.absent": S("マット元が表示区間の外のとき", "hide", [("hide", "何も見えない"), ("show", "切らずに全部見える")], optional=True, group="合成"), "matte.mode": S("マットの種類", "alpha", [("alpha", "アルファ"), ("alpha_inv", "アルファ反転"), ("luma", "ルミナンス"), ("luma_inv", "ルミナンス反転")], optional=True, group="合成"), "matte.keep_source": B("マット元も映す", optional=True, group="合成"),
     "scope": {"type": "scope", "label": "効かせる範囲(数 = 下の N 層・0 = 下すべて / レイヤー id の配列)", "default": 0, "min": 0, "max": 1000, "step": 1, "animatable": False, "accepts": ["number", "layers"], "group": "グループ・カメラ", "types": ["group", "camera"], "optional": True}, "snapshot": B("画面を 1 枚の絵として動かす(フレームバッファ)", group="調整レイヤー", types=["adjustment"]),
     "repeater.count": N("個数(書かなければ 1 = 複製なし)", 3, 0, 4096, 1, **RG), "repeater.mode": S("並べ方", "linear", [("linear", "一方向"), ("grid", "格子"), ("radial", "円形"), ("random", "ランダム")], **RG), "repeater.offset.position": V3("1 個ごとのずれ", [100, 0, 0], **RG), "repeater.offset.rotation": A("1 個ごとの回転", **RG),
     "repeater.offset.scale": P("1 個ごとの拡大率", 100, 0, 400, **RG), "repeater.offset.opacity": P("1 個ごとの不透明度", **RG), "repeater.time_offset": N("1 個ごとの時間差(コマ)", 0, -600, 600, 0.5, False, **RG), "repeater.order": S("重なり順", "back", [("back", "あとの複製が手前"), ("front", "最初が手前")], **RG),

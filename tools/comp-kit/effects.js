@@ -211,13 +211,16 @@ const F = {
     }`,
   // 周辺ボケ光量: 中心から離れるほど、ぼかした絵に寄せて暗くする。色ずれは外向きに R と B をずらす
   vblur: HEAD + /* glsl */ `
-    uniform sampler2D tBlur; uniform vec2 uC, uInv; uniform float uR, uSoft, uAmt, uShift; uniform vec4 uColor;
+    uniform sampler2D tBlur; uniform vec2 uC, uInv; uniform float uR, uSoft, uAmt, uShift, uLin, uBri; uniform vec4 uColor;
     vec4 Bl(vec2 p){ return texture2D(tBlur, vec2(p.x / uRes.x, 1.0 - p.y / uRes.y)); }
     void main(){
       vec2 p = P(); vec2 q = (p - uC) * uInv;
-      float k = smoothstep(uR, uR + uSoft + 1e-4, length(q) * 0.70711);
+      float rr = length(q) * 0.70711;
+      float k = uLin > 0.5 ? clamp((rr - uR) / (uSoft + 1e-4), 0.0, 1.0) : smoothstep(uR, uR + uSoft + 1e-4, rr);
       vec4 c = texture2D(tSrc, vUv), b = Bl(p);
       if (uShift > 0.0) { vec2 d = normalize(q + 1e-6) * uShift * k; b = vec4(Bl(p - d).r, b.g, Bl(p + d).b, b.a); }
+      // brightness: ぼかした側の明るさ(足し算。AviUtl の 光量。0 = そのまま)
+      if (uBri != 0.0) b.rgb = clamp(b.rgb + uBri * b.a, 0.0, b.a);
       vec4 o = mix(c, b, k);
       float dk = k * uAmt * uColor.a;
       gl_FragColor = vec4(mix(o.rgb, uColor.rgb * o.a, dk), o.a);
@@ -505,15 +508,19 @@ export class Effects {
         return this.run1('polar', { uC: V2(), uR: 1, uInvP: 0 }, src, { uC: this.v2.set(cx, cy), uR: Math.max(1, Math.min(b[2] - b[0], b[3] - b[1]) / 2), uInvP: p.invert ? 1 : 0 })
       case 'vignette_blur': {
         // amount = 周辺の暗さ %、blur = 周辺のぼかし px、radius = 効き始める位置(%。箱の対角の半分が 100)、softness = 効ききるまでの幅 %
+        // shape: 'box'(既定。箱の縦横比のだ円)/ 'circle'(正円。どの向きにも同じ距離)。ramp: 'smooth'(既定)/ 'linear'
+        // brightness: 周辺(ぼかした側)の明るさ %。100 = そのまま、100 より上で明るく(色調補正の 明るさ と同じ足し算)
         const br = Math.max(0, num(p.blur, 8)) * rs
         const bl = br > 0.05 ? this.blur(src, br) : null
         const c = toColor(p.color ?? '#000000')
-        const m = this.mat('vblur', { tBlur: null, uC: V2(), uInv: V2(), uR: 0.5, uSoft: 0.5, uAmt: 0.5, uShift: 0, uColor: V4() })
-        m.uniforms.uInv.value.set(2 / Math.max(1, b[2] - b[0]), 2 / Math.max(1, b[3] - b[1]))
+        const m = this.mat('vblur', { tBlur: null, uC: V2(), uInv: V2(), uR: 0.5, uSoft: 0.5, uAmt: 0.5, uShift: 0, uLin: 0, uBri: 0, uColor: V4() })
+        const bw = Math.max(1, b[2] - b[0]), bh = Math.max(1, b[3] - b[1])
+        if (p.shape === 'circle') { const k = 2 / (Math.hypot(bw, bh) * 0.70711); m.uniforms.uInv.value.set(k, k) }
+        else m.uniforms.uInv.value.set(2 / bw, 2 / bh)
         const out = this.run1('vblur', null, src, {
           tBlur: (bl || src).texture, uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs),
           uR: clamp(num(p.radius, 50) / 100, 0, 2), uSoft: Math.max(0, num(p.softness, 50)) / 100, uAmt: clamp(num(p.amount, 60) / 100, 0, 1),
-          uShift: Math.max(0, num(p.color_shift, 0)) * rs, uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
+          uShift: Math.max(0, num(p.color_shift, 0)) * rs, uLin: p.ramp === 'linear' ? 1 : 0, uBri: (num(p.brightness, 100) - 100) / 100, uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
         })
         g.release(bl)
         return out

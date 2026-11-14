@@ -65,6 +65,22 @@
      "label": "反転",
      "default": false,
      "animatable": false
+    },
+    "feather_mode": {
+     "type": "select",
+     "label": "ぼかしの付き方",
+     "default": "center",
+     "options": [
+      {
+       "value": "center",
+       "label": "境目をまん中に(直線)"
+      },
+      {
+       "value": "inside",
+       "label": "内側だけ(境目で 0・cos カーブ。AviUtl の帯)"
+      }
+     ],
+     "animatable": false
     }
    }
   },
@@ -1073,6 +1089,51 @@
        "random"
       ]
      }
+    },
+    "spin": {
+     "type": "number",
+     "label": "回る速さ ± 度/秒(ばらまく)",
+     "default": 0,
+     "min": 0,
+     "max": 3600,
+     "step": 1,
+     "animatable": true
+    },
+    "drift_x": {
+     "type": "number",
+     "label": "流れる速さ X ± px/秒(ばらまく)",
+     "default": 0,
+     "min": 0,
+     "max": 10000,
+     "step": 1,
+     "animatable": true
+    },
+    "drift_y": {
+     "type": "number",
+     "label": "流れる速さ Y ± px/秒(ばらまく)",
+     "default": 0,
+     "min": 0,
+     "max": 10000,
+     "step": 1,
+     "animatable": true
+    },
+    "copy_scale": {
+     "type": "percent",
+     "label": "1 個ずつの拡大率(円形)",
+     "default": 100,
+     "min": 0,
+     "max": 1000,
+     "step": 1,
+     "animatable": true
+    },
+    "copy_rotation": {
+     "type": "angle",
+     "label": "1 個ずつの回転(円形)",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true
     }
    }
   },
@@ -1957,6 +2018,22 @@
      "label": "レイヤーの大きさに合わせる",
      "default": false,
      "animatable": false
+    },
+    "anchor": {
+     "type": "select",
+     "label": "位置の基準",
+     "default": "center",
+     "options": [
+      {
+       "value": "center",
+       "label": "中心どうし"
+      },
+      {
+       "value": "top_left",
+       "label": "箱の左上に素材の左上"
+      }
+     ],
+     "animatable": false
     }
    }
   },
@@ -2456,6 +2533,47 @@
      "default": 0,
      "min": -4000,
      "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "shape": {
+     "type": "select",
+     "label": "形",
+     "default": "box",
+     "options": [
+      {
+       "value": "box",
+       "label": "箱の縦横比のだ円"
+      },
+      {
+       "value": "circle",
+       "label": "正円"
+      }
+     ],
+     "animatable": false
+    },
+    "ramp": {
+     "type": "select",
+     "label": "変わり方",
+     "default": "smooth",
+     "options": [
+      {
+       "value": "smooth",
+       "label": "なめらか"
+      },
+      {
+       "value": "linear",
+       "label": "まっすぐ"
+      }
+     ],
+     "animatable": false
+    },
+    "brightness": {
+     "type": "percent",
+     "label": "周辺の明るさ(100 = そのまま)",
+     "default": 100,
+     "min": 0,
+     "max": 200,
      "step": 1,
      "animatable": true
     }
@@ -3956,6 +4074,14 @@
      "animatable": true,
      "group": "線"
     },
+    "stroke_in_box": {
+     "type": "bool",
+     "label": "線の外側までを箱にする(crop・マスクの基準。AviUtl の図形と同じ)",
+     "default": false,
+     "animatable": false,
+     "optional": true,
+     "group": "線"
+    },
     "cap": {
      "type": "select",
      "label": "線の端",
@@ -4927,6 +5053,14 @@
      "default": false,
      "animatable": false,
      "group": "素材"
+    },
+    "transparent": {
+     "type": "bool",
+     "label": "子の背景色を塗らない(下のレイヤーが透ける)",
+     "default": false,
+     "animatable": false,
+     "optional": true,
+     "group": "素材"
     }
    },
    "default_source": {
@@ -5734,6 +5868,24 @@
    "default": null,
    "animatable": false,
    "layer": true,
+   "optional": true,
+   "group": "合成"
+  },
+  "matte.absent": {
+   "type": "select",
+   "label": "マット元が表示区間の外のとき",
+   "default": "hide",
+   "options": [
+    {
+     "value": "hide",
+     "label": "何も見えない"
+    },
+    {
+     "value": "show",
+     "label": "切らずに全部見える"
+    }
+   ],
+   "animatable": false,
    "optional": true,
    "group": "合成"
   },

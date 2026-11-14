@@ -308,3 +308,26 @@ boot に `fonts` を足した。postMessage に `comp:fonts {fonts}` を足し�
 - 親 → iframe: `comp:guides {show}`(下絵レイヤーの表示)、`comp:overlay {safe, grid}`(セーフフレーム・三分割の線)。
 - 選択枠のつまみ: 四隅 = 縦横比を保って拡大(Shift で自由)、辺 = 1 軸、上辺の外 = 回転(Shift で 15° 刻み)。1 枚だけ選んでいるときに出る。
 - 下絵(`guide: true`)は、書き出しのほか **入れ子の中でも描かない**(プレビューでも。親に置いた子の絵が、書き出しと同じになるように)。
+
+### v1.1 の追加(3 回目・2026-11-14): 箱の決まり・AviUtl 取り込みで足した書式
+
+どれも足しただけで、書かなければ今までどおり(例 14 本 × 3 コマは 1 バイトも変わらない)。確かめ方は `tools/comp-kit/test/check_test.py`、経緯は `reference/aviutl_mad/ENGINE_ISSUES.md` の B-8〜B-11。
+
+**直した決まり**
+
+- `stroke_outline` は箱も広げる(外側 = 幅ぶん)。あとの `crop` は広がった箱から測る(前は縁取り前の箱から測っていた = 不具合)。
+- 重いエフェクト(ぼかしなど)のあとの `flip` / `repeat` は、画面より大きいレイヤーでも効く。
+
+**足した書式**
+
+| 書式 | 意味 |
+|---|---|
+| shape の `source.stroke_in_box: true` | 線の外側の縁までを箱にする(crop・マスク・選択枠の基準。絵は同じ)。AviUtl の図形 + ライン幅 |
+| `vignette_blur` の `shape: "box" \| "circle"`、`ramp: "smooth" \| "linear"`、`brightness`(%。100 = そのまま) | 正円・まっすぐな変わり方・周辺を明るく。AviUtl の 周辺ボケ光量 = circle + linear + brightness |
+| `clip_line` の `feather_mode: "center" \| "inside"` | inside = ぼかしは帯の内側だけ(端で 0・cos カーブ)。AviUtl の斜めクリッピングの帯 |
+| `matte.layers: [id, …]`、`matte.absent: "hide" \| "show"` | 時間で入れ替わるマット元(その時刻に表示中の 1 枚)。どれも無い時刻に show なら切らない |
+| comp レイヤーの `source.transparent: true` | 子の背景色を塗らない |
+| `overlay_source` の `anchor: "center" \| "top_left"` | top_left = 箱の左上に素材の左上を合わせる |
+| `repeat`(circle)の `copy_scale` `copy_rotation`、(random)の `spin` `drift_x` `drift_y` | 1 個ずつの拡大・回転、時間で回る・流れる |
+
+**player.html**: つまみの当たり判定は、マウス 10px・指 22px(見た目は同じ)。

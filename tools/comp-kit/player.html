@@ -206,6 +206,10 @@
 
   // ---- 選択枠・つまみ・目安 ----
   const HANDLE = 7, ROT_OFF = 26 // つまみの大きさ・回転つまみの上辺からの距離(CSS px)
+  // つまみの当たり判定の半径(CSS px)。マウスは 10、指(タッチ、または pointer: coarse の機械でのマウス以外)は 22。見た目は同じ
+  const HIT_FINE = HANDLE + 3, HIT_COARSE = 22
+  const coarseMq = window.matchMedia ? window.matchMedia('(pointer: coarse)') : null
+  const hitRadius = (ev) => (ev && ev.pointerType === 'touch' ? HIT_COARSE : ev && ev.pointerType === 'mouse' ? HIT_FINE : coarseMq && coarseMq.matches ? HIT_COARSE : HIT_FINE)
   const X = (p) => view.x + p[0] * view.s, Y = (p) => view.y + p[1] * view.s
   // つまみの位置(CSS px)。1 枚だけ選んでいるときに出す。→ [{kind:'scale'|'rotate', ax, ay, x, y}]
   //   ax, ay: -1 = 左・上の辺、0 = 中央、1 = 右・下の辺
@@ -226,11 +230,18 @@
   }
   const canTransform = (id) => { const d = eng.layerDef(id); return !!d && !d.locked && d.type !== 'camera' }
   // (cx, cy)(CSS px)にあるつまみ。無ければ null
-  function handleAt(cx, cy) {
+  function handleAt(cx, cy, hit = HIT_FINE) {
     if (selected.length !== 1 || playing || !canTransform(selected[0])) return null
     const b = eng.layerBounds(selected[0], frame)
     if (!b) return null
-    let best = null, bd = HANDLE + 3
+    // 広げた当たり判定(指)は、箱の内側では短い辺の 1/4 まで(小さいレイヤーでも、まん中をつかんで動かせるように)。外側はいっぱいまで
+    let inner = hit
+    if (hit > HIT_FINE && inQuad(b, (cx - view.x) / view.s, (cy - view.y) / view.s)) {
+      const q = b.corners
+      const side = Math.min(Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1])) * view.s
+      inner = Math.max(HIT_FINE, Math.min(hit, side / 4))
+    }
+    let best = null, bd = inner
     for (const h of handlesOf(b)) {
       const d = Math.hypot(h.p[0] - cx, h.p[1] - cy)
       if (d < bd) { bd = d; best = h }
@@ -323,7 +334,7 @@
     window.addEventListener('pointerdown', (ev) => {
       if (ev.button !== 0) return
       window.focus()
-      const h = handleAt(ev.clientX, ev.clientY)
+      const h = handleAt(ev.clientX, ev.clientY, hitRadius(ev))
       if (h) {
         ev.preventDefault()
         const b = h.bounds, an = b.anchor || [(b.corners[0][0] + b.corners[2][0]) / 2, (b.corners[0][1] + b.corners[2][1]) / 2]
@@ -338,7 +349,9 @@
           // 元の値が 2 個([x, y])なら 2 個で返す。z を動かすのは 3D レイヤーだけ(2D では z に意味が無いので、そのまま)
           const sv = eng.valueAt(h.id, 'transform.scale', frame), def = eng.layerDef(h.id)
           drag = { mode: 'scale', id: h.id, an, ux, uy, hp, ax: h.ax, ay: h.ay, base: v3(sv, 100), n: Array.isArray(sv) && sv.length === 2 ? 2 : 3, z3d: !!(def && (def.three_d || def.type === 'model')),
-            moved: false, value: null, sx: ev.clientX, sy: ev.clientY }
+            moved: false, value: null, sx: ev.clientX, sy: ev.clientY,
+            // 指で(広い当たり判定で)つかんだときは、つかんだ所とつまみのずれを覚えておく(つかんだ瞬間に大きさが跳ねないように)。マウスは今までどおり
+            off: hitRadius(ev) > HIT_FINE ? [(ev.clientX - h.p[0]) / view.s, (ev.clientY - h.p[1]) / view.s] : [0, 0] }
         }
         hot = h
         stage.setPointerCapture(ev.pointerId)
@@ -368,7 +381,7 @@
     window.addEventListener('pointermove', (ev) => {
       if (!drag) {
         // つまみの上に来たら形を変える
-        const h = handleAt(ev.clientX, ev.clientY)
+        const h = handleAt(ev.clientX, ev.clientY, hitRadius(ev))
         const was = hot
         hot = h
         document.body.style.cursor = cursorOf(h)
@@ -387,7 +400,8 @@
         }
       } else if (drag.mode === 'scale') {
         // ポインタと、つかんだ点を、anchor を原点に箱の軸で測り直して比を取る
-        const p = toComp(ev), { ux, uy, an, hp } = drag
+        const p0 = toComp(ev), { ux, uy, an, hp } = drag
+        const p = [p0[0] - drag.off[0], p0[1] - drag.off[1]]
         const det = ux[0] * uy[1] - ux[1] * uy[0]
         const dec = (v) => (Math.abs(det) < 1e-9 ? [0, 0] : [((v[0] - an[0]) * uy[1] - (v[1] - an[1]) * uy[0]) / det, (ux[0] * (v[1] - an[1]) - ux[1] * (v[0] - an[0])) / det])
         const a = dec(p), a0 = dec(hp)

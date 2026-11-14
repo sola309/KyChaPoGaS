@@ -30,6 +30,10 @@ const MB_SAMPLES = 16, MB_SHUTTER = 0.5 // モーションブラー: 180° シ�
 const MAX_DEPTH = 8
 const MAX_COPIES = 4096
 const GEO = new Set(['flip', 'repeat', 'tile'])
+// 縁取り(stroke_outline / outline)が箱を広げる量(レイヤーの px)。外側 = 幅ぶん、中央 = 半分、内側 = 0。
+// AviUtl の縁取りは絵の箱そのものを四方へ広げるので、あとに続く crop などは「広がったあとの箱」から測る
+const strokeGrow = (p) => { const w = Math.max(0, num(p.width ?? p.size, 4)); return p.position === 'inner' ? 0 : p.position === 'center' ? w / 2 : w }
+const growRect = (r, d) => (d > 0 ? { x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d } : r)
 const SKIP = new Set(['offset', 'aviutl_script'])
 
 const BLEND_FRAG = /* glsl */ `
@@ -165,6 +169,7 @@ export class CompScene {
       this.order.push(L)
       // マット元は隠す(AE と同じ)。keep_source: true ならマット元も映す(AviUtl の「上のオブジェクトでクリッピング」)
       if (def.matte?.layer != null && !def.matte.keep_source) this.matteSources.add(String(def.matte.layer))
+      if (Array.isArray(def.matte?.layers) && !def.matte.keep_source) for (const m of def.matte.layers) this.matteSources.add(String(m))
       if (def.solo) this.anySolo = true
     }
     for (const [id, L] of this.layers) if (next.get(id) !== L) this.disposeLayer(L)
@@ -841,7 +846,8 @@ export class CompScene {
         let cf = (this.srcFrame(L, f) / this.fps) * e.scene.fps
         cf = this.fitFrame(L, cf, e.scene.duration)
         if (cf < -1e-6 || cf >= e.scene.duration) return null
-        const rt = e.scene.renderCached(cf, [...stack, e.id])
+        // source.transparent: true = 子の背景色(bg)を塗らない(子に何も無い所は、親の下のレイヤーが透けて見える)
+        const rt = e.scene.renderCached(cf, [...stack, e.id], !!L.def.source?.transparent)
         C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true
         break
       }
@@ -956,8 +962,10 @@ export class CompScene {
 
   // 中身 → 描く状態。エフェクトを足していくと ops(シェーダで済む分)がたまり、必要になったら RT に描き出す
   newState(L, f, C) {
+    // 形に畳み込んだ縁取り(haloOf)も、パスで掛けたときと同じく箱を広げる
+    const halo = L.type === 'shape' ? this.haloOf(L) : null
     return {
-      L, f, tex: C.texture, uvRect: C.uvRect, quad: C.multi ? null : (C.quad || C.rect), rect: C.rect, ink: C.screen ? null : C.ink,
+      L, f, tex: C.texture, uvRect: C.uvRect, quad: C.multi ? null : (C.quad || C.rect), rect: halo ? growRect(C.rect, halo.width) : C.rect, ink: C.screen ? null : C.ink,
       edge: C.edge, multi: C.multi, batch: C.multi ? L.batch : null, pattern: C.pattern, dual: C.dual, dualOver: C.dualOver, tint: C.tint, toSrgb: C.toSrgb,
       internalAdd: C.internalAdd, screenContent: C.screen, masks: C.screen ? null : this.maskData(L, f, C.rect), maskOrigin: [C.rect.x, C.rect.y],
       ops: [], data: null, opTex: [], n4: 0, stage: 0, copies: null, noEdge: false, inkPad: 0, hidden: false, planes: null,
@@ -1069,7 +1077,7 @@ export class CompScene {
   notePlanes(S, type, i) {
     const o = S.data, P = (S.planes ??= [])
     if (type === 'clip_line') {
-      if (o[i + 7] > 0.5 || o[i + 5] > 1.5) return
+      if (o[i + 7] % 2 > 0.5 || o[i + 5] > 1.5) return
       const nx = o[i + 2], ny = o[i + 3], d = nx * o[i] + ny * o[i + 1], fe = o[i + 6]
       if (o[i + 5] < 0.5) P.push([nx, ny, d, fe])
       else { P.push([nx, ny, d + o[i + 4], fe]); P.push([-nx, -ny, -d + o[i + 4], fe]) }
@@ -1203,16 +1211,22 @@ export class CompScene {
       const n = clamp(Math.round(num(p.count_x ?? p.count, 10)), 1, MAX_COPIES)
       const ar = vec(p.area ?? [num(p.area_x, 400), num(p.area_y, 400)], 2, 400), seed = num(p.seed, 1) | 0
       const rot = num(p.random_rotation, 0), s0 = num(p.scale_min, 100), s1 = num(p.scale_max, 100)
+      // spin(度/秒)・drift / drift_x・drift_y(px/秒): 1 個ずつ、± その幅の中の決まった速さで回る・流れる(レイヤーの in からの時間で)
+      const spin = num(p.spin, 0), dr = vec(p.drift ?? [num(p.drift_x, 0), num(p.drift_y, 0)], 2, 0)
+      const tt = spin || dr[0] || dr[1] ? (S.f - (S.L.def.in ?? 0)) / this.fps : 0
       for (let i = 0; i < n; i++) {
         const sc = (s0 + (s1 - s0) * rand01(seed, i, 5)) / 100
-        list.push({ m: T((rand01(seed, i, 1) - 0.5) * ar[0], (rand01(seed, i, 2) - 0.5) * ar[1], (rand01(seed, i, 4) * 2 - 1) * rot, sc), op: 1 })
+        const dx = tt ? (rand01(seed, i, 6) * 2 - 1) * dr[0] * tt : 0, dy = tt ? (rand01(seed, i, 7) * 2 - 1) * dr[1] * tt : 0
+        const da = tt ? (rand01(seed, i, 8) * 2 - 1) * spin * tt : 0
+        list.push({ m: T((rand01(seed, i, 1) - 0.5) * ar[0] + dx, (rand01(seed, i, 2) - 0.5) * ar[1] + dy, (rand01(seed, i, 4) * 2 - 1) * rot + da, sc), op: 1 })
       }
     } else if (mode === 'circle') {
       const n = clamp(Math.round(num(p.count_x ?? p.count, 8)), 1, MAX_COPIES)
       const rad = num(p.radius, 200), st = num(p.angle ?? p.rotation, 0), sw = num(p.sweep ?? p.arc, 360)
       for (let i = 0; i < n; i++) {
         const a = st + (Math.abs(sw) >= 360 ? i / n : n > 1 ? i / (n - 1) : 0) * sw
-        list.push({ m: T(Math.sin(a * D2R) * rad, -Math.cos(a * D2R) * rad, p.rotate === false ? 0 : a), op: 1 })
+        // copy_scale(%)・copy_rotation(度): 1 個ずつを、置いた位置は変えずに自分の中心で拡大・回転(AviUtl の円形並べの 拡大率・回転)
+        list.push({ m: T(Math.sin(a * D2R) * rad, -Math.cos(a * D2R) * rad, (p.rotate === false ? 0 : a) + num(p.copy_rotation, 0), num(p.copy_scale, 100) / 100), op: 1 })
       }
     } else {
       const nx = clamp(Math.round(num(p.count_x ?? p.cols, 3)), 1, 256), ny = clamp(Math.round(num(p.count_y ?? p.rows, 3)), 1, 256)
@@ -1258,25 +1272,27 @@ export class CompScene {
     if (S.buf || S.copies || S.stage !== 0 || S.space !== 'layer' || !S.ink) return null
     const fxs = this.env.effects
     const tmp = { data: (this._fp ??= new Float32Array(32)), planes: [] }
-    let pad = 0
+    let pad = 0, rect = S.rect
     for (let j = i; j < chain.length; j++) {
       const e = chain[j], reg = INLINE[e.type]
       if (isPass(e.type)) {
         // blur の variant は別のパスへ回るので、ここでは先読みをやめる
         if (!LOCAL_PASS.has(e.type) || e.p.variant) break
-        pad += fxs.pad(e.type, e.p, S.rect) + 2
+        pad += fxs.pad(e.type, e.p, rect) + 2
+        // 縁取りは箱を広げる(runChain と同じ)。あとの crop は広がった箱から測る
+        if (e.type === 'stroke_outline' || e.type === 'outline') rect = growRect(rect, strokeGrow(e.p))
         continue
       }
       if (!reg) break // 形のエフェクト(flip / repeat)から先は読まない
       if (reg.alpha && (!reg.addsAlpha || reg.addsAlpha(e.p))) break
       if (reg.tex || e.p._pct) { if (reg.mask) break; continue } // 画像のマスクは読み込みの都合があるので先読みしない
       if (e.type === 'clip_line' || e.type === 'crop' || e.type === 'clip' || e.type === 'mask_shape' || e.type === 'mask' || e.type === 'iris') {
-        const ctx = { rect: S.rect, ext: S.ext, f: S.f, fps: this.fps, pad: 0, shift: null }
+        const ctx = { rect, ext: S.ext, f: S.f, fps: this.fps, pad: 0, shift: null }
         tmp.data.fill(0)
         const n0 = tmp.planes.length
         if (reg.pack(e.p, ctx, tmp.data, 0) !== false) this.notePlanes(tmp, e.type === 'clip' ? 'crop' : e.type, 0)
         for (let k = n0; k < tmp.planes.length; k++) tmp.planes[k][3] += pad // はみ出しぶんだけ外まで描く
-        if (ctx.rect !== S.rect || ctx.shift) break // crop は箱を変えるので、そこまで
+        if (ctx.rect !== rect || ctx.shift) break // crop は箱を変えるので、そこまで
       }
     }
     return tmp.planes.length ? tmp.planes : null
@@ -1302,7 +1318,8 @@ export class CompScene {
     }
     // レイヤーの RT が画面よりずっと大きくなるとき(大きな床など)は、画面空間で掛けたほうが軽い
     let useScreen = S.space === 'screen' || !ink
-    if (!useScreen && !S.buf) {
+    // (あとに flip / repeat が続くときは逃げない。画面大のバッファは反転・複製できないので。大きすぎる RT は下で解像度を落とす)
+    if (!useScreen && !S.buf && !S.geoAhead) {
       const [bw, bh] = this.bufSize(), res0 = this.fxRes(L)
       if ((ink.w + 2 * pad) * (ink.h + 2 * pad) * res0 * res0 > bw * bh * 1.5) useScreen = true
     }
@@ -1375,6 +1392,8 @@ export class CompScene {
           if (ds > 1) { const sg = Math.sqrt(Math.max(0.09, (r0 / ds) ** 2 - 0.2)); e = { type: 'blur', p: { ...e.p, radius: (e.p.radius * sg) / (r0 / ds) } } }
         } else if (ds >= 4) lo = 2 / ds
       }
+      S.geoAhead = false
+      for (let j = i + 1; j < chain.length; j++) if (GEO.has(chain[j].type)) { S.geoAhead = true; break }
       this.flush(S, pad, lo, LOCAL_PASS.has(e.type) && !S.noPlanes ? this.futurePlanes(S, chain, i) : null)
       if (S.hidden || !S.buf) break
       const res = S.res
@@ -1394,6 +1413,8 @@ export class CompScene {
       if (out) {
         // 縁・影・ぼかしではみ出したぶん、絵の範囲を広げる
         if (S.ext) { const pd = fxs.pad(e.type, e.p, S.rect); if (pd > 0) S.ext = { x: S.ext.x - pd, y: S.ext.y - pd, w: S.ext.w + 2 * pd, h: S.ext.h + 2 * pd } }
+        // 縁取りは箱も広げる(このあとの crop・% の切り抜きは、広がったあとの箱から測る)
+        if (e.type === 'stroke_outline' || e.type === 'outline') S.rect = growRect(S.rect, strokeGrow(e.p))
         if (out.width !== S.buf.width) S.res *= out.width / S.buf.width // ぼかしは縮小したまま返してくる
         if (!S.borrow) g.release(S.buf); S.borrow = false; S.buf = out; S.tex = out.texture
       }
@@ -1706,7 +1727,13 @@ export class CompScene {
     let blend = def.blend in SHADER_BLEND ? def.blend : 'normal'
     if (def.blend && !(def.blend in SHADER_BLEND)) this.warn('blend' + def.blend, `未対応のブレンド: ${def.blend}`)
     if (asMatte) blend = 'normal'
-    const matteL = !asMatte && def.matte?.layer != null ? this.layers.get(String(def.matte.layer)) : null
+    // matte.layers: [id, ...] = マット元が時間で入れ替わるとき(AviUtl の「上のオブジェクトでクリッピング」は、その時刻に上の段にある物で切る)。
+    // そのコマで表示区間に入っている最初の 1 枚を使う。どれも区間の外なら matte.absent('hide' = 既定・何も見えない / 'show' = 切らずに全部見える)
+    let matteL = !asMatte && def.matte?.layer != null ? this.layers.get(String(def.matte.layer)) : null
+    if (!asMatte && Array.isArray(def.matte?.layers) && def.matte.layers.length) {
+      const ms = def.matte.layers.map((m) => this.layers.get(String(m))).filter(Boolean)
+      matteL = ms.find((m) => this.inRange(m, f)) || matteL || ms[0] || null
+    }
     const clipL = !asMatte && def.clip_to != null ? this.layers.get(String(def.clip_to)) : null
     if (def.double_sided === false && this.is3d(L)) {
       // 裏を向いていたら描かない(画面上で四隅が反時計回り)
@@ -1781,7 +1808,7 @@ export class CompScene {
         if (mb) g.pass(this.env.matteMat, out, { tSrc: buf.texture, tMatte: mb.texture, uMode: MATTE_MODE[mode] ?? 0 })
         else {
           // マットが無い区間: 反転なら全部見える、そうでなければ何も見えない
-          if (mode === 'alpha_inv' || mode === 'luma_inv') g.copy(buf.texture, out); else g.clear(out)
+          if (mode === 'alpha_inv' || mode === 'luma_inv' || (ML === matteL && def.matte?.absent === 'show')) g.copy(buf.texture, out); else g.clear(out)
         }
         g.release(buf); buf = out
       }
@@ -1944,13 +1971,13 @@ export class CompScene {
   //   1 コマの中で同じ子を 2 回使うとき(マット元でもあり自分も映る・同じ時刻で 2 回置く)と、
   //   子のコマが前のコマと同じとき(freeze・time_remap の止め・子が終わりで止まっている)に効く。
   // 返す RT は共有物(__keep)。呼び出し側が release しても戻らない。使われなかったコマの終わりに sweepCache が片づける
-  renderCached(f, stack = []) {
+  renderCached(f, stack = [], noBg = false) {
     const env = this.env
-    const key = `${f}|${env.epoch}|${env.fontEpoch}|${this.bufSize().join('x')}`
+    const key = `${f}|${env.epoch}|${env.fontEpoch}|${this.bufSize().join('x')}${noBg ? '|nobg' : ''}`
     const fc = (this.fcache ??= new Map())
     let c = fc.get(key)
     if (!c) {
-      const rt = this.render(f, stack)
+      const rt = this.render(f, stack, noBg)
       if (fc.size >= 4) return rt // 1 コマに何回も違う時刻で描くとき(モーションブラーなど)は、ためこまない
       rt.__keep = true
       fc.set(key, (c = { rt, used: 0 }))
@@ -1969,7 +1996,7 @@ export class CompScene {
     }
   }
 
-  render(f, stack = []) {
+  render(f, stack = [], noBg = false) {
     const g = this.env.gfx
     const [bw, bh] = this.bufSize()
     let acc = g.acquire(bw, bh)
@@ -1977,7 +2004,7 @@ export class CompScene {
     g.setScissor(null)
     g.clear(acc)
     const bg = this.comp.data?.bg
-    if (bg) { const c = toColor(bg, [0, 0, 0, 1]); g.fill(acc, c[0], c[1], c[2], 1) }
+    if (bg && !noBg) { const c = toColor(bg, [0, 0, 0, 1]); g.fill(acc, c[0], c[1], c[2], 1) }
     const top = !this.isChild
     for (const L of this.drawList(f).slice()) {
       if (top) this.env.curLayer = L.id
