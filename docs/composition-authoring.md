@@ -25,6 +25,7 @@
 | **親子** | `parent: "<id>"` で位置・回転・拡大を継ぐ。子の position は親の中心が原点。`type: "null"` は親専用の見えないレイヤー |
 | **グループ** | `type: "group"` は自分より下の N 層(`scope`: 数、0 = 下すべて、または id の配列)をまとめて動かす・エフェクトを配る。自分の `in`〜`out` の間だけ効く |
 | **3D・カメラ** | `three_d: true` のレイヤーだけ透視投影。`type: "camera"`(position・`source.target`・`zoom` か `fov`・`dof`)。カメラが無ければ「z=0 がちょうど画面いっぱい」の既定のカメラ |
+| **立体(mesh)** | `type: "mesh"`, `source: {"objects": [...]}`。箱・球・回転体・押し出し・立体文字・管・破片を式で作り、光・影・映り込みつきで描く(いつも 3D)。同じ形の複製(`instances`)で 3D の紙吹雪・花びら。レシピ 16〜21 |
 | **入れ子** | `type: "comp"`, `source: {"comp_id": N}`。子を保存し直すと親も「古い」になる(循環は保存時に断られる) |
 | **マット・マスク** | `matte: {"layer": "<id>", "mode": "alpha"}` = 別のレイヤーの形で切り抜く(マット元は映らない)。`clip_to: "<id>"` = 相手も映したまま切り抜く。`masks[]`(箱の左上が原点)やエフェクト `mask_shape` = 自分に付いた形 |
 | **下絵** | `guide: true`。プレビューには出るが、描き出しには出ない(位置合わせの参考) |
@@ -57,7 +58,7 @@
 | Ctrl+A / Esc | すべて選ぶ / 選択をやめる |
 | Ctrl+ホイール | タイムラインの拡大 |
 
-## 4. レシピ 15
+## 4. レシピ 21
 
 どれも 1920×1080・30fps・90 コマのコンポジションの `layers`(配列の先頭が最前面)。`asset_id` は自分のプロジェクトの画像素材の番号に替える(例はプロジェクト 35 の 935)。
 `{"k": [...]}` の `f` はコマ。レイヤーの長さやコンポジションの fps を変えたら、キーの時刻も合わせて直す。
@@ -242,9 +243,88 @@
 ]
 ```
 
+### 16. 押し出し文字(金属・面取り)
+
+ここから 21 までは **`mesh` レイヤー**(手続きで作る 3D。書式の全部は `docs/composition-design.md` の「mesh レイヤー」)。`mesh` はいつも 3D で、`source.objects` に立体を並べる。
+オブジェクトの `position` はレイヤーの原点から(px・y は下が正・z は奥が正)、`rotation` は度、`scale` は倍率(1 = 等倍)。
+
+`"geometry": "text"` が立体文字(日本語可)。`depth` が厚み、`bevel` が面取り(`size` ぶん外へ太る)。金属は `metalness: 1` + `roughness`(小さいほど鏡)。`faces: [表裏, 側面]` で側面だけ色を変えられる。
+影は `light.shadows: true` と、影だけを受ける透明な面(`"type": "shadow"`)。回転は成分ごとにキーを書ける(`[x のキー, y のキー, 0]`)。
+
+```json
+[
+ {"id": "title", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 520, 0]}, "source": {"light": {"direction": [-0.6, -1, -0.8], "shadows": true, "shadow_area": 2600}, "objects": [{"geometry": "text", "text": "ポッキーの日", "font": "Noto Sans JP", "weight": 900, "font_size": 240, "depth": 60, "bevel": {"size": 5, "segments": 3}, "rotation": [{"k": [{"f": 0, "v": -50, "e": "outCubic"}, {"f": 40, "v": 0}]}, {"k": [{"f": 0, "v": -30, "e": "inOutSine"}, {"f": 90, "v": 20}]}, 0], "material": {"color": "#d4af37", "metalness": 1, "roughness": 0.3}, "faces": [null, {"color": "#8a5a1c", "metalness": 1, "roughness": 0.5}]}, {"geometry": "plane", "size": [4000, 2400], "position": [0, 0, 220], "cast_shadow": false, "material": {"type": "shadow", "opacity": 0.45}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#2b2230"}}
+]
+```
+
+### 17. 宝石・金属(回転体・多面体・ガラス)
+
+`lathe` は断面 `profile: [[半径, y], …]` を縦の軸のまわりに回した形(y は下が正)。`segments: 8` + `flat: true` でカット面の宝石、`smooth` を上げればつるんとした卵形。
+`icosahedron` などの多面体も `flat: true` で宝石になる。`"type": "glass"` は透ける本体に映り込みが乗る。金属・ガラスの見え方は `source.env`(映り込みの環境)で決まる。
+
+```json
+[
+ {"id": "gems", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 540, 0]}, "source": {"env": "studio", "light": {"points": [{"position": [0, -300, -400], "color": "#fff2d0", "intensity": 1.5}]}, "objects": [{"geometry": "lathe", "profile": [[0, -150], [70, -110], [110, -40], [110, 0], [0, 170]], "segments": 8, "position": [-520, 0, 0], "rotation": [15, {"k": [{"f": 0, "v": 0}, {"f": 90, "v": 180}]}, 0], "material": {"color": "#e0245e", "metalness": 0.9, "roughness": 0.1, "flat": true}}, {"geometry": "lathe", "profile": [[0, -160], [70, -130], [105, -40], [95, 60], [50, 140], [0, 160]], "smooth": 8, "position": [-170, 0, 0], "material": {"type": "glass", "color": "#7fe7ff", "opacity": 0.3}}, {"geometry": "icosahedron", "radius": 130, "position": [190, 0, 0], "rotation": [{"k": [{"f": 0, "v": 0}, {"f": 90, "v": 90}]}, {"k": [{"f": 0, "v": 0}, {"f": 90, "v": 120}]}, 0], "material": {"color": "#3fd28b", "metalness": 0.8, "roughness": 0.1, "flat": true}}, {"geometry": "torus", "radius": 120, "tube": 26, "position": [540, 0, 0], "rotation": [{"k": [{"f": 0, "v": 60}, {"f": 90, "v": 60}]}, {"k": [{"f": 0, "v": 0}, {"f": 90, "v": 180}]}, 0], "material": {"color": "#d4af37", "metalness": 1, "roughness": 0.2}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#15121c"}}
+]
+```
+
+### 18. 紙吹雪・桜吹雪(3D)
+
+`instances` が 3D の複製(1 回の描画。数百〜数千個でも軽い)。板(紙吹雪)や `extrude` の `petal`(厚み 0 の花びら)を、画面の上の薄い箱(`area`)から降らせる。
+`velocity`(px/秒。y 正 = 落ちる)・`spin`(度/秒)・`sway`(ゆらゆら)と、それぞれの `_random`(ばらつき)。`lifetime` + `loop: true` で降り続ける。`colors` は 1 枚ごとの色(マテリアルは白にしておく)。
+頭のコマから舞っている(`prewarm`。順に降り始めたいときは `"prewarm": false`)。粒子レイヤー(レシピ 10)との違い: こちらは 1 枚ずつが 3D で回り、光で表と裏の明るさが変わる。
+
+```json
+[
+ {"id": "cam", "type": "camera", "in": 0, "out": 90, "source": {"zoom": 1400}},
+ {"id": "confetti", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 540, 0]}, "source": {"env": "soft", "light": {"ambient": 1}, "objects": [{"geometry": "plane", "size": [34, 20], "position": [0, -700, 0], "material": {"color": "#ffffff", "roughness": 0.6}, "instances": {"count": 400, "seed": 11, "layout": "box", "area": [2600, 300, 1400], "velocity": [0, 330, 0], "velocity_random": [90, 110, 60], "spin": [220, 160, 90], "spin_random": [260, 240, 180], "rotation_random": [180, 180, 180], "sway": {"amp": [70, 0, 30], "freq": 0.45}, "scale": [0.7, 1.5], "lifetime": 5, "loop": true, "colors": ["#ff5d73", "#ffd23f", "#3fd2c7", "#7b6cf6", "#ffffff"], "fade_in": 0.25, "fade_out": 0.5}}, {"geometry": "extrude", "shape": "petal", "size": [30, 38], "depth": 0, "position": [0, -700, 0], "material": {"color": "#ffffff", "roughness": 0.8}, "instances": {"count": 200, "seed": 5, "layout": "box", "area": [2600, 300, 1400], "velocity": [-60, 210, 0], "velocity_random": [60, 60, 40], "spin": [120, 90, 60], "spin_random": [200, 200, 120], "rotation_random": [180, 180, 180], "sway": {"amp": [110, 0, 50], "freq": 0.3}, "scale": [0.8, 1.6], "lifetime": 7, "loop": true, "colors": ["#ffc7d6", "#ff9dba", "#ffe6ee"], "fade_in": 0.3, "fade_out": 0.6}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#232a4d"}}
+]
+```
+
+### 19. 破片トランジション(割れて次の場面へ)
+
+`"geometry": "shards"` は、板を `count` 個ほどに割って飛び散らせる。`progress` 0 = 元の板(継ぎ目なし)、1 = 飛び散ったあと。前の場面をコンポジションにして `texture: {"comp_id": N}` で貼り(`frame` で止めるコマ)、
+その下に次の場面を置く。`stagger: "center_out"` で中心から順に割れる。`direction: [0, 0, -500]` = 手前へ飛ぶ。`fade` で終わりに消える。`comp_id` は自分のコンポジションの番号に替える。
+
+```json
+[
+ {"id": "shatter", "type": "mesh", "in": 0, "out": 80, "transform": {"position": [960, 540, 0]}, "source": {"objects": [{"geometry": "shards", "size": [1920, 1080], "count": 160, "seed": 3, "progress": {"k": [{"f": 20, "v": 0, "e": "inQuad"}, {"f": 78, "v": 1}]}, "stagger": "center_out", "stagger_amount": 0.45, "spread": 900, "spread_z": 700, "direction": [0, 0, -500], "spin": 300, "gravity": [0, 700, 0], "fade": 0.35, "material": {"type": "basic", "texture": {"comp_id": 101, "frame": 0}}}]}},
+ {"id": "next", "type": "text", "in": 0, "out": 90, "transform": {"position": [960, 540]}, "source": {"text": "次の場面", "font": "Noto Sans JP", "weight": 900, "size": 200, "fill": "#ffffff"}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#e65163"}}
+]
+```
+
+### 20. 箱に絵を貼る(パッケージ)
+
+`box` の `faces: [右, 左, 上, 下, 手前, 奥]` に面ごとのマテリアルを書く(`null` は `material` のまま)。`texture` は画像素材(`asset_id`)でも、コンポジション(`comp_id`)でもよい。絵はその面いっぱいに 1 枚貼られる
+(面の縦横比に合わせた絵を用意する)。`clearcoat` でつやのある箱。y を正に回すと左の面が、x を正に回すと下の面が見えてくる。
+
+```json
+[
+ {"id": "box", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 540, 0]}, "source": {"light": {"shadows": true, "shadow_area": 1600}, "objects": [{"geometry": "box", "size": [300, 460, 90], "rotation": [{"k": [{"f": 0, "v": 8}, {"f": 90, "v": 8}]}, {"k": [{"f": 0, "v": -40, "e": "inOutSine"}, {"f": 90, "v": 220}]}, 0], "material": {"color": "#e8323c", "roughness": 0.45, "clearcoat": 0.6}, "faces": [null, null, null, null, {"color": "#ffffff", "texture": {"asset_id": 935}, "roughness": 0.45, "clearcoat": 0.6}, {"color": "#ffffff", "texture": {"comp_id": 101}, "roughness": 0.45, "clearcoat": 0.6}]}, {"geometry": "plane", "size": [3000, 2000], "position": [0, 232, 0], "rotation": [90, 0, 0], "cast_shadow": false, "material": {"type": "shadow", "opacity": 0.4}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#f3ead8"}}
+]
+```
+
+### 21. らせんのレール(管 + 道に沿った複製)
+
+`path`(`helix` = らせん。`height` 正 = 上へ進む)を `tube`(管)と `instances.layout: "along"`(道に沿って等間隔)で使う。レール 2 本は半径を変えた同じらせん、枕木は道の向きに合わせて回る箱
+(`size: [道の向きの幅, 厚み, 道を横切る長さ]`)。`offset` をキーにすると道の上を進む(1 個だけの複製は道の始点から)。全体を回すのはレイヤーの `transform.rotation`。
+
+```json
+[
+ {"id": "cam", "type": "camera", "in": 0, "out": 90, "source": {"zoom": 1400, "target": [960, 540, 0]}, "transform": {"position": {"k": [{"f": 0, "v": [960, 160, -1400], "e": "inOutSine"}, {"f": 90, "v": [960, 420, -1250]}]}}},
+ {"id": "rail", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 560, 0], "rotation": [0, {"k": [{"f": 0, "v": 0}, {"f": 90, "v": 120}]}, 0]}, "source": {"objects": [{"geometry": "tube", "path": {"type": "helix", "radius": 278, "turns": 3, "height": 620}, "tube": 7, "material": {"color": "#c9ccd6", "metalness": 1, "roughness": 0.25}}, {"geometry": "tube", "path": {"type": "helix", "radius": 322, "turns": 3, "height": 620}, "tube": 7, "material": {"color": "#c9ccd6", "metalness": 1, "roughness": 0.25}}, {"geometry": "box", "size": [16, 8, 70], "position": [0, 8, 0], "material": {"color": "#7a4a22", "roughness": 0.8}, "instances": {"count": 110, "layout": "along", "path": {"type": "helix", "radius": 300, "turns": 3, "height": 620}}}, {"geometry": "sphere", "radius": 26, "position": [0, -30, 0], "material": {"type": "emissive", "color": "#ffd23f", "emissive_intensity": 1.2}, "instances": {"count": 1, "layout": "along", "path": {"type": "helix", "radius": 300, "turns": 3, "height": 620}, "offset": {"k": [{"f": 0, "v": 0.02}, {"f": 90, "v": 0.95}]}}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#101624"}}
+]
+```
+
 ### レシピを組み合わせるコツ
 
-- **重い順**: 入れ子 > 被写界深度つき 3D > 粒子 > ぼかし・縁・影 > 切り抜き・色。同時に映るレイヤーを 40〜60 枚に抑えると、プレビューが軽い。
+- **重い順**: mesh(光・影・映り込みつき)≒ 入れ子 > 被写界深度つき 3D > 粒子 > ぼかし・縁・影 > 切り抜き・色。同時に映るレイヤーを 40〜60 枚に抑えると、プレビューが軽い。
 - **まず transition、足りなければ offset**: 登場は `transition_in`。位置の動きを足すなら、`transform.position` を直接キーにする代わりにエフェクト `offset`(足し算)を使うと、置き場所と動きを分けて直せる。
 - **同じ動きを何枚にも**: `group`(下の N 層)か `parent`(null レイヤー)でまとめる。同じ絵を並べるなら `repeater`。
 - **1 枚の絵として動かしたい**: 入れ子(プリコンポーズ。行の右クリック)にまとめる。
@@ -357,3 +437,7 @@ call("PATCH", f"/api/comps/{cid}", {"data": comp["data"]})
 8. **背景を消す(切り抜き)**: 既存のジョブ `cutout` を呼び、できた素材にレイヤーを差し替える(下の「背景を消す」の例)。元の素材は残す。
 9. **重さ**: 重いエフェクト・入れ子・被写界深度は枚数に比例して遅い(`tools/comp-kit/README.md` の「例と速さ」)。
 10. 取り込み試験のプロジェクト(36)のコンポジションは参照用。試すときは `duplicate` した写しで。
+11. **mesh(立体)**: 書式は `docs/composition-design.md` の「mesh レイヤー」に全部ある。間違えやすい所:
+    `scale` は倍率(% ではない)。y は下が正(`lathe` の `profile`・`extrude` の `points`・`velocity`・`gravity` も)。金属は `env` が `"none"` だと黒い。
+    透過 PNG を貼るときは `transparent: true` か `alpha_test: 0.5`。交差・影を落とし合う物は同じ mesh レイヤーに入れる(レイヤーどうしは原点の奥行きで並ぶだけ)。
+    `instances.colors` を使うときマテリアルは白。破片(`shards`)の `progress` 0 は元の板そのものなので、割れ始めるコマまで置いておいてよい。

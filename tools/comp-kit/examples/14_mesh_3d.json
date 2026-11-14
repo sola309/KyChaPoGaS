@@ -1,0 +1,494 @@
+{
+ "id": "ex14",
+ "name": "14 mesh 3d",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#0b0e1a",
+  "layers": [
+   {
+    "id": "cam",
+    "type": "camera",
+    "in": 0,
+    "out": 150,
+    "source": {
+     "zoom": 1500,
+     "target": [
+      960,
+      560,
+      0
+     ],
+     "dof": {
+      "focus_distance": 0,
+      "aperture": 14,
+      "max_blur": 40
+     }
+    },
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         420,
+         300,
+         -1500
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 150,
+        "v": [
+         1500,
+         420,
+         -1380
+        ]
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "cap",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      1000
+     ]
+    },
+    "source": {
+     "text": "mesh レイヤー: 押し出し文字 + 回転体の宝石 + 光と影",
+     "font": "Noto Sans JP",
+     "weight": 500,
+     "size": 34,
+     "fill": "#aab4d0"
+    }
+   },
+   {
+    "id": "title",
+    "type": "mesh",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      470,
+      0
+     ]
+    },
+    "source": {
+     "env": "studio",
+     "light": {
+      "ambient": 0.5,
+      "intensity": 2.2,
+      "direction": [
+       -0.6,
+       -1,
+       -0.8
+      ],
+      "shadows": true,
+      "shadow_area": 2400,
+      "shadow_opacity": 0.7,
+      "points": [
+       {
+        "position": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            -700,
+            -200,
+            -300
+           ]
+          },
+          {
+           "f": 150,
+           "v": [
+            700,
+            -260,
+            -300
+           ]
+          }
+         ]
+        },
+        "color": "#ffd9a0",
+        "intensity": 1.2
+       }
+      ]
+     },
+     "objects": [
+      {
+       "geometry": "text",
+       "text": "十年愛",
+       "font": "Noto Serif JP",
+       "weight": 900,
+       "font_size": 300,
+       "tracking": 20,
+       "depth": 70,
+       "bevel": {
+        "size": 6,
+        "thickness": 8,
+        "segments": 4
+       },
+       "position": [
+        0,
+        -60,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -14,
+           "e": "inOutSine"
+          },
+          {
+           "f": 150,
+           "v": 14
+          }
+         ]
+        },
+        0
+       ],
+       "material": {
+        "color": "#d4af37",
+        "metalness": 1,
+        "roughness": 0.28
+       },
+       "faces": [
+        null,
+        {
+         "color": "#b8862a",
+         "metalness": 1,
+         "roughness": 0.45
+        }
+       ]
+      },
+      {
+       "geometry": "lathe",
+       "profile": [
+        [
+         0,
+         -95
+        ],
+        [
+         34,
+         -78
+        ],
+        [
+         62,
+         -40
+        ],
+        [
+         70,
+         0
+        ],
+        [
+         58,
+         44
+        ],
+        [
+         30,
+         80
+        ],
+        [
+         0,
+         96
+        ]
+       ],
+       "segments": 10,
+       "position": [
+        -560,
+        330,
+        -40
+       ],
+       "rotation": [
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 0
+          },
+          {
+           "f": 150,
+           "v": 20
+          }
+         ]
+        },
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 0
+          },
+          {
+           "f": 150,
+           "v": 180
+          }
+         ]
+        },
+        12
+       ],
+       "material": {
+        "color": "#e0245e",
+        "metalness": 0.9,
+        "roughness": 0.12,
+        "flat": true
+       }
+      },
+      {
+       "geometry": "lathe",
+       "profile": [
+        [
+         0,
+         -95
+        ],
+        [
+         34,
+         -78
+        ],
+        [
+         62,
+         -40
+        ],
+        [
+         70,
+         0
+        ],
+        [
+         58,
+         44
+        ],
+        [
+         30,
+         80
+        ],
+        [
+         0,
+         96
+        ]
+       ],
+       "smooth": 8,
+       "segments": 64,
+       "position": [
+        560,
+        330,
+        -40
+       ],
+       "rotation": [
+        0,
+        0,
+        -12
+       ],
+       "material": {
+        "type": "glass",
+        "color": "#7fe7ff",
+        "opacity": 0.35,
+        "roughness": 0.02
+       }
+      },
+      {
+       "geometry": "torus",
+       "radius": 120,
+       "tube": 9,
+       "position": [
+        560,
+        330,
+        -40
+       ],
+       "rotation": [
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 70
+          },
+          {
+           "f": 150,
+           "v": 70
+          }
+         ]
+        },
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 0
+          },
+          {
+           "f": 150,
+           "v": -240
+          }
+         ]
+        },
+        0
+       ],
+       "material": {
+        "color": "#e8e8f0",
+        "metalness": 1,
+        "roughness": 0.15
+       }
+      },
+      {
+       "geometry": "icosahedron",
+       "radius": 70,
+       "position": [
+        0,
+        360,
+        -80
+       ],
+       "rotation": [
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 0
+          },
+          {
+           "f": 150,
+           "v": 120
+          }
+         ]
+        },
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": 0
+          },
+          {
+           "f": 150,
+           "v": 200
+          }
+         ]
+        },
+        0
+       ],
+       "material": {
+        "color": "#3fd28b",
+        "metalness": 0.8,
+        "roughness": 0.1,
+        "flat": true
+       }
+      },
+      {
+       "geometry": "plane",
+       "size": [
+        3600,
+        2400
+       ],
+       "position": [
+        0,
+        440,
+        0
+       ],
+       "rotation": [
+        90,
+        0,
+        0
+       ],
+       "cast_shadow": false,
+       "material": {
+        "type": "shadow",
+        "opacity": 0.55
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "stars",
+    "type": "mesh",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      440,
+      900
+     ]
+    },
+    "source": {
+     "objects": [
+      {
+       "geometry": "octahedron",
+       "radius": 26,
+       "material": {
+        "color": "#ffffff",
+        "metalness": 1,
+        "roughness": 0.2,
+        "flat": true
+       },
+       "instances": {
+        "count": 90,
+        "seed": 7,
+        "layout": "box",
+        "area": [
+         4200,
+         1700,
+         900
+        ],
+        "scale": [
+         0.5,
+         1.6
+        ],
+        "rotation_random": [
+         180,
+         180,
+         180
+        ],
+        "spin": [
+         0,
+         40,
+         0
+        ],
+        "spin_random": [
+         30,
+         60,
+         30
+        ],
+        "colors": [
+         "#ffd76a",
+         "#ff8fb1",
+         "#8fd3ff",
+         "#ffffff"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "bg",
+    "type": "solid",
+    "in": 0,
+    "out": 150,
+    "source": {
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#1a2140"
+        ],
+        [
+         1,
+         "#07080f"
+        ]
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}

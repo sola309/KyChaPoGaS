@@ -15,20 +15,21 @@
 | `effects.js` | **重いエフェクト**(ぼかし・光・縁・影・ゆがみ)。RT → RT のパス |
 | `pattern.js` | 模様(矢絣・麻の葉・青海波・市松など 20 種)。式で描く |
 | `text.js` `shape.js` `particles.js` `model.js` | 種別ごとの中身(Canvas2D のラスタライズ、粒子の式、GLB) |
+| `mesh3d.js` | **mesh レイヤー**(手続きで作る 3D): 箱・球・回転体・押し出し・立体文字(Canvas2D の字から輪郭を起こす)・管・破片と、その複製(InstancedMesh)。光・影・映り込み(式で作る環境)。three.js の通常のマテリアルで RT に描いてレイヤーに戻す(model.js と同じ流れ) |
 | `assets.js` | 画像・動画・連番・素材情報の読み込み |
 | `player.html` | iframe / キャプチャ用のページ。`/*__COMP_BOOT__*/` を `window.__COMP_BOOT = {...};` に置き換えて使う |
 | `schema.json` | 編集画面むけの一覧(エフェクト・レイヤー種別・共通項目・合成モード・イージング・プリセット)。`test/schema_gen.py` で作る |
 | `examples/*.json` | 例(下の表) |
 | `test/render_test.py` | 描画テスト(コマの書き出し・動画・`--bench`) |
-| `test/check_test.py` | 数値の約束(50% 赤・画像 100%・`source.fit`・破線・`deg_per_px`・箱の決まり(縁取り → crop・stroke_in_box・ぼかし → flip・transparent・matte.layers・vignette_blur の円)・決定論・プレビュー = 書き出し) |
-| `test/schema_test.py` | schema.json の全項目がエンジンで通るか。エフェクトの全項目(256 個)・レイヤーの source・共通項目を「効き目が見える場面」で動かし、絵が変わらなければ NG |
+| `test/check_test.py` | 数値の約束(50% 赤・画像 100%・`source.fit`・破線・`deg_per_px`・箱の決まり(縁取り → crop・stroke_in_box・ぼかし → flip・transparent・matte.layers・vignette_blur の円)・mesh(箱の画素数・faces の並びと回転の向き・破片の progress 0・comp テクスチャ・立体文字の輪郭・複製の決定論・被写界深度)・決定論・プレビュー = 書き出し) |
+| `test/schema_test.py` | schema.json の全項目がエンジンで通るか。エフェクトの全項目(256 個)・レイヤーの source・共通項目・mesh の objects の全項目(152 個)を「効き目が見える場面」で動かし、絵が変わらなければ NG |
 | `test/order_test.py` | エフェクトが書いた順に掛かるか。軽いエフェクト + flip / repeat の順番つきの全部の組(812 組)を、1 個ずつ RT に描く手本と比べる。先読みの切り抜きも |
 | `test/player_test.py` | player.html と親の間の postMessage(選択・移動・拡大・回転・複数選択・キー・知らせ・下絵・目安)を、iframe に本物のマウスとキーを送って確かめる |
 
 配信は `comp-kit` と `mg-libs` を同じ URL(`/api/comps/engine/`)に平らに並べる。
 - どの応答にも `Access-Control-Allow-Origin: *` が要る(キャプチャのページは `set_content` で作るのでオリジンが無い。モジュール・画像・動画のコマ・書体すべて CORS 扱い)。
 - `.js` は `text/javascript` で返す。動画ファイルは Range(206)に対応していること。
-- model レイヤーは `GLTFLoader.js` を後から読む。`'three'` の import map は player.html が自分で入れる。
+- model レイヤーは `GLTFLoader.js` を後から読む。`'three'` の import map は player.html が自分で入れる。mesh レイヤーは `mesh3d.js` だけで、three.js の追加モジュールは使わない。
 
 ## 例と速さ
 
@@ -49,6 +50,8 @@ SwiftShader(書き出しと同じ GL)・1920×1080 での 1 コマあたりの�
 | 11 character_card | 参考作品ふうのキャラ紹介(斜めクリッピングの帯・網点・名札) | 19 | 88 | 98 |
 | 12 petals_3d_dof | 3D の花びら 5 層 + 被写界深度 | 11 | 74 | 81 |
 | 13 title_sequence | 19 秒・151 層(同時に 40〜60 層)。矢じりの列 48 枚、名札、3D の札 36 枚 + 被写界深度、扇の切り替え | 151 | 104 | 169 |
+| 14 mesh_3d | mesh: 押し出し文字(日本語・面取り・金)+ 回転体の宝石・ガラス・多面体 + 影 + 点の光 + 複製 90 個 + カメラ移動・被写界深度 | 5 | 196 | 276 |
+| 15 confetti_shatter | mesh: 破片 160 枚の場面転換(入れ子 `15a_shatter_card` をテクスチャに)+ 3D の紙吹雪 420 枚・花びら 160 枚 | 6 | 124 | 175 |
 
 速さの勘どころ:
 - 切る・色・位置の足し算だけのレイヤーは RT を使わず 1 回の描画で済む(13 の矢じり 48 枚で 25 ms ほど)。
@@ -61,6 +64,8 @@ SwiftShader(書き出しと同じ GL)・1920×1080 での 1 コマあたりの�
   先読みできるのは、まわりの画素だけで決まるパス(blur / glow / drop_shadow / stroke_outline など)と色の op だけをはさんで続く `clip_line` `crop` `mask_shape` `iris`。
 - シェイプの先頭の `stroke_outline`(外側・ぼかしなし・動かない値・不透明な色・閉じた形)は、形のラスタライズに畳み込む(RT もパスも使わない)。
   それ以外の細い縁(幅 2.5px 以下)は 1 パス。太い縁は「広げる → 仕上げ」の 2 パス以上。
+- mesh レイヤーは 1 枚ごとに three.js のシーンを 4 倍 MSAA・浮動小数の RT に描く。重いのは画素の光の計算(PBR + 映り込み + 影)で、形・複製の数ではない(複製 2000 個でも数 ms)。
+  光の要らない絵(破片に絵を貼るだけ・色紙)は `unlit: true` か `type: "basic"` が軽い。形(文字の輪郭・押し出し)と環境(PMREM)は最初の 1 回だけ作って使い回す(例 14 の最初のコマで +0.3 秒ほど)。
 - 取り込んだ comp 12(キャラ羅列紹介。入れ子 + 太い縁取り 12 枚 + 影 12 枚)は 13 コマの平均 211 → 124 ms、最大 434 → 276 ms。
 
 ## テスト
@@ -74,6 +79,7 @@ $PY tools/comp-kit/test/render_test.py examples/13_title_sequence.json --bench 1
 $PY tools/comp-kit/test/render_test.py examples/06_nested.json --serve     # サーバだけ立てて URL を出す(手で見る用)
 $PY tools/comp-kit/test/check_test.py       # 数値の約束
 $PY tools/comp-kit/test/schema_test.py      # schema.json の全項目
+$PY tools/comp-kit/test/render_test.py examples/14_mesh_3d.json --frames 0,75,140 --out /tmp/x   # mesh(入れ子をテクスチャにする 15 は、15a を id で引く)
 ```
 
 テスト用サーバは空きポートで立ち、`/api/comps/<id>` は examples の JSON(無ければ本番へ)、`/api/comps/vframe/..` は ffmpeg の切り出し、
@@ -140,7 +146,7 @@ iframe → 親
 
 ## 文書の読み方(仕様に書いていない所の決め)
 
-v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」に全部書いた。ここは実装の決めだけ。
+v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」に全部書いた(mesh レイヤーは 5 回目)。ここは実装の決めだけ。
 
 - レイヤー空間の原点は中身の中心。子の `position` は親のレイヤー空間(= 親の中心が原点)。
 - 回転: z は時計回り。x は上が奥へ、y は右が奥へ倒れる向きが正(CSS の rotateX / rotateY と同じ見え方)。掛ける順は X·Y·Z。
@@ -161,6 +167,15 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - text: `font` は CSS の並びに直す(`Noto Sans JP` → この機械の `Noto Sans CJK JP`、Serif / Mono も同様)。箱の中心が原点(`valign` を書いたときは align × valign の端)。
   文字ごとアニメ・円周の文字は「範囲の決まらない絵」なので、重いエフェクトは画面空間で掛かる(長さは画面の px)。
 - model: `{"asset_id"|"url", "height": px, "light": {"intensity","ambient","color","direction"}}`。常に 3D。
+- mesh: 書式は `docs/composition-design.md` の「mesh レイヤー」。ここは実装の決めだけ。
+  - 形は three.js の座標(y 上・z 手前)で作り、置くときに文書の座標(y 下・z 奥)へ直す(`FLIP · レイヤーの行列 · FLIP`。model と同じ)。文書の回転 (x, y, z) は three.js では (−x, y, −z)・XYZ 順。
+  - 形は「形を決める項目」の JSON を鍵に 240 個まで使い回す(文字は書体の読み込み(fontEpoch)も鍵)。コマごとに変えるのは行列・複製の行列・破片の頂点・マテリアルの値だけ。
+  - テクスチャはエンジンのもの(sRGB の値・乗算済み・画像は上が v = 0)をそのまま貼り、シェーダの `map_fragment` を差し替えて「乗算を解く → リニアへ」と読む(複製しない)。繰り返し・ずらしもシェーダの中(`fract` + `textureGrad`)。
+  - 光の既定は 環境光 0.6・主光 2(model は 1.6・2.5)。映り込みは `scene.environment` ではなくマテリアルの `envMap` に入れる(マテリアルごとの強さを効かせるため)。環境は PMREM(式で作ったシーンから。鍵ごとに 6 個まで)。
+  - `glass` は MeshPhysicalMaterial の出力を差し替え、アルファ = 不透明度 + 鏡面の明るさ、色 = (拡散 × 不透明度 + 鏡面) にする(屈折用のパスは使わない)。
+  - 複製のフェード(不透明度)は、複製ごとの属性 `aFade` + 奥からの並べ替え(CPU)。`fade_mode: "scale"` なら並べ替えも半透明も要らない。
+  - 影は `renderer.shadowMap.enabled` を mesh を描く間だけ入れる(ほかの描画には影響しない)。
+  - 選択枠の箱(`rect`)は、形の外接球 × 倍率 + 複製の範囲からの目安。
 - `motion_blur: true`(16 回)または回数。前後 1/4 コマずつを足し込む。軽いエフェクトは 1 回ごとに、重いエフェクトは足し込んだあとの絵に掛かる。
 - `source.url` の `/...` は apiBase からの道として読む。
 - **エフェクトは書いた順に掛かる**(`order_test.py`)。軽いエフェクトはシェーダの中でまとめるが、結果は「1 個ずつ順に掛けた絵」と同じ:
@@ -186,6 +201,12 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - `matte.layers: [id, …]`: マット元が時間で入れ替わるとき(そのコマで表示区間に入っている最初の 1 枚を使う)。`matte.absent: "show"` = マット元がどれも表示区間の外のコマは、切らずに全部見せる
   (既定 `"hide"` = 今までどおり何も見えない)。AviUtl の「上のオブジェクトでクリッピング」(その時刻に上の段にある物で切る。無ければ切らない)。
 - comp レイヤーの `source.transparent: true`: 子の背景色(`bg`)を塗らない。子に何も無い所は、親の下のレイヤーが透けて見える。
+- `overlay_source` の `mode: "atop"`: 絵のある所にだけ重ねる(アルファは変えない)。文字や図形に絵・動画・コンポジションを貼る使い方。AviUtl の画像・動画ファイル合成「前方から合成」。
+- `glow` の `variant: "diffuse"`: 足し算ではなく、ぼかした絵との明るいほうへ `strength` ぶん寄せる(AviUtl の拡散光。平らな色は変わらない)。書かなければ今までどおりの足し算。
+- `duotone` の `gray: "max"`: 明るさを輝度ではなく RGB の最大値で取る(色の濃い絵が白っぽく残る白黒。AviUtl の 白黒@T_Color_Module の全色 100 % に合わせた)。
+- `per_char.hide_outside: true`: 順番が来る前・消えたあとの文字を描かない(既定は今までどおり、from / to の姿で描く)。AviUtl の TA 登場(順番が来るまで alpha 0)。
+- 長いコンポジションの書き出し(capture)では、静止画のテクスチャを合計 160 M 画素まで持ち、超えたら「直前のコマで使わなかった古い物」から捨てる(`assets.js` の `trim()`)。
+  要るときに読み直すので絵は変わらない(96 秒・素材 460 個のコンポジションでブラウザのメモリが 13GB → 約 5GB)。プレビューでは捨てない。
 - `overlay_source` の `anchor: "top_left"`: 箱の左上に素材の左上を合わせた所から `x` `y` だけずらす(AviUtl の画像ファイル合成)。既定は中心どうし。
 - `repeat` の円形に `copy_scale`(%)`copy_rotation`(度): 1 個ずつを、置いた位置はそのままに自分の中心で拡大・回転。
   ばらまく(random)に `spin`(度/秒)`drift_x` `drift_y`(px/秒): 1 個ずつ ± その幅の中の決まった速さで回る・流れる(レイヤーの `in` からの時間)。
@@ -216,5 +237,6 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - `repeater.time_offset` で中身まで時刻をずらすのは 64 個まで(それより多いと変形・不透明度だけ)。
 - プレビューの動画は `<video>` のシークなのでコマ単位では甘い(書き出しは 1 コマずつの画像で正確)。capture の動画で `speed` が 1 でないときは最近傍のコマ。
 - model は GLB の見た目を出すだけ(アニメーション・環境マップなし)。
+- mesh: 屈折・オブジェクトどうしの映り込みなし(映るのは `env` だけ)。影は主光 1 本。被写界深度はレイヤーごとに一様。ほかのレイヤーとの交差なし。文字の面取りは外へ太る。動画を直接は貼れない(入れ子にして `comp_id` で貼る)。
 - プレビュー(実 GPU)と書き出し(SwiftShader)は同じコードだが、GPU が違うので 1 階調ほどの差はありうる。同じ GL なら 1 バイトも違わない。
 - コンポジションの中の音・エクスプレッションは無い(仕様どおり)。

@@ -50,6 +50,13 @@ const F = {
       float a = clamp(max(c.a + g.a * (1.0 - c.a), max(rgb.r, max(rgb.g, rgb.b))), 0.0, 1.0);
       gl_FragColor = vec4(min(rgb, vec3(a)), a);
     }`,
+  // 拡散光(AviUtl): ぼかした絵との「明るいほう」へ strength ぶん寄せる。平らな色は変わらず、明るい所がまわりへにじむ
+  glowDiffuse: HEAD + /* glsl */ `
+    uniform sampler2D tGlow; uniform float uStrength;
+    void main(){
+      vec4 c = texture2D(tSrc, vUv), g = texture2D(tGlow, vUv);
+      gl_FragColor = c + clamp(uStrength, 0.0, 1.0) * (max(c, g) - c);
+    }`,
   rgb_shift: HEAD + /* glsl */ `
     uniform vec2 uOff;
     void main(){
@@ -374,6 +381,12 @@ export class Effects {
         return this.blur(src, r, 1, 1, dirOf(num(p.angle, 90)))
       }
       case 'glow': {
+        if (p.variant === 'diffuse') {
+          const bd = this.blur(src, num(p.radius, 20) * rs)
+          const od = this.run1('glowDiffuse', { tGlow: null, uStrength: 1 }, src, { tGlow: bd.texture, uStrength: num(p.strength, 1) })
+          g.release(bd)
+          return od
+        }
         const br = this.run1('bright', { uThreshold: 0 }, src, { uThreshold: pct(p.threshold, 0.5) })
         const bl = this.blur(br, num(p.radius, 20) * rs)
         g.release(br)

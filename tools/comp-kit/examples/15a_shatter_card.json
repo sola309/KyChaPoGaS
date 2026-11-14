@@ -1,0 +1,92 @@
+{
+ "id": "ex15a",
+ "name": "15a shatter card",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#f3ead8",
+  "layers": [
+   {
+    "id": "t1",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      470
+     ]
+    },
+    "source": {
+     "text": "割れる前の絵",
+     "font": "Noto Serif JP",
+     "weight": 900,
+     "size": 220,
+     "fill": "#2b2230",
+     "stroke": "#ffffff",
+     "stroke_width": 10
+    }
+   },
+   {
+    "id": "t2",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      720
+     ]
+    },
+    "source": {
+     "text": "この 1 枚が comp テクスチャとして破片に貼られる",
+     "font": "Noto Sans JP",
+     "weight": 500,
+     "size": 44,
+     "fill": "#6b4a5a"
+    }
+   },
+   {
+    "id": "fr",
+    "type": "shape",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      540
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 1760,
+     "height": 920,
+     "radius": 40,
+     "fill": null,
+     "stroke": "#e65163",
+     "stroke_width": 14
+    }
+   },
+   {
+    "id": "p",
+    "type": "pattern",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "opacity": 60
+    },
+    "source": {
+     "kind": "asanoha",
+     "colors": [
+      "#f6c1cc",
+      "#f3ead8"
+     ],
+     "size": 120
+    }
+   }
+  ]
+ }
+}

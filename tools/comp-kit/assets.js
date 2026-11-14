@@ -20,7 +20,9 @@ function setupTex(t, mip) {
 }
 
 const MAX_FRAMES = 8 // capture で持っておく動画のコマ数(コマごとに入れ替わるので少なくてよい)
-const MAX_SEQ = 96 // 連番画像を持っておく枚数
+const MAX_SEQ = 96 // 連番画像を持っておく枚数(プレビュー)
+const MAX_SEQ_CAPTURE = 16 // 書き出しでは少なく(コマごとに読み直せる)
+const MAX_STILL_PX = 40e6 // capture で持っておく静止画の画素数の合計(約 0.4GB。書き出しは 8 本並列なので控えめに)。超えたら、前のコマで使わなかった古いものから捨てる(要るときに読み直す)
 
 export class Assets {
   constructor(env) {
@@ -67,16 +69,45 @@ export class Assets {
     return e
   }
   evict() {
-    for (const [kind, max] of [[true, MAX_FRAMES], ['seq', MAX_SEQ]]) {
+    for (const [kind, max] of [[true, MAX_FRAMES], ['seq', this.env.mode === 'capture' ? MAX_SEQ_CAPTURE : MAX_SEQ]]) {
       const list = [...this.images.entries()].filter(([, e]) => e.transient === kind)
       if (list.length <= max) continue
       list.sort((a, b) => a[1].used - b[1].used)
+      // 書き出しでは、いまのコマで使った物は捨てない(1 コマに max 枚より多く要るとき、読み直しが終わらなくなる)
+      const keep = this.env.mode === 'capture' ? (this.trimMark || 0) : Infinity
       for (const [url, e] of list.slice(0, list.length - max)) {
-        if (e.state === 'loading') continue
+        if (e.state === 'loading' || e.used > keep) continue
         e.tex?.dispose()
         this.images.delete(url)
       }
     }
+  }
+
+  // 長いコンポジションの書き出しでメモリが増え続けないように、しばらく使っていない静止画を捨てる(capture のコマの頭で呼ぶ)。
+  // 前に呼んでからいままでに使った画像(= 直前のコマの絵)は残す。捨てた画像は、次に要るときに読み直す(絵は変わらない)。
+  trim(maxPx = MAX_STILL_PX) {
+    const mark = this.trimMark || 0
+    this.trimMark = this.tick
+    let total = 0
+    const list = []
+    for (const [url, e] of this.images) {
+      if (e.transient || e.state !== 'ready') continue
+      total += e.w * e.h
+      if (e.used <= mark) list.push([url, e])
+    }
+    if (total <= maxPx) return 0
+    list.sort((a, b) => a[1].used - b[1].used)
+    let n = 0
+    for (const [url, e] of list) {
+      if (total <= maxPx * 0.7) break
+      total -= e.w * e.h
+      const img = e.tex && e.tex.image
+      e.tex?.dispose()
+      if (img && 'src' in img) { try { img.onload = img.onerror = null; img.src = '' } catch {} }
+      this.images.delete(url)
+      n++
+    }
+    return n
   }
 
   // 素材の情報(幅・高さ・長さ)

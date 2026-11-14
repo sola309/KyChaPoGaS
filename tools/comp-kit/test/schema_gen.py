@@ -50,7 +50,7 @@ fx("fill", "単色化", G3, {"color": C("色", "#ffffff"), "amount": P("強さ")
 fx("tint", "色味を付ける", G3, {"color": C("色", "#ffb347"), "amount": P("強さ")}, True)
 fx("color", "色調補正", G3, {"brightness": N("明るさ", 0, -100, 100, 1), "contrast": N("コントラスト", 0, -100, 200, 1), "saturation": N("彩度", 0, -100, 200, 1), "hue": A("色相"), "luminance": P("輝度", 100, 0, 400), "gamma": P("ガンマ", 100, 10, 400)}, True)
 fx("grayscale", "グレースケール", G3, {"amount": P("強さ")}, True)
-fx("duotone", "2 色化", G3, {"dark": C("暗部の色", "#000000"), "light": C("明部の色", "#ffffff"), "gamma": P("ガンマ", 100, 10, 400), "amount": P("強さ")}, True)
+fx("duotone", "2 色化", G3, {"dark": C("暗部の色", "#000000"), "light": C("明部の色", "#ffffff"), "gamma": P("ガンマ", 100, 10, 400), "amount": P("強さ"), "gray": S("明るさの取り方", "", [("", "輝度"), ("max", "RGB の最大値")])}, True)
 fx("threshold", "2 値化", G3, {"level": N("しきい値", 128, 0, 255, 1), "light": C("明部の色", "#ffffff"), "dark": C("暗部の色", "#000000"), "softness": N("なめらかさ", 0, 0, 128, 1), "amount": P("強さ")}, True)
 fx("bleach_bypass", "ブリーチバイパス(銀残し)", G3, {"amount": P("強度"), "saturation": P("彩度", 70, 0, 200), "gamma": P("ガンマ", 120, 10, 400)}, True)
 fx("invert", "色の反転", G3, {"amount": P("強さ"), "luma_only": B("輝度だけ")}, True)
@@ -65,7 +65,7 @@ fx("lightleak", "光もれ", G3, {"color": C("色", "#ffb060"), "x": CX(), "y": 
 fx("gradient_overlay", "グラデーション", G3, {"color": C("開始色", "#ffffff"), "color2": C("終了色", "#000000"), "shape": S("形", "linear", [("linear", "線"), ("radial", "円")]), "angle": A("角度"), "cx": CX(), "cy": CY(), "width": N("幅(0 = レイヤーの大きさ)", 0, 0, 8000, 1), "amount": P("強さ"), "blend": S("合成", "normal", BLEND5)}, True)
 fx("border", "枠", G3, {"width": N("太さ", 4, 0, 500, 1), "color": C("色", "#ffffff"), "position": S("位置", "inside", [("inside", "内側"), ("center", "中央"), ("outside", "外側")]), "opacity": P("不透明度")}, True)
 fx("noise", "ノイズ", G3, {"amount": N("量", 10, 0, 100, 1), "seed": N("種", 0, 0, 9999, 1, False), "color": B("色つき"), "animated": B("コマごとに変える", True)}, True)
-fx("overlay_source", "画像・動画・コンポジションの合成", G7, {"asset_id": N("素材", None, anim=False, asset="any"), "mode": S("重ね方", "over", [("over", "上に重ねる"), ("under", "下に敷く"), ("replace_color", "色だけ置き換える"), ("luma_to_alpha", "輝度をアルファに")]), "x": CX(), "y": CY(), "scale": P("拡大率", 100, 0, 1000), "opacity": P("不透明度"), "start": N("再生位置(コマ)", 0, 0, 1000000, 1, False), "speed": N("再生速度", 1, 0, 16, 0.01, False), "tile": B("敷きつめる"), "fit": B("レイヤーの大きさに合わせる"),
+fx("overlay_source", "画像・動画・コンポジションの合成", G7, {"asset_id": N("素材", None, anim=False, asset="any"), "mode": S("重ね方", "over", [("over", "上に重ねる"), ("under", "下に敷く"), ("replace_color", "色だけ置き換える"), ("luma_to_alpha", "輝度をアルファに"), ("atop", "絵のある所にだけ重ねる")]), "x": CX(), "y": CY(), "scale": P("拡大率", 100, 0, 1000), "opacity": P("不透明度"), "start": N("再生位置(コマ)", 0, 0, 1000000, 1, False), "speed": N("再生速度", 1, 0, 16, 0.01, False), "tile": B("敷きつめる"), "fit": B("レイヤーの大きさに合わせる"),
     "anchor": S("位置の基準", "center", [("center", "中心どうし"), ("top_left", "箱の左上に素材の左上")])}, True)
 # --- 縁・影(RT を使う) ---
 fx("stroke_outline", "縁取り", G4, {"width": N("サイズ", 4, 0, 200, 1), "color": C("色", "#000000"), "blur": N("ぼかし", 0, 0, 200, 1), "position": S("位置", "outer", [("outer", "外側"), ("inner", "内側"), ("center", "中央")]), "opacity": P("不透明度"), "only": B("縁だけ")}, False)
@@ -79,7 +79,7 @@ fx("feather", "縁をぼかす", G4, {"radius": N("幅", 10, 0, 300, 1)}, False)
 fx("blur", "ぼかし", G5, {"radius": N("範囲", 10, 0, 500, 1)}, False)
 fx("directional_blur", "方向ブラー", G5, {"length": N("範囲", 40, 0, 1000, 1), "angle": A("角度", 90)}, False)
 fx("radial_blur", "放射ブラー", G5, {"amount": N("範囲", 20, 0, 200, 1), "mode": S("種類", "zoom", [("zoom", "ズーム"), ("spin", "回転")]), "cx": CX(), "cy": CY()}, False)
-fx("glow", "グロー", G5, {"radius": N("拡散", 20, 0, 300, 1), "strength": N("強さ", 1, 0, 5, 0.05), "threshold": P("しきい値", 50)}, False)
+fx("glow", "グロー", G5, {"radius": N("拡散", 20, 0, 300, 1), "strength": N("強さ", 1, 0, 5, 0.05), "threshold": P("しきい値", 50), "variant": S("種類", "", [("", "グロー(足し算)"), ("diffuse", "拡散光(ぼかしとの明るいほうへ寄せる)")])}, False)
 fx("sharpen", "シャープ", G5, {"amount": P("強さ", 50, 0, 400)}, False)
 fx("vignette_blur", "周辺ボケ光量", G5, {"amount": P("周辺の暗さ", 60), "blur": N("周辺のぼかし", 8, 0, 200, 0.5), "radius": P("効き始める位置", 50, 0, 200), "softness": P("効ききるまでの幅", 50, 0, 200),
     "color_shift": N("周辺の色ずれ", 0, 0, 100, 0.5), "color": C("暗くする色", "#000000"), "cx": CX(), "cy": CY(),
@@ -145,7 +145,7 @@ LT["text"] = {"label": "テキスト", "icon": "🔤", "source": {"text": T("文
     "visible_chars": N("見せる文字数(タイプライター)", None, 0, 100000, 0.1, optional=True, **g("アニメ")),
     "arc": {"type": "object", "label": "円周に沿わせる", "default": None, "animatable": False, "optional": True, "group": "円周", "fields": {"radius": N("半径(負 = 下側)", 300, -8000, 8000, 1), "start": A("位置"), "sweep": A("等間隔に配る範囲(省略 = 字幅どおり)", None),
         "deg_per_px": N("px あたりの角度(度。書くと「字幅 ÷ 半径」の代わりに「文字の横位置 × これ」)", None, -10, 10, 0.001, optional=True)}},
-    "per_char": {"type": "object", "label": "文字ごとアニメ", "default": None, "animatable": False, "optional": True, "group": "アニメ", "fields": {"unit": S("単位", "char", [("char", "文字"), ("word", "単語"), ("line", "行")]), "stagger": N("間隔(コマ)", 2, 0, 600, 0.1, False), "duration": N("時間(コマ)", 12, 0.1, 600, 0.1, False),
+    "per_char": {"type": "object", "label": "文字ごとアニメ", "default": None, "animatable": False, "optional": True, "group": "アニメ", "fields": {"unit": S("単位", "char", [("char", "文字"), ("word", "単語"), ("line", "行")]), "hide_outside": B("順番の前後は描かない"), "stagger": N("間隔(コマ)", 2, 0, 600, 0.1, False), "duration": N("時間(コマ)", 12, 0.1, 600, 0.1, False),
         "order": S("登場順", "forward", [("forward", "前から"), ("backward", "後ろから"), ("center", "内側から"), ("edges", "外側から"), ("random", "ランダム")]), "e": T("イージング", "easeOut"), "at": N("開始(レイヤーの頭からのコマ)", 0, 0, 100000, 1, False),
         "ranks": {"type": "numbers", "label": "順番の表(i 文字目が何番目に出るか。書くと登場順より優先)", "default": None, "animatable": False, "optional": True},
         "sequence": {"type": "numbers", "label": "出る順に並べた文字の番号(0 始まり。ranks の逆の書き方)", "default": None, "animatable": False, "optional": True},
@@ -169,6 +169,76 @@ LT["camera"] = {"label": "カメラ", "icon": "🎥", "source": {"zoom": N("距�
     "dof": {"type": "object", "label": "被写界深度", "default": None, "animatable": False, "optional": True, "group": "被写界深度", "fields": {"focus_distance": N("ピントの距離(0 = zoom)", 0, 0, 100000, 1), "aperture": N("ぼけの強さ", 20, 0, 500, 1), "max_blur": N("ぼけの上限", 60, 0, 300, 1, False)}}},
     "default_source": {"zoom": 1024}, "default_layer": {}}
 LT["model"] = {"label": "3D モデル", "icon": "🧊", "source": {"asset_id": N("素材(GLB)", None, anim=False, asset="model", **g("素材")), "height": N("高さ", 540, 1, 8000, 1, **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {}}
+# ---- mesh(手続きの 3D: 箱・球・回転体・押し出し・立体文字・管・破片、その複製)。エンジンは mesh3d.js ----
+def WG(d, *kinds): d["when"] = {"geometry": list(kinds)}; return d
+JS = lambda label, default=None, **kw: {"type": "json", "label": label, "default": default, "animatable": False, "optional": True, **kw}
+GEOS = [("box", "箱"), ("plane", "板"), ("sphere", "球"), ("cylinder", "円柱"), ("cone", "円すい"), ("torus", "ドーナツ"), ("ring", "輪(平ら)"), ("lathe", "回転体(profile)"), ("extrude", "押し出し(shape / points)"), ("text", "立体文字"),
+        ("tube", "管(path)"), ("shards", "破片(割れる板)"), ("icosahedron", "20 面体"), ("octahedron", "8 面体"), ("dodecahedron", "12 面体"), ("tetrahedron", "4 面体"), ("group", "まとめ(children)")]
+POLY = ("icosahedron", "octahedron", "dodecahedron", "tetrahedron")
+MESH_SHAPES = [(x, x) for x in ["star", "heart", "petal", "flower", "polygon", "hexagon", "pentagon", "triangle", "rect", "rounded_rect", "ellipse", "ring", "burst", "arrow", "cross", "chevron", "bubble", "pie"]]
+AXES = [("y", "y(縦の軸)"), ("x", "x(横の軸)"), ("z", "z(奥行きの軸)")]
+MESH_TEX = {"type": "object", "label": "貼る絵", "default": None, "animatable": False, "optional": True, "fields": {
+    "asset_id": N("画像の素材", None, anim=False, asset="image"), "comp_id": N("コンポジション", None, anim=False, asset="comp"), "url": T("URL(素材の代わり)", None, optional=True),
+    "frame": N("子のコマ(固定。省略 = レイヤーの時刻)", None, 0, 10000000, 1, optional=True), "start": N("子の開始コマ", 0, -10000000, 10000000, 1, optional=True), "speed": N("子の再生速度", 1, -16, 16, 0.01, optional=True),
+    "loop": B("子を繰り返す", optional=True), "transparent": B("子の背景色を塗らない", optional=True)}}
+MESH_MAT = {
+    "type": S("種類", "standard", [("standard", "標準(光・映り込み)"), ("basic", "光なし(色・絵そのまま)"), ("emissive", "発光(色 × 強さ)"), ("glass", "ガラス"), ("toon", "トゥーン(段々の陰)"), ("shadow", "影だけ受ける(透明な床)")]),
+    "color": C("色", "#ffffff"), "opacity": N("不透明度(0〜1。省略 = 1、ガラス 0.25、影 0.4)", 1, 0, 1, 0.01, optional=True),
+    "metalness": N("金属らしさ", 0, 0, 1, 0.01), "roughness": N("粗さ(省略 = 0.5、ガラス 0.05)", 0.5, 0, 1, 0.01, optional=True),
+    "emissive": C("自分で光る色", "#000000"), "emissive_intensity": N("光る強さ", 1, 0, 20, 0.05), "env_intensity": N("映り込みの強さ", 1, 0, 10, 0.05), "clearcoat": N("クリア塗装", 0, 0, 1, 0.01),
+    "side": S("描く面", "", [("", "自動(板・開いた形は両面)"), ("front", "表"), ("back", "裏"), ("double", "両面")], optional=True), "flat": B("面ごとに平らな陰(カット面)"), "wireframe": B("ワイヤーフレーム"),
+    "transparent": B("半透明として描く(透過 PNG を貼るとき)", optional=True), "alpha_test": N("この値より薄い所は描かない(切り抜き)", 0, 0, 1, 0.01), "toon_steps": N("陰の段数(トゥーン)", 3, 2, 16, 1, False),
+    "texture": MESH_TEX, "texture_repeat": V2("絵の繰り返し", [1, 1]), "texture_offset": V2("絵のずれ(0〜1)", [0, 0])}
+MESH_PATH = {"type": "object", "label": "道(管・道に沿った押し出し・複製の along)", "default": None, "animatable": False, "optional": True, "fields": {
+    "type": S("種類", "helix", [("helix", "らせん"), ("circle", "円"), ("line", "直線"), ("points", "点の列")]), "radius": N("半径", 300, 0, 20000, 1), "radius_end": N("終わりの半径(らせん)", None, 0, 20000, 1, optional=True),
+    "turns": N("巻き数(らせん)", 3, -100, 100, 0.01), "height": N("高さ(らせん。正 = 上へ進む)", 400, -20000, 20000, 1), "axis": S("軸", "y", AXES), "start": A("開始角"), "arc": A("範囲(円)", 360),
+    "from": V3("始点(直線)", [-200, 0, 0]), "to": V3("終点(直線)", [200, 0, 0]), "points": JS("点 [[x,y,z],…](点の列)"), "closed": B("閉じる(点の列)"), "curve": S("つなぎ方(点の列)", "catmullrom", [("catmullrom", "なめらか"), ("linear", "折れ線")]),
+    "tension": N("曲がりの強さ(なめらか)", 0.5, 0, 1, 0.01, False)}}
+MESH_INST = {"type": "object", "label": "複製(3D の粒・並び)", "default": None, "animatable": False, "optional": True, "fields": {
+    "count": N("個数", 100, 1, 20000, 1, False), "seed": N("種", 1, 0, 99999, 1, False),
+    "layout": S("最初の並び", "box", [("box", "箱の中にばらまく"), ("sphere", "球の中にばらまく"), ("grid", "格子"), ("ring", "円周"), ("along", "道(path)に沿って"), ("point", "1 点")]),
+    "area": V3("範囲(箱)", [600, 600, 600]), "grid": V3("個数(格子 x・y・z)", None, optional=True, animatable=False), "spacing": V3("間隔(格子)", [100, 100, 100]), "radius": N("半径(球・円周)", 300, 0, 20000, 1), "surface": B("球の表面だけ"),
+    "axis": S("軸(円周)", "y", AXES), "start": A("開始角(円周)"), "arc": A("範囲(円周)", 360), "offset": N("並びをずらす(円周・道。1 = 1 周)", 0, -100, 100, 0.001), "align": B("並びの向きに合わせて回す(円周・道)", True), "path": MESH_PATH,
+    "scale": V2("大きさの幅(最小・最大の倍率)", [1, 1]), "rotation": V3("回転", [0, 0, 0]), "rotation_random": V3("回転のばらつき(±度)", [0, 0, 0]),
+    "velocity": V3("速さ(px/秒)", [0, 0, 0]), "velocity_random": V3("速さのばらつき(±)", [0, 0, 0]), "radial": V2("中心から外への速さ(最小・最大)", [0, 0]), "gravity": V3("重力(px/秒²)", [0, 0, 0]), "drag": N("空気の抵抗(1/秒)", 0, 0, 20, 0.05),
+    "spin": V3("回る速さ(度/秒)", [0, 0, 0]), "spin_random": V3("回る速さのばらつき(±)", [0, 0, 0]),
+    "sway": {"type": "object", "label": "ゆらゆら", "default": None, "animatable": False, "optional": True, "fields": {"amp": V3("幅(px)", [30, 0, 0]), "freq": N("1 秒あたりの回数", 0.5, 0, 30, 0.01)}},
+    "lifetime": N("寿命(秒。0 = ずっと)", 0, 0, 600, 0.05), "lifetime_random": N("寿命のばらつき", 0, 0, 0.95, 0.01), "loop": B("寿命が尽きたら生まれ直す"), "prewarm": B("最初から途中の姿で始める(loop)", True),
+    "emit_duration": N("生まれる時刻をばらす幅(秒。省略 = loop なら寿命、ほかは 0)", None, 0, 600, 0.05, optional=True), "colors": {"type": "colors", "label": "色(1 個ごとに選ぶ。マテリアルの色に掛かる)", "default": None, "animatable": False, "optional": True},
+    "fade_in": N("現れる時間(秒)", 0, 0, 60, 0.05), "fade_out": N("消える時間(秒。寿命の終わり)", 0, 0, 60, 0.05), "fade_mode": S("現れ方・消え方", "opacity", [("opacity", "不透明度"), ("scale", "大きさ"), ("both", "両方")]),
+    "time_offset": N("時刻をずらす(秒)", 0, -600, 600, 0.05)}}
+MESH_OBJ = {
+    "geometry": S("形", "box", GEOS), "position": V3("位置(レイヤーの原点から)", [0, 0, 0]), "rotation": V3("回転(X・Y・Z)", [0, 0, 0]), "scale": V3("拡大(倍率。1 = 等倍)", [1, 1, 1]), "visible": B("表示", True),
+    "size": WG(V3("大きさ(箱 = 幅・高さ・奥行き / 板・押し出し・破片 = 幅・高さ)", [200, 200, 200]), "box", "plane", "extrude", "shards"),
+    "radius": WG(N("半径", 100, 0, 20000, 1), "sphere", "cylinder", "cone", "torus", *POLY), "radius_top": WG(N("上の半径", None, 0, 20000, 1, optional=True), "cylinder"), "radius_bottom": WG(N("下の半径", None, 0, 20000, 1, optional=True), "cylinder"),
+    "height": WG(N("高さ", 200, 0, 20000, 1), "cylinder", "cone"), "open_ended": WG(B("ふた無し"), "cylinder", "cone"), "tube": WG(N("管の太さ(半径)", 20, 0.1, 5000, 0.1), "torus", "tube"),
+    "inner": WG(N("内側の半径", 60, 0, 20000, 1), "ring"), "outer": WG(N("外側の半径", 120, 0, 20000, 1), "ring"), "arc": WG(A("範囲(度)", 360), "torus", "ring", "lathe"), "start": WG(A("開始角(上から時計回り)"), "torus", "ring"),
+    "detail": WG(N("細かさ(0 = 角ばった宝石)", 0, 0, 5, 1, False), *POLY), "segments": N("分割数(省略 = 形ごとの既定)", None, 1, 1024, 1, False, optional=True), "radial_segments": WG(N("断面の分割数", None, 3, 256, 1, False, optional=True), "torus", "tube"),
+    "profile": WG(JS("断面 [[半径, y],…](回転体。y は下が正)"), "lathe"), "smooth": WG(N("断面をなめらかに(点の間を何分割するか。0 = 折れ線)", 0, 0, 32, 1, False), "lathe"),
+    "shape": WG(S("形(押し出し)", "star", MESH_SHAPES), "extrude"), "shape_sides": WG(N("角の数(多角形・星)", None, 3, 64, 1, False, optional=True), "extrude"), "shape_inner": WG(N("内側の割合(星・輪)", None, 0, 1, 0.01, False, optional=True), "extrude"),
+    "shape_radius": WG(N("角丸(四角・多角形)", None, 0, 2000, 1, False, optional=True), "extrude"), "points": WG(JS("頂点 [[x,y],…](shape の代わり。y は下が正)"), "extrude"), "holes": WG(JS("穴 [[[x,y],…],…]"), "extrude"),
+    "depth": WG(N("厚み", 40, 0, 5000, 1), "extrude", "text", "shards"),
+    "bevel": WG({"type": "object", "label": "面取り", "default": None, "animatable": False, "optional": True, "fields": {"size": N("幅(外へ太る)", 4, 0, 500, 0.5, False), "thickness": N("奥行き(省略 = 幅と同じ)", None, 0, 500, 0.5, False, optional=True), "segments": N("段数", 3, 1, 16, 1, False), "offset": N("輪郭をずらす(負 = 太らせない)", 0, -500, 500, 0.5, False)}}, "extrude", "text"),
+    "smooth_angle": WG(N("この角度までの折れ目はなめらかに", 40, 0, 180, 1, False), "extrude", "text"),
+    "text": WG(T("文字", "文字"), "text"), "font": WG(T("書体", "Noto Sans JP", font=True), "text"), "weight": WG(N("太さ", 700, 100, 900, 100, False), "text"), "italic": WG(B("斜体"), "text"), "font_size": WG(N("文字の大きさ", 200, 1, 4000, 1), "text"),
+    "tracking": WG(N("字間(px)", 0, -500, 2000, 1), "text"), "leading": WG(N("行送り(文字の大きさに対する倍率)", 1.2, 0.1, 10, 0.01), "text"), "align": WG(S("行揃え", "center", [("center", "中央"), ("left", "左"), ("right", "右")]), "text"),
+    "path": MESH_PATH,
+    "count": WG(N("破片の数(およそ)", 120, 1, 6000, 1, False), "shards"), "seed": WG(N("種", 1, 0, 99999, 1, False), "shards"), "cut": WG(S("割り方", "voronoi", [("voronoi", "不ぞろいな多角形"), ("triangles", "三角"), ("grid", "四角の升")]), "shards"), "jitter": WG(N("不ぞろいさ", 1, 0, 1, 0.01, False), "shards"),
+    "progress": WG(N("割れ具合(0 = 元の板、1 = 飛び散った)", 0, 0, 1, 0.001), "shards"), "stagger": WG(S("割れていく順", "none", [("none", "一斉"), ("left_to_right", "左から"), ("right_to_left", "右から"), ("top_to_bottom", "上から"), ("bottom_to_top", "下から"), ("center_out", "中心から"), ("edges_in", "外側から"), ("random", "ばらばら")]), "shards"),
+    "stagger_amount": WG(N("順番の時間差(0 = 一斉、大きいほど順々)", 0.5, 0, 0.95, 0.01), "shards"), "direction": WG(V3("全体が流れる先(px)", [0, 0, 0]), "shards"), "spread": WG(N("飛び散る距離(px)", 600, -20000, 20000, 1), "shards"), "spread_z": WG(N("奥行きの散り(px。省略 = 距離の半分)", None, 0, 20000, 1, optional=True), "shards"),
+    "origin": WG(V2("飛び散る中心", [0, 0]), "shards"), "spin": WG(N("回る角度(度)", 240, 0, 7200, 1), "shards"), "gravity": WG(V3("落ちる量(px。割れ具合の 2 乗に比例)", [0, 0, 0]), "shards"), "scale_end": WG(N("終わりの大きさ(倍率)", 1, 0, 10, 0.01), "shards"),
+    "fade": WG(N("終わりに消える割合(0 = 消えない)", 0, 0, 1, 0.01), "shards"),
+    "material": {"type": "object", "label": "マテリアル", "fields": MESH_MAT},
+    "faces": {"type": "list", "label": "面ごとのマテリアル(箱 = 右・左・上・下・手前・奥 / 押し出し・文字 = 表裏・側面 / 円柱 = 側面・上・下)", "default": None, "animatable": False, "optional": True, "item": MESH_MAT},
+    "instances": MESH_INST, "cast_shadow": B("影を落とす", True), "receive_shadow": B("影を受ける", True), "render_order": N("描く順(半透明の重なり。大きいほどあと)", 0, -100, 100, 1, False)}
+LT["mesh"] = {"label": "3D オブジェクト", "icon": "💎", "source": {
+    "unlit": B("光を使わない(色・絵そのまま)", **g("光")), "light.ambient": N("環境光", 0.6, 0, 10, 0.05, **g("光")), "light.intensity": N("主光の強さ", 2, 0, 20, 0.05, **g("光")), "light.color": C("主光の色", "#ffffff", **g("光")),
+    "light.direction": V3("主光の来る方向(x 負 = 左、y 負 = 上、z 負 = 手前)", [-0.5, -1, -1], **g("光")), "light.shadows": B("影を落とす", **g("光")), "light.shadow_area": N("影を計算する範囲(px。省略 = 画面の長辺 × 1.2)", None, 10, 40000, 1, optional=True, **g("光")),
+    "light.shadow_opacity": N("影の濃さ", 1, 0, 1, 0.01, **g("光")),
+    "light.points": {"type": "list", "label": "点の光", "default": None, "animatable": False, "optional": True, "group": "光", "item": {"position": V3("位置(レイヤーの原点から)", [0, -300, -300]), "color": C("色", "#ffffff"), "intensity": N("強さ", 1, 0, 50, 0.05), "distance": N("届く距離(0 = どこまでも)", 0, 0, 40000, 1)}},
+    "env": S("映り込みの環境", "studio", [("studio", "スタジオ(明るい面つき)"), ("soft", "やわらかい白"), ("sunset", "夕焼け"), ("night", "夜"), ("none", "なし")], **g("映り込み")), "env_intensity": N("映り込みの強さ", 1, 0, 10, 0.05, **g("映り込み")), "env_rotation": A("環境を回す", **g("映り込み")),
+    "objects": {"type": "list", "label": "オブジェクト", "default": None, "animatable": False, "group": "オブジェクト", "item": MESH_OBJ}},
+    "default_source": {"light": {"shadows": False}, "objects": [{"geometry": "box", "size": [300, 300, 300], "rotation": [20, 30, 0], "material": {"color": "#4f9dff", "roughness": 0.4}}]}, "default_layer": {}}
 PRE = [("", "(なし)"), ("petals", "花びら"), ("confetti", "紙吹雪"), ("snow", "雪"), ("sparks", "火花"), ("dust", "ちり")]
 LT["particles"] = {"label": "粒子", "icon": "✨", "source": {"seed": N("種", 1, 0, 99999, 1, False, **g("粒子")), **{"emitter." + k: v for k, v in {
     "preset": S("出来合い", "", PRE, optional=True, **g("粒子")), "sprite": S("粒の絵", "soft", [(x, x) for x in ["soft", "circle", "square", "rect", "star", "spark", "petal", "heart", "flower"]], **g("粒子")), "blend": S("重ね方", "add", [("add", "加算"), ("normal", "通常")], **g("粒子")),

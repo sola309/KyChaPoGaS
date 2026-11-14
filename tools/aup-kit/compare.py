@@ -49,11 +49,14 @@ def parse_frames(s):
 
 
 def final_frame(f, fps=60.0):
-    d = os.path.join(SAKURA, 'compare', '_final')
+    # f = 完成動画の何枚目か(0 始まり)。この mp4 の映像は start_time = 1/60 秒(1 コマ遅れて始まる)なので、f 枚目の時刻は (f+1)/fps。
+    # -ss は「その時刻以降の最初のコマ」を返すので、半コマ手前の (f+0.5)/fps を指す。
+    # (前は f/fps を渡していて f-1 枚目が返っていた → 「エンジンの f コマ目 = 完成動画の f+1」に見えていた。枚数で数えればずれは 0)
+    d = os.path.join(SAKURA, 'compare', '_final_idx')
     os.makedirs(d, exist_ok=True)
     p = os.path.join(d, f'{f:05d}.png')
     if not os.path.exists(p):
-        subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{f / fps:.6f}', '-i', FINAL, '-frames:v', '1',
+        subprocess.run(['ffmpeg', '-y', '-v', 'error', '-ss', f'{(f + 0.5) / fps:.6f}', '-i', FINAL, '-frames:v', '1',
                         '-vf', f'scale={CW}:{CH}:flags=area', p], check=True)
     return Image.open(p).convert('RGB')
 

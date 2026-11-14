@@ -1298,6 +1298,22 @@
      "max": 100,
      "step": 1,
      "animatable": true
+    },
+    "gray": {
+     "type": "select",
+     "label": "明るさの取り方",
+     "default": "",
+     "options": [
+      {
+       "value": "",
+       "label": "輝度"
+      },
+      {
+       "value": "max",
+       "label": "RGB の最大値"
+      }
+     ],
+     "animatable": false
     }
    }
   },
@@ -1949,6 +1965,10 @@
       {
        "value": "luma_to_alpha",
        "label": "輝度をアルファに"
+      },
+      {
+       "value": "atop",
+       "label": "絵のある所にだけ重ねる"
       }
      ],
      "animatable": false
@@ -2461,6 +2481,22 @@
      "max": 100,
      "step": 1,
      "animatable": true
+    },
+    "variant": {
+     "type": "select",
+     "label": "種類",
+     "default": "",
+     "options": [
+      {
+       "value": "",
+       "label": "グロー(足し算)"
+      },
+      {
+       "value": "diffuse",
+       "label": "拡散光(ぼかしとの明るいほうへ寄せる)"
+      }
+     ],
+     "animatable": false
     }
    }
   },
@@ -4851,6 +4887,12 @@
        ],
        "animatable": false
       },
+      "hide_outside": {
+       "type": "bool",
+       "label": "順番の前後は描かない",
+       "default": false,
+       "animatable": false
+      },
       "stagger": {
        "type": "number",
        "label": "間隔(コマ)",
@@ -5413,6 +5455,2419 @@
    },
    "default_source": {
     "asset_id": null
+   },
+   "default_layer": {}
+  },
+  "mesh": {
+   "label": "3D オブジェクト",
+   "icon": "💎",
+   "source": {
+    "unlit": {
+     "type": "bool",
+     "label": "光を使わない(色・絵そのまま)",
+     "default": false,
+     "animatable": false,
+     "group": "光"
+    },
+    "light.ambient": {
+     "type": "number",
+     "label": "環境光",
+     "default": 0.6,
+     "min": 0,
+     "max": 10,
+     "step": 0.05,
+     "animatable": true,
+     "group": "光"
+    },
+    "light.intensity": {
+     "type": "number",
+     "label": "主光の強さ",
+     "default": 2,
+     "min": 0,
+     "max": 20,
+     "step": 0.05,
+     "animatable": true,
+     "group": "光"
+    },
+    "light.color": {
+     "type": "color",
+     "label": "主光の色",
+     "default": "#ffffff",
+     "animatable": true,
+     "group": "光"
+    },
+    "light.direction": {
+     "type": "vec3",
+     "label": "主光の来る方向(x 負 = 左、y 負 = 上、z 負 = 手前)",
+     "default": [
+      -0.5,
+      -1,
+      -1
+     ],
+     "animatable": true,
+     "group": "光"
+    },
+    "light.shadows": {
+     "type": "bool",
+     "label": "影を落とす",
+     "default": false,
+     "animatable": false,
+     "group": "光"
+    },
+    "light.shadow_area": {
+     "type": "number",
+     "label": "影を計算する範囲(px。省略 = 画面の長辺 × 1.2)",
+     "default": null,
+     "min": 10,
+     "max": 40000,
+     "step": 1,
+     "animatable": true,
+     "optional": true,
+     "group": "光"
+    },
+    "light.shadow_opacity": {
+     "type": "number",
+     "label": "影の濃さ",
+     "default": 1,
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "光"
+    },
+    "light.points": {
+     "type": "list",
+     "label": "点の光",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "光",
+     "item": {
+      "position": {
+       "type": "vec3",
+       "label": "位置(レイヤーの原点から)",
+       "default": [
+        0,
+        -300,
+        -300
+       ],
+       "animatable": true
+      },
+      "color": {
+       "type": "color",
+       "label": "色",
+       "default": "#ffffff",
+       "animatable": true
+      },
+      "intensity": {
+       "type": "number",
+       "label": "強さ",
+       "default": 1,
+       "min": 0,
+       "max": 50,
+       "step": 0.05,
+       "animatable": true
+      },
+      "distance": {
+       "type": "number",
+       "label": "届く距離(0 = どこまでも)",
+       "default": 0,
+       "min": 0,
+       "max": 40000,
+       "step": 1,
+       "animatable": true
+      }
+     }
+    },
+    "env": {
+     "type": "select",
+     "label": "映り込みの環境",
+     "default": "studio",
+     "options": [
+      {
+       "value": "studio",
+       "label": "スタジオ(明るい面つき)"
+      },
+      {
+       "value": "soft",
+       "label": "やわらかい白"
+      },
+      {
+       "value": "sunset",
+       "label": "夕焼け"
+      },
+      {
+       "value": "night",
+       "label": "夜"
+      },
+      {
+       "value": "none",
+       "label": "なし"
+      }
+     ],
+     "animatable": false,
+     "group": "映り込み"
+    },
+    "env_intensity": {
+     "type": "number",
+     "label": "映り込みの強さ",
+     "default": 1,
+     "min": 0,
+     "max": 10,
+     "step": 0.05,
+     "animatable": true,
+     "group": "映り込み"
+    },
+    "env_rotation": {
+     "type": "angle",
+     "label": "環境を回す",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true,
+     "group": "映り込み"
+    },
+    "objects": {
+     "type": "list",
+     "label": "オブジェクト",
+     "default": null,
+     "animatable": false,
+     "group": "オブジェクト",
+     "item": {
+      "geometry": {
+       "type": "select",
+       "label": "形",
+       "default": "box",
+       "options": [
+        {
+         "value": "box",
+         "label": "箱"
+        },
+        {
+         "value": "plane",
+         "label": "板"
+        },
+        {
+         "value": "sphere",
+         "label": "球"
+        },
+        {
+         "value": "cylinder",
+         "label": "円柱"
+        },
+        {
+         "value": "cone",
+         "label": "円すい"
+        },
+        {
+         "value": "torus",
+         "label": "ドーナツ"
+        },
+        {
+         "value": "ring",
+         "label": "輪(平ら)"
+        },
+        {
+         "value": "lathe",
+         "label": "回転体(profile)"
+        },
+        {
+         "value": "extrude",
+         "label": "押し出し(shape / points)"
+        },
+        {
+         "value": "text",
+         "label": "立体文字"
+        },
+        {
+         "value": "tube",
+         "label": "管(path)"
+        },
+        {
+         "value": "shards",
+         "label": "破片(割れる板)"
+        },
+        {
+         "value": "icosahedron",
+         "label": "20 面体"
+        },
+        {
+         "value": "octahedron",
+         "label": "8 面体"
+        },
+        {
+         "value": "dodecahedron",
+         "label": "12 面体"
+        },
+        {
+         "value": "tetrahedron",
+         "label": "4 面体"
+        },
+        {
+         "value": "group",
+         "label": "まとめ(children)"
+        }
+       ],
+       "animatable": false
+      },
+      "position": {
+       "type": "vec3",
+       "label": "位置(レイヤーの原点から)",
+       "default": [
+        0,
+        0,
+        0
+       ],
+       "animatable": true
+      },
+      "rotation": {
+       "type": "vec3",
+       "label": "回転(X・Y・Z)",
+       "default": [
+        0,
+        0,
+        0
+       ],
+       "animatable": true
+      },
+      "scale": {
+       "type": "vec3",
+       "label": "拡大(倍率。1 = 等倍)",
+       "default": [
+        1,
+        1,
+        1
+       ],
+       "animatable": true
+      },
+      "visible": {
+       "type": "bool",
+       "label": "表示",
+       "default": true,
+       "animatable": false
+      },
+      "size": {
+       "type": "vec3",
+       "label": "大きさ(箱 = 幅・高さ・奥行き / 板・押し出し・破片 = 幅・高さ)",
+       "default": [
+        200,
+        200,
+        200
+       ],
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "box",
+         "plane",
+         "extrude",
+         "shards"
+        ]
+       }
+      },
+      "radius": {
+       "type": "number",
+       "label": "半径",
+       "default": 100,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "sphere",
+         "cylinder",
+         "cone",
+         "torus",
+         "icosahedron",
+         "octahedron",
+         "dodecahedron",
+         "tetrahedron"
+        ]
+       }
+      },
+      "radius_top": {
+       "type": "number",
+       "label": "上の半径",
+       "default": null,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "cylinder"
+        ]
+       }
+      },
+      "radius_bottom": {
+       "type": "number",
+       "label": "下の半径",
+       "default": null,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "cylinder"
+        ]
+       }
+      },
+      "height": {
+       "type": "number",
+       "label": "高さ",
+       "default": 200,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "cylinder",
+         "cone"
+        ]
+       }
+      },
+      "open_ended": {
+       "type": "bool",
+       "label": "ふた無し",
+       "default": false,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "cylinder",
+         "cone"
+        ]
+       }
+      },
+      "tube": {
+       "type": "number",
+       "label": "管の太さ(半径)",
+       "default": 20,
+       "min": 0.1,
+       "max": 5000,
+       "step": 0.1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "torus",
+         "tube"
+        ]
+       }
+      },
+      "inner": {
+       "type": "number",
+       "label": "内側の半径",
+       "default": 60,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "ring"
+        ]
+       }
+      },
+      "outer": {
+       "type": "number",
+       "label": "外側の半径",
+       "default": 120,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "ring"
+        ]
+       }
+      },
+      "arc": {
+       "type": "angle",
+       "label": "範囲(度)",
+       "default": 360,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "torus",
+         "ring",
+         "lathe"
+        ]
+       }
+      },
+      "start": {
+       "type": "angle",
+       "label": "開始角(上から時計回り)",
+       "default": 0,
+       "min": -360,
+       "max": 360,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "torus",
+         "ring"
+        ]
+       }
+      },
+      "detail": {
+       "type": "number",
+       "label": "細かさ(0 = 角ばった宝石)",
+       "default": 0,
+       "min": 0,
+       "max": 5,
+       "step": 1,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "icosahedron",
+         "octahedron",
+         "dodecahedron",
+         "tetrahedron"
+        ]
+       }
+      },
+      "segments": {
+       "type": "number",
+       "label": "分割数(省略 = 形ごとの既定)",
+       "default": null,
+       "min": 1,
+       "max": 1024,
+       "step": 1,
+       "animatable": false,
+       "optional": true
+      },
+      "radial_segments": {
+       "type": "number",
+       "label": "断面の分割数",
+       "default": null,
+       "min": 3,
+       "max": 256,
+       "step": 1,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "torus",
+         "tube"
+        ]
+       }
+      },
+      "profile": {
+       "type": "json",
+       "label": "断面 [[半径, y],…](回転体。y は下が正)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "lathe"
+        ]
+       }
+      },
+      "smooth": {
+       "type": "number",
+       "label": "断面をなめらかに(点の間を何分割するか。0 = 折れ線)",
+       "default": 0,
+       "min": 0,
+       "max": 32,
+       "step": 1,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "lathe"
+        ]
+       }
+      },
+      "shape": {
+       "type": "select",
+       "label": "形(押し出し)",
+       "default": "star",
+       "options": [
+        {
+         "value": "star",
+         "label": "star"
+        },
+        {
+         "value": "heart",
+         "label": "heart"
+        },
+        {
+         "value": "petal",
+         "label": "petal"
+        },
+        {
+         "value": "flower",
+         "label": "flower"
+        },
+        {
+         "value": "polygon",
+         "label": "polygon"
+        },
+        {
+         "value": "hexagon",
+         "label": "hexagon"
+        },
+        {
+         "value": "pentagon",
+         "label": "pentagon"
+        },
+        {
+         "value": "triangle",
+         "label": "triangle"
+        },
+        {
+         "value": "rect",
+         "label": "rect"
+        },
+        {
+         "value": "rounded_rect",
+         "label": "rounded_rect"
+        },
+        {
+         "value": "ellipse",
+         "label": "ellipse"
+        },
+        {
+         "value": "ring",
+         "label": "ring"
+        },
+        {
+         "value": "burst",
+         "label": "burst"
+        },
+        {
+         "value": "arrow",
+         "label": "arrow"
+        },
+        {
+         "value": "cross",
+         "label": "cross"
+        },
+        {
+         "value": "chevron",
+         "label": "chevron"
+        },
+        {
+         "value": "bubble",
+         "label": "bubble"
+        },
+        {
+         "value": "pie",
+         "label": "pie"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "shape_sides": {
+       "type": "number",
+       "label": "角の数(多角形・星)",
+       "default": null,
+       "min": 3,
+       "max": 64,
+       "step": 1,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "shape_inner": {
+       "type": "number",
+       "label": "内側の割合(星・輪)",
+       "default": null,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "shape_radius": {
+       "type": "number",
+       "label": "角丸(四角・多角形)",
+       "default": null,
+       "min": 0,
+       "max": 2000,
+       "step": 1,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "points": {
+       "type": "json",
+       "label": "頂点 [[x,y],…](shape の代わり。y は下が正)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "holes": {
+       "type": "json",
+       "label": "穴 [[[x,y],…],…]",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "extrude"
+        ]
+       }
+      },
+      "depth": {
+       "type": "number",
+       "label": "厚み",
+       "default": 40,
+       "min": 0,
+       "max": 5000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "extrude",
+         "text",
+         "shards"
+        ]
+       }
+      },
+      "bevel": {
+       "type": "object",
+       "label": "面取り",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "fields": {
+        "size": {
+         "type": "number",
+         "label": "幅(外へ太る)",
+         "default": 4,
+         "min": 0,
+         "max": 500,
+         "step": 0.5,
+         "animatable": false
+        },
+        "thickness": {
+         "type": "number",
+         "label": "奥行き(省略 = 幅と同じ)",
+         "default": null,
+         "min": 0,
+         "max": 500,
+         "step": 0.5,
+         "animatable": false,
+         "optional": true
+        },
+        "segments": {
+         "type": "number",
+         "label": "段数",
+         "default": 3,
+         "min": 1,
+         "max": 16,
+         "step": 1,
+         "animatable": false
+        },
+        "offset": {
+         "type": "number",
+         "label": "輪郭をずらす(負 = 太らせない)",
+         "default": 0,
+         "min": -500,
+         "max": 500,
+         "step": 0.5,
+         "animatable": false
+        }
+       },
+       "when": {
+        "geometry": [
+         "extrude",
+         "text"
+        ]
+       }
+      },
+      "smooth_angle": {
+       "type": "number",
+       "label": "この角度までの折れ目はなめらかに",
+       "default": 40,
+       "min": 0,
+       "max": 180,
+       "step": 1,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "extrude",
+         "text"
+        ]
+       }
+      },
+      "text": {
+       "type": "text",
+       "label": "文字",
+       "default": "文字",
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "font": {
+       "type": "text",
+       "label": "書体",
+       "default": "Noto Sans JP",
+       "animatable": false,
+       "font": true,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "weight": {
+       "type": "number",
+       "label": "太さ",
+       "default": 700,
+       "min": 100,
+       "max": 900,
+       "step": 100,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "italic": {
+       "type": "bool",
+       "label": "斜体",
+       "default": false,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "font_size": {
+       "type": "number",
+       "label": "文字の大きさ",
+       "default": 200,
+       "min": 1,
+       "max": 4000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "tracking": {
+       "type": "number",
+       "label": "字間(px)",
+       "default": 0,
+       "min": -500,
+       "max": 2000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "leading": {
+       "type": "number",
+       "label": "行送り(文字の大きさに対する倍率)",
+       "default": 1.2,
+       "min": 0.1,
+       "max": 10,
+       "step": 0.01,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "align": {
+       "type": "select",
+       "label": "行揃え",
+       "default": "center",
+       "options": [
+        {
+         "value": "center",
+         "label": "中央"
+        },
+        {
+         "value": "left",
+         "label": "左"
+        },
+        {
+         "value": "right",
+         "label": "右"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "text"
+        ]
+       }
+      },
+      "path": {
+       "type": "object",
+       "label": "道(管・道に沿った押し出し・複製の along)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "fields": {
+        "type": {
+         "type": "select",
+         "label": "種類",
+         "default": "helix",
+         "options": [
+          {
+           "value": "helix",
+           "label": "らせん"
+          },
+          {
+           "value": "circle",
+           "label": "円"
+          },
+          {
+           "value": "line",
+           "label": "直線"
+          },
+          {
+           "value": "points",
+           "label": "点の列"
+          }
+         ],
+         "animatable": false
+        },
+        "radius": {
+         "type": "number",
+         "label": "半径",
+         "default": 300,
+         "min": 0,
+         "max": 20000,
+         "step": 1,
+         "animatable": true
+        },
+        "radius_end": {
+         "type": "number",
+         "label": "終わりの半径(らせん)",
+         "default": null,
+         "min": 0,
+         "max": 20000,
+         "step": 1,
+         "animatable": true,
+         "optional": true
+        },
+        "turns": {
+         "type": "number",
+         "label": "巻き数(らせん)",
+         "default": 3,
+         "min": -100,
+         "max": 100,
+         "step": 0.01,
+         "animatable": true
+        },
+        "height": {
+         "type": "number",
+         "label": "高さ(らせん。正 = 上へ進む)",
+         "default": 400,
+         "min": -20000,
+         "max": 20000,
+         "step": 1,
+         "animatable": true
+        },
+        "axis": {
+         "type": "select",
+         "label": "軸",
+         "default": "y",
+         "options": [
+          {
+           "value": "y",
+           "label": "y(縦の軸)"
+          },
+          {
+           "value": "x",
+           "label": "x(横の軸)"
+          },
+          {
+           "value": "z",
+           "label": "z(奥行きの軸)"
+          }
+         ],
+         "animatable": false
+        },
+        "start": {
+         "type": "angle",
+         "label": "開始角",
+         "default": 0,
+         "min": -360,
+         "max": 360,
+         "step": 1,
+         "animatable": true
+        },
+        "arc": {
+         "type": "angle",
+         "label": "範囲(円)",
+         "default": 360,
+         "min": -360,
+         "max": 360,
+         "step": 1,
+         "animatable": true
+        },
+        "from": {
+         "type": "vec3",
+         "label": "始点(直線)",
+         "default": [
+          -200,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "to": {
+         "type": "vec3",
+         "label": "終点(直線)",
+         "default": [
+          200,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "points": {
+         "type": "json",
+         "label": "点 [[x,y,z],…](点の列)",
+         "default": null,
+         "animatable": false,
+         "optional": true
+        },
+        "closed": {
+         "type": "bool",
+         "label": "閉じる(点の列)",
+         "default": false,
+         "animatable": false
+        },
+        "curve": {
+         "type": "select",
+         "label": "つなぎ方(点の列)",
+         "default": "catmullrom",
+         "options": [
+          {
+           "value": "catmullrom",
+           "label": "なめらか"
+          },
+          {
+           "value": "linear",
+           "label": "折れ線"
+          }
+         ],
+         "animatable": false
+        },
+        "tension": {
+         "type": "number",
+         "label": "曲がりの強さ(なめらか)",
+         "default": 0.5,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": false
+        }
+       }
+      },
+      "count": {
+       "type": "number",
+       "label": "破片の数(およそ)",
+       "default": 120,
+       "min": 1,
+       "max": 6000,
+       "step": 1,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "seed": {
+       "type": "number",
+       "label": "種",
+       "default": 1,
+       "min": 0,
+       "max": 99999,
+       "step": 1,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "cut": {
+       "type": "select",
+       "label": "割り方",
+       "default": "voronoi",
+       "options": [
+        {
+         "value": "voronoi",
+         "label": "不ぞろいな多角形"
+        },
+        {
+         "value": "triangles",
+         "label": "三角"
+        },
+        {
+         "value": "grid",
+         "label": "四角の升"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "jitter": {
+       "type": "number",
+       "label": "不ぞろいさ",
+       "default": 1,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "progress": {
+       "type": "number",
+       "label": "割れ具合(0 = 元の板、1 = 飛び散った)",
+       "default": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.001,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "stagger": {
+       "type": "select",
+       "label": "割れていく順",
+       "default": "none",
+       "options": [
+        {
+         "value": "none",
+         "label": "一斉"
+        },
+        {
+         "value": "left_to_right",
+         "label": "左から"
+        },
+        {
+         "value": "right_to_left",
+         "label": "右から"
+        },
+        {
+         "value": "top_to_bottom",
+         "label": "上から"
+        },
+        {
+         "value": "bottom_to_top",
+         "label": "下から"
+        },
+        {
+         "value": "center_out",
+         "label": "中心から"
+        },
+        {
+         "value": "edges_in",
+         "label": "外側から"
+        },
+        {
+         "value": "random",
+         "label": "ばらばら"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "stagger_amount": {
+       "type": "number",
+       "label": "順番の時間差(0 = 一斉、大きいほど順々)",
+       "default": 0.5,
+       "min": 0,
+       "max": 0.95,
+       "step": 0.01,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "direction": {
+       "type": "vec3",
+       "label": "全体が流れる先(px)",
+       "default": [
+        0,
+        0,
+        0
+       ],
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "spread": {
+       "type": "number",
+       "label": "飛び散る距離(px)",
+       "default": 600,
+       "min": -20000,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "spread_z": {
+       "type": "number",
+       "label": "奥行きの散り(px。省略 = 距離の半分)",
+       "default": null,
+       "min": 0,
+       "max": 20000,
+       "step": 1,
+       "animatable": true,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "origin": {
+       "type": "vec2",
+       "label": "飛び散る中心",
+       "default": [
+        0,
+        0
+       ],
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "spin": {
+       "type": "number",
+       "label": "回る角度(度)",
+       "default": 240,
+       "min": 0,
+       "max": 7200,
+       "step": 1,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "gravity": {
+       "type": "vec3",
+       "label": "落ちる量(px。割れ具合の 2 乗に比例)",
+       "default": [
+        0,
+        0,
+        0
+       ],
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "scale_end": {
+       "type": "number",
+       "label": "終わりの大きさ(倍率)",
+       "default": 1,
+       "min": 0,
+       "max": 10,
+       "step": 0.01,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "fade": {
+       "type": "number",
+       "label": "終わりに消える割合(0 = 消えない)",
+       "default": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "shards"
+        ]
+       }
+      },
+      "material": {
+       "type": "object",
+       "label": "マテリアル",
+       "fields": {
+        "type": {
+         "type": "select",
+         "label": "種類",
+         "default": "standard",
+         "options": [
+          {
+           "value": "standard",
+           "label": "標準(光・映り込み)"
+          },
+          {
+           "value": "basic",
+           "label": "光なし(色・絵そのまま)"
+          },
+          {
+           "value": "emissive",
+           "label": "発光(色 × 強さ)"
+          },
+          {
+           "value": "glass",
+           "label": "ガラス"
+          },
+          {
+           "value": "toon",
+           "label": "トゥーン(段々の陰)"
+          },
+          {
+           "value": "shadow",
+           "label": "影だけ受ける(透明な床)"
+          }
+         ],
+         "animatable": false
+        },
+        "color": {
+         "type": "color",
+         "label": "色",
+         "default": "#ffffff",
+         "animatable": true
+        },
+        "opacity": {
+         "type": "number",
+         "label": "不透明度(0〜1。省略 = 1、ガラス 0.25、影 0.4)",
+         "default": 1,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true,
+         "optional": true
+        },
+        "metalness": {
+         "type": "number",
+         "label": "金属らしさ",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "roughness": {
+         "type": "number",
+         "label": "粗さ(省略 = 0.5、ガラス 0.05)",
+         "default": 0.5,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true,
+         "optional": true
+        },
+        "emissive": {
+         "type": "color",
+         "label": "自分で光る色",
+         "default": "#000000",
+         "animatable": true
+        },
+        "emissive_intensity": {
+         "type": "number",
+         "label": "光る強さ",
+         "default": 1,
+         "min": 0,
+         "max": 20,
+         "step": 0.05,
+         "animatable": true
+        },
+        "env_intensity": {
+         "type": "number",
+         "label": "映り込みの強さ",
+         "default": 1,
+         "min": 0,
+         "max": 10,
+         "step": 0.05,
+         "animatable": true
+        },
+        "clearcoat": {
+         "type": "number",
+         "label": "クリア塗装",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "side": {
+         "type": "select",
+         "label": "描く面",
+         "default": "",
+         "options": [
+          {
+           "value": "",
+           "label": "自動(板・開いた形は両面)"
+          },
+          {
+           "value": "front",
+           "label": "表"
+          },
+          {
+           "value": "back",
+           "label": "裏"
+          },
+          {
+           "value": "double",
+           "label": "両面"
+          }
+         ],
+         "animatable": false,
+         "optional": true
+        },
+        "flat": {
+         "type": "bool",
+         "label": "面ごとに平らな陰(カット面)",
+         "default": false,
+         "animatable": false
+        },
+        "wireframe": {
+         "type": "bool",
+         "label": "ワイヤーフレーム",
+         "default": false,
+         "animatable": false
+        },
+        "transparent": {
+         "type": "bool",
+         "label": "半透明として描く(透過 PNG を貼るとき)",
+         "default": false,
+         "animatable": false,
+         "optional": true
+        },
+        "alpha_test": {
+         "type": "number",
+         "label": "この値より薄い所は描かない(切り抜き)",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "toon_steps": {
+         "type": "number",
+         "label": "陰の段数(トゥーン)",
+         "default": 3,
+         "min": 2,
+         "max": 16,
+         "step": 1,
+         "animatable": false
+        },
+        "texture": {
+         "type": "object",
+         "label": "貼る絵",
+         "default": null,
+         "animatable": false,
+         "optional": true,
+         "fields": {
+          "asset_id": {
+           "type": "number",
+           "label": "画像の素材",
+           "default": null,
+           "animatable": false,
+           "asset": "image"
+          },
+          "comp_id": {
+           "type": "number",
+           "label": "コンポジション",
+           "default": null,
+           "animatable": false,
+           "asset": "comp"
+          },
+          "url": {
+           "type": "text",
+           "label": "URL(素材の代わり)",
+           "default": null,
+           "animatable": false,
+           "optional": true
+          },
+          "frame": {
+           "type": "number",
+           "label": "子のコマ(固定。省略 = レイヤーの時刻)",
+           "default": null,
+           "min": 0,
+           "max": 10000000,
+           "step": 1,
+           "animatable": true,
+           "optional": true
+          },
+          "start": {
+           "type": "number",
+           "label": "子の開始コマ",
+           "default": 0,
+           "min": -10000000,
+           "max": 10000000,
+           "step": 1,
+           "animatable": true,
+           "optional": true
+          },
+          "speed": {
+           "type": "number",
+           "label": "子の再生速度",
+           "default": 1,
+           "min": -16,
+           "max": 16,
+           "step": 0.01,
+           "animatable": true,
+           "optional": true
+          },
+          "loop": {
+           "type": "bool",
+           "label": "子を繰り返す",
+           "default": false,
+           "animatable": false,
+           "optional": true
+          },
+          "transparent": {
+           "type": "bool",
+           "label": "子の背景色を塗らない",
+           "default": false,
+           "animatable": false,
+           "optional": true
+          }
+         }
+        },
+        "texture_repeat": {
+         "type": "vec2",
+         "label": "絵の繰り返し",
+         "default": [
+          1,
+          1
+         ],
+         "animatable": true
+        },
+        "texture_offset": {
+         "type": "vec2",
+         "label": "絵のずれ(0〜1)",
+         "default": [
+          0,
+          0
+         ],
+         "animatable": true
+        }
+       }
+      },
+      "faces": {
+       "type": "list",
+       "label": "面ごとのマテリアル(箱 = 右・左・上・下・手前・奥 / 押し出し・文字 = 表裏・側面 / 円柱 = 側面・上・下)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "item": {
+        "type": {
+         "type": "select",
+         "label": "種類",
+         "default": "standard",
+         "options": [
+          {
+           "value": "standard",
+           "label": "標準(光・映り込み)"
+          },
+          {
+           "value": "basic",
+           "label": "光なし(色・絵そのまま)"
+          },
+          {
+           "value": "emissive",
+           "label": "発光(色 × 強さ)"
+          },
+          {
+           "value": "glass",
+           "label": "ガラス"
+          },
+          {
+           "value": "toon",
+           "label": "トゥーン(段々の陰)"
+          },
+          {
+           "value": "shadow",
+           "label": "影だけ受ける(透明な床)"
+          }
+         ],
+         "animatable": false
+        },
+        "color": {
+         "type": "color",
+         "label": "色",
+         "default": "#ffffff",
+         "animatable": true
+        },
+        "opacity": {
+         "type": "number",
+         "label": "不透明度(0〜1。省略 = 1、ガラス 0.25、影 0.4)",
+         "default": 1,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true,
+         "optional": true
+        },
+        "metalness": {
+         "type": "number",
+         "label": "金属らしさ",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "roughness": {
+         "type": "number",
+         "label": "粗さ(省略 = 0.5、ガラス 0.05)",
+         "default": 0.5,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true,
+         "optional": true
+        },
+        "emissive": {
+         "type": "color",
+         "label": "自分で光る色",
+         "default": "#000000",
+         "animatable": true
+        },
+        "emissive_intensity": {
+         "type": "number",
+         "label": "光る強さ",
+         "default": 1,
+         "min": 0,
+         "max": 20,
+         "step": 0.05,
+         "animatable": true
+        },
+        "env_intensity": {
+         "type": "number",
+         "label": "映り込みの強さ",
+         "default": 1,
+         "min": 0,
+         "max": 10,
+         "step": 0.05,
+         "animatable": true
+        },
+        "clearcoat": {
+         "type": "number",
+         "label": "クリア塗装",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "side": {
+         "type": "select",
+         "label": "描く面",
+         "default": "",
+         "options": [
+          {
+           "value": "",
+           "label": "自動(板・開いた形は両面)"
+          },
+          {
+           "value": "front",
+           "label": "表"
+          },
+          {
+           "value": "back",
+           "label": "裏"
+          },
+          {
+           "value": "double",
+           "label": "両面"
+          }
+         ],
+         "animatable": false,
+         "optional": true
+        },
+        "flat": {
+         "type": "bool",
+         "label": "面ごとに平らな陰(カット面)",
+         "default": false,
+         "animatable": false
+        },
+        "wireframe": {
+         "type": "bool",
+         "label": "ワイヤーフレーム",
+         "default": false,
+         "animatable": false
+        },
+        "transparent": {
+         "type": "bool",
+         "label": "半透明として描く(透過 PNG を貼るとき)",
+         "default": false,
+         "animatable": false,
+         "optional": true
+        },
+        "alpha_test": {
+         "type": "number",
+         "label": "この値より薄い所は描かない(切り抜き)",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "toon_steps": {
+         "type": "number",
+         "label": "陰の段数(トゥーン)",
+         "default": 3,
+         "min": 2,
+         "max": 16,
+         "step": 1,
+         "animatable": false
+        },
+        "texture": {
+         "type": "object",
+         "label": "貼る絵",
+         "default": null,
+         "animatable": false,
+         "optional": true,
+         "fields": {
+          "asset_id": {
+           "type": "number",
+           "label": "画像の素材",
+           "default": null,
+           "animatable": false,
+           "asset": "image"
+          },
+          "comp_id": {
+           "type": "number",
+           "label": "コンポジション",
+           "default": null,
+           "animatable": false,
+           "asset": "comp"
+          },
+          "url": {
+           "type": "text",
+           "label": "URL(素材の代わり)",
+           "default": null,
+           "animatable": false,
+           "optional": true
+          },
+          "frame": {
+           "type": "number",
+           "label": "子のコマ(固定。省略 = レイヤーの時刻)",
+           "default": null,
+           "min": 0,
+           "max": 10000000,
+           "step": 1,
+           "animatable": true,
+           "optional": true
+          },
+          "start": {
+           "type": "number",
+           "label": "子の開始コマ",
+           "default": 0,
+           "min": -10000000,
+           "max": 10000000,
+           "step": 1,
+           "animatable": true,
+           "optional": true
+          },
+          "speed": {
+           "type": "number",
+           "label": "子の再生速度",
+           "default": 1,
+           "min": -16,
+           "max": 16,
+           "step": 0.01,
+           "animatable": true,
+           "optional": true
+          },
+          "loop": {
+           "type": "bool",
+           "label": "子を繰り返す",
+           "default": false,
+           "animatable": false,
+           "optional": true
+          },
+          "transparent": {
+           "type": "bool",
+           "label": "子の背景色を塗らない",
+           "default": false,
+           "animatable": false,
+           "optional": true
+          }
+         }
+        },
+        "texture_repeat": {
+         "type": "vec2",
+         "label": "絵の繰り返し",
+         "default": [
+          1,
+          1
+         ],
+         "animatable": true
+        },
+        "texture_offset": {
+         "type": "vec2",
+         "label": "絵のずれ(0〜1)",
+         "default": [
+          0,
+          0
+         ],
+         "animatable": true
+        }
+       }
+      },
+      "instances": {
+       "type": "object",
+       "label": "複製(3D の粒・並び)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "fields": {
+        "count": {
+         "type": "number",
+         "label": "個数",
+         "default": 100,
+         "min": 1,
+         "max": 20000,
+         "step": 1,
+         "animatable": false
+        },
+        "seed": {
+         "type": "number",
+         "label": "種",
+         "default": 1,
+         "min": 0,
+         "max": 99999,
+         "step": 1,
+         "animatable": false
+        },
+        "layout": {
+         "type": "select",
+         "label": "最初の並び",
+         "default": "box",
+         "options": [
+          {
+           "value": "box",
+           "label": "箱の中にばらまく"
+          },
+          {
+           "value": "sphere",
+           "label": "球の中にばらまく"
+          },
+          {
+           "value": "grid",
+           "label": "格子"
+          },
+          {
+           "value": "ring",
+           "label": "円周"
+          },
+          {
+           "value": "along",
+           "label": "道(path)に沿って"
+          },
+          {
+           "value": "point",
+           "label": "1 点"
+          }
+         ],
+         "animatable": false
+        },
+        "area": {
+         "type": "vec3",
+         "label": "範囲(箱)",
+         "default": [
+          600,
+          600,
+          600
+         ],
+         "animatable": true
+        },
+        "grid": {
+         "type": "vec3",
+         "label": "個数(格子 x・y・z)",
+         "default": null,
+         "animatable": false,
+         "optional": true
+        },
+        "spacing": {
+         "type": "vec3",
+         "label": "間隔(格子)",
+         "default": [
+          100,
+          100,
+          100
+         ],
+         "animatable": true
+        },
+        "radius": {
+         "type": "number",
+         "label": "半径(球・円周)",
+         "default": 300,
+         "min": 0,
+         "max": 20000,
+         "step": 1,
+         "animatable": true
+        },
+        "surface": {
+         "type": "bool",
+         "label": "球の表面だけ",
+         "default": false,
+         "animatable": false
+        },
+        "axis": {
+         "type": "select",
+         "label": "軸(円周)",
+         "default": "y",
+         "options": [
+          {
+           "value": "y",
+           "label": "y(縦の軸)"
+          },
+          {
+           "value": "x",
+           "label": "x(横の軸)"
+          },
+          {
+           "value": "z",
+           "label": "z(奥行きの軸)"
+          }
+         ],
+         "animatable": false
+        },
+        "start": {
+         "type": "angle",
+         "label": "開始角(円周)",
+         "default": 0,
+         "min": -360,
+         "max": 360,
+         "step": 1,
+         "animatable": true
+        },
+        "arc": {
+         "type": "angle",
+         "label": "範囲(円周)",
+         "default": 360,
+         "min": -360,
+         "max": 360,
+         "step": 1,
+         "animatable": true
+        },
+        "offset": {
+         "type": "number",
+         "label": "並びをずらす(円周・道。1 = 1 周)",
+         "default": 0,
+         "min": -100,
+         "max": 100,
+         "step": 0.001,
+         "animatable": true
+        },
+        "align": {
+         "type": "bool",
+         "label": "並びの向きに合わせて回す(円周・道)",
+         "default": true,
+         "animatable": false
+        },
+        "path": {
+         "type": "object",
+         "label": "道(管・道に沿った押し出し・複製の along)",
+         "default": null,
+         "animatable": false,
+         "optional": true,
+         "fields": {
+          "type": {
+           "type": "select",
+           "label": "種類",
+           "default": "helix",
+           "options": [
+            {
+             "value": "helix",
+             "label": "らせん"
+            },
+            {
+             "value": "circle",
+             "label": "円"
+            },
+            {
+             "value": "line",
+             "label": "直線"
+            },
+            {
+             "value": "points",
+             "label": "点の列"
+            }
+           ],
+           "animatable": false
+          },
+          "radius": {
+           "type": "number",
+           "label": "半径",
+           "default": 300,
+           "min": 0,
+           "max": 20000,
+           "step": 1,
+           "animatable": true
+          },
+          "radius_end": {
+           "type": "number",
+           "label": "終わりの半径(らせん)",
+           "default": null,
+           "min": 0,
+           "max": 20000,
+           "step": 1,
+           "animatable": true,
+           "optional": true
+          },
+          "turns": {
+           "type": "number",
+           "label": "巻き数(らせん)",
+           "default": 3,
+           "min": -100,
+           "max": 100,
+           "step": 0.01,
+           "animatable": true
+          },
+          "height": {
+           "type": "number",
+           "label": "高さ(らせん。正 = 上へ進む)",
+           "default": 400,
+           "min": -20000,
+           "max": 20000,
+           "step": 1,
+           "animatable": true
+          },
+          "axis": {
+           "type": "select",
+           "label": "軸",
+           "default": "y",
+           "options": [
+            {
+             "value": "y",
+             "label": "y(縦の軸)"
+            },
+            {
+             "value": "x",
+             "label": "x(横の軸)"
+            },
+            {
+             "value": "z",
+             "label": "z(奥行きの軸)"
+            }
+           ],
+           "animatable": false
+          },
+          "start": {
+           "type": "angle",
+           "label": "開始角",
+           "default": 0,
+           "min": -360,
+           "max": 360,
+           "step": 1,
+           "animatable": true
+          },
+          "arc": {
+           "type": "angle",
+           "label": "範囲(円)",
+           "default": 360,
+           "min": -360,
+           "max": 360,
+           "step": 1,
+           "animatable": true
+          },
+          "from": {
+           "type": "vec3",
+           "label": "始点(直線)",
+           "default": [
+            -200,
+            0,
+            0
+           ],
+           "animatable": true
+          },
+          "to": {
+           "type": "vec3",
+           "label": "終点(直線)",
+           "default": [
+            200,
+            0,
+            0
+           ],
+           "animatable": true
+          },
+          "points": {
+           "type": "json",
+           "label": "点 [[x,y,z],…](点の列)",
+           "default": null,
+           "animatable": false,
+           "optional": true
+          },
+          "closed": {
+           "type": "bool",
+           "label": "閉じる(点の列)",
+           "default": false,
+           "animatable": false
+          },
+          "curve": {
+           "type": "select",
+           "label": "つなぎ方(点の列)",
+           "default": "catmullrom",
+           "options": [
+            {
+             "value": "catmullrom",
+             "label": "なめらか"
+            },
+            {
+             "value": "linear",
+             "label": "折れ線"
+            }
+           ],
+           "animatable": false
+          },
+          "tension": {
+           "type": "number",
+           "label": "曲がりの強さ(なめらか)",
+           "default": 0.5,
+           "min": 0,
+           "max": 1,
+           "step": 0.01,
+           "animatable": false
+          }
+         }
+        },
+        "scale": {
+         "type": "vec2",
+         "label": "大きさの幅(最小・最大の倍率)",
+         "default": [
+          1,
+          1
+         ],
+         "animatable": true
+        },
+        "rotation": {
+         "type": "vec3",
+         "label": "回転",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "rotation_random": {
+         "type": "vec3",
+         "label": "回転のばらつき(±度)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "velocity": {
+         "type": "vec3",
+         "label": "速さ(px/秒)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "velocity_random": {
+         "type": "vec3",
+         "label": "速さのばらつき(±)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "radial": {
+         "type": "vec2",
+         "label": "中心から外への速さ(最小・最大)",
+         "default": [
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "gravity": {
+         "type": "vec3",
+         "label": "重力(px/秒²)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "drag": {
+         "type": "number",
+         "label": "空気の抵抗(1/秒)",
+         "default": 0,
+         "min": 0,
+         "max": 20,
+         "step": 0.05,
+         "animatable": true
+        },
+        "spin": {
+         "type": "vec3",
+         "label": "回る速さ(度/秒)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "spin_random": {
+         "type": "vec3",
+         "label": "回る速さのばらつき(±)",
+         "default": [
+          0,
+          0,
+          0
+         ],
+         "animatable": true
+        },
+        "sway": {
+         "type": "object",
+         "label": "ゆらゆら",
+         "default": null,
+         "animatable": false,
+         "optional": true,
+         "fields": {
+          "amp": {
+           "type": "vec3",
+           "label": "幅(px)",
+           "default": [
+            30,
+            0,
+            0
+           ],
+           "animatable": true
+          },
+          "freq": {
+           "type": "number",
+           "label": "1 秒あたりの回数",
+           "default": 0.5,
+           "min": 0,
+           "max": 30,
+           "step": 0.01,
+           "animatable": true
+          }
+         }
+        },
+        "lifetime": {
+         "type": "number",
+         "label": "寿命(秒。0 = ずっと)",
+         "default": 0,
+         "min": 0,
+         "max": 600,
+         "step": 0.05,
+         "animatable": true
+        },
+        "lifetime_random": {
+         "type": "number",
+         "label": "寿命のばらつき",
+         "default": 0,
+         "min": 0,
+         "max": 0.95,
+         "step": 0.01,
+         "animatable": true
+        },
+        "loop": {
+         "type": "bool",
+         "label": "寿命が尽きたら生まれ直す",
+         "default": false,
+         "animatable": false
+        },
+        "prewarm": {
+         "type": "bool",
+         "label": "最初から途中の姿で始める(loop)",
+         "default": true,
+         "animatable": false
+        },
+        "emit_duration": {
+         "type": "number",
+         "label": "生まれる時刻をばらす幅(秒。省略 = loop なら寿命、ほかは 0)",
+         "default": null,
+         "min": 0,
+         "max": 600,
+         "step": 0.05,
+         "animatable": true,
+         "optional": true
+        },
+        "colors": {
+         "type": "colors",
+         "label": "色(1 個ごとに選ぶ。マテリアルの色に掛かる)",
+         "default": null,
+         "animatable": false,
+         "optional": true
+        },
+        "fade_in": {
+         "type": "number",
+         "label": "現れる時間(秒)",
+         "default": 0,
+         "min": 0,
+         "max": 60,
+         "step": 0.05,
+         "animatable": true
+        },
+        "fade_out": {
+         "type": "number",
+         "label": "消える時間(秒。寿命の終わり)",
+         "default": 0,
+         "min": 0,
+         "max": 60,
+         "step": 0.05,
+         "animatable": true
+        },
+        "fade_mode": {
+         "type": "select",
+         "label": "現れ方・消え方",
+         "default": "opacity",
+         "options": [
+          {
+           "value": "opacity",
+           "label": "不透明度"
+          },
+          {
+           "value": "scale",
+           "label": "大きさ"
+          },
+          {
+           "value": "both",
+           "label": "両方"
+          }
+         ],
+         "animatable": false
+        },
+        "time_offset": {
+         "type": "number",
+         "label": "時刻をずらす(秒)",
+         "default": 0,
+         "min": -600,
+         "max": 600,
+         "step": 0.05,
+         "animatable": true
+        }
+       }
+      },
+      "cast_shadow": {
+       "type": "bool",
+       "label": "影を落とす",
+       "default": true,
+       "animatable": false
+      },
+      "receive_shadow": {
+       "type": "bool",
+       "label": "影を受ける",
+       "default": true,
+       "animatable": false
+      },
+      "render_order": {
+       "type": "number",
+       "label": "描く順(半透明の重なり。大きいほどあと)",
+       "default": 0,
+       "min": -100,
+       "max": 100,
+       "step": 1,
+       "animatable": false
+      }
+     }
+    }
+   },
+   "default_source": {
+    "light": {
+     "shadows": false
+    },
+    "objects": [
+     {
+      "geometry": "box",
+      "size": [
+       300,
+       300,
+       300
+      ],
+      "rotation": [
+       20,
+       30,
+       0
+      ],
+      "material": {
+       "color": "#4f9dff",
+       "roughness": 0.4
+      }
+     }
+    ]
    },
    "default_layer": {}
   },

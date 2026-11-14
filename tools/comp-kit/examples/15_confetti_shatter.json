@@ -1,0 +1,334 @@
+{
+ "id": "ex15",
+ "name": "15 confetti shatter",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#14182a",
+  "layers": [
+   {
+    "id": "cam",
+    "type": "camera",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "zoom": 1500
+    }
+   },
+   {
+    "id": "confetti",
+    "type": "mesh",
+    "in": 64,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      0
+     ]
+    },
+    "source": {
+     "light": {
+      "ambient": 1.0,
+      "intensity": 1.8
+     },
+     "env": "soft",
+     "objects": [
+      {
+       "geometry": "plane",
+       "size": [
+        34,
+        20
+       ],
+       "material": {
+        "color": "#ffffff",
+        "roughness": 0.6,
+        "metalness": 0.1
+       },
+       "instances": {
+        "count": 420,
+        "seed": 11,
+        "layout": "box",
+        "area": [
+         2600,
+         300,
+         1400
+        ],
+        "velocity": [
+         0,
+         330,
+         0
+        ],
+        "velocity_random": [
+         90,
+         110,
+         60
+        ],
+        "spin": [
+         220,
+         160,
+         90
+        ],
+        "spin_random": [
+         260,
+         240,
+         180
+        ],
+        "rotation_random": [
+         180,
+         180,
+         180
+        ],
+        "sway": {
+         "amp": [
+          70,
+          0,
+          30
+         ],
+         "freq": 0.45
+        },
+        "scale": [
+         0.7,
+         1.5
+        ],
+        "lifetime": 5.2,
+        "lifetime_random": 0.2,
+        "loop": true,
+        "prewarm": false,
+        "colors": [
+         "#ff5d73",
+         "#ffd23f",
+         "#3fd2c7",
+         "#7b6cf6",
+         "#ffffff",
+         "#ff9f1c"
+        ],
+        "fade_in": 0.25,
+        "fade_out": 0.5
+       },
+       "position": [
+        0,
+        -760,
+        0
+       ]
+      },
+      {
+       "geometry": "extrude",
+       "shape": "petal",
+       "size": [
+        30,
+        38
+       ],
+       "depth": 0,
+       "material": {
+        "color": "#ffffff",
+        "roughness": 0.8
+       },
+       "instances": {
+        "count": 160,
+        "seed": 5,
+        "layout": "box",
+        "area": [
+         2600,
+         300,
+         1400
+        ],
+        "velocity": [
+         -60,
+         210,
+         0
+        ],
+        "velocity_random": [
+         60,
+         60,
+         40
+        ],
+        "spin": [
+         120,
+         90,
+         60
+        ],
+        "spin_random": [
+         200,
+         200,
+         120
+        ],
+        "rotation_random": [
+         180,
+         180,
+         180
+        ],
+        "sway": {
+         "amp": [
+          110,
+          0,
+          50
+         ],
+         "freq": 0.3
+        },
+        "scale": [
+         0.8,
+         1.6
+        ],
+        "lifetime": 7,
+        "loop": true,
+        "prewarm": false,
+        "colors": [
+         "#ffc7d6",
+         "#ff9dba",
+         "#ffe6ee"
+        ],
+        "fade_in": 0.3,
+        "fade_out": 0.6
+       },
+       "position": [
+        0,
+        -760,
+        0
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "id": "shatter",
+    "type": "mesh",
+    "in": 0,
+    "out": 110,
+    "transform": {
+     "position": [
+      960,
+      540,
+      0
+     ]
+    },
+    "source": {
+     "unlit": false,
+     "light": {
+      "ambient": 2.4,
+      "intensity": 1.2,
+      "direction": [
+       -0.3,
+       -0.6,
+       -1
+      ]
+     },
+     "objects": [
+      {
+       "geometry": "shards",
+       "size": [
+        1920,
+        1080
+       ],
+       "count": 160,
+       "seed": 3,
+       "depth": 0,
+       "progress": {
+        "k": [
+         {
+          "f": 24,
+          "v": 0,
+          "e": "inQuad"
+         },
+         {
+          "f": 104,
+          "v": 1
+         }
+        ]
+       },
+       "stagger": "center_out",
+       "stagger_amount": 0.45,
+       "spread": 900,
+       "spread_z": 700,
+       "direction": [
+        0,
+        0,
+        -500
+       ],
+       "spin": 300,
+       "gravity": [
+        0,
+        700,
+        0
+       ],
+       "fade": 0.35,
+       "material": {
+        "type": "basic",
+        "texture": {
+         "comp_id": "ex15a",
+         "frame": 0
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "after",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      500
+     ]
+    },
+    "source": {
+     "text": "割れたあと",
+     "font": "Noto Serif JP",
+     "weight": 900,
+     "size": 230,
+     "fill": "#ffffff",
+     "stroke": "#e65163",
+     "stroke_width": 8
+    }
+   },
+   {
+    "id": "after2",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      740
+     ]
+    },
+    "source": {
+     "text": "破片 = shards / 紙吹雪・花びら = instances(3D の複製)",
+     "font": "Noto Sans JP",
+     "weight": 500,
+     "size": 44,
+     "fill": "#aab4d0"
+    }
+   },
+   {
+    "id": "bg",
+    "type": "solid",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#232a4d"
+        ],
+        [
+         1,
+         "#0c0e18"
+        ]
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}

@@ -159,6 +159,7 @@ def em_factor(name):
 
 
 CAM_ROLL_SIGN = 1      # カメラの rotation.z の向き(エンジンの決めに合わせる。完成動画と見比べて決めた)
+CAM_TILT_WITH_TARGET = float(os.environ.get('CAM_TILT', '-1'))   # オートターゲットのときの「傾き」の向き(S40 の 5520 コマ目で確かめた)
 BLEND = {'通常': 'normal', '加算': 'add', '減算': 'subtract', '乗算': 'multiply', 'スクリーン': 'screen',
          'オーバーレイ': 'overlay', '比較(明)': 'lighten', '比較(暗)': 'darken', '輝度': 'luminosity',
          '色差': 'color', '陰影': 'shade', '明暗': 'light_dark', '差分': 'difference'}
@@ -411,8 +412,9 @@ def text_runs(text, size, font, bold, notes):
 # ------------------------------------------------------------------ シーン → 文書
 
 class SceneBuilder:
-    def __init__(self, doc, scene_no, mats, comp_of, opts):
+    def __init__(self, doc, scene_no, mats, comp_of, opts, exclude=()):
         self.doc = doc
+        self.exclude = set(exclude)     # 写し(循環よけ)を作るとき: これらのシーンを指すオブジェクトを捨てる
         ex = doc['exedit']
         self.sc = next(s for s in ex['scenes'] if s['index'] == scene_no)
         self.no = scene_no
@@ -442,6 +444,14 @@ class SceneBuilder:
     def keep(self, c):
         if c.kind == '音声ファイル':
             return False
+        if self.exclude:
+            x = c.segs[0]['filters'][0]['exdata']
+            if c.kind == 'シーン' and x.get('scene') in self.exclude:
+                return False
+            if c.kind == '動画ファイル':
+                m = AM.SCENE_AVI_RE.match(AM.norm(x.get('file', '')).rsplit('\\', 1)[-1])
+                if m and int(m.group(1)) in self.exclude:
+                    return False
         if c.disabled or c.layer in self.hidden:
             return not self.opts.drop_disabled
         return True
@@ -674,7 +684,13 @@ class SceneBuilder:
                 'blend': BLEND.get(AM_BLEND(x.get('blend')), 'normal'),
                 'shape': ['linear', 'radial', 'rect', 'convex'][x.get('type', 0)] if x.get('type', 0) < 4 else 'linear'})]
         if n in ('画像ファイル合成', '動画ファイル合成'):
-            mode = {0: 'over', 1: 'under', 2: 'replace_color', 3: 'luma_to_alpha'}.get(x.get('mode', 0), 'over')
+            mode = {0: 'atop', 1: 'under', 2: 'replace_color', 3: 'luma_to_alpha'}.get(x.get('mode', 0), 'atop')   # 0 = 前方から合成: 元の絵のアルファの中だけに重なる(文字・図形に絵を貼る使い方。S40 のソウルジェムの中の絵で確認)
+            nxt = c.o['filters'][fi + 1] if fi + 1 < len(c.o['filters']) else None
+            if mode == 'replace_color' and n == '動画ファイル合成' and nxt and nxt['name'] == '単色化' and not nxt.get('checks', {}).get('輝度を保持する'):
+                # 色情報を上書き → すぐあとにベタの単色化: 上書きした色は捨てられるので、残る働きは「重ねた素材の形で切る」だけのはず(推測。
+                # S8/S13 の線路 + 桜吹雪ノイズ: 完成版では白ベタの線路が下の縞を隠していない)→ 素材の明るさ(白い粒 = アルファ)で切る
+                mode = 'luma_to_alpha'
+                self.rep['notes']['動画ファイル合成(色情報を上書き)+ ベタの単色化 → 素材の形で切る(推測)'] += 1
             p = {'mode': mode, 'x': P('X'), 'y': P('Y'), 'scale': P('拡大率')}
             if ck.get('ループ画像'):
                 p['tile'] = True
@@ -696,6 +712,7 @@ class SceneBuilder:
                 elif src2.get('asset_id') is not None:
                     ov = self.asset_size(src2['asset_id'])
                 p.pop('scene_no', None)
+                p.pop('recreated', None)
                 p.pop('transparent', None)   # 重ねる素材(overlay_source)には無い項目
             if p.get('asset_id') is None and p.get('comp_id') is None:
                 p['missing'] = AM.norm(path)
@@ -871,11 +888,14 @@ class SceneBuilder:
                  'seed': int(prm.get('ran', 0) or 0) + 1, 'random_rotation': 180 if prm.get('kz', 1) else 0,
                  'scale_min': 100 - (prm.get('s_min', 0) or 0), 'scale_max': 100, 'opts': prm}
             if K(2) or cv.is_anim(fi, 'track2'):
+                # 移動速度 v: x += rand(-100,100) × 秒 × v/100 × wx/100 → 1 個ずつ ±v×wx/100 px/秒(エンジンの drift_x / drift_y)
                 p['drift_speed_aviutl'] = T(2)
-                self.rep['notes']['ランダム配置@ANM1 の移動速度(時間で流れる。未対応)'] += 1
+                p['drift_x'], p['drift_y'] = T(2, lambda v: round(v * wx / 100, 3)), T(2, lambda v: round(v * wy / 100, 3))
             if K(3) or cv.is_anim(fi, 'track3'):
+                # 回転速度 r: rz += rand(-100,100) × 秒 × r/100 → 1 個ずつ ±r 度/秒(エンジンの spin)
                 p['spin_speed_aviutl'] = T(3)
-                self.rep['notes']['ランダム配置@ANM1 の回転速度(時間で回る。未対応)'] += 1
+                if prm.get('kz', 1):
+                    p['spin'] = T(3)
             if prm.get('wz') or prm.get('kx') or prm.get('ky'):
                 self.rep['notes']['ランダム配置@ANM1 の Z 範囲・X/Y 回転(未対応)'] += 1
             if box is None:
@@ -911,7 +931,8 @@ class SceneBuilder:
                 frm['rotation'] = [rx, ry, rz]
             if prm.get('fade'):
                 frm['opacity'] = 0
-            pc = {'stagger': round(itv * fps, 3), 'duration': round(abs(dur) * fps, 3), 'order': order, 'from': frm, 'e': ez}
+            # @TA.anm: 順番が来る前(登場)・消え終わったあと(退場)の文字は alpha 0(i > 1)→ hide_outside
+            pc = {'stagger': round(itv * fps, 3), 'duration': round(abs(dur) * fps, 3), 'order': order, 'from': frm, 'e': ez, 'hide_outside': True}
             if ranks is not None:
                 pc['ranks'] = ranks
             elif int(K(3)) in (2, 3):
@@ -946,6 +967,10 @@ class SceneBuilder:
                 p.update({'mode': T(0), 'gamma': T(1)})
             else:
                 p.update({'r': T(0), 'g': T(1), 'b': T(2), 'w': T(3)})
+                # EnhGrayScale は Photoshop 式の白黒(最小値 × W + 主色 × (最大 − 中間) + 間の色 × (中間 − 最小))。
+                # R・G・B・C・M・Y・W が全部 100 % のときは RGB の最大値になる(輝度より明るい)→ duotone の gray: 'max'
+                if all(abs(float(K(i)) - 100) < 1e-6 for i in range(4)) and all(float(prm.get(k, 100) or 100) == 100 for k in ('C', 'M', 'Y')):
+                    p['gray'] = 'max'
             return [self.fx('duotone', p)]
         if name == '２値化@T_Color_Module':
             # @T_Color_Module.anm「２値化」: track0 = 閾値(0〜255)、track1 = ｸﾞﾚｰ処理、track2 = 自動判定(0 = 手動。1〜6 は DLL が閾値を決める)、
@@ -1042,6 +1067,14 @@ class SceneBuilder:
             e = self.mats.file_asset('guide:original_op', os.path.join(self.mats.sakura, 'original_op.mp4')) if self.mats else None
             out['asset_id'] = e['asset_id'] if e else None
             out['start'] = round((p0 - 1) * ratio, 3)
+        elif base in PART_AVI and self.opts.avi_as_scene and self.comp_of(PART_AVI[base][0]):
+            # 名前の番号と中身のシーンが違う「一部分だけの書き出し」(G2 V05)。AVI の 0 コマ目 = そのシーンの off コマ目
+            sn, off = PART_AVI[base]
+            out['comp_id'] = self.comp_of(sn)
+            out['start'] = round(off + (p0 - 1) * ratio, 3)
+            out['substituted'] = AM.norm(path)
+            out['transparent'] = True
+            self.rep['notes']['シーンの一部分の AVI → comp(PART_AVI)'] += 1
         elif (m and self.opts.avi_as_scene and (self.no, int(m.group(1))) in self.opts.avi_ok
               and self.scene_covers(int(m.group(1)), c.start, c.end - c.start)):
             # シーンを書き出した AVI。AVI の (再生位置-1) コマ目が、置いた位置 c.start に映る。
@@ -1057,6 +1090,27 @@ class SceneBuilder:
                 # 元の AVI では相手の絵の下に「こちらの絵」が映っていたので、相手の背景色は塗らず、こちらの下のレイヤーを透かす
                 out['transparent'] = True
                 self.rep['notes']['シーンの AVI → comp: 相手がこちらの AVI を敷いている(循環)ので背景を透かした'] += 1
+        elif (m and self.opts.avi_as_scene and int(m.group(1)) != self.no and (self.no, int(m.group(1))) in getattr(self.opts, 'avi_dropped', ())
+              and int(m.group(1)) in getattr(self.opts, 'variants', {}) and self.no not in self.exclude
+              and self.scene_covers(int(m.group(1)), c.start, c.end - c.start)):
+            # 循環になる組(相手もこちらの書き出しを敷いている)。相手のシーンから「こちらを指す物」を除いた写しの comp を敷く
+            sn = int(m.group(1))
+            out['comp_id'] = self.comp_of(f'{sn}v')
+            out['scene_no'] = sn
+            out['start'] = round(c.start, 3)
+            out['substituted'] = AM.norm(path)
+            self.rep['avi_as_scene'].append((base, f'{sn}v'))
+            self.rep['notes']['シーンの AVI → 循環よけの写しの comp'] += 1
+        elif self.recreated(path) and not (self.mats and self.mats.amap.get(AM.norm(path), {}).get('project_id') == self.mats.project_id):
+            # 手元に無い連番を、アプリの機能で作り直したコンポジション(recreate.py)で置き換える。comp の n コマ目 = 連番の n+1 番
+            rc = self.recreated(path)
+            out['comp_id'] = rc['comp_id']
+            out['start'] = round((p0 - 1) * ratio, 3)
+            out['transparent'] = True
+            out['recreated'] = rc.get('key')
+            if remap:
+                out['time_remap'] = Conv._kf([(f, round((v - 1) * ratio, 3), ez) for f, v, ez in remap])
+            self.rep['notes']['連番 → 作り直した comp(recreate)'] += 1
         elif AM.SEQ_RE.match(base):
             lo = int(min(k[1] for k in pos))
             hi = int(max(max(k[1] for k in pos), p0 + (c.end - c.start) * abs(sp0) / ratio)) + 1
@@ -1082,6 +1136,13 @@ class SceneBuilder:
         if x.get('_internal_260_hex'):
             out['source_fps'] = sfps
         return out
+
+    def recreated(self, path):
+        rm = getattr(self.opts, 'recreate_map', None) or {}
+        p = AM.norm(path)
+        d = AM.rel_of(p.rsplit('\\', 1)[0]) if AM.SEQ_RE.match(p.rsplit('\\', 1)[-1]) else AM.rel_of(p)
+        e = rm.get(d)
+        return dict(e, key=d) if e and e.get('comp_id') else None
 
     def scene_covers(self, sn, start, length):
         """シーン sn に、その時間帯に映るものがあるか(書き出した AVI をシーンで置き換えてよいかの目安)。"""
@@ -1150,8 +1211,14 @@ class SceneBuilder:
             if 'comp_id' in vs:
                 L = self.base_layer(c, 'comp')
                 src = {'comp_id': vs['comp_id'], 'substituted': vs.get('substituted')}
+                if vs.get('recreated'):
+                    src = {'comp_id': vs['comp_id'], 'recreated': vs['recreated']}
                 if vs.get('transparent'):
                     src['transparent'] = True
+                if 'time_remap' in vs:
+                    src['time_remap'] = vs['time_remap']
+                if vs.get('recreated') and f0['checks'].get('ループ再生'):
+                    src['loop'] = True
             else:
                 L = self.base_layer(c, 'video')
                 src = {'asset_id': vs.get('asset_id')}
@@ -1169,11 +1236,20 @@ class SceneBuilder:
                 L['name'] = '下絵(元の OP 動画)'
                 self.rep['guide'] += 1
         elif kind == '画像ファイル':
-            L = self.base_layer(c, 'image')
-            e = self.still(x0.get('file', ''))
-            src = {'asset_id': e['asset_id'] if e else None}
-            if not e:
-                L['missing'] = AM.norm(x0.get('file', ''))
+            rm = getattr(self.opts, 'recreate_map', None) or {}
+            skey = 'still:' + AM.rel_of(AM.norm(x0.get('file', '')))
+            e = self.still(x0.get('file', '')) if not (rm.get(skey, {}).get('comp_id') and not os.path.exists(self.mats.local(x0.get('file', '')) if self.mats else '')) else None
+            if e is None and rm.get(skey, {}).get('comp_id'):
+                # 手元にも PC にも無い静止画(元絵が要る)→ 同じ大きさの仮の板のコンポジション(recreate.py。キーは 'still:<相対パス>')
+                L = self.base_layer(c, 'comp')
+                src = {'comp_id': rm[skey]['comp_id'], 'recreated': skey, 'transparent': True}
+                L['start'], L['speed'] = 0, 0
+                self.rep['notes']['無い静止画 → 仮の板の comp(recreate)'] += 1
+            else:
+                L = self.base_layer(c, 'image')
+                src = {'asset_id': e['asset_id'] if e else None}
+                if not e:
+                    L['missing'] = AM.norm(x0.get('file', ''))
         elif kind == '図形':
             col = hexcol(x0.get('color'))
             ft = x0.get('type', 0)
@@ -1272,6 +1348,13 @@ class SceneBuilder:
             bn = fs[last]['exdata'].get('blend_name', '通常')
             if bn != '通常':
                 L['blend'] = BLEND.get(bn, 'normal')
+            if bn == '減算' and self.sc.get('alpha') and not any(
+                    u is not c and u.layer < c.layer and u.start <= c.end and u.end >= c.start and u.kind not in ('音声ファイル', 'グループ制御')
+                    and not (u.disabled or u.layer in self.hidden) for u in self.chains):
+                # アルファつきのシーンのいちばん下に「減算」で置いた絵(G2: S16 の人物)。何も無い所から引くので、AviUtl では形だけ残った黒い影になる
+                L.pop('blend', None)
+                effects = list(effects) + [self.fx('fill', {'color': '#000000', 'amount': 100, 'keep_luma': False})]
+                self.rep['notes']['アルファつきシーンの底の減算 → 黒い影(fill)'] += 1
             if fs[last].get('checks', {}).get('裏面を表示しない'):
                 L['backface'] = False
             if kind == 'フレームバッファ':
@@ -1349,6 +1432,35 @@ class SceneBuilder:
             src['monospace'] = True
         return src
 
+    def counter_value(self, c, cv, mode):
+        """exedit.obj「カウンター」の式どおりの値と表示形式。
+        sec = 初期値 + 時間 × 速度(速度はその時刻の値)。形式 6・7 は sec += 初期値 × 9 のあと 360000(負は 86400)で割った余り、4・5 は 6000 の余り。
+        形式 1〜3 は %02d〜%04d(整数の 0 埋め)、4 = MM:SS、5 = MM:SS.xx、6 = HH:MM:SS、7 = HH:MM:SS.xx。"""
+        k0, k1 = cv.scalar(0, 'track0'), cv.scalar(0, 'track1')
+
+        def val(f):
+            a = cv.eval_keys(k0, f)
+            sec = a + (f - c.start) / self.fps * cv.eval_keys(k1, f)
+            if mode in (6, 7):
+                sec += a * 9
+                sec = sec % 86400 if sec < 0 else sec % 360000
+            elif mode in (4, 5):
+                sec = sec % 6000
+            return round(sec, 4)
+        if len(k0) == 1 and len(k1) == 1 and abs(k1[0][1]) < 1e-9:
+            value = val(c.start)
+        else:
+            value = {'k': [{'f': f, 'v': val(f)} for f in range(c.start, c.end + 1)]}
+        out = {'value': value, 'format': {7: 'timecode', 6: 'hh:mm:ss', 5: 'mm:ss.cc', 4: 'mm:ss'}.get(mode, 'number')}
+        if mode in (1, 2, 3):
+            out['pad'] = mode + 1
+        if mode <= 3:
+            out['decimals'] = 0
+            # %d は 0 のほうへ切り捨て(エンジンの number は四捨五入なので、値を先に切り捨てておく)
+            trunc = lambda v: float(int(v))
+            out['value'] = trunc(value) if not isinstance(value, dict) else {'k': [dict(k, v=trunc(k['v'])) for k in value['k']]}
+        return out
+
     def custom_object(self, c, cv, f0):
         x = f0['exdata']
         name = x.get('script') or x.get('name') or f'#{x.get("type")}'
@@ -1361,7 +1473,7 @@ class SceneBuilder:
             emf = em_factor(prm.get('font'))
             src = {'text': '', 'font': font, 'weight': weight, 'size': cv.prop(0, 'track2', lambda v: v * emf), 'fill': col_param(prm.get('col1'), '#ffffff'),
                    'font_original': prm.get('font'), 'align': 'center', 'valign': 'middle',
-                   'counter': {'start': K(0), 'rate': K(1), 'format': int(K(3)), 'from_frame': c.start}}
+                   'counter': self.counter_value(c, cv, int(K(3)))}
             self.rep['effects_mapped']['text.counter'] += 1
             return L, src
         if name == '市松模様N@FIGURE':
@@ -1484,7 +1596,9 @@ class SceneBuilder:
                                 p = [t[0], t[1], t[2] - d]
                             pk.append((f_, [round(p[0] + W2, 3), round(p[1] + H2, 3), round(p[2], 3)], None))
                             # カメラの向きは目印の回転に合わせる(目印が -54 度なら、画面は時計回りに 54 度回って見える)
-                            rk.append((f_, [0, 0, round(CAM_ROLL_SIGN * (self.chain_rot(u, f_) if u is not None else Conv.eval_keys(cv.scalar(0, '傾き'), f_)), 3)], None))
+                            tilt = Conv.eval_keys(cv.scalar(0, '傾き'), f_)
+                            # スクリプトは上方向ベクトル(目印の回転)だけを書き、カメラ制御の「傾き」はそのまま残る → 両方が効く
+                            rk.append((f_, [0, 0, round(CAM_ROLL_SIGN * (self.chain_rot(u, f_) + CAM_TILT_WITH_TARGET * tilt if u is not None else tilt), 3)], None))
                             if t is not None:
                                 tk.append((f_, [round(t[0] + W2, 3), round(t[1] + H2, 3), round(t[2], 3)], None))
                         def thin(keys):
@@ -1738,6 +1852,30 @@ class SceneBuilder:
             default_cam['scope'] = [i for i in default_cam['scope'] if i in ids]
         self.rep['empty_controls_dropped'] = dict(dropped)
         dur = max([c.end + 1 for c in kept] + [1])
+        # グループ制御に付いた「ランダム配置」: ばらまく幅は画面の px(obj.draw の座標は相手の拡大率を受けない)。
+        # エンジンは相手のレイヤーの中(拡大する前)でばらまくので、相手の拡大率で割っておく(S32 4104〜: 拡大率 10% のハートが 1 か所に固まっていた)
+        byid = {L['id']: L for L in out}
+        for G in out:
+            if G.get('type') != 'group' or not isinstance(G.get('scope'), list):
+                continue
+            scs = {tuple(byid[i].get('transform', {}).get('scale') or (100, 100)) if isinstance(byid[i].get('transform', {}).get('scale', [100, 100]), list) else None for i in G['scope'] if i in byid}
+            if len(scs) != 1 or None in scs:
+                continue
+            sx, sy = list(scs)[0][:2]
+            if not (isinstance(sx, (int, float)) and isinstance(sy, (int, float))) or (sx == 100 and sy == 100) or sx <= 0 or sy <= 0:
+                continue
+            for e in G.get('effects', []):
+                q = e.get('params', {})
+                if e.get('type') == 'repeat' and q.get('mode') == 'random':
+                    for k, d in (('area_x', sx), ('area_y', sy), ('drift_x', sx), ('drift_y', sy)):
+                        v = q.get(k)
+                        if isinstance(v, (int, float)):
+                            q[k] = round(v * 100 / d, 3)
+                        elif isinstance(v, dict) and 'k' in v:
+                            for kk in v['k']:
+                                if isinstance(kk.get('v'), (int, float)):
+                                    kk['v'] = round(kk['v'] * 100 / d, 3)
+                    self.rep['notes']['グループのランダム配置: 相手の拡大率で範囲を割った'] += 1
         data = {'version': 1, 'bg': None if self.sc.get('alpha') else '#000000', 'layers': out,
                 'aviutl': {'scene': self.no, 'source': os.path.basename(self.doc['project'].get('project_path', '').replace('\\', '/'))}}
         self.rep['duration'] = dur
@@ -1850,6 +1988,9 @@ def scene_name(doc, sn, names):
     return f'S{sn:02d} {names.get(sn, "")}'.strip()
 
 
+# 名前の番号と中身が違う「シーンの一部分だけの書き出し」: ファイル名 → (中身のシーン, AVI の 0 コマ目にあたるそのシーンのコマ)
+#   scene08_素材 = S18(矢じり)の 0〜145(黒地に白い矢じりが降りて埋まる)、素材2 = S18 の 538〜683(緑地に矢じりの縦の札)
+PART_AVI = {'scene08_素材_0.09-1.avi': (18, 0), 'scene08_素材2_0.09-2.avi': (18, 538)}
 SCENE_NAMES = {0: 'Root', 1: '冒頭長いカット', 4: '冒頭線路螺旋', 8: 'タイトルパート背景', 12: 'キャラ紹介1前後', 13: 'タイトルロゴ',
                14: 'タイトルロゴ文字', 17: 'キャラ紹介矢じり', 18: 'キャラ紹介背景矢じり', 20: 'キャラ紹介後半', 21: 'キャラ紹介説明書',
                22: 'キャラ紹介ソウルジェム中', 23: '10年愛', 25: '楽曲タイトル直後(桜模様マスク)', 26: '楽曲タイトル直後',
@@ -1909,6 +2050,23 @@ def main():
                     todo.append(s)
         if sn not in todo:
             todo.append(sn)
+    # 循環よけの写し: 捨てた組 (親, 子) の子ごとに、「親たちを指す物を除いた子」を別の comp('20v' など)として先に作る
+    a.variants = {}
+    for (p_, c_) in sorted(a.avi_dropped):
+        if p_ != c_:
+            a.variants.setdefault(c_, set()).add(p_)
+    a.variants = {c_: ps for c_, ps in a.variants.items() if any(p_ in want or p_ in todo for p_ in ps)}
+    pre = []
+    for c_, ps in a.variants.items():
+        a._stack = list(ps)
+        for s in nested_scenes(doc, c_, a):
+            if s not in ps and s not in pre:
+                pre.append(s)
+        a._stack = []
+        pre.append((c_, tuple(sorted(ps))))
+    todo = pre + [s for s in todo if s not in pre]
+    rmp = os.path.join(sakura, 'recreate_map.json')
+    a.recreate_map = json.load(open(rmp, encoding='utf-8')).get(str(a.project_id), {}) if os.path.exists(rmp) else {}
     dry = bool(a.dry_run)
     api = None if dry else Api(a.api)
     mats = AM.Materials(sakura=sakura, root=a.materials_root, api=None if dry else a.api,
@@ -1927,12 +2085,15 @@ def main():
         k = str(sn)
         if k in pm:
             return pm[k]
+        var = isinstance(sn, str) and sn.endswith('v')
+        if var:
+            sn = int(sn[:-1])
         if dry:
-            return -sn if sn else None       # 文書だけ書くときの仮の番号
+            return (-sn - (1000 if var else 0)) if sn else None       # 文書だけ書くときの仮の番号
         if not any(s == sn for s in all_scenes):
             return None
         sc = next(s for s in doc['exedit']['scenes'] if s['index'] == sn)
-        c = api.call('POST', '/api/comps/', {'project_id': a.project_id, 'name': scene_name(doc, sn, SCENE_NAMES),
+        c = api.call('POST', '/api/comps/', {'project_id': a.project_id, 'name': scene_name(doc, sn, SCENE_NAMES) + (' (循環よけの写し)' if var else ''),
                                              'width': sc['width'] or W, 'height': sc['height'] or H, 'fps': fps,
                                              'duration_frames': 1, 'data': {'version': 1, 'bg': None, 'layers': []}})
         pm[k] = c['id']
@@ -1948,19 +2109,23 @@ def main():
     os.makedirs(rdir, exist_ok=True)
     dry_out = {}
     for sn in todo:
-        b = SceneBuilder(doc, sn, mats, comp_of, a)
+        excl, key, suffix = (), sn, ''
+        if isinstance(sn, tuple):
+            sn, excl = sn
+            key, suffix = f'{sn}v', ' (循環よけの写し)'
+        b = SceneBuilder(doc, sn, mats, comp_of, a, exclude=excl)
         data, dur = b.build()
         rep = jsonable(b.rep)
         rep['missing'] = sorted(set(rep['missing']))
         if dry:
-            dry_out[str(sn)] = {'name': scene_name(doc, sn, SCENE_NAMES), 'width': b.W, 'height': b.H, 'fps': fps,
+            dry_out[str(key)] = {'name': scene_name(doc, sn, SCENE_NAMES) + suffix, 'width': b.W, 'height': b.H, 'fps': fps,
                                 'duration_frames': dur, 'data': data}
         else:
-            cid = comp_of(sn)
-            api.call('PATCH', f'/api/comps/{cid}', {'name': scene_name(doc, sn, SCENE_NAMES), 'width': b.W, 'height': b.H,
+            cid = comp_of(key)
+            api.call('PATCH', f'/api/comps/{cid}', {'name': scene_name(doc, sn, SCENE_NAMES) + suffix, 'width': b.W, 'height': b.H,
                                                     'fps': fps, 'duration_frames': dur, 'data': data})
             rep['comp_id'] = cid
-        json.dump(rep, open(os.path.join(rdir, f'scene{sn:02d}.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+        json.dump(rep, open(os.path.join(rdir, f'scene{sn:02d}{"v" if suffix else ""}.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
         um = sum(rep['effects_unmapped'].values())
         print(f"scene {sn:2d} → comp {rep.get('comp_id', '-')}: レイヤー {rep['layers_out']} (元 {rep['objects_total']}、無効 {rep['dropped_disabled']}・非表示段 {rep['dropped_hidden_layer']} を除く) "
               f"効果 {sum(rep['effects_mapped'].values())} 未対応 {um} 素材なし {len(rep['missing'])}")

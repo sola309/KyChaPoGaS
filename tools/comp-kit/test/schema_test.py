@@ -224,6 +224,90 @@ SRC_CTX["particles"] = {
     "emitter.area": {"_value": [60, 160, 0]}, "emitter.position": {"_value": [60, 30, 0]}, "emitter.preset": {"_value": "confetti"}, "emitter.sprite": {"_value": "heart"}, "emitter.blend": {"_value": "add"},
 }
 
+# mesh(手続きの 3D): source 直下の項目は、光・影・映り込みが見える土台から動かす
+SRC_BASE["mesh"] = {"light": {"shadows": True, "shadow_area": 600}, "objects": [
+    {"geometry": "sphere", "radius": 45, "position": [-60, -10, 0], "material": {"color": "#d4af37", "metalness": 1, "roughness": 0.2}},
+    {"geometry": "box", "size": [60, 60, 60], "position": [60, -10, 0], "rotation": [20, 30, 0], "material": {"color": "#4f9dff"}},
+    {"geometry": "plane", "size": [400, 300], "position": [0, 40, 0], "rotation": [80, 0, 0], "material": {"color": "#cccccc"}}]}
+SRC_CTX["mesh"] = {"light.direction": {"_value": [0.8, -1, -0.3]}}
+
+# mesh の objects の 1 件の項目: 土台の箱(MESH_OBJ)に前提を重ねてから、その項目を動かす。どの項目も、絵が変わらなければ NG
+#   キー = 項目の道(material.color など)。値の中の _ つきは指示: _value = 動かす先 / _extra = いっしょに置くオブジェクト / _source = source に重ねる値
+MESH_OBJ = {"geometry": "box", "size": [90, 70, 60], "rotation": [25, 35, 0], "material": {"color": "#d08040", "roughness": 0.4}}
+_HELIX = {"type": "helix", "radius": 50, "turns": 2, "height": 80}
+_PTS = {"type": "points", "points": [[-60, 20, 0], [-10, -40, 30], [60, 10, -20]]}
+_SH = {"geometry": "shards", "size": [160, 100], "count": 30, "progress": 0.5, "spread": 40, "rotation": [0, 0, 0]}
+_IN = {"geometry": "box", "size": [14, 10, 6], "rotation": [0, 0, 0], "instances": {"count": 40, "seed": 1, "layout": "box", "area": [240, 130, 60]}}
+def _g(geo, **kw): return {"geometry": geo, **kw}
+def _sh(**kw): return {**_SH, **kw}
+def _in(_value=None, **inst):
+    d = {**_IN, "instances": {**_IN["instances"], **inst}}
+    if _value is not None: d["_value"] = _value
+    return d
+def _path(pd, **kw): return {"geometry": "tube", "tube": 5, "path": pd, **kw}
+def _mat(**kw): return {"material": {"color": "#d08040", "roughness": 0.4, **kw}}
+def mesh_ctx(tex_a, tex_b):
+    """tex_a = 透明な所のある絵、tex_b = 別の絵(どちらも data URL)"""
+    texm = lambda **kw: {"geometry": "plane", "size": [150, 110], "rotation": [0, 0, 0], "material": {"type": "basic", "texture": {"url": tex_a}, **kw}}  # noqa: E731
+    compm = lambda **kw: {"geometry": "plane", "size": [240, 135], "rotation": [0, 0, 0], "material": {"type": "basic", "texture": {"comp_id": 9001, **kw}}}  # noqa: E731
+    floor = {"geometry": "plane", "size": [300, 300], "position": [0, 50, 0], "rotation": [80, 0, 0], "material": {"color": "#cccccc"}}
+    ctx = {
+        "geometry": {"_value": "sphere"}, "position": {}, "rotation": {}, "scale": {"_value": [1.3, 0.7, 1]}, "visible": {}, "size": {},
+        "radius": _g("sphere"), "radius_top": _g("cylinder", _value=30), "radius_bottom": _g("cylinder", _value=30), "height": _g("cylinder", _value=90), "open_ended": _g("cylinder", rotation=[60, 0, 0]),
+        "tube": _g("torus", radius=50), "inner": _g("ring"), "outer": _g("ring", _value=80), "arc": _g("torus", radius=50, _value=200), "start": _g("ring", arc=200),
+        "detail": _g("icosahedron", radius=60, _value=2), "segments": _g("sphere", radius=60, _value=5), "radial_segments": _g("torus", radius=50, _value=3),
+        "profile": _g("lathe", _value=[[0, -40], [50, 0], [0, 40]]), "smooth": _g("lathe", profile=[[0, -40], [40, -10], [20, 30], [0, 40]], _value=6),
+        "shape": _g("extrude", size=[90, 90], _value="heart"), "shape_sides": _g("extrude", size=[90, 90], shape="polygon", _value=3), "shape_inner": _g("extrude", size=[90, 90], shape="star", _value=0.8),
+        "shape_radius": _g("extrude", size=[90, 90], shape="rect", _value=30), "points": _g("extrude", _value=[[-40, -30], [40, -30], [0, 40]]),
+        "holes": _g("extrude", points=[[-45, -45], [45, -45], [45, 45], [-45, 45]], _value=[[[-15, -15], [15, -15], [15, 15], [-15, 15]]]),
+        "depth": _g("extrude", size=[90, 90]), "bevel.size": _g("extrude", size=[90, 90], bevel={"size": 6, "segments": 3}, _value=12), "bevel.thickness": _g("extrude", size=[90, 90], bevel={"size": 6}, _value=14),
+        "bevel.segments": _g("extrude", size=[90, 90], bevel={"size": 8, "segments": 3}, _value=1), "bevel.offset": _g("extrude", size=[90, 90], bevel={"size": 6}, _value=-5),
+        "smooth_angle": _g("extrude", size=[90, 90], shape="ellipse", _value=0),
+        "text": _g("text", font_size=70, text="あA", _value="愛"), "font": _g("text", font_size=70, text="あA", _value="Noto Serif JP"), "weight": _g("text", font_size=70, text="あA", _value=300), "italic": _g("text", font_size=70, text="あA"),
+        "font_size": _g("text", font_size=70, text="あA", _value=50), "tracking": _g("text", font_size=60, text="あA", _value=20), "leading": _g("text", font_size=45, text="あ\nA", _value=1.6), "align": _g("text", font_size=45, text="ああ\nA", _value="left"),
+        "path.type": _path(_HELIX, _value="circle"), "path.radius": _path(_HELIX, _value=30), "path.radius_end": _path(_HELIX, _value=10), "path.turns": _path(_HELIX, _value=3.5), "path.height": _path(_HELIX, _value=30),
+        "path.axis": _path(_HELIX, _value="x"), "path.start": _path(_HELIX), "path.arc": _path({"type": "circle", "radius": 50}, _value=200),
+        "path.from": _path({"type": "line"}, _value=[-60, 30, 0]), "path.to": _path({"type": "line"}, _value=[60, 30, 0]),
+        "path.points": _path(_PTS, _value=[[-60, 0, 0], [0, 40, 0], [60, 0, 0]]), "path.closed": _path(_PTS), "path.curve": _path(_PTS, _value="linear"), "path.tension": _path(_PTS, _value=0),
+        "count": _sh(_value=60), "seed": _sh(), "cut": _sh(_value="triangles"), "jitter": _sh(_value=0), "progress": _sh(_value=0.8), "stagger": _sh(_value="left_to_right"), "stagger_amount": _sh(stagger="left_to_right", _value=0.1),
+        "direction": _sh(_value=[30, 10, 0]), "spread": _sh(_value=90), "spread_z": _sh(_value=300), "origin": _sh(_value=[60, 30]), "spin": _sh(_value=20), "gravity": _sh(_value=[0, 40, 0]), "scale_end": _sh(_value=0.3), "fade": _sh(_value=0.8),
+        "material.type": {"_value": "basic"}, "material.color": {}, "material.opacity": {"_value": 0.5}, "material.metalness": {"_value": 1}, "material.roughness": {**_mat(metalness=1), "_value": 0.05},
+        "material.emissive": {"_value": "#404000"}, "material.emissive_intensity": {**_mat(emissive="#303030"), "_value": 3}, "material.env_intensity": {**_mat(metalness=1), "_value": 3}, "material.clearcoat": {"_value": 1},
+        "material.side": _g("plane", size=[120, 90], rotation=[0, 150, 0], _value="front"), "material.flat": _g("sphere", radius=60, segments=8), "material.wireframe": {},
+        "material.transparent": texm(), "material.alpha_test": {**texm(), "_value": 0.5}, "material.toon_steps": {**_g("sphere", radius=60), **_mat(type="toon"), "_value": 8},
+        "material.texture.url": {**texm(), "_value": tex_b}, "material.texture.comp_id": {**texm(), "_value": 9001},
+        "material.texture.frame": {**compm(), "_value": 100}, "material.texture.start": {**compm(), "_value": 60}, "material.texture.speed": {**compm(), "_value": 4}, "material.texture.loop": compm(start=200), "material.texture.transparent": compm(),
+        "material.texture_repeat": {**texm(), "_value": [2, 3]}, "material.texture_offset": {**texm(), "_value": [0.3, 0.2]},
+        "instances.count": _in(80), "instances.seed": _in(), "instances.layout": _in("sphere"), "instances.area": _in([120, 160, 60]), "instances.grid": _in([4, 3, 2], layout="grid", spacing=[40, 30, 20]), "instances.spacing": _in([40, 30, 20], layout="grid"),
+        "instances.radius": _in(40, layout="ring", radius=70), "instances.surface": _in(layout="sphere", radius=80), "instances.axis": _in("z", layout="ring", radius=70), "instances.start": _in(layout="ring", radius=70, arc=180),
+        "instances.arc": _in(200, layout="ring", radius=70), "instances.offset": _in(0.01, layout="ring", radius=70), "instances.align": _in(layout="ring", radius=70),
+        "instances.scale": _in([0.4, 2]), "instances.rotation": _in([30, 40, 50]), "instances.rotation_random": _in([90, 90, 90]), "instances.velocity": _in([60, 20, 0]), "instances.velocity_random": _in([80, 80, 0]),
+        "instances.radial": _in([40, 90]), "instances.gravity": _in([0, 200, 0]), "instances.drag": _in(3, velocity=[150, 0, 0]), "instances.spin": _in([90, 120, 60]), "instances.spin_random": _in([200, 200, 200]),
+        "instances.sway.amp": _in([0, 40, 0], sway={"amp": [30, 0, 0], "freq": 0.5}), "instances.sway.freq": _in(1.3, sway={"amp": [30, 0, 0], "freq": 0.5}),
+        "instances.lifetime": _in(0.4, emit_duration=0.5), "instances.lifetime_random": _in(0.9, lifetime=1), "instances.loop": _in(lifetime=1, velocity=[100, 0, 0]), "instances.prewarm": _in(lifetime=1, loop=True),
+        "instances.emit_duration": _in(0.9, velocity=[100, 0, 0]), "instances.colors": _in(["#102030", "#f0c812", "#ff00aa"]), "instances.fade_in": _in(2), "instances.fade_out": _in(0.8, lifetime=1),
+        "instances.fade_mode": _in("scale", fade_in=2), "instances.time_offset": _in(1, velocity=[60, 20, 0]),
+        "cast_shadow": {"position": [0, -20, 0], "_extra": [floor], "_source": {"light": {"shadows": True, "shadow_area": 500}}},
+        "receive_shadow": {**floor, "_extra": [{"geometry": "sphere", "radius": 30, "position": [0, -30, 0]}], "_source": {"light": {"shadows": True, "shadow_area": 500}}},
+        "render_order": {"geometry": "plane", "size": [120, 90], "rotation": [0, 0, 0], "material": {"color": "#ff2020", "opacity": 0.5}, "_value": 5,
+                         "_extra": [{"geometry": "plane", "size": [90, 120], "position": [20, 0, -30], "material": {"color": "#2040ff", "opacity": 0.5}}]},
+    }
+    # 複製の道(instances.path.*)は、オブジェクトの path.* と同じ前提を複製の along に移して確かめる
+    for k in [k for k in ctx if k.startswith("path.")]:
+        c = ctx[k]
+        ctx["instances." + k] = {"geometry": "box", "size": [12, 8, 20], "rotation": [25, 35, 0], "instances": {"count": 30, "layout": "along", "path": c["path"]}, **({"_value": c["_value"]} if "_value" in c else {})}
+    return ctx
+
+
+def flat_fields(fields, prefix=""):
+    """object 型の中まで開いた (道, 説明) の列。list 型はそのまま返す"""
+    for k, d in fields.items():
+        if d.get("type") == "object" and d.get("fields"):
+            yield from flat_fields(d["fields"], prefix + k + ".")
+        else:
+            yield prefix + k, d
+
+
 # レイヤー共通の項目: 効き目が見える前提。set = 先に書いておく道、value = 動かす先、frame = 描くコマ、matte = マット元のレイヤーを足す
 MOVE = {"k": [{"f": 0, "v": [60, 90]}, {"f": 40, "v": [260, 90]}]}
 def _tr(side, type_, **kw):
@@ -404,6 +488,91 @@ async def run(verbose: bool):
                             obj[fk] = fd["default"]
                     set_path(l4["source"], k, obj)
                     await draw(comp([l4] + others), f"layer {lt}.source.{k}{{fields}}")
+
+        # ---- mesh の objects・点の光(一覧の中の項目)。source 直下と同じく、動かして絵が変わらなければ NG ----
+        mesh_src = schema["layer_types"]["mesh"]["source"]
+        MCTX = mesh_ctx(mask_url, ov_url)
+        nmesh = 0
+
+        def mesh_comp(obj, extra=(), source=None):
+            src = {"objects": [obj, *extra]}
+            for sk, sv in (source or {}).items():
+                src[sk] = copy.deepcopy(sv)
+            return comp([{"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [W / 2, H / 2]}, "source": src}], bg="#203040")
+        for k, d in flat_fields(mesh_src["objects"]["item"]):
+            if "asset" in d and k != "material.texture.comp_id":
+                continue
+            if k == "faces":
+                # 面ごとのマテリアル: 箱の手前の面だけ色を替える
+                o = copy.deepcopy(MESH_OBJ)
+                r0 = await draw(mesh_comp(o), "mesh objects.faces 前")
+                o["faces"] = [None, None, None, None, {"color": "#12c8f0"}, None]
+                r1 = await draw(mesh_comp(o), "mesh objects.faces 後")
+                nmesh += 1
+                if r0["hash"] == r1["hash"]:
+                    fails.append(("mesh objects.faces", ["面ごとのマテリアルを書いても絵が変わらない"]))
+                continue
+            c = MCTX.get(k)
+            if c is None:
+                fails.append((f"mesh objects.{k}", ["前提が無い(schema_test.py の mesh_ctx に足す)"]))
+                continue
+            o = copy.deepcopy(MESH_OBJ)
+            for ck, cv in c.items():
+                if not ck.startswith("_"):
+                    set_path(o, ck, copy.deepcopy(cv)) if "." in ck else o.__setitem__(ck, copy.deepcopy(cv))
+            cur = get_path(o, k)
+            if cur is None and d.get("default") is not None:
+                cur = d["default"]
+                set_path(o, k, copy.deepcopy(cur))
+            v = c["_value"] if "_value" in c else other_from(d, cur)
+            if v is None or v == cur:
+                fails.append((f"mesh objects.{k}", ["動かす先の値を作れない(mesh_ctx に _value を書く)"]))
+                continue
+            nmesh += 1
+            r0 = await draw(mesh_comp(o, c.get("_extra", ()), c.get("_source")), f"mesh objects.{k} 前")
+            if r0["sum"] == 0:
+                fails.append((f"mesh objects.{k}", ["下ごしらえの絵に何も映っていない"]))
+            o2 = copy.deepcopy(o)
+            set_path(o2, k, v)
+            r1 = await draw(mesh_comp(o2, c.get("_extra", ()), c.get("_source")), f"mesh objects.{k} 後")
+            if r0["hash"] == r1["hash"]:
+                fails.append((f"mesh objects.{k}", [f"値を動かしても絵が変わらない({json.dumps(cur, ensure_ascii=False)[:60]} → {json.dumps(v, ensure_ascii=False)[:60]})"]))
+        # 知らない道を前提に書いていないか(項目の名前を変えたときの消し忘れ)
+        known = {k for k, _ in flat_fields(mesh_src["objects"]["item"])}
+        for k in MCTX:
+            if k not in known:
+                fails.append((f"mesh objects.{k}", ["schema に無い項目の前提が残っている"]))
+        # 点の光・影の範囲
+        ball = {"geometry": "sphere", "radius": 60, "material": {"color": "#cccccc"}}
+        pl0 = {"position": [-100, -60, -80], "color": "#ff4040", "intensity": 2, "distance": 0}
+        for k, d in mesh_src["light.points"]["item"].items():
+            v = {"distance": 110, "position": [120, 40, -80]}.get(k, other_from(d, pl0[k]))
+            r0 = await draw(mesh_comp(ball, source={"light": {"points": [pl0]}}), f"mesh light.points.{k} 前")
+            r1 = await draw(mesh_comp(ball, source={"light": {"points": [{**pl0, k: v}]}}), f"mesh light.points.{k} 後")
+            nmesh += 1
+            if r0["hash"] == r1["hash"]:
+                fails.append((f"mesh light.points.{k}", [f"値を動かしても絵が変わらない({v})"]))
+        sb = copy.deepcopy(SRC_BASE["mesh"])
+        r0 = await draw(comp([{"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [W / 2, H / 2]}, "source": sb}]), "mesh light.shadow_area 前")
+        sb["light"]["shadow_area"] = 250
+        r1 = await draw(comp([{"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [W / 2, H / 2]}, "source": sb}]), "mesh light.shadow_area 後")
+        nmesh += 1
+        if r0["hash"] == r1["hash"]:
+            fails.append(("mesh light.shadow_area", ["値を動かしても絵が変わらない"]))
+        for o in mesh_src["objects"]["item"]["geometry"]["options"]:
+            ob = {"geometry": o["value"], "rotation": [25, 35, 0], "material": {"color": "#d08040"}}
+            if o["value"] == "group":
+                ob["children"] = [{"geometry": "box", "size": [60, 60, 60]}]
+            elif o["value"] == "shards":
+                ob["size"] = [200, 120]
+            r = await draw(mesh_comp(ob), f"mesh geometry {o['value']}")
+            if r["sum"] == 0:
+                fails.append((f"mesh geometry {o['value']}", ["既定値で何も映らない"]))
+        for o in mesh_src["objects"]["item"]["shape"]["options"]:
+            r = await draw(mesh_comp({"geometry": "extrude", "shape": o["value"], "size": [100, 100], "rotation": [20, 30, 0]}), f"mesh shape {o['value']}")
+            if r["sum"] == 0:
+                fails.append((f"mesh shape {o['value']}", ["何も映らない"]))
+        print(f"mesh: objects・点の光の {nmesh} 項目を動かして確かめた")
 
         # ---- レイヤー共通 ----
         for k, d in schema["layer_common"].items():

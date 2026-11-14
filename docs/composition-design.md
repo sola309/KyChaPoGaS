@@ -353,3 +353,181 @@ boot に `fonts` を足した。postMessage に `comp:fonts {fonts}` を足し�
   大きさのワンタップは `fit` を書き、拡大率を 100 % に、位置をまん中に戻す(キーつき・親つきの値は触らない)。どれも取り消し 1 回で戻る。
 - `threshold` の自動判定(大津)は入れていない(`reference/aviutl_mad/ENGINE_ISSUES.md` R-3 に理由)。
 
+
+### v1.1 の追加(5 回目・2026-11-14): mesh レイヤー(手続きで作る 3D)
+
+Blender で作っていた立体(押し出し文字・宝石・箱・レール・紙吹雪・割れる板)を、アプリの中で書けるようにした。レイヤー種別 `mesh` を足しただけで、ほかの書式は変わらない
+(例 00〜13 の絵は 1 バイトも変わらない)。エンジンは `tools/comp-kit/mesh3d.js`、例は `examples/14_mesh_3d.json` `15_confetti_shatter.json`、レシピは `docs/composition-authoring.md` の 16〜21。
+
+- `mesh` は `model` と同じく **いつも 3D**(`three_d` を書かなくてよい)。1 レイヤー = three.js のシーン 1 つを、そのレイヤーに効くカメラ(無ければ既定のカメラ)で画面大の RT に描き、1 枚の絵としてレイヤーに戻す。
+  だから `transform`・`effects`・`blend`・マスク・`transition_*`・`parent`・`group`・被写界深度(レイヤーの原点の奥行きで、レイヤーごと一様にぼける)は、ほかの 3D レイヤーと同じに効く。
+  レイヤーどうしの前後は原点の奥行きで並ぶだけ(1 レイヤーの中のオブジェクトどうしは、深度バッファで正しく隠れる)。**交差・影を落とし合わせたい物は、同じ mesh レイヤーの `objects` に入れる。**
+- 座標は文書の決まりのまま: px・**y は下が正・z は奥が正**。オブジェクトの `position` はレイヤーの原点(`transform.position`)から。既定のカメラでは z = 0 が等倍(100 px の箱の手前の面を z = 0 に置けば、画面で 100 px)。
+- 回転は度。向きはレイヤーの `transform.rotation` と同じ(x = 上が奥へ、y = 右が奥へ、z = 時計回り。掛ける順は X·Y·Z)。y を正に回すと **左の面** が見えてくる。x を正に回すと **下の面** が見えてくる。
+- `scale` は **倍率**(1 = 等倍。レイヤーの `transform.scale` は今までどおり %)。
+- 数・色・ベクトルはプロパティ値(キーフレーム・wiggle・loop)にできる。ベクトルは `{"k": [{"f", "v": [x,y,z]}]}` のほか、成分ごとに `[10, {"k": [...]}, 0]` とも書ける。キーの `f` はコンポジションのコマ。
+  **形を決める項目**(大きさ・分割数・文字・断面など)もキーにできるが、値が変わるたびに形を作り直す(240 個まで使い回す)。動かすなら `scale` `rotation` `position` を使う。
+- 決定論: 乱数はすべて種つき(`props.js` の `rand01`)。複製の動きは「(種, 番号, 時刻)の式」で、前のコマに依らない(どのコマから描いても同じ絵)。
+- 色: マテリアルの色は sRGB で書く(光の計算はリニア。`basic` `emissive` と `unlit` は、書いた色・貼った絵がそのまま出る)。貼る絵は、エンジンのテクスチャ(画像・入れ子の絵)をそのまま使う。
+
+```jsonc
+{"type": "mesh", "id": "m1", "in": 0, "out": 120, "transform": {"position": [960, 540, 0]},
+ "source": {
+  "unlit": false,                       // true = 光を使わない(全部 basic 扱い。色・絵がそのまま出る)
+  "light": {"ambient": 0.6, "intensity": 2, "color": "#ffffff", "direction": [-0.5, -1, -1],   // direction = 光の来る方向(x 負 = 左、y 負 = 上、z 負 = 手前)
+            "shadows": false, "shadow_area": null, "shadow_opacity": 1,
+            "points": [{"position": [0, -300, -300], "color": "#ffffff", "intensity": 1, "distance": 0}]},
+  "env": "studio",                      // 映り込みの環境: "studio" | "soft" | "sunset" | "night" | "none" | {"top", "bottom", "horizon", "panels", "panel_color"}
+  "env_intensity": 1, "env_rotation": 0,
+  "objects": [ {…}, {…} ]
+ }}
+```
+
+**source**
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `unlit` | false | true = 光・影・映り込みを使わない。どのマテリアルも `basic`(`emissive` は `emissive`)として描く |
+| `light.ambient` | 0.6 | 環境光(上が白・下が灰色の半球光)の強さ |
+| `light.intensity` `light.color` | 2・`#ffffff` | 主光(平行光)。白い面が主光に正対すると 2 / π ≒ 0.64 の明るさ。環境光・映り込みが足されて 1 前後になる |
+| `light.direction` | `[-0.5, -1, -1]` | 主光の **来る方向**(光源のある側)。文書の座標。既定 = 左上手前 |
+| `light.shadows` | false | 主光の影(2048 px のシャドウマップ)。オブジェクトごとに `cast_shadow` `receive_shadow`(既定はどちらも true) |
+| `light.shadow_area` | 画面の長辺 × 1.2 | 影を計算する範囲(px。レイヤーの原点を中心にした正方形)。小さいほど影がくっきり。範囲の外には影が落ちない |
+| `light.shadow_opacity` | 1 | 影の濃さ(0〜1) |
+| `light.points[]` | なし | 点の光。`position`(レイヤーの原点から)`color` `intensity` `distance`(0 = どこまでも同じ強さ。正 = その距離でなめらかに 0)。距離による減衰はない |
+| `env` | `"studio"` | 金属・ガラスに映る環境(式で作る。外部ファイルなし)。`studio` = 灰色の空 + 明るい面 5 枚、`soft` = 白っぽい一様、`sunset` `night`、`none` = 映り込みなし(金属は黒くなる)。`{"top": 色, "bottom": 色, "horizon": 色, "panels": 真偽, "panel_color": 色}` で自作も可 |
+| `env_intensity` `env_rotation` | 1・0 | 映り込みの強さ、環境を縦軸まわりに回す角度(度)。環境は世界に固定(カメラを動かすと映り込みが流れる) |
+| `objects[]` | — | 下の表。配列の順は見た目に関係しない(深度バッファ)。半透明どうしは奥から描く |
+
+**objects[] の共通項目**
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `geometry` | `"box"` | 形。下の表 |
+| `position` `rotation` `scale` | `[0,0,0]`・`[0,0,0]`・1 | レイヤーの原点からの位置(px)、回転(度。数 1 個なら z)、倍率(数か `[x,y,z]`) |
+| `visible` | true | false で描かない |
+| `material` | `{}` | 下の表 |
+| `faces` | なし | 面ごとのマテリアルの配列。`null`・足りない分は `material`。箱 = `[右, 左, 上, 下, 手前, 奥]`、押し出し・文字 = `[表と裏, 側面(面取りを含む)]`、円柱 = `[側面, 上, 下]` |
+| `instances` | なし | 複製(下の表)。`shards` と `group` には効かない |
+| `cast_shadow` `receive_shadow` | true | `light.shadows` のとき |
+| `render_order` | 0 | 半透明の重なりを手で決めるとき(大きいほどあとに描く) |
+| `children` | — | `"geometry": "group"` のとき、子のオブジェクトの配列(親の位置・回転・倍率について動く。8 段まで)。schema(編集画面)には無い、JSON だけの書式 |
+
+**形(`geometry`)**。どれも原点 = 形の中心。分割数 `segments` は省略でよい。
+
+| geometry | 項目(既定) |
+|---|---|
+| `box` | `size: [幅, 高さ, 奥行き]`([200,200,200]。数 1 個 = 立方体) |
+| `plane` | `size: [幅, 高さ]`([200,200])。手前を向いた板。裏も描く |
+| `sphere` | `radius`(100)、`segments`(48。`[横, 縦]` も可) |
+| `cylinder` | `radius`(100)か `radius_top` `radius_bottom`、`height`(200)、`open_ended`(ふた無し)、`segments`(48)。軸は縦 |
+| `cone` | `radius`(100)、`height`(200)。とがった側が上 |
+| `torus` | `radius`(100。輪の半径)、`tube`(20。管の半径)、`arc`(360)`start`(0。上から時計回り)、`segments`(96)`radial_segments`(24)。輪は手前を向く |
+| `ring` | `inner`(60)`outer`(120)、`arc` `start`。平らな輪。裏も描く |
+| `icosahedron` `octahedron` `dodecahedron` `tetrahedron` | `radius`(100)、`detail`(0 = 角ばったまま。上げると球に近づく)。宝石には `material.flat: true` |
+| `lathe` | `profile: [[半径, y], …]`(断面。y は下が正。上から下・下から上どちらの順でもよい)、`smooth`(0 = 折れ線。N = 点の間を N 分割してなめらかに)、`segments`(64。8 前後 + `flat` でカット面)、`arc`(360) |
+| `extrude` | 形は `shape`(`star` `heart` `petal` `flower` `polygon` `hexagon` `pentagon` `triangle` `rect` `rounded_rect` `ellipse` `ring` `burst` `arrow` `cross` `chevron` `bubble` `pie`)+ `size: [幅, 高さ]`、または `points: [[x,y], …]`(y は下が正)+ `holes: [[[x,y], …], …]`。`shape` はシェイプレイヤーの source と同じ書式のオブジェクト(`{"kind": "star", "sides": 6, "inner": 0.4}`)でもよく、文字列のときは `shape_sides` `shape_inner` `shape_radius` で足せる。`depth`(40。0 = 平らな面で、裏も描く)、`bevel: {"size": 4, "thickness": size, "segments": 3, "offset": 0}`(面取り。**輪郭が size ぶん外へ太る**。太らせたくなければ `offset: -size`)、`smooth_angle`(40。この角度までの折れ目は陰をなめらかに)。厚みのまん中が z = 0。`path` を書くと、断面を道に沿って伸ばす(レール・帯。`depth` `bevel` は効かない。`segments` = 道の分割数 200) |
+| `text` | `text`(改行可)、`font`(`Noto Sans JP`)、`weight`(700)、`italic`、`font_size`(200)、`tracking`(字間 px)、`leading`(行送りの倍率 1.2)、`align`(`center` `left` `right`)。あとは `extrude` と同じ(`depth` `bevel` `smooth_angle`)。日本語可。箱(行の並び)の中心が原点。輪郭は Canvas2D で描いた字から起こす(下の「文字の輪郭」)。`quality`(1。輪郭の細かさ 0.25〜4)、`simplify`(0.3。輪郭を間引く許容差・絵の px) |
+| `tube` | `path`(下)、`tube`(20。管の半径)、`segments`(200)`radial_segments`(12)、`closed`(省略 = 道が閉じていれば閉じる)。端は開いている(裏も描く) |
+| `shards` | 下の「破片」 |
+| `group` | `children` をまとめるだけ(形なし) |
+
+**道(`path`)**: `tube`・`extrude` の道、`instances.layout: "along"` で使う。
+
+| type | 項目(既定) |
+|---|---|
+| `helix` | `radius`(300)、`radius_end`(省略 = 同じ。書くと渦巻き・円すい)、`turns`(3)、`height`(400。**正 = 上へ進む**。原点が中心)、`axis`(`"y"` = 縦の軸 / `"x"` / `"z"`)、`start`(開始角。0 = 手前。軸 z のときは上)。t が進むと右へ回る |
+| `circle` | `radius` `axis` `start`、`arc`(360。360 なら閉じた道) |
+| `line` | `from: [x,y,z]` `to: [x,y,z]` |
+| `points` | `points: [[x,y,z], …]`、`closed`、`curve`(`"catmullrom"` = なめらか / `"linear"` = 折れ線)、`tension`(0.5) |
+
+**マテリアル(`material`・`faces[]`)**
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `type` | `"standard"` | `standard` = 光・影・映り込み(PBR)/ `basic` = 光なし(色・絵そのまま)/ `emissive` = 光なしで `color × emissive_intensity` / `glass` = 透ける本体 + 透けない映り込み(下)/ `toon` = 段々の陰(`toon_steps` 3)/ `shadow` = 影だけを受ける透明な面(床) |
+| `color` | `#ffffff`(`shadow` は黒) | 色。`#rrggbbaa` のアルファは不透明度に掛かる |
+| `opacity` | 1(`glass` 0.25、`shadow` 0.4) | 0〜1。1 未満なら半透明として描く |
+| `metalness` `roughness` | 0・0.5(`glass` 0.05) | 金属らしさ・粗さ(0〜1)。金 = `{"color": "#d4af37", "metalness": 1, "roughness": 0.25}` |
+| `emissive` `emissive_intensity` | `#000000`・1 | 自分で光る色(光の当たり方に足される) |
+| `env_intensity` | 1 | このマテリアルの映り込みの強さ(`source.env_intensity` に掛かる) |
+| `clearcoat` | 0 | クリア塗装(0〜1)。つやのある箱・プラスチック |
+| `side` | 自動 | `front` `back` `double`。自動 = 板・輪・破片・回転体・管・ふた無し・厚み 0 の押し出し・ガラスは両面、ほかは表だけ |
+| `flat` | false | 面ごとに平らな陰(宝石のカット面) |
+| `wireframe` | false | 線だけ |
+| `texture` | なし | 貼る絵。`{"asset_id": N}`(画像素材)/ `{"url": "…"}` / `{"comp_id": N, "frame"?, "start"?, "speed"?, "loop"?, "transparent"?}`(入れ子の絵。`frame` = 子のコマを固定。省略 = `(レイヤーの in からのコマ × speed + start)` を子の fps に直したコマ。終わりを超えたら最後のコマ、`loop: true` で繰り返す。`transparent: true` = 子の背景色を塗らない)。色に掛かる(白いマテリアルなら絵そのまま) |
+| `texture_repeat` `texture_offset` | `[1,1]`・`[0,0]` | 繰り返しの回数、ずらす量(1 = 絵 1 枚ぶん。キーにすれば流れる) |
+| `transparent` | 自動 | 透過 PNG を貼るとき true(半透明として描く)。くっきり切り抜くなら `alpha_test: 0.5`(その値より薄い所は描かない。重なりが乱れない) |
+| `depth_write` | 自動 | 半透明の重なりが欠けるとき false |
+
+- uv(絵の貼られ方): 箱・板・球・円柱は three.js の標準(箱は面ごとに 1 枚、上が上)。押し出し・文字は外接矩形に 1 枚(側面は縁の色が伸びる)。破片は元の板に 1 枚。
+- `glass` は屈折を計算しない(レイヤーの後ろの絵は、ふつうの半透明として透ける)。本体は `color` × `opacity` で透け、映り込みとハイライトだけ不透明に乗る。ガラスも影を落とすので、要らなければ `cast_shadow: false`。
+- 動画を貼るときは、動画を入れたコンポジションを作って `comp_id` で貼る。
+
+**複製(`instances`)**: 同じ形を InstancedMesh で 1 回の描画にまとめる(2000 個でも軽い。上限 20000)。3D の紙吹雪・花びら・星・並べた部品に使う。
+i 番目の姿は (種, i, 時刻) の式で決まる。時刻 = `(コマ − レイヤーの in) ÷ fps + time_offset` 秒。
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `count` `seed` | 100・1 | 個数、種 |
+| `layout` | `"box"` | 最初の並び。`box` = `area: [幅, 高さ, 奥行き]`([600,600,600])の中にばらまく / `sphere` = 半径 `radius`(300)の球の中(`surface: true` = 表面だけ)/ `grid` = `grid: [nx, ny, nz]` 個を `spacing: [x, y, z]`([100,100,100])で(左上手前から。`count` が上限)/ `ring` = 半径 `radius` の円周に等間隔(`axis` 既定 `"y"` = 水平の輪、`"z"` = 画面に正対した輪。`start` `arc`)/ `along` = `path`(省略 = オブジェクトの `path`)に沿って等間隔(開いた道は両端を含む。1 個だけなら始点。閉じた道は 1 周を等分)/ `point` = 全部が原点 |
+| `align` | true | `ring` `along` で、並びの向きに合わせて回す(`along` は形の x が道の向き、y が上。枕木は `size: [道の向きの幅, 厚み, 道を横切る長さ]`) |
+| `offset` | 0 | `ring` `along` の並びをずらす(1 = 1 周・道の全長。キーにすれば流れる。閉じていない道では、端から出た分は消える) |
+| `scale` | `[1, 1]` | 大きさの幅 `[最小, 最大]`(倍率。数 1 個なら全部同じ) |
+| `rotation` `rotation_random` | 0 | 最初の回転(度)と、ばらつき(± 度。`[x,y,z]`) |
+| `velocity` `velocity_random` | 0 | 速さ(px/秒。y 正 = 落ちる)と、ばらつき(±) |
+| `radial` | `[0, 0]` | 中心から外へ飛ぶ速さ `[最小, 最大]`(px/秒。`point` なら全方向へ) |
+| `gravity` | 0 | 加速度(px/秒²。`[0, 600, 0]` = 下へ) |
+| `drag` | 0 | 空気の抵抗(1/秒)。大きいほど早く止まり、重力では一定の速さに落ち着く |
+| `spin` `spin_random` | 0 | 回る速さ(度/秒)と、ばらつき(±) |
+| `sway` | なし | ゆらゆら `{"amp": [x, y, z] か数(x), "freq": 1 秒あたりの回数}`。1 個ごとに位相が違う |
+| `lifetime` `lifetime_random` | 0・0 | 寿命(秒。0 = ずっと)。ばらつき 0.3 = 寿命が 70〜100 % |
+| `loop` `prewarm` | false・true | `loop` = 寿命が尽きたら最初の位置から生まれ直す(周ごとに乱数が変わる)。`prewarm: false` = 頭のコマでは何も無く、順に生まれてくる(true = 最初から途中の姿) |
+| `emit_duration` | `loop` なら寿命、ほかは 0 | 生まれる時刻を 0〜この秒数にばらす |
+| `colors` | なし | 色の配列。1 個ごとに 1 色選び、マテリアルの色に掛ける(マテリアルは白にしておく) |
+| `fade_in` `fade_out` `fade_mode` | 0・0・`"opacity"` | 現れる・消える時間(秒。消えるのは寿命の終わり)。`opacity` = 不透明度 / `scale` = 大きさ / `both` |
+| `time_offset` | 0 | 時刻をずらす(秒)。動きの途中から始めたいとき |
+
+- 位置の式: `p = 最初の位置 + v·t + g·t²/2 + ゆらゆら`(`drag` k > 0 のとき `v·(1−e^(−kt))/k + g·(t/k − (1−e^(−kt))/k²)`)。回転 = 最初の回転 + 回る速さ × t。
+- 降り続ける紙吹雪: `layout: "box"` で画面の上に薄い箱を置き、`velocity: [0, 300, 0]`・`lifetime: 5`・`loop: true`。
+
+**破片(`"geometry": "shards"`)**: 四角い板を割って飛び散らせる。場面転換では、前の場面をコンポジションにして `texture: {"comp_id": N}` で貼り、後ろに次の場面を置く。
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `size` | `[1920, 1080]` | 板の大きさ |
+| `count` `seed` `cut` `jitter` | 120・1・`"voronoi"`・1 | 破片の数(およそ。縦横の升に丸める)、種、割り方(`voronoi` = 不ぞろいな多角形 / `triangles` / `grid` = 四角)、不ぞろいさ(0〜1) |
+| `depth` | 0 | 厚み。0 = 紙(裏は同じ絵の鏡像)。正 = 側面つき |
+| `progress` | 0 | 割れ具合 0〜1。**0 = 元の板そのもの**(継ぎ目なし。板に絵を貼ったのと同じ絵)。キーで動かす |
+| `stagger` `stagger_amount` | `"none"`・0.5 | 割れていく順: `none`(一斉)`left_to_right` `right_to_left` `top_to_bottom` `bottom_to_top` `center_out` `edges_in` `random`。量 = 時間差の割合(0 = 一斉、0.95 = ほぼ 1 枚ずつ) |
+| `spread` `spread_z` `origin` | 600・spread の半分・`[0,0]` | `origin`(板の中心から px)から外へ飛ぶ距離(px。破片ごとに 0.5〜1.5 倍)、奥行き方向の散り(±) |
+| `direction` | `[0,0,0]` | 全体が流れる先(progress 1 での移動量 px。`[0, 0, -500]` = 手前へ) |
+| `gravity` | 0 | 落ちる量(px。progress の 2 乗に比例。`[x,y,z]` か数 = y) |
+| `spin` | 240 | 回る角度(度。破片ごとに 0.4〜1.6 倍・向きはばらばら) |
+| `scale_end` | 1 | 終わりの大きさ(倍率。0 で消えていく) |
+| `fade` | 0 | 終わりに消える割合(0.3 = 各破片の動きの最後の 30 % で透明に) |
+
+**文字の輪郭**: エンジンが使える書体は Canvas2D の書体(機械の書体・プロジェクトの Web フォント)で、輪郭のデータは取れない。
+そこで、文字を 1 em ≒ 320 px の大きさで Canvas2D に描き、アルファ 50 % の等高線をマーチングスクエアでたどって(境目はアルファから補間するので 1 px より細かい)、折れ線を間引き(許容差 0.3 px)、
+外周と穴に分けて three.js の押し出しに渡す。できた形は (文字・書体・大きさ・厚み・面取り) ごとに使い回す。テキストレイヤーの字と比べて、大きさの差は 1 px 以内・面積の差は 1 % ほど(`check_test.py`)。
+書体が読み込まれる前は代わりの書体で作り、読めたら作り直す(書き出しでは、読み終わるまで待つ)。
+
+**できないこと**
+
+- 屈折・反射に周りのオブジェクトやレイヤーは映らない(映るのは `env` だけ)。影は主光 1 本だけ(点の光は影を落とさない)。
+- 被写界深度は 1 レイヤーごとに一様(1 枚の mesh レイヤーの中での奥行きの差ではぼけ方が変わらない)。奥と手前で変えたいときは、mesh レイヤーを分ける。
+- 別のレイヤー(2D・ほかの mesh)との交差・影の受け渡しはない。
+- 文字の面取りは外へ太る。細い画の書体で大きな `bevel.size` を使うと、隣の画とつながる(`size` は画の太さの 1/4 まで)。`offset` を負にしすぎると、細い画が消える。
+- 複製 1 個ずつの当たり判定・並べ替えはしない(フェード(`opacity`)を使うときだけ、奥から順に並べ直す)。
+- 立体文字は 1 つの `text` を 4096 px 幅の絵に描いて輪郭を起こす。長い行(20 字を超えるあたり)は輪郭が粗くなるので、オブジェクトを分ける。文字ごとのアニメは無い(1 文字ずつ動かすなら 1 文字 1 オブジェクト)。
+- `texture.comp_id` で使った子は、バックエンドの依存関係(子を直したら親が「古い」になる印・循環の検査 = `comp_render.child_comp_ids`)には **まだ数えられない**。絵は正しく出る(エンジンが自分で子を読む。エンジンの中の循環は検査して止める)が、
+  子を直したあとは親を自分で描き直す。
+- 編集画面の選択枠は目安(形の外接球からの四角)。編集画面で 3D として扱わせたいとき(z のつまみなど)は、レイヤーに `three_d: true` も書いておく(エンジンは無くても 3D)。
+
+### v1.1 の追加(6 回目・2026-11-14): AviUtl 取り込みの全編再現で足した物
+
+- `overlay_source` の `mode: "atop"`(絵のある所にだけ重ねる。アルファはそのまま)。
+- `glow` の `variant: "diffuse"`(拡散光: ぼかした絵との明るいほうへ寄せる)。
+- `duotone` の `gray: "max"`(明るさを RGB の最大値で取る白黒)。
+- text の `per_char.hide_outside`(順番が来る前・消えたあとの文字を描かない)。
+- 書き出し(capture)での静止画テクスチャの上限(160 M 画素。古い物から捨てて、要るときに読み直す)。文書の書式には関係しない。

@@ -192,6 +192,7 @@ export class CompEngine {
     const env = this.env
     try {
       if (env.mode === 'capture') {
+        env.assets.trim?.()
         // 入れ子を読むと新しい素材が見つかるので、積まれるものが無くなるまで繰り返す
         for (let i = 0; i < 64; i++) {
           env.pending.length = 0
@@ -224,6 +225,7 @@ export class CompEngine {
     g.release(acc)
     // 入れ子の絵のうち、このコマで使わなかったものを手放す
     for (const e of this.env.comps.items.values()) e.scene?.sweepCache()
+    if (this.env.mode === 'capture') { s.sweepLayers?.(); for (const e of this.env.comps.items.values()) e.scene?.sweepLayers?.() }
     g.gc()
   }
 
@@ -308,6 +310,7 @@ export class CompEngine {
     this.env.comps.items.clear()
     this.env.assets.dispose()
     this.env.models.dispose()
+    this.env.meshes?.dispose()
     for (const t of this.env.sprites.values()) t.dispose()
     this.env.gfx.dispose()
     this.renderer.dispose()

@@ -348,7 +348,7 @@
           const hp = [(h.p[0] - view.x) / view.s, (h.p[1] - view.y) / view.s]
           // 元の値が 2 個([x, y])なら 2 個で返す。z を動かすのは 3D レイヤーだけ(2D では z に意味が無いので、そのまま)
           const sv = eng.valueAt(h.id, 'transform.scale', frame), def = eng.layerDef(h.id)
-          drag = { mode: 'scale', id: h.id, an, ux, uy, hp, ax: h.ax, ay: h.ay, base: v3(sv, 100), n: Array.isArray(sv) && sv.length === 2 ? 2 : 3, z3d: !!(def && (def.three_d || def.type === 'model')),
+          drag = { mode: 'scale', id: h.id, an, ux, uy, hp, ax: h.ax, ay: h.ay, base: v3(sv, 100), n: Array.isArray(sv) && sv.length === 2 ? 2 : 3, z3d: !!(def && (def.three_d || def.type === 'model' || def.type === 'mesh')),
             moved: false, value: null, sx: ev.clientX, sy: ev.clientY,
             // 指で(広い当たり判定で)つかんだときは、つかんだ所とつまみのずれを覚えておく(つかんだ瞬間に大きさが跳ねないように)。マウスは今までどおり
             off: hitRadius(ev) > HIT_FINE ? [(ev.clientX - h.p[0]) / view.s, (ev.clientY - h.p[1]) / view.s] : [0, 0] }

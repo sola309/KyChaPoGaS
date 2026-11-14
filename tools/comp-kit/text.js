@@ -427,6 +427,7 @@ function stage(def, n, layerId) {
     pos: vec(fromDef.position, 3, 0), scale: vec(fromDef.scale ?? 100, 3, 100),
     rot: Array.isArray(fromDef.rotation) ? vec(fromDef.rotation, 3, 0) : [0, 0, num(fromDef.rotation, 0)],
     op: fromDef.opacity == null ? 100 : num(fromDef.opacity, 100),
+    hide: !!def.hide_outside, // 出る前(in)・消えたあと(out)の文字を描かない(AviUtl の TA 登場・退場: 順番が来るまで alpha 0)
   }
 }
 
@@ -464,6 +465,7 @@ export function fillTextBatch(batch, lay, perChar, t, span, layerId, opt = {}) {
     let px = 0, py = 0, pz = 0, sx = 1, sy = 1, rx = 0, ry = 0, rz = 0, op = 1
     if (vis != null) { const k = clamp(vis - g.idx, 0, 1); if (k <= 0) continue; op *= k }
     if (sIn) {
+      if (sIn.hide && t < num(sIn.at, 0) + sIn.ranks[ui] * sIn.stagger) continue
       const k = ease(sIn.e, clamp((t - num(sIn.at, 0) - sIn.ranks[ui] * sIn.stagger) / sIn.dur, 0, 1)), q = 1 - k
       px += sIn.pos[0] * q; py += sIn.pos[1] * q; pz += sIn.pos[2] * q
       sx *= 1 + (sIn.scale[0] / 100 - 1) * q; sy *= 1 + (sIn.scale[1] / 100 - 1) * q
@@ -474,6 +476,7 @@ export function fillTextBatch(batch, lay, perChar, t, span, layerId, opt = {}) {
       // 消えるほうは、最後の文字がレイヤーの out で消え終わるように後ろから詰める
       const t0 = sOut.at != null ? num(sOut.at, 0) : span - sOut.dur - (nUnits - 1) * sOut.stagger
       const q = ease(sOut.e, clamp((t - t0 - sOut.ranks[ui] * sOut.stagger) / sOut.dur, 0, 1))
+      if (sOut.hide && t > t0 + sOut.ranks[ui] * sOut.stagger + sOut.dur) continue
       px += sOut.pos[0] * q; py += sOut.pos[1] * q; pz += sOut.pos[2] * q
       sx *= 1 + (sOut.scale[0] / 100 - 1) * q; sy *= 1 + (sOut.scale[1] / 100 - 1) * q
       rx += sOut.rot[0] * q; ry += sOut.rot[1] * q; rz += sOut.rot[2] * q

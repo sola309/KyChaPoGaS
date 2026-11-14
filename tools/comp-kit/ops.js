@@ -240,10 +240,10 @@ R.grayscale = {
 }
 R.duotone = {
   n: 3,
-  color: `{ vec4 dc = mix($0, $1, pow(clamp(OL(s.rgb), 0.0, 1.0), $2.x)); s = vec4(mix(s.rgb, dc.rgb, $2.y), s.a * mix(1.0, dc.a, $2.y)); }`,
+  color: `{ vec4 dc = mix($0, $1, pow(clamp(mix(OL(s.rgb), max(s.r, max(s.g, s.b)), $2.z), 0.0, 1.0), $2.x)); s = vec4(mix(s.rgb, dc.rgb, $2.y), s.a * mix(1.0, dc.a, $2.y)); }`,
   pack(p, ctx, o, i) {
     putCol(o, i, p.dark ?? '#000000'); putCol(o, i + 4, p.light ?? '#ffffff')
-    put(o, i + 8, 100 / Math.max(1, num(p.gamma, 100)), pct(p.amount, 100))
+    put(o, i + 8, 100 / Math.max(1, num(p.gamma, 100)), pct(p.amount, 100), p.gray === 'max' ? 1 : 0)
   },
 }
 R.threshold = {
@@ -395,7 +395,8 @@ R.noise = {
 R.overlay_source = {
   n: 3, tex: true, alpha: true,
   // アルファが増えるのは over / under だけ(色の置き換え・輝度をアルファに、は増えない)
-  addsAlpha: (p) => !(p.mode === 'replace_color' || p.mode === 'luma_to_alpha'),
+  // atop = 絵のある所にだけ重ねる(アルファはそのまま。AviUtl の画像・動画ファイル合成「前方から合成」: 文字や図形に絵を貼る)
+  addsAlpha: (p) => !(p.mode === 'replace_color' || p.mode === 'luma_to_alpha' || p.mode === 'atop'),
   // 重ねる素材は、いまの絵の範囲の中だけに出る(AviUtl と同じ。絵の外へはみ出さない)
   color: `{ vec2 uv = ($P - $0.xy) / (2.0 * $0.zw) + 0.5; bool outb = uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0;
     if ($1.w > 0.5) { uv = fract(uv); outb = false; }
@@ -406,7 +407,8 @@ R.overlay_source = {
     if ($1.x < 0.5) s = OOVER(s, tc, t.a);
     else if ($1.x < 1.5) { float a = s.a + t.a * (1.0 - s.a); s = vec4(a > 1e-5 ? (s.rgb * s.a + tc * t.a * (1.0 - s.a)) / a : s.rgb, a); }
     else if ($1.x < 2.5) s.rgb = mix(s.rgb, tc, clamp(t0.a * 64.0, 0.0, 1.0) * $1.y);
-    else s.a *= outb ? 0.0 : OL(t.rgb); }`,
+    else if ($1.x < 3.5) s.a *= outb ? 0.0 : OL(t.rgb);
+    else s.rgb = mix(s.rgb, tc, t.a); }`,
   pack(p, ctx, o, i) {
     const e = ctx.overlay(p)
     if (!e) return false
@@ -416,7 +418,7 @@ R.overlay_source = {
     // anchor: 'top_left' = 箱の左上に素材の左上を合わせた所から x・y だけずらす(AviUtl の画像ファイル合成)。既定は中心どうし
     const tl = p.anchor === 'top_left' && !p.fit
     put(o, i, (tl ? r.x + w / 2 : r.x + r.w / 2) + num(p.x, 0), (tl ? r.y + h / 2 : r.y + r.h / 2) + num(p.y, 0), Math.max(1e-3, w / 2), Math.max(1e-3, h / 2))
-    put(o, i + 4, { over: 0, under: 1, replace_color: 2, luma_to_alpha: 3 }[p.mode] ?? 0, pct(p.opacity, 100), e.flipY ? 1 : 0, p.repeat || p.tile ? 1 : 0)
+    put(o, i + 4, { over: 0, under: 1, replace_color: 2, luma_to_alpha: 3, atop: 4 }[p.mode] ?? 0, pct(p.opacity, 100), e.flipY ? 1 : 0, p.repeat || p.tile ? 1 : 0)
     put(o, i + 8, ...extOf(ctx))
     ctx.tex = e.tex
   },

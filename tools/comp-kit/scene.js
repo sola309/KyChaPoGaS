@@ -13,13 +13,14 @@ import { layoutText, fillTextBatch, fontSpec } from './text.js'
 import { fillParticles, SPRITE_KINDS, PARTICLE_PRESETS } from './particles.js'
 import { canvasTexture } from './assets.js'
 import { ModelStore } from './model.js'
+import { MeshStore } from './mesh3d.js'
 import { patternUniforms } from './pattern.js'
 import { INLINE, opsGlsl, MAX_OP_VEC4, MAX_OP_TEX } from './ops.js'
 import { isPass, BLUR_THR, DOF_THR, LOCAL_PASS } from './effects.js'
 
 const D2R = Math.PI / 180
 const DEFAULT_FOV = 39.6 // AE の 50mm 相当(水平画角)
-const DRAWABLE = new Set(['image', 'video', 'sequence', 'text', 'shape', 'solid', 'pattern', 'comp', 'model', 'particles', 'adjustment'])
+const DRAWABLE = new Set(['image', 'video', 'sequence', 'text', 'shape', 'solid', 'pattern', 'comp', 'model', 'mesh', 'particles', 'adjustment'])
 const KNOWN = new Set([...DRAWABLE, 'null', 'camera', 'group'])
 const SHADER_BLEND = {
   multiply: 0, overlay: 1, lighten: 2, darken: 3, difference: 4, normal: 5, add: 6, screen: 7,
@@ -312,7 +313,7 @@ export class CompScene {
   // 親を含まない行列(m に書く)
   local(L, f, m) {
     const X = this.xform(L, f)
-    const is3d = L.def.three_d || L.type === 'model' || L.type === 'group'
+    const is3d = L.def.three_d || L.type === 'model' || L.type === 'mesh' || L.type === 'group'
     const pos = vec(this.tr(L, 'position', f, [this.W / 2, this.H / 2, 0]), 3, 0)
     const rot = rotVec(this.tr(L, 'rotation', f, 0))
     const sc = vec(this.tr(L, 'scale', f, 100), 3, 100)
@@ -468,7 +469,9 @@ export class CompScene {
     for (const L of this.order) if (L.type === 'camera' && this.active(L, f) && L.def.scope == null) return this.camState(L, f)
     return this.camState(null, f)
   }
-  is3d(L) { return !!L.def.three_d || L.type === 'model' }
+  // mesh レイヤーの置き場(最初に使うときに作る)
+  meshes() { return (this.env.meshes ??= new MeshStore(this.env)) }
+  is3d(L) { return !!L.def.three_d || L.type === 'model' || L.type === 'mesh' }
   mvp(L, f) {
     if (L.mvpStamp === f) return L.mvp
     const w = this.drawWorld(L, f)
@@ -606,6 +609,7 @@ export class CompScene {
         return { x: p[0] - 40, y: p[1] - 40, w: 80, h: 80 }
       }
       case 'model': { const h = num(s.height, this.H * 0.5); return box(h, h) }
+      case 'mesh': return this.meshes().bounds(L)
     }
     return null
   }
@@ -784,6 +788,7 @@ export class CompScene {
 
   // 描くための中身をそろえる。→ L.content(使い回し)または null
   content(L, f, stack) {
+    L.usedTick = this.env.drawTick
     const rect = this.rect(L, f)
     if (!rect) return null
     const C = L.content
@@ -880,6 +885,15 @@ export class CompScene {
       }
       case 'model': {
         const rt = this.env.models.render(this, L, f)
+        if (!rt) return null
+        C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true; C.screen = true; C.toSrgb = true
+        C.rect = { x: 0, y: 0, w: this.W, h: this.H }
+        C.ink = null
+        break
+      }
+      case 'mesh': {
+        // 手続きの 3D(mesh3d.js)。model と同じく、画面大の絵(リニア・乗算済み)で戻る
+        const rt = this.meshes().render(this, L, f, stack)
         if (!rt) return null
         C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true; C.screen = true; C.toSrgb = true
         C.rect = { x: 0, y: 0, w: this.W, h: this.H }
@@ -1427,7 +1441,7 @@ export class CompScene {
       let b
       if (S.space === 'screen') {
         b = [0, 0, S.buf.width, S.buf.height]
-        if (S.L.type !== 'adjustment' && S.L.type !== 'model' && S.L.type !== 'particles') {
+        if (S.L.type !== 'adjustment' && S.L.type !== 'model' && S.L.type !== 'mesh' && S.L.type !== 'particles') {
           const q = this.corners(S.L, S.f, S.rect)
           if (q) b = [Math.min(...q.map((p) => p[0])) * res, Math.min(...q.map((p) => p[1])) * res, Math.max(...q.map((p) => p[0])) * res, Math.max(...q.map((p) => p[1])) * res]
         }
@@ -1643,7 +1657,7 @@ export class CompScene {
   timeVarying(L) {
     if (L.tv === undefined) {
       const d = L.def
-      L.tv = d.type === 'video' || d.type === 'comp' || d.type === 'sequence' || d.type === 'particles' || anyAnimated(d.source) || anyAnimated(d.effects) || !!d.transition_in || !!d.transition_out || !!d.source?.per_char
+      L.tv = d.type === 'video' || d.type === 'comp' || d.type === 'sequence' || d.type === 'particles' || d.type === 'mesh' || anyAnimated(d.source) || anyAnimated(d.effects) || !!d.transition_in || !!d.transition_out || !!d.source?.per_char
     }
     return L.tv
   }
@@ -1962,6 +1976,7 @@ export class CompScene {
           if (Array.isArray(s.runs)) for (const r of s.runs) env.font(fontSpec({ ...s, ...r }, 32), String(r?.text ?? ''))
           else env.font(fontSpec(s, 32), s.counter ? '0123456789' : String(evalProp(s.text, tl, this.fps) ?? ''))
         } else if (L.type === 'model') env.models.prepare(this, L)
+        else if (L.type === 'mesh') this.meshes().prepare(this, L, tl, stack)
         else if (L.type === 'particles') this.particleSprite(L)
         else if (L.type === 'comp' && s.comp_id != null) this.prepareComp(s.comp_id, (this.srcFrame(L, tl) / this.fps), stack, L)
         if (Array.isArray(L.def.effects)) {
@@ -2011,6 +2026,17 @@ export class CompScene {
     }
     c.used = env.drawTick
     return c.rt
+  }
+  // 書き出し用: このコマで描かなかったレイヤーの持ち物(文字・シェイプの絵、mesh の形とマテリアル)を手放す。要るときに作り直す(絵は変わらない)。
+  // 長いコンポジション(数千レイヤー)を通しで描いても、メモリが増え続けないように
+  sweepLayers() {
+    const t = this.env.drawTick
+    for (const L of this.layers.values()) {
+      if (L.usedTick === t) continue
+      let any = false
+      for (const k in L.cache) { any = true; L.cache[k]?.tex?.dispose?.() }
+      if (any) L.cache = {}
+    }
   }
   // このコマで使われなかった絵を手放す(all = 全部)
   sweepCache(all = false) {

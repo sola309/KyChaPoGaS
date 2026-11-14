@@ -7,6 +7,7 @@
 確かめること:
   1. 不透明度 50% の赤 → 画素が rgba(255,0,0,128)(ストレートアルファで出る)
   2. 画像を 100% で置く → 元の画素と 1 バイトも違わない(軽いエフェクト・位置の足し算を付けても同じ)
+  2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度
   3. 決定論: コマを描く順を変えても同じ絵(md5)
   4. プレビュー経路 = 書き出し経路(同じ GL なら同じ絵)
 """
@@ -197,8 +198,76 @@ def main():
         ok("on_circle.deg_per_px = 180/π/半径 は既定と同じ並び", d01 < 40, f"違う画素 {d01}")
         ok("on_circle.deg_per_px を 2 倍 → 横に広がる", s2 and s0 and (s2[1] - s2[0]) > (s0[1] - s0[0]) * 1.4, f"{s0} {s2}")
 
+        # 2e. mesh レイヤー(手続きの 3D)
+        mesh = lambda objs, **src: {"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [100, 100, 0]}, "source": {"objects": objs, **src}}  # noqa: E731
+        # 光なしの赤い箱 100×60×40。手前の面を z = 0 に置く → 画面では 100×60 px ちょうど(既定のカメラは z = 0 が等倍)
+        im = px(asyncio.run(grab(comp([mesh([{"geometry": "box", "size": [100, 60, 40], "position": [0, 0, 20], "material": {"color": "#ff0000"}}], unlit=True)]), [0], base))[0])
+        on = [(x, y) for y in range(200) for x in range(200) if im.getpixel((x, y))[3] > 0]
+        bb = (min(q[0] for q in on), min(q[1] for q in on), max(q[0] for q in on), max(q[1] for q in on)) if on else None
+        ok("mesh: 光なしの赤い箱(手前の面が z = 0)は 100×60 px・rgba(255,0,0,255)", len(on) == 6000 and bb == (50, 70, 149, 129) and all(im.getpixel(q) == (255, 0, 0, 255) for q in on), f"{len(on)} px {bb}")
+        # 面ごとのマテリアル(箱 = 右・左・上・下・手前・奥)と回転の向き(y = 右が奥へ → 左の面が見える、x = 上が奥へ → 下の面が見える)
+        fcs = [{"color": c} for c in ("#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff")]
+        seen = []
+        for rot in ([0, 0, 0], [0, 90, 0], [0, -90, 0], [90, 0, 0], [-90, 0, 0], [0, 180, 0]):
+            im = px(asyncio.run(grab(comp([mesh([{"geometry": "box", "size": [80, 80, 80], "rotation": rot, "faces": fcs}], unlit=True)]), [0], base))[0])
+            seen.append(im.getpixel((100, 100))[:3])
+        ok("mesh: faces の並びと回転の向き(手前・左・右・下・上・奥の順に見える)", seen == [(255, 0, 255), (0, 255, 0), (255, 0, 0), (255, 255, 0), (0, 0, 255), (0, 255, 255)], str(seen))
+        # 破片: progress 0 は、絵を貼った板そのもの(継ぎ目なし・画像レイヤーと同じ絵)
+        timg = Image.new("RGBA", (120, 80))
+        timg.putdata([(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256), 255) for _ in range(120 * 80)])
+        from PIL import ImageDraw, ImageFilter
+        ImageDraw.Draw(timg).rectangle([0, 0, 39, 29], fill=(255, 255, 255, 255))  # 左上の白(向きの目印)
+        timg = timg.filter(ImageFilter.GaussianBlur(3)).convert("RGBA")  # なだらかな絵にする(くっきりした境目は、uv の補間のわずかな差が 2〜3 階調に化ける)
+        tb = io.BytesIO(); timg.save(tb, "PNG")
+        turl = "data:image/png;base64," + base64.b64encode(tb.getvalue()).decode()
+        ref = px(asyncio.run(grab(comp([{"id": "i", "type": "image", "in": 0, "out": 60, "transform": {"position": [100, 100]}, "source": {"url": turl}}]), [0], base))[0])
+        sh = lambda p: comp([mesh([{"geometry": "shards", "size": [120, 80], "count": 40, "seed": 5, "progress": p, "spread": 60, "material": {"type": "basic", "texture": {"url": turl}}}])])  # noqa: E731
+        got = px(asyncio.run(grab(sh(0), [0], base))[0])
+        # 比べるのは板の中(40,60)〜(160,140)。外は、mesh の側が完全に透明であること(画像レイヤーは縁の AA で 1/255 だけにじむ)
+        inbox = (40, 60, 160, 140)
+        outside = lambda im_: sum(1 for y in range(200) for x in range(200) if not (40 <= x < 160 and 60 <= y < 140) and im_.getpixel((x, y))[3] > 0)  # noqa: E731
+        dmax = max(abs(a_ - b_) for a_, b_ in zip(got.crop(inbox).tobytes(), ref.crop(inbox).tobytes()))
+        ok("mesh: 破片の progress 0 = 絵を貼った板(画像レイヤーと同じ・継ぎ目なし)", dmax <= 1 and min(got.getpixel((48, 68))[:3]) > 240 and outside(got) == 0, f"最大の差 {dmax}・外の画素 {outside(got)}")
+        got = px(asyncio.run(grab(sh(0.6), [0], base))[0])
+        holes = sum(1 for y in range(60, 140) for x in range(40, 160) if got.getpixel((x, y))[3] < 128)
+        ok("mesh: 破片の progress 0.6 は板が割れて散る(すき間ができ、外へはみ出す)", holes > 300 and sum(1 for x in range(200) if got.getpixel((x, 30))[3] > 0 or got.getpixel((x, 170))[3] > 0) > 0, f"すき間 {holes} px")
+        # 入れ子の絵をテクスチャに: 板(子と同じ大きさ・光なし)= comp レイヤーで置いた絵
+        tmpm = Path(tempfile.mkdtemp(prefix="compkit_mesh_"))
+        subm = {"id": 9960, "name": "meshsub", "width": 120, "height": 80, "fps": 30, "duration_frames": 30, "data": {"version": 1, "bg": "#204060", "layers": [
+            {"id": "a", "type": "solid", "in": 0, "out": 30, "transform": {"position": [20, 15]}, "source": {"color": "#ffffff", "width": 40, "height": 30}},
+            {"id": "b", "type": "shape", "in": 0, "out": 30, "transform": {"position": {"k": [{"f": 0, "v": [40, 50]}, {"f": 20, "v": [100, 50]}]}}, "source": {"kind": "ellipse", "width": 30, "height": 30, "fill": "#ff8000"}}]}}
+        (tmpm / "meshsub.json").write_text(json.dumps(subm), encoding="utf-8")
+        old_extra = rt.EXTRA_DIR
+        rt.EXTRA_DIR = tmpm
+        ref = asyncio.run(grab(comp([{"id": "n", "type": "comp", "in": 0, "out": 60, "transform": {"position": [100, 100]}, "source": {"comp_id": 9960}}]), [0, 10], base))
+        got = asyncio.run(grab(comp([mesh([{"geometry": "plane", "size": [120, 80], "material": {"type": "basic", "texture": {"comp_id": 9960}}}])]), [0, 10], base))
+        dmax = max(max(abs(a_ - b_) for a_, b_ in zip(px(got[f]).crop(inbox).tobytes(), px(ref[f]).crop(inbox).tobytes())) for f in (0, 10))
+        ok("mesh: comp をテクスチャにした板 = comp レイヤー(向き・色・時刻が同じ)", dmax <= 1 and px(got[0]).tobytes() != px(got[10]).tobytes() and outside(px(got[0])) == 0, f"最大の差 {dmax}")
+        rt.EXTRA_DIR = old_extra
+        # 立体文字の輪郭: 厚み 0・光なしの白い文字は、テキストレイヤーの文字とほぼ同じ形(大きさ・面積)
+        tx = px(asyncio.run(grab(comp([{"id": "t", "type": "text", "in": 0, "out": 60, "transform": {"position": [100, 100]}, "source": {"text": "愛あ", "font": "Noto Sans JP", "weight": 700, "size": 80, "fill": "#ffffff"}}]), [0], base))[0])
+        mx = px(asyncio.run(grab(comp([mesh([{"geometry": "text", "text": "愛あ", "font": "Noto Sans JP", "weight": 700, "font_size": 80, "depth": 0, "material": {"color": "#ffffff"}}], unlit=True)]), [0], base))[0])
+        def ink(im_):
+            pts = [(x, y) for y in range(200) for x in range(200) if im_.getpixel((x, y))[3] > 127]
+            return (max(q[0] for q in pts) - min(q[0] for q in pts), max(q[1] for q in pts) - min(q[1] for q in pts), len(pts)) if pts else (0, 0, 0)
+        ti, mi = ink(tx), ink(mx)
+        ok("mesh: 立体文字(日本語)の輪郭はテキストレイヤーの字と同じ大きさ", ti[2] > 2000 and abs(ti[0] - mi[0]) <= 2 and abs(ti[1] - mi[1]) <= 2 and abs(ti[2] - mi[2]) < ti[2] * 0.03, f"text {ti} mesh {mi}")
+        # 複製(3D の紙吹雪): コマを描く順を変えても同じ絵
+        conf = comp([mesh([{"geometry": "plane", "size": [10, 6], "material": {"color": "#ffffff"}, "instances": {
+            "count": 300, "seed": 4, "layout": "box", "area": [260, 60, 200], "velocity": [0, 80, 0], "velocity_random": [30, 30, 20], "gravity": [0, 60, 0], "spin": [200, 150, 90], "spin_random": [200, 200, 200],
+            "rotation_random": [180, 180, 180], "sway": {"amp": [20, 0, 10], "freq": 0.6}, "lifetime": 1.5, "loop": True, "colors": ["#ff5d73", "#ffd23f", "#3fd2c7"], "fade_in": 0.2, "fade_out": 0.3}}])], dur=60)
+        c1 = asyncio.run(grab(conf, [3, 17, 40], base))
+        c2 = asyncio.run(grab(conf, [40, 3, 17], base))
+        ok("mesh: 複製(300 個)の決定論(描く順を変えても同じ絵・コマごとに違う絵)", all(c1[f] == c2[f] for f in (3, 17, 40)) and len({hashlib.md5(c1[f]).digest() for f in (3, 17, 40)}) == 3)
+        # 被写界深度: ピントから外れた mesh レイヤーは、model と同じくレイヤーごとぼける
+        dofc = lambda dof: comp([{"id": "cam", "type": "camera", "in": 0, "out": 60, "source": {"zoom": 400, **({"dof": {"focus_distance": 400, "aperture": 40}} if dof else {})}},  # noqa: E731
+                                 {"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [100, 100, 600]}, "source": {"unlit": True, "objects": [{"geometry": "box", "size": [120, 120, 10], "material": {"color": "#ffffff"}}]}}])
+        soft = lambda im_: sum(1 for y in range(0, 200, 2) for x in range(0, 200, 2) if 8 < im_.getpixel((x, y))[3] < 247)  # noqa: E731
+        s0, s1 = soft(px(asyncio.run(grab(dofc(False), [0], base))[0])), soft(px(asyncio.run(grab(dofc(True), [0], base))[0]))
+        ok("mesh: 被写界深度が掛かる(ぼけて半透明の縁が広がる)", s1 > s0 + 200, f"半透明の画素 {s0} → {s1}")
+
         # 3. 決定論 / 4. プレビュー一致
-        exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof"]
+        exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter"]
         for ex in exs:
             c = json.loads((KIT / "examples" / f"{ex}.json").read_text(encoding="utf-8"))
             d = c["duration_frames"]
