@@ -231,7 +231,7 @@ def s07_logo(ctx):
                                      'writing': 'vertical', 'valign': 'top', 'tracking': tracking}, pos=[x, y], effects=[BR])
     return doc('部品 S07 題字', n, [
         col('t1', [{'text': 'さくら'}, {'text': 'の', 'size': 80}, {'text': '空', 'size': 146}], 1034, 178),
-        col('t2', [{'text': 'アプリコ'}, {'text': 'ッ', 'size': 72}, {'text': 'ト'}, {'text': 'の', 'size': 72}, {'text': '愛', 'size': 140}], 904, 200, size=90, tracking=-25),   # 窓の中では左の列が 210〜710 に収まる
+        col('t2', [{'text': 'アプリコ'}, {'text': 'ッ', 'size': 72}, {'text': 'ト'}, {'text': 'の', 'size': 72}, {'text': '愛', 'size': 128}], 904, 196, size=86, tracking=-25),   # 窓の中では左の列が 210〜710 に収まる
         layer('en', 'text', n, {'text': 'A love for Sakura Kyoko', 'font': 'Noto Serif JP', 'weight': 400, 'size': 20, 'fill': ink, 'tracking': 1}, transform={'position': [962, 427], 'rotation': [0, 0, 90]}),
         layer('sakura', 'shape', n, {'kind': 'path', 'closed': True, 'points': _sakura_pts(68), 'fill': '#f6b9c4'}, transform={'position': [1034, 640], 'rotation': [0, 0, 8]}),
     ])

@@ -130,7 +130,12 @@ def _b25c_puppet():
     出せない物: ポッキーを持つ手の動き・顔の向きの変化(絵のまま)。"""
     n, w, h = 170, 1400, 1800
     g = _B25_SIDE
-    L = [puppet_layer('fig', n, g, [560, 380], 450, seed=2, wind=-0.9, sway=1.5, turn=0.08)]
+    hc = [560, 380]
+    if g['puppet_id'] == 'sakura_A_profile2':      # v4: 腰までの横顔(顔の層が無い 2 層のパペット)。頭の中心・高さは絵から測った値。口が目印 (760, 520) に来るように置く
+        g = dict(g, head=[1040, 395], head_h=230)
+        hc = [672 + 800, 334]
+        w = 3000                                    # 左へ長くなびくポニーテールが切れないように comp を左右に 800 ずつ広げる(中心からの位置は同じ)
+    L = [puppet_layer('fig', n, g, hc, 450, seed=2, wind=-0.9, sway=1.5, turn=0.08)]
     return doc(f'仮: 2D 立ち絵 + 分解 B25 杏子の横顔({g["puppet_id"]})', n, L, w=w, h=h)
 
 
@@ -189,8 +194,9 @@ def b25(ctx):
     L = [
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
         layer('charaB', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=101,
-              transform={'anchor': [60, -380, 0], 'position': kf((101, [930, 470, 0]), (150, [975, 465, 0]), (177, [1100, 610, 0], 'inOutCubic'), (246, [1110, 600, 0])),
-                         'scale': kf((101, [60, 60]), (150, [62, 62]), (177, [118, 118], 'inOutCubic'), (246, [120, 120]))}),
+              # v4: 完成版 5293・5300・5333 の頭の大きさ(640 幅で 95→67→58px)と位置から。101〜111 は 60%、119 までに 42% へ引き、150 で 37%
+              transform={'anchor': [60, -380, 0], 'position': kf((101, [880, 590, 0]), (111, [880, 589, 0]), (119, [922, 558, 0], 'outCubic'), (150, [959, 554, 0]), (177, [1100, 610, 0], 'inOutCubic'), (246, [1110, 600, 0])),
+                         'scale': kf((101, [60, 60]), (111, [60, 60]), (119, [42, 42], 'outCubic'), (150, [37, 37]), (177, [118, 118], 'inOutCubic'), (246, [120, 120]))}),
         layer('charaA', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=81, t1=101,
               transform={'anchor': [60, -380, 0], 'position': kf((81, [380, 340, 0]), (85, [400, 350, 0]), (93, [880, 520, 0], 'inOutCubic'), (100, [875, 522, 0])),
                          'scale': kf((81, [715, 715]), (85, [690, 690]), (93, [150, 150], 'inOutCubic'), (100, [147, 147])),

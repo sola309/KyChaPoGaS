@@ -148,10 +148,12 @@ def figure(pos, color, h=165, name='figure', rot=None):
 
 ROOF_CAM = dict(
     zoom=1400,
-    pos=[(0, (0, -800, 670)), (25, (0, -310, 670), 'easeOutCubic'), (71, (0, -310, 670), 'easeInOutSine'), (101, (0, -141, 163), 'easeOutSine'), (116, (0, -141, 163), 'easeInOutSine'),
-         (131, (0, -139, 56), 'linear'), (146, (78, -153, 19), 'easeInOutSine'), (161, (484, -244, 320), 'linear'), (164, (500, -248, 322), 'hold'), (165, (-278, -420, -1832), 'linear'), (188, (-278, -420, -1832), 'easeOutCubic'), (245, (-358, -420, -1832))],
-    tgt=[(0, (0, -508, 2670)), (25, (0, -18, 2670), 'easeOutCubic'), (71, (0, -18, 2670), 'easeInOutSine'), (101, (0, 56, 1500), 'linear'), (116, (0, 56, 1500), 'easeInOutSine'), (131, (0, 64, 1500), 'linear'), (146, (78, 60, 1500), 'easeInOutSine'),
-         (161, (-335, 81, 894), 'linear'), (164, (-319, 77, 896), 'hold'), (165, (-125, 157, -846), 'easeOutSine'), (188, (-238, 157, -846), 'easeOutCubic'), (245, (-318, 157, -846))],
+    # v4: 前半(〜164)を完成版 3440〜3550 から測り直した。3414〜3503 は止まったまま(人物は斜めのワイプで現れる)→ 3503 から引き、3543〜3550 で右へ回りこむ。
+    #     カメラの高さ ≈ 金網の上端(地平線と金網の上端が重なる)。人物(165)は金網の 180 手前
+    pos=[(0, (0, -636, 1075)), (25, (0, -146, 1075), 'easeOutCubic'), (114, (0, -146, 1075), 'easeInOutSine'), (141, (40, -172, 929), 'linear'), (154, (43, -214, 892), 'linear'),
+         (161, (421, -232, 1016), 'linear'), (164, (470, -236, 1030), 'hold'), (165, (-278, -420, -1832), 'linear'), (188, (-278, -420, -1832), 'easeOutCubic'), (245, (-358, -420, -1832))],
+    tgt=[(0, (0, -563, 1500)), (25, (0, -73, 1500), 'easeOutCubic'), (114, (0, -73, 1500), 'easeInOutSine'), (141, (40, -50, 1500), 'linear'), (154, (147, -34, 1483), 'linear'),
+         (161, (121, -37, 1536), 'linear'), (164, (150, -40, 1550), 'hold'), (165, (-125, 157, -846), 'easeOutSine'), (188, (-238, 157, -846), 'easeOutCubic'), (245, (-318, 157, -846))],
 )
 
 # 3D モデルの杏子たち(仮: マネキン = mesh の mannequin)。足もとの位置は、完成版 3580 の足の画面位置を ROOF_CAM から床へ逆算した値。
@@ -208,6 +210,7 @@ def board(ctx, g, pos, h, yaw=0):
 
 
 # 屋上の人物の衣装の記号(KEY/OUTFITS.md)と向き。パペットがあれば板、無ければマネキン
+B_SIT_KEY = 'v4:roof/B_sit.png'
 ROOF_SYMS = [('A', 'back'), ('G', None), ('C', None), ('F', None), ('A', None), ('E', None), ('H', None), ('D', None), ('B', 'sit')]
 ROOF_PUPPETS = [None if v == 'sit' else find_puppet(s, v) for s, v in ROOF_SYMS]     # 登録の時点で引く(how に書くため)
 for _g in ROOF_PUPPETS:
@@ -218,9 +221,9 @@ for _g in ROOF_PUPPETS:
 def roof_people_how():
     names = ['1 人目(後ろ姿 A)', 'G', 'C', 'F', 'A', 'E', 'H', 'D', '座る B']
     pu = [nm for nm, g in zip(names, ROOF_PUPPETS) if g]
-    mq = [nm for nm, g in zip(names, ROOF_PUPPETS) if not g]
+    mq = [nm for nm, g in zip(names, ROOF_PUPPETS) if not g and nm != '座る B']
     return ('。人物は仮: ' + (f'2D 立ち絵 + 分解の板(puppet)= {"・".join(pu)}' if pu else '') + ('、' if pu and mq else '') + (f'マネキン = {"・".join(mq)}' if mq else '')
-            + '(puppet は板なので、回りこみ・腕のポーズは出せない)')
+            + '、座る B = 新しく生成した座り姿の絵の板(v4:roof/B_sit.png)(puppet・絵は板なので、回りこみは出せない)')
 
 
 def _cam_yaw(x, z):
@@ -242,6 +245,13 @@ def roof_figures(n, ctx=None):
         m = F[i]
         px, py, pz = m['position']
         F[i] = board(ctx, g, (px, py, pz), m['body']['height'], yaw=_cam_yaw(px, pz) if i == 0 else 0)
+    a = ctx.asset(B_SIT_KEY)
+    if a and PEOPLE != 'mannequin':      # v4: 座る B = 新しく生成した座り姿の絵(槍つき。仮・ユーザー未確認)の板。高さ 200・下端はベンチの下の床
+        h = 200
+        w = h * a['w'] / a['h']
+        px, py, pz = F[8]['position']
+        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px + 20, -26 - h / 2, pz - 70], 'B_sit': True,
+                'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'asset_id': a['asset_id']}}}
     return F
 
 
@@ -250,7 +260,7 @@ def _roof_mannequins(n):
     wave = {'k': [dict(f=f, v=round(48 + 14 * math.sin(2 * math.pi * f / 44), 2)) for f in range(0, n + 8, 8)]}
     F = [
         # 1 人目: 金網の前で街を見ている後ろ姿(緑のパーカー・右手を腰)。完成版 3475〜3550
-        kyoko((15, 0, 420), *HOOD, pose={**_HIP_R, 'shoulder_l': [0, 0, 14], 'elbow_l': 10, 'hip_l': [0, 0, 6], 'hip_r': [0, 0, 6]}, rot=180, h=165, n=n, seed=0),
+        kyoko((15, 0, 1320), *HOOD, pose={**_HIP_R, 'shoulder_l': [0, 0, 14], 'elbow_l': 10, 'hip_l': [0, 0, 6], 'hip_r': [0, 0, 6]}, rot=180, h=176, n=n, seed=0),
         # 後半の並び(完成版 3565〜3633)。左から: 黒のロングワンピース(右手でピース)/ 白のセーター + スカート(両手を広げる)/ 白のワンピース / 緑のパーカー(手を腰)/ 赤のワンピース(手を胸)/ 黒のシスター服(片足を上げて駆ける)/ 水着(左手を振る)
         kyoko((-715, 0, -1119), {'top': '#2a262c', 'bottom': '#2a262c', 'skirt': '#3a3a34', 'shoes': '#2a2228'}, {'sleeves': 0.3, 'pants': 0.05, 'skirt': 1.75, 'skirt_flare': 0.7},
               pose={'shoulder_r': [12, -80, 48], 'elbow_r': 118, 'hand_r': 'peace', 'shoulder_l': [0, 0, 20]}, rot=-12, n=n, seed=1),
@@ -284,23 +294,25 @@ def roof_parts(n, parts, figures=False, ctx=None):
     if 'city' in P:
         O.append(plane((300000, 300000), (0, 2500, 60000), '#5a4353', rot=(90, 0, 0)))
         for i, (cnt, sz, col, seed) in enumerate(((260, (1500, 380, 1500), '#a9a9a6', 5), (200, (900, 600, 900), '#8f9090', 6), (90, (2600, 300, 1800), '#c9c8c2', 7))):
-            O.append({'geometry': 'box', 'size': list(sz), 'position': [0, 2500 - sz[1] / 2, 42000], 'material': mat(col),
-                      'instances': {'count': cnt, 'seed': seed, 'layout': 'box', 'area': [110000, 0, 56000], 'scale': [0.5, 1.4]}})
-    if 'sc1' in P:    # 手前の白い棟(金網ごしに見える台形)
-        O.append(box((700, 1000, 2200), (-1250, 2000, 3300), '#e6e4dc'))
-        O.append(box((520, 1100, 1500), (-380, 1950, 3600), '#efeee8'))
+            O.append({'geometry': 'box', 'size': list(sz), 'position': [0, 2500 - sz[1] / 2, 47000], 'material': mat(col),
+                      'instances': {'count': cnt, 'seed': seed, 'layout': 'box', 'area': [130000, 0, 54000], 'scale': [0.5, 1.4]}})
+    # v4: 金網ごしの棟は屋上より 3m 低い細長い屋根が奥へのびる形(完成版 3465 の白い台形)。前は 20m 下にあって画面の外だった
+    if 'sc1' in P:
+        O.append(box((200, 1500, 1100), (-1150, 1050, 2720), '#e6e4dc'))
+        O.append(box((200, 1500, 1100), (-620, 1050, 2720), '#efeee8'))
     if 'sc2' in P:
-        O.append(box((560, 1000, 1700), (330, 2000, 3500), '#e2e0d8'))
-        O.append(box((420, 900, 420), (-760, 2050, 2500), '#d8b860', material=mat('#d8b860', wireframe=True)))
+        O.append(box((210, 1500, 1000), (-290, 1050, 2800), '#e2e0d8'))
+        O.append(box((340, 1400, 300), (-200, 1150, 2330), '#dcdad2'))
     if 'sc3' in P:    # 右の木組みの足場
-        for k in range(5):
-            O.append(box((700, 500, 380), (1250 + k * 30, 2250 - k * 20, 2500 + k * 420), '#d9b45c', material=mat('#d9b45c', wireframe=True)))
-        O.append(box((760, 30, 2200), (1300, 1960, 3300), '#e8dcc0'))
+        for k in range(6):
+            O.append(box((300, 420, 240), (560 + k * 120, 510, 2230 + k * 215), '#d9b45c', material=mat('#d9b45c', wireframe=True)))
+        O.append(box((330, 20, 1300), (860, 300, 2760), '#e8dcc0', rot=(0, -29, 0)))
     if 'fence' in P:
-        O.append(plane((3200, 300), (0, -150, 1500), '#ffffff', tname='net', repeat=(150, 14), type='basic', transparent=True))
-        O.append({'geometry': 'box', 'size': [14, 310, 14], 'position': [0, -155, 1500], 'material': mat('#33463a'),
-                  'instances': {'count': 17, 'layout': 'grid', 'grid': [17, 1, 1], 'spacing': [200, 0, 0]}})
-        O.append(box((3200, 10, 10), (0, -300, 1500), '#33463a'))
+        # v4: 金網は高さ 154・柱は 40 おき・網目は 8(完成版 3465: 金網の高さ 175px に柱の間 45px・網目 9px)
+        O.append(plane((3200, 154), (0, -77, 1500), '#ffffff', tname='net', repeat=(400, 19), type='basic', transparent=True))
+        O.append({'geometry': 'box', 'size': [3.2, 158, 3.2], 'position': [0, -79, 1500], 'material': mat('#33463a'),
+                  'instances': {'count': 81, 'layout': 'grid', 'grid': [81, 1, 1], 'spacing': [40, 0, 0]}})
+        O.append(box((3200, 3.5, 3.5), (0, -154, 1500), '#33463a'))
     if 'stand' in P:  # 高台: 床・細い柵・ベンチ・塔屋(戸口が光る)
         O.append(plane((3200, 1200), (0, -2, -900), '#77705c', rot=(90, 0, 0), type='basic'))                 # 後半に映る側の床は日かげ(暗い)
         O.append(box((3600, 2800, 1300), (0, 1340, -2150), '#c9c2ae', material=mat('#ffffff', 'floor', (8, 4))))
@@ -313,8 +325,11 @@ def roof_parts(n, parts, figures=False, ctx=None):
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
     if figures:
-        O.extend(roof_figures(n, ctx))                                                                                # 人物 = 仮: マネキン
-        O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                              # 槍
+        F = roof_figures(n, ctx)
+        sit_pic = bool(F[8].pop('B_sit', False))
+        O.extend(F)
+        if not sit_pic:
+            O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                          # 槍(座り姿の絵には槍が描いてある)
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
     return [cam(n, ROOF_CAM['zoom'], ROOF_CAM['pos'], ROOF_CAM['tgt']), mesh('stage', n, O, light=lt)]
 
@@ -360,6 +375,7 @@ COR_BOARDS = [(-200, 0, 700, 270), (230, 0, 720, 260), (-60, 0, 900, 250), (110,
 
 def corridor_boards(ctx):
     pics = [v for v in (ctx.asset(k) for k in COR_PICS) if v] if ctx is not None else []
+    spear = [v for v in (ctx.asset(f'v4:corridor/{i:02d}.png') for i in range(1, 13)) if v] if ctx is not None else []      # v4: 槍を持つ魔法少女服の杏子 12 種(GEN_A。仮・ユーザー未確認)
     O = []
     for i, (x, lift, z, h) in enumerate(COR_BOARDS):
         if not pics:                                   # 絵がまだ無いとき(36 など)は影絵の板のまま
@@ -367,6 +383,10 @@ def corridor_boards(ctx):
             continue
         mg = [v for v in pics if v.get('asset_id') and v is pics[-1]] if len(pics) == len(COR_PICS) else []      # 魔法少女服の立ち絵(静止画素材/3.png)
         a = mg[0] if mg and i % 2 == 0 else pics[(i * 5 + i // 3) % max(1, len(pics) - (1 if mg else 0))]      # 半分は魔法少女服、残りはほかの衣装の立ち絵
+        if len(spear) >= 6:                            # 完成版 4020〜4080 は全員が槍を持つ魔法少女服 → 槍の絵だけを順に(12 枚目 = 逆立ちの絵は浮いた板にだけ)
+            a = spear[(i * 5) % len(spear)]
+            if a is spear[-1] and len(spear) == 12 and lift == 0:
+                a = spear[(i * 5 + 1) % 11]
         h = h * 1.25
         w = h * a['w'] / a['h']
         O.append({'geometry': 'plane', 'size': [w, h], 'position': [x, 198 - lift - h / 2, z], 'scale': [-1 if (i % 2) == (1 if x < 0 else 0) else 1, 1, 1],
