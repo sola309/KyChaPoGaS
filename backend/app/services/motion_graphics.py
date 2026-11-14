@@ -55,6 +55,7 @@ async def render_html_to_video(
     inject_data: dict | None = None,
     capture: str = "page",       # "page" (DOM screenshot) | "canvas" (WebGL toDataURL)
     progress_cb=None,
+    workers: int | None = None,  # 並列数の上書き(重いページでメモリを食うとき絞る)。None = MG_RENDER_WORKERS
 ) -> Path:
     """Render an HTML animation to a video file. Returns `out`.
 
@@ -89,7 +90,8 @@ async def render_html_to_video(
     # (The old single-page → stdin pipe was strictly serial and the render bottleneck.)
     # MG_RENDER_WORKERS: 重いページ(scene3dのGLB同梱等)でワーカーブラウザが
     # メモリ落ちする場合に絞る
-    workers = max(1, min(int(os.getenv("MG_RENDER_WORKERS", "8")),
+    workers = max(1, min(workers or int(os.getenv("MG_RENDER_WORKERS", "8")),
+                         int(os.getenv("MG_RENDER_WORKERS", "8")),
                          (os.cpu_count() or 4) - 1))
     if n_frames < 2 * workers:
         workers = 1

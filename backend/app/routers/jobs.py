@@ -200,7 +200,7 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
 # 取り消しても ComfyUI を止めないジョブ(ComfyUI を使わず CPU だけで動く)。
 # ComfyUI の /interrupt は相手を選ばず「いま ComfyUI で実行中のプロンプト」を止めるので、
 # これらを取り消すと、別レーンで走っている GPU ジョブ(H3 など)が巻き添えで止まる。
-_NO_COMFYUI_JOB_TYPES = frozenset({"render_rain_layer"})   # 🌧 雨フィルターの層(app/services/rain_fx.py)
+_NO_COMFYUI_JOB_TYPES = frozenset({"render_rain_layer", "render_comp"})   # 🌧 雨フィルターの層(app/services/rain_fx.py)
 
 
 def _interrupt_comfyui() -> None:

@@ -19,7 +19,7 @@ import imageio_ffmpeg
 from sqlmodel import Session, select
 
 from app.db.database import engine
-from app.models import Asset, Clip
+from app.models import Asset, Clip, Job
 from app.models.composition import Composition
 
 log = logging.getLogger("comp_render")
@@ -166,20 +166,54 @@ def engine_file(path: str) -> Path | None:
 # ── 入れ子・参照 ──────────────────────────────────────────────────────────────
 
 def child_comp_ids(data: dict) -> set[int]:
-    """文書が中で使っているコンポジション(comp レイヤーと、効果 overlay_source の comp_id)。"""
-    out = set()
-    for ly in data.get("layers") or []:
-        if not isinstance(ly, dict):
-            continue
-        if ly.get("type") == "comp":
-            cid = (ly.get("source") or {}).get("comp_id")
-            if isinstance(cid, int):
+    """文書が中で使っているコンポジション(comp レイヤー、効果 overlay_source、mesh のテクスチャなど、
+    レイヤーの中のどこかにある comp_id をすべて拾う)。"""
+    out: set[int] = set()
+
+    def walk(v):
+        if isinstance(v, dict):
+            cid = v.get("comp_id")
+            if isinstance(cid, int) and not isinstance(cid, bool):
                 out.add(cid)
-        for fx in ly.get("effects") or []:
-            cid = (fx.get("params") or {}).get("comp_id") if isinstance(fx, dict) else None
-            if isinstance(cid, int):
-                out.add(cid)
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+
+    walk(data.get("layers") or [])
     return out
+
+
+def _deep_layer_count(comp_id: int, session: Session, seen: set[int] | None = None) -> int:
+    """入れ子の中まで数えたレイヤーの数(描き出しの重さの目安)。"""
+    seen = seen if seen is not None else set()
+    if comp_id in seen:
+        return 0
+    seen.add(comp_id)
+    c = session.get(Composition, comp_id)
+    if not c:
+        return 0
+    try:
+        data = json.loads(c.data_json or "{}")
+    except Exception:
+        return 0
+    n = len(data.get("layers") or [])
+    for cid in child_comp_ids(data):
+        n += _deep_layer_count(cid, session, seen)
+    return n
+
+
+def render_workers(comp_id: int, session: Session) -> int:
+    """描き出しの並列数。入れ子の深い重い comp は 1 本あたり 5〜10GB 使うので(さくら全編で空き 11GB まで
+    落ちた、2026-11-14)、空きメモリ 40GB を残す範囲に絞る。"""
+    layers = _deep_layer_count(comp_id, session)
+    per_gb = 1.5 if layers < 60 else 4.0 if layers < 250 else 9.0
+    try:
+        avail_gb = next(int(l.split()[1]) for l in open("/proc/meminfo") if l.startswith("MemAvailable")) / 1048576
+    except Exception:
+        avail_gb = 48.0
+    return max(1, min(8, int((avail_gb - 40.0) / per_gb)))
 
 
 def is_stale_deep(c: Composition, session: Session) -> bool:
@@ -300,17 +334,28 @@ async def render_comp(comp_id: int, job_id: int, progress_cb=None, frames: tuple
             raise ValueError(f"コンポジション {comp_id} がありません")
         comp = comp_dict(c)
         key = content_key(comp_id, s)
+        workers = render_workers(comp_id, s)
     transparent = not comp["data"].get("bg")
     dest = GENERATED_DIR / str(comp["project_id"])
     dest.mkdir(parents=True, exist_ok=True)
     out = dest / (f"comp{comp_id}_r{comp['rev']}_{job_id}." + ("mov" if transparent else "mp4"))
     html = player_html(comp, "capture", API_BASE)
+
+    def _progress(p: float) -> None:
+        # 取り消されたら撮るのをやめる(例外で抜けるとワーカーのブラウザも閉じる)
+        with Session(engine) as s2:
+            j = s2.get(Job, job_id)
+            if j is not None and j.status == "cancelled":
+                raise RuntimeError("取り消されました")
+        if progress_cb:
+            progress_cb(0.9 * p)
+
     await render_html_to_video(
         html, out,
         duration_sec=comp["duration_frames"] / comp["fps"],
         fps=comp["fps"], width=comp["width"], height=comp["height"],
         transparent=transparent, capture="canvas",
-        progress_cb=(lambda p: progress_cb(0.9 * p)) if progress_cb else None,
+        progress_cb=_progress, workers=workers,
     )
     info = probe(out)
     gp = {"comp_id": comp_id, "rev": comp["rev"], "content_key": key, "job_id": job_id,
