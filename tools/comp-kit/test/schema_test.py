@@ -181,6 +181,14 @@ def fx_fixtures(mask_url, ov_url):
         "trace_outline": {"per": {"start": {"ctx": {"progress": 50}, "value": 30}, "dash_period": {"ctx": {"dash_gap": 5}, "value": 20}, "dash_gap": {"ctx": {"dash_period": 20}, "value": 10}}},
         "halftone": {"per": {"self_mask": {"ctx": {"bg": "#ffffff"}}}},
         "mirror": {"per": {"cy": {"ctx": {"angle": 30}}}},
+        "polar": {"per": {"clamp": {"ctx": {"scale": 50}}, "center_width": {"value": 30}}},
+        "rough_edges": {"per": {"softness": {"value": 40}}},
+        "block_noise": {"base": {"count": [12, 12], "width": [40, 80], "height": [20, 40]}, "per": {"count": {"value": [30, 30]}, "width": {"value": [90, 120]}, "height": {"value": [60, 80]},
+                                  "shift_x": {"value": [40, 60]}, "shift_y": {"value": [40, 60]}, "speed": {"value": 7}, "amount": {"value": 30}}},
+        "lens_flare": {"base": {"radius": 30, "streak_length": 120}, "per": {"spin": {"value": 200}, "flicker": {"value": 80}, "ring": {"value": 100}, "rays": {"value": 3}}},
+        "refract": {"base": {"radius": 60}, "per": {"radius": {"value": 40}, "radius_y": {"value": 30}, "aberration": {"value": 30}, "highlight": {"value": 100}, "shade": {"value": 80},
+                              "size": {"ctx": {"kind": "frost", "amount": 12}, "value": 30}, "seed": {"ctx": {"kind": "frost", "amount": 12}, "value": 9}, "tint": {"ctx": {"tint_amount": 60}}, "tint_amount": {"value": 60}}},
+        "inner_shadow": {"per": {"x": {"value": 14}, "y": {"value": 14}}},
         "glow": {"base": {"threshold": 20}},
         "wave": {"per": {"speed": {"value": 2.3}}},
         "raster": {"per": {"speed": {"value": 2.3}}},
@@ -229,6 +237,12 @@ SRC_BASE["mesh"] = {"light": {"shadows": True, "shadow_area": 600}, "objects": [
     {"geometry": "sphere", "radius": 45, "position": [-60, -10, 0], "material": {"color": "#d4af37", "metalness": 1, "roughness": 0.2}},
     {"geometry": "box", "size": [60, 60, 60], "position": [60, -10, 0], "rotation": [20, 30, 0], "material": {"color": "#4f9dff"}},
     {"geometry": "plane", "size": [400, 300], "position": [0, 40, 0], "rotation": [80, 0, 0], "material": {"color": "#cccccc"}}]}
+# puppet: 本番の既存のパペット(kyoko_flat = 全身 / kyoko_portrait = 描き差分つき)の顔のまわりを crop で映して、項目を 1 つずつ動かす
+SRC_BASE["puppet"] = {"puppet_id": "kyoko_flat", "crop": [483, 90, 803, 270]}
+_PP = {"puppet_id": "kyoko_portrait", "crop": [501, 480, 821, 660]}
+SRC_CTX["puppet"] = {"puppet_id": {"_value": "kyoko_portrait"}, "crop": {"_value": [400, 60, 720, 240]}, "hide": {"_value": ["front hair"]},
+    "auto_blink": {"blink_interval": 0.4, "blink_seed": 1}, "blink_interval": {"auto_blink": True, "blink_interval": 0.4, "_value": 9}, "blink_seed": {"auto_blink": True, "blink_interval": 0.4, "_value": 2},
+    "vowel": {**_PP, "mouth": 0.9, "_value": "i"}, "head_tilt": {"_value": 8}, "body_lean": {"_value": 5}, "sway_seed": {"_value": 7}, "sway_lag": {"head_turn": {"k": [{"f": 14, "v": -1}, {"f": 22, "v": 1}]}, "_value": 0.4}}
 SRC_CTX["mesh"] = {"light.direction": {"_value": [0.8, -1, -0.3]}}
 
 # mesh の objects の 1 件の項目: 土台の箱(MESH_OBJ)に前提を重ねてから、その項目を動かす。どの項目も、絵が変わらなければ NG
@@ -245,6 +259,7 @@ def _in(_value=None, **inst):
     if _value is not None: d["_value"] = _value
     return d
 def _path(pd, **kw): return {"geometry": "tube", "tube": 5, "path": pd, **kw}
+def _mq(**kw): return {"geometry": "mannequin", "position": [0, 78, 0], "rotation": [0, 25, 0], "body": {"height": 150}, "hair": {"style": "ponytail"}, "colors": {"top": "#d08040"}, **kw}  # マネキン(足もとが原点)
 def _mat(**kw): return {"material": {"color": "#d08040", "roughness": 0.4, **kw}}
 def mesh_ctx(tex_a, tex_b):
     """tex_a = 透明な所のある絵、tex_b = 別の絵(どちらも data URL)"""
@@ -269,6 +284,7 @@ def mesh_ctx(tex_a, tex_b):
         "path.axis": _path(_HELIX, _value="x"), "path.start": _path(_HELIX), "path.arc": _path({"type": "circle", "radius": 50}, _value=200),
         "path.from": _path({"type": "line"}, _value=[-60, 30, 0]), "path.to": _path({"type": "line"}, _value=[60, 30, 0]),
         "path.points": _path(_PTS, _value=[[-60, 0, 0], [0, 40, 0], [60, 0, 0]]), "path.closed": _path(_PTS), "path.curve": _path(_PTS, _value="linear"), "path.tension": _path(_PTS, _value=0),
+        "path.up": {"geometry": "extrude", "shape": "rect", "size": [34, 3], "segments": 160, "path": {"type": "helix", "radius": 45, "turns": 2, "height": 110}, "_value": [0, -1, 0]},
         "count": _sh(_value=60), "seed": _sh(), "cut": _sh(_value="triangles"), "jitter": _sh(_value=0), "progress": _sh(_value=0.8), "stagger": _sh(_value="left_to_right"), "stagger_amount": _sh(stagger="left_to_right", _value=0.1),
         "direction": _sh(_value=[30, 10, 0]), "spread": _sh(_value=90), "spread_z": _sh(_value=300), "origin": _sh(_value=[60, 30]), "spin": _sh(_value=20), "gravity": _sh(_value=[0, 40, 0]), "scale_end": _sh(_value=0.3), "fade": _sh(_value=0.8),
         "material.type": {"_value": "basic"}, "material.color": {}, "material.opacity": {"_value": 0.5}, "material.metalness": {"_value": 1}, "material.roughness": {**_mat(metalness=1), "_value": 0.05},
@@ -287,13 +303,23 @@ def mesh_ctx(tex_a, tex_b):
         "instances.lifetime": _in(0.4, emit_duration=0.5), "instances.lifetime_random": _in(0.9, lifetime=1), "instances.loop": _in(lifetime=1, velocity=[100, 0, 0]), "instances.prewarm": _in(lifetime=1, loop=True),
         "instances.emit_duration": _in(0.9, velocity=[100, 0, 0]), "instances.colors": _in(["#102030", "#f0c812", "#ff00aa"]), "instances.fade_in": _in(2), "instances.fade_out": _in(0.8, lifetime=1),
         "instances.fade_mode": _in("scale", fade_in=2), "instances.time_offset": _in(1, velocity=[60, 20, 0]),
+        # マネキン(関節つきの人形)
+        "style": _mq(_value="stick"), "face": _mq(), "self_light": _mq(_value=1.5), "preset": _mq(_value="wave"), "phase": _mq(preset="walk", _value=0.3),
+        "preset_b": _mq(preset_mix=1, _value="cheer"), "phase_b": _mq(preset_b="walk", preset_mix=1, _value=0.3), "preset_mix": _mq(preset_b="cheer", _value=1),
+        "pose": _mq(_value={"shoulder_l": [0, 0, 90], "head": [0, 40, 0]}), "ground": _mq(pose={"offset": [0, -0.2, 0]}, _value=True),
+        "body.height": _mq(_value=100), "body.heads": _mq(_value=4), "body.thickness": _mq(_value=1.7), "body.shoulder": _mq(_value=1.6), "body.hip": _mq(_value=1.7), "body.arm_length": _mq(_value=1.5), "body.leg_length": _mq(_value=0.6),
+        "colors.skin": _mq(), "colors.top": _mq(), "colors.bottom": _mq(), "colors.hair": _mq(), "colors.shoes": _mq(), "colors.ribbon": _mq(), "colors.eyes": _mq(),
+        "colors.skirt": _mq(outfit={"skirt": 0.8}), "colors.sleeves": _mq(), "colors.pants": _mq(), "colors.socks": _mq(outfit={"socks": 1}),
+        "outfit.sleeves": _mq(_value=0.3), "outfit.pants": _mq(_value=0.8), "outfit.skirt": _mq(_value=0.8), "outfit.skirt_flare": _mq(outfit={"skirt": 0.8}, _value=2), "outfit.socks": _mq(_value=1), "outfit.boots": _mq(_value=0.8),
+        "hair.style": _mq(_value="none"), "hair.length": _mq(_value=0.8), "hair.thickness": _mq(_value=2), "hair.bangs": _mq(), "hair.ribbon": _mq(),
+        "outline.width": _mq(outline={"width": 2}, _value=8), "outline.color": _mq(outline={"width": 4}),
         "cast_shadow": {"position": [0, -20, 0], "_extra": [floor], "_source": {"light": {"shadows": True, "shadow_area": 500}}},
         "receive_shadow": {**floor, "_extra": [{"geometry": "sphere", "radius": 30, "position": [0, -30, 0]}], "_source": {"light": {"shadows": True, "shadow_area": 500}}},
         "render_order": {"geometry": "plane", "size": [120, 90], "rotation": [0, 0, 0], "material": {"color": "#ff2020", "opacity": 0.5}, "_value": 5,
                          "_extra": [{"geometry": "plane", "size": [90, 120], "position": [20, 0, -30], "material": {"color": "#2040ff", "opacity": 0.5}}]},
     }
     # 複製の道(instances.path.*)は、オブジェクトの path.* と同じ前提を複製の along に移して確かめる
-    for k in [k for k in ctx if k.startswith("path.")]:
+    for k in [k for k in ctx if k.startswith("path.") and k != "path.up"]:      # path.up は押し出しの道だけ(複製には無い)
         c = ctx[k]
         ctx["instances." + k] = {"geometry": "box", "size": [12, 8, 20], "rotation": [25, 35, 0], "instances": {"count": 30, "layout": "along", "path": c["path"]}, **({"_value": c["_value"]} if "_value" in c else {})}
     return ctx

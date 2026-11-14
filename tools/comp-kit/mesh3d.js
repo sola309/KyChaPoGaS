@@ -48,6 +48,24 @@ class FnCurve extends THREE.Curve {
   constructor(fn, div = 200) { super(); this.fn = fn; this.arcLengthDivisions = div }
   getPoint(t, target = new THREE.Vector3()) { return this.fn(t, target) }
 }
+// path.up(押し出しの道だけ): 断面の向きを固定する。断面の縦(y)= up の向き、横(x)= 道と up に直角(らせんで up = 軸なら、横は半径の向き = ねじれない帯)。
+// 無ければ three.js の既定(平行移動の枠。らせんでは巻くごとに少しずつねじれる)
+function fixedPathFrames(curve, up) {
+  const u = v3(up), U = new THREE.Vector3(u[0], -u[1], -u[2])
+  if (U.lengthSq() < 1e-12) return
+  U.normalize()
+  curve.computeFrenetFrames = function (segments) {
+    const tangents = [], normals = [], binormals = []
+    for (let i = 0; i <= segments; i++) {
+      const t = this.getTangentAt(i / segments, new THREE.Vector3()).normalize()
+      const n = new THREE.Vector3().crossVectors(U, t)
+      if (n.lengthSq() < 1e-10) n.copy(i ? normals[i - 1] : new THREE.Vector3(1, 0, 0))
+      n.normalize()
+      tangents.push(t); normals.push(n); binormals.push(new THREE.Vector3().crossVectors(t, n).normalize())
+    }
+    return { tangents, normals, binormals }
+  }
+}
 // path: {type: helix|circle|line|points, ...}。座標は文書の決まり(y 下・z 奥)で書き、ここで three.js の座標に直す
 function makeCurve(p) {
   p = isObj(p) ? p : {}
@@ -314,6 +332,7 @@ function extrudeGeo(shapes, p) {
   if (isObj(p.path) && p.geometry === 'extrude') {
     // 断面を道に沿って伸ばす(レール・帯)。面取りは付かない
     const curve = makeCurve(p.path)
+    if (Array.isArray(p.path.up)) fixedPathFrames(curve, p.path.up)
     geo = new THREE.ExtrudeGeometry(shapes, { steps: Math.max(2, Math.round(num(Array.isArray(p.segments) ? p.segments[0] : p.segments, 200))), bevelEnabled: false, extrudePath: curve, curveSegments: 8 })
     creaseNormals(geo, num(p.smooth_angle, 40))
     return geo
@@ -623,6 +642,290 @@ function buildEnv(renderer, d) {
   return rt
 }
 
+// ---- マネキン(関節つきの人形)--------------------------------------------
+// geometry: 'mannequin' は、関節の階層(腰 → 背 → 胸 → 首 → 頭、肩 → ひじ → 手首、股 → ひざ → 足首、ポニーテール 3 節)から
+// 部品(球・円柱)の行列を求め、「まとめ(group)」の子として並べる。部品の形は単位の球・円柱の使い回しで、大きさは行列に入れる。
+// 人形の中の座標は three.js の向き(y 上・z 手前 = 顔の向き・x 正 = 本人の左 = 正面向きのとき画面の右)。原点 = 両足の間の地面。
+// 角度(度)の決まり:
+//   体の軸(root・spine・chest・neck・head)= [前へ倒す, 向きを変える(オブジェクトの rotation の y と同じ向き), 横へ傾ける(画面で時計回り)]
+//   腕・脚の付け根(shoulder・hip)= [前へ上げる, 内へひねる, 外へ開く]   ひじ(elbow)= [曲げる, 前腕を内へひねる]   ひざ(knee)= 曲げる
+//   手首(wrist)= [前へ曲げる, 内へひねる, 外へ]   足首(ankle)= [つま先を下げる, 内へ向ける]   ポニーテール(pony_1〜3)= [後ろへ振る, 横へ振る(x 正の側)]
+const MQ_SPH = { geometry: 'sphere', radius: 1, segments: [20, 14] }
+const mqCyl = (ratio) => ({ geometry: 'cylinder', radius_top: 1, radius_bottom: Math.round(clamp(ratio, 0, 4) * 20) / 20, height: 1, segments: 16 })
+const MQ_TORSO = new Set(['root', 'spine', 'chest', 'neck', 'head'])
+const MQ_JOINTS = ['root', 'spine', 'chest', 'neck', 'head', 'shoulder_l', 'shoulder_r', 'elbow_l', 'elbow_r', 'wrist_l', 'wrist_r', 'hip_l', 'hip_r', 'knee_l', 'knee_r', 'ankle_l', 'ankle_r', 'pony_1', 'pony_2', 'pony_3']
+export const MANNEQUIN_PRESETS = ['stand', 'a_pose', 't_pose', 'idle', 'walk', 'run', 'wave', 'sit', 'hand_on_hip', 'peace', 'lean_forward', 'cheer']
+// プリセット → {関節: [a, b, c], offset: [x, y, z](身長に対する割合・y 下), hand_l / hand_r, ground}。ph = 位相(0〜1 で 1 周)
+function mqPreset(name, ph, d) {
+  const th = ph * Math.PI * 2, s = Math.sin(th), c = Math.cos(th)
+  const P = { shoulder_l: [0, 0, 6], shoulder_r: [0, 0, 6], elbow_l: [8, 0, 0], elbow_r: [8, 0, 0] }
+  switch (name) {
+    case 'a_pose': P.shoulder_l = [0, 0, 35]; P.shoulder_r = [0, 0, 35]; P.elbow_l = [0, 0, 0]; P.elbow_r = [0, 0, 0]; break
+    case 't_pose': P.shoulder_l = [0, 0, 90]; P.shoulder_r = [0, 0, 90]; P.elbow_l = [0, 0, 0]; P.elbow_r = [0, 0, 0]; break
+    case 'idle':
+      P.root = [0, 0, 0.8 * s]; P.chest = [1.2 * s, 0, -0.8 * s]; P.head = [0, 0, 1.5 * s]
+      P.shoulder_l = [0, 0, 8 + s]; P.shoulder_r = [0, 0, 8 - s]; P.elbow_l = [10, 0, 0]; P.elbow_r = [10, 0, 0]
+      P.pony_1 = [2 * c, 3 * s, 0]; P.pony_2 = [0, 2 * Math.sin(th - 0.8), 0]
+      break
+    case 'walk': case 'run': {
+      const k = name === 'run' ? 1 : 0
+      const hipA = 26 + 18 * k, knA = 48 + 42 * k, armA = 20 + 22 * k
+      P.root = [3 + 9 * k, -5 * s, 0]; P.chest = [2 * k, 9 * s, 0]; P.head = [-4 * k, -4 * s, 0]
+      P.hip_l = [hipA * s + 8 * k, 0, 2]; P.hip_r = [-hipA * s + 8 * k, 0, 2]
+      P.knee_l = [4 + 14 * k + knA * Math.max(0, c), 0, 0]; P.knee_r = [4 + 14 * k + knA * Math.max(0, -c), 0, 0]
+      P.ankle_l = [-6 * s, 0, 0]; P.ankle_r = [6 * s, 0, 0]
+      P.shoulder_l = [-armA * s, 0, 7]; P.shoulder_r = [armA * s, 0, 7]
+      P.elbow_l = [15 + 65 * k + 10 * Math.max(0, -s), 0, 0]; P.elbow_r = [15 + 65 * k + 10 * Math.max(0, s), 0, 0]
+      P.pony_1 = [6 + 14 * k + 5 * Math.sin(2 * th), 6 * s, 0]; P.pony_2 = [4 * Math.sin(2 * th - 1), 5 * Math.sin(th - 0.8), 0]; P.pony_3 = [4 * Math.sin(2 * th - 2), 5 * Math.sin(th - 1.6), 0]
+      P.ground = true
+      break
+    }
+    case 'wave':
+      P.shoulder_r = [0, -90, 84]; P.elbow_r = [82 + 26 * s, 0, 0]; P.hand_r = 'open'; P.head = [0, 0, -4]
+      break
+    case 'sit':
+      P.hip_l = [88, 0, 4]; P.hip_r = [88, 0, 4]; P.knee_l = [88, 0, 0]; P.knee_r = [88, 0, 0]
+      P.shoulder_l = [28, 10, 6]; P.shoulder_r = [28, 10, 6]; P.elbow_l = [55, 0, 0]; P.elbow_r = [55, 0, 0]
+      P.offset = [0, d.thigh / d.H, 0]
+      break
+    case 'hand_on_hip':
+      P.shoulder_r = [-22, 62, 46]; P.elbow_r = [98, 0, 0]; P.hand_r = 'fist'; P.root = [0, 0, 2.5]; P.chest = [0, 0, -2.5]
+      break
+    case 'peace':
+      P.shoulder_r = [25, -75, 62]; P.elbow_r = [128, 0, 0]; P.wrist_r = [0, 0, 0]; P.hand_r = 'peace'; P.head = [0, 0, -7]
+      P.shoulder_l = [-22, 62, 46]; P.elbow_l = [98, 0, 0]; P.hand_l = 'fist'
+      break
+    case 'lean_forward':
+      P.root = [14, 0, 0]; P.spine = [16, 0, 0]; P.chest = [10, 0, 0]; P.neck = [-14, 0, 0]; P.head = [-18, 0, 0]
+      P.hip_l = [14, 0, 2]; P.hip_r = [14, 0, 2]
+      P.shoulder_l = [-48, 30, 10]; P.shoulder_r = [-48, 30, 10]; P.elbow_l = [25, 0, 0]; P.elbow_r = [25, 0, 0]
+      P.pony_1 = [-20, 0, 0]
+      break
+    case 'cheer':
+      P.shoulder_l = [0, -90, 152]; P.shoulder_r = [0, -90, 152]; P.elbow_l = [22, 0, 0]; P.elbow_r = [22, 0, 0]; P.hand_l = 'open'; P.hand_r = 'open'; P.head = [-8, 0, 0]
+      break
+  }
+  return P
+}
+const mqA3 = (v, base) => (Array.isArray(v) ? [0, 1, 2].map((i) => (typeof v[i] === 'number' ? v[i] : base[i])) : typeof v === 'number' ? [v, base[1], base[2]] : base)
+// 姿勢を決める: preset(+ preset_b を preset_mix で混ぜる)に pose を重ねる
+function mqPose(e, d) {
+  const ph = num(e.phase, 0)
+  const A = mqPreset(typeof e.preset === 'string' ? e.preset : 'stand', ph, d)
+  const mix = clamp(num(e.preset_mix, 0), 0, 1)
+  const Bp = typeof e.preset_b === 'string' && mix > 0 ? mqPreset(e.preset_b, num(e.phase_b, ph), d) : null
+  const Z = [0, 0, 0], out = {}
+  for (const j of MQ_JOINTS) {
+    let a = A[j] || Z
+    if (Bp) { const b = Bp[j] || Z; a = [a[0] + (b[0] - a[0]) * mix, a[1] + (b[1] - a[1]) * mix, a[2] + (b[2] - a[2]) * mix] }
+    out[j] = a
+  }
+  let off = A.offset || Z
+  if (Bp) { const b = Bp.offset || Z; off = [off[0] + (b[0] - off[0]) * mix, off[1] + (b[1] - off[1]) * mix, off[2] + (b[2] - off[2]) * mix] }
+  const pick = (k) => (Bp && mix >= 0.5 ? Bp[k] : A[k])
+  out.offset = off; out.hand_l = pick('hand_l') || 'mitt'; out.hand_r = pick('hand_r') || 'mitt'; out.ground = !!pick('ground')
+  const p = isObj(e.pose) ? e.pose : {}
+  for (const j of MQ_JOINTS) if (p[j] !== undefined && p[j] !== null) out[j] = mqA3(p[j], out[j])
+  if (p.offset !== undefined && p.offset !== null) out.offset = mqA3(p.offset, out.offset)
+  if (typeof p.hand_l === 'string') out.hand_l = p.hand_l
+  if (typeof p.hand_r === 'string') out.hand_r = p.hand_r
+  if (e.ground !== undefined && e.ground !== null) out.ground = !!e.ground
+  return out
+}
+// 体格(px)。README の「マネキンの体格」と同じ式(check_test がこの式で手先の位置を確かめる)
+function mqDims(e) {
+  const b = isObj(e.body) ? e.body : {}
+  const H = Math.max(1, num(b.height, 600)), heads = clamp(num(b.heads, 6.5), 2, 12)
+  const th = clamp(num(b.thickness, 1), 0.05, 10), kA = clamp(num(b.arm_length, 1), 0.2, 3), kL = clamp(num(b.leg_length, 1), 0.3, 1.4)
+  const hh = H / heads, B = H - hh
+  const neck = 0.05 * B, legs = 0.59 * B * kL, torso = B - neck - legs, footH = 0.05 * B * kL
+  const thigh = (legs - footH) / 2
+  return { H, hh, B, th, neck, legs, torso, footH, thigh, shin: thigh, hipY: legs,
+    sw: 0.118 * B * clamp(num(b.shoulder, 1), 0.2, 4), hw: 0.055 * B * clamp(num(b.hip, 1), 0.2, 4),
+    U: 0.19 * B * kA, F: 0.17 * B * kA, hand: 0.09 * B * kA, ry: hh / 2, rx: hh * 0.43, rz: hh * 0.45 }
+}
+const _mqE = new THREE.Euler(), _mqM = new THREE.Matrix4(), _mqQ = new THREE.Quaternion(), _mqV = new THREE.Vector3(), _mqS = new THREE.Vector3()
+function mqQuat(name, a, rest) {
+  const x = a[0], y = a[1], z = a[2], side = name.endsWith('_l') ? 1 : -1
+  if (MQ_TORSO.has(name)) _mqE.set(x * D2R, y * D2R, -z * D2R, 'YXZ')
+  else if (name.startsWith('shoulder') || name.startsWith('hip')) _mqE.set(-x * D2R, -side * y * D2R, side * z * D2R, 'ZXY')
+  else if (name.startsWith('elbow')) _mqE.set(-x * D2R, -side * y * D2R, 0, 'YXZ')
+  else if (name.startsWith('wrist')) _mqE.set(-x * D2R, -side * y * D2R, side * z * D2R, 'ZXY')
+  else if (name.startsWith('knee')) _mqE.set(x * D2R, 0, 0, 'XYZ')
+  else if (name.startsWith('ankle')) _mqE.set(x * D2R, -side * y * D2R, 0, 'YXZ')
+  else _mqE.set((x + rest) * D2R, 0, y * D2R, 'ZXY') // ポニーテール
+  return new THREE.Quaternion().setFromEuler(_mqE)
+}
+// 関節の位置(人形の中の座標・three.js の向き)。→ {名前: Matrix4}
+function mqSkeleton(d, pose, hairLen) {
+  const T = d.torso, shY = 0.4 * T - 0.03 * d.B * d.th
+  const defs = [
+    ['root', null, 0, d.hipY, 0], ['spine', 'root', 0, 0.3 * T, 0], ['chest', 'spine', 0, 0.3 * T, 0], ['neck', 'chest', 0, 0.4 * T, 0], ['head', 'neck', 0, d.neck, 0],
+    ['shoulder_l', 'chest', d.sw, shY, 0], ['elbow_l', 'shoulder_l', 0, -d.U, 0], ['wrist_l', 'elbow_l', 0, -d.F, 0],
+    ['shoulder_r', 'chest', -d.sw, shY, 0], ['elbow_r', 'shoulder_r', 0, -d.U, 0], ['wrist_r', 'elbow_r', 0, -d.F, 0],
+    ['hip_l', 'root', d.hw, 0, 0], ['knee_l', 'hip_l', 0, -d.thigh, 0], ['ankle_l', 'knee_l', 0, -d.shin, 0],
+    ['hip_r', 'root', -d.hw, 0, 0], ['knee_r', 'hip_r', 0, -d.thigh, 0], ['ankle_r', 'knee_r', 0, -d.shin, 0],
+    ['pony_1', 'head', 0, d.ry * 1.62, -d.rz * 0.72], ['pony_2', 'pony_1', 0, -hairLen / 3, 0], ['pony_3', 'pony_2', 0, -hairLen / 3, 0],
+  ]
+  const REST = { pony_1: 42, pony_2: -26, pony_3: -12 }
+  const W = {}
+  const build = (shift) => {
+    for (const [name, parent, x, y, z] of defs) {
+      const m = new THREE.Matrix4()
+      if (!parent) _mqV.set(x + pose.offset[0] * d.H, y - pose.offset[1] * d.H + shift, z - pose.offset[2] * d.H); else _mqV.set(x, y, z)
+      m.compose(_mqV, mqQuat(name, pose[name], REST[name] || 0), _mqS.set(1, 1, 1))
+      if (parent) m.premultiply(W[parent])
+      W[name] = m
+    }
+  }
+  build(0)
+  if (pose.ground) {
+    // いちばん低い足の裏を地面(y = 0)に付ける
+    let lo = Infinity
+    for (const a of ['ankle_l', 'ankle_r']) for (const z of [-0.25, 0.75]) lo = Math.min(lo, _mqV.set(0, -d.footH, z * 0.15 * d.B).applyMatrix4(W[a]).y)
+    if (isFinite(lo) && Math.abs(lo) > 1e-6) build(-lo)
+  }
+  return W
+}
+// → まとめの子の並び(部品ごとに {geometry…, _matrix: 16 個, material})
+function buildMannequin(e) {
+  const d = mqDims(e), pose = mqPose(e, d)
+  const stick = e.style === 'stick'
+  const hair = isObj(e.hair) ? e.hair : typeof e.hair === 'string' ? { style: e.hair } : {}
+  const hairStyle = hair.style === 'ponytail' || hair.style === 'short' ? hair.style : 'none'
+  const hairLen = Math.max(1, num(hair.length, 0.42) * d.H), hairK = clamp(num(hair.thickness, 1), 0.1, 5)
+  const W = mqSkeleton(d, pose, hairLen)
+  const col = isObj(e.colors) ? e.colors : {}
+  const C = { skin: col.skin ?? '#f6d9c8', top: col.top ?? '#d8d8de', bottom: col.bottom ?? '#5a6278', hair: col.hair ?? '#b5334f', shoes: col.shoes ?? '#3a3036', ribbon: col.ribbon ?? '#1c1a1e', eyes: col.eyes ?? '#7a1f2c' }
+  C.skirt = col.skirt ?? C.bottom; C.sleeves = col.sleeves ?? C.top; C.pants = col.pants ?? C.bottom; C.socks = col.socks ?? C.shoes
+  const base = isObj(e.material) ? e.material : {}
+  const ol = isObj(e.outline) ? e.outline : typeof e.outline === 'number' ? { width: e.outline } : null
+  const olW = ol ? Math.max(0, num(ol.width, 3)) : 0, olMat = olW > 0 ? { type: 'basic', color: ol.color ?? '#2a1a20', side: 'back' } : null
+  const mats = new Map()
+  const selfLit = clamp(num(e.self_light, 0), 0, 4) // 自分で光る割合(暗い場面でも服の色が見えるように。部品の色 × この値を emissive に足す)
+  const matOf = (c) => { const k = typeof c === 'string' ? c : JSON.stringify(c); let m = mats.get(k); if (!m) mats.set(k, (m = selfLit > 0 ? { ...base, color: c, emissive: c, emissive_intensity: selfLit } : { ...base, color: c })); return m }
+  const out = []
+  const cs = e.cast_shadow, rs = e.receive_shadow
+  const ro0 = num(e.render_order, 0)
+  // 部品を 1 個置く: 関節 bone の座標で、位置 t・回転 r(度。x → z の順)・大きさ s(単位の形に掛ける)
+  const put = (bone, geo, color, t, s, r, pivot, mat) => {
+    _mqM.copy(W[bone])
+    if (pivot) _mqM.multiply(new THREE.Matrix4().makeTranslation(pivot[0], pivot[1], pivot[2]))
+    if (r) _mqM.multiply(new THREE.Matrix4().makeRotationFromEuler(_mqE.set(r[0] * D2R, (r[2] || 0) * D2R, r[1] * D2R, 'ZXY')))
+    _mqM.multiply(new THREE.Matrix4().makeTranslation(t[0], t[1], t[2]))
+    const o = { ...geo, _matrix: _mqM.clone().scale(_mqS.set(s[0], s[1], s[2])).toArray(), material: mat || matOf(color) }
+    if (cs !== undefined) o.cast_shadow = cs
+    if (rs !== undefined) o.receive_shadow = rs
+    o.render_order = ro0 + out.length * 1e-5 // 描く順を部品の番号で決めておく(重なった面の奥行きが同じとき、作った順(マテリアルの id)で絵が変わらないように)
+    out.push(o)
+    if (olMat && !mat) out.push({ ...geo, _matrix: _mqM.clone().scale(_mqS.set(s[0] + olW, s[1] + olW * (geo === MQ_SPH ? 1 : 2), s[2] + olW)).toArray(), material: olMat, cast_shadow: false, receive_shadow: false, render_order: ro0 + out.length * 1e-5 })
+  }
+  const ball = (bone, color, t, s, r, pivot) => put(bone, MQ_SPH, color, t, Array.isArray(s) ? s : [s, s, s], r, pivot)
+  // bone から -y へ伸びる筒(長さ len・太さ r0 → r1)の a〜b の区間
+  const tube = (bone, color, len, r0, r1, a = 0, b = 1, k = 1, flat = 1, r, pivot) => {
+    const ra = (r0 + (r1 - r0) * a) * k, rb = (r0 + (r1 - r0) * b) * k
+    put(bone, mqCyl(ra > 1e-6 ? rb / ra : 1), color, [0, -((a + b) / 2) * len, 0], [Math.max(ra, 1e-3), Math.max((b - a) * len, 1e-3), Math.max(ra, 1e-3) * flat], r, pivot)
+  }
+  const of = isObj(e.outfit) ? e.outfit : {}
+  const sleeve = clamp(num(of.sleeves, 1), 0, 1), pants = clamp(num(of.pants, 0.2), 0, 1), boots = clamp(num(of.boots, 0), 0, 1), socks = clamp(num(of.socks, 0), 0, 2)
+  const skirt = clamp(num(of.skirt, 0), 0, 2), flare = clamp(num(of.skirt_flare, 0.6), 0, 4)
+  const B = d.B, th = d.th
+  if (stick) {
+    const r = 0.012 * d.H * th
+    const line = (bone, color, len, rr, pv) => tube(bone, color, len, r, r, 0, 1, 1, 1, rr, pv)
+    // 胴(腰 → 背 → 胸 → 首 → 頭)は上へ伸びる = x に 180 度回した筒
+    line('root', C.bottom, 0.3 * d.torso, [180, 0]); line('spine', C.top, 0.3 * d.torso, [180, 0]); line('chest', C.top, 0.4 * d.torso, [180, 0]); line('neck', C.skin, d.neck, [180, 0])
+    const shY = 0.4 * d.torso - 0.03 * B * th
+    line('chest', C.top, d.sw * 2, [0, 90], [-d.sw, shY, 0]); line('root', C.bottom, d.hw * 2, [0, 90], [-d.hw, 0, 0])
+    for (const sd of ['l', 'r']) {
+      line('shoulder_' + sd, sleeve > 0 ? C.sleeves : C.skin, d.U); line('elbow_' + sd, sleeve > 0.55 ? C.sleeves : C.skin, d.F)
+      line('hip_' + sd, pants > 0 ? C.pants : C.skin, d.thigh); line('knee_' + sd, pants > 0.55 ? C.pants : boots > 0 ? C.shoes : C.skin, d.shin)
+      line('ankle_' + sd, C.shoes, 0.11 * B, [-90, 0], [0, -d.footH + r, -0.02 * B])
+      for (const j of ['shoulder_', 'elbow_', 'hip_', 'knee_', 'ankle_']) ball(j + sd, j === 'ankle_' ? C.shoes : j === 'shoulder_' || j === 'elbow_' ? (sleeve > 0 ? C.sleeves : C.skin) : pants > 0 ? C.pants : C.skin, [0, 0, 0], r * 1.5)
+      ball('wrist_' + sd, C.skin, [0, -r, 0], r * 2)
+    }
+    ball('head', C.skin, [0, d.ry, 0], [d.rx, d.ry, d.rz])
+  } else {
+    const rU0 = 0.03 * B * th, rU1 = 0.025 * B * th, rF1 = 0.019 * B * th
+    const rT0 = 0.058 * B * th, rT1 = 0.04 * B * th, rS1 = 0.026 * B * th
+    const waistR = 0.082 * B * th, ribR = 0.1 * B * th, hipR = (d.hw + rT0) * 1.02, shR = Math.max(ribR, d.sw - rU0 * 0.2), T = d.torso, FL = 0.68
+    // 胴
+    ball('root', C.pants, [0, 0.02 * T, 0], [hipR, 0.2 * T, hipR * 0.74])
+    tube('root', C.pants, 0.3 * T, hipR * 0.98, waistR, 0, 1, 1, FL, [180, 0], [0, -0.02 * T, 0])
+    tube('spine', C.top, 0.3 * T, waistR, ribR, 0, 1, 1.02, FL, [180, 0], [0, -0.03 * T, 0])
+    ball('spine', C.top, [0, 0, 0], [waistR * 1.02, waistR * 0.7, waistR * FL * 1.02])
+    tube('chest', C.top, 0.4 * T - rU0, ribR, shR, 0, 1, 1.02, FL, [180, 0], [0, -0.03 * T, 0])
+    ball('chest', C.top, [0, 0.4 * T - rU0 * 1.05, 0], [shR * 1.02, rU0 * 1.5, shR * FL * 1.02])
+    tube('neck', C.skin, d.neck * 1.6, 0.03 * B * th, 0.026 * B * th, 0, 1, 1, 1, [180, 0], [0, -d.neck * 0.3, 0])
+    // 腕・脚: 服の掛かる区間は少し太い筒を重ねる
+    const limb = (b0, b1, L0, L1, r0, r1, r2, cover, cloth, lowFrom, lowCol) => {
+      const tot = L0 + L1, c0 = clamp((cover * tot) / L0, 0, 1), c1 = clamp((cover * tot - L0) / L1, 0, 1)
+      ball(b0, c0 > 0 ? cloth : C.skin, [0, 0, 0], r0 * (c0 > 0 ? 1.1 : 1))
+      tube(b0, C.skin, L0, r0, r1)
+      if (c0 > 0) tube(b0, cloth, L0, r0, r1, 0, c0, 1.1)
+      ball(b1, c1 > 0 ? cloth : C.skin, [0, 0, 0], r1 * (c1 > 0 ? 1.1 : 1))
+      tube(b1, C.skin, L1, r1, r2)
+      if (c1 > 0) tube(b1, cloth, L1, r1, r2, 0, c1, 1.1)
+      if (lowFrom < 1) tube(b1, lowCol, L1, r1, r2, lowFrom, 1, 1.14)
+    }
+    for (const sd of ['l', 'r']) {
+      limb('shoulder_' + sd, 'elbow_' + sd, d.U, d.F, rU0, rU1, rF1, sleeve, C.sleeves, 1, null)
+      const low = Math.max(boots, Math.min(1, socks)), lowCol = boots >= Math.min(1, socks) && boots > 0 ? C.shoes : C.socks
+      limb('hip_' + sd, 'knee_' + sd, d.thigh, d.shin, rT0, rT1, rS1, pants, C.pants, 1 - low, lowCol)
+      if (socks > 1) tube('hip_' + sd, C.socks, d.thigh, rT0, rT1, 1 - (socks - 1), 1, 1.12)
+      // 足(足首から前へ)
+      ball('ankle_' + sd, C.shoes, [0, -d.footH * 0.45, 0.045 * B], [0.03 * B * th, d.footH * 0.6, 0.075 * B])
+      // 手
+      const wb = 'wrist_' + sd, hl = d.hand, hwd = 0.05 * B * th, shape = pose['hand_' + sd]
+      ball(wb, sleeve >= 1 ? C.sleeves : C.skin, [0, 0, 0], rF1 * (sleeve >= 1 ? 1.1 : 1))
+      if (shape === 'mitt') ball(wb, C.skin, [0, -hl * 0.5, 0], [hwd * 0.3, hl * 0.5, hwd * 0.5])
+      else {
+        const open = shape === 'open'
+        ball(wb, C.skin, [0, -hl * 0.3, 0], [hwd * (open ? 0.26 : 0.42), hl * (open ? 0.34 : 0.3), hwd * 0.5])
+        const fr = hwd * 0.11
+        const finger = (z, ang, len) => { tube(wb, C.skin, len, fr, fr * 0.8, 0, 1, 1, 1, [ang, 0], [0, -hl * 0.48, z]); ball(wb, C.skin, [0, -len, 0], fr * 0.8, [ang, 0], [0, -hl * 0.48, z]) }
+        if (open) { for (let i = 0; i < 4; i++) finger((1.5 - i) * hwd * 0.25, (1.5 - i) * 9, hl * (0.5 - 0.05 * Math.abs(i - 1.2))); finger(hwd * 0.5, 55, hl * 0.3) }
+        else if (shape === 'peace') { finger(hwd * 0.3, 13, hl * 0.6); finger(hwd * 0.02, -11, hl * 0.62) }
+        else if (shape === 'point') finger(hwd * 0.3, 0, hl * 0.6)
+      }
+    }
+    // スカート(腰から下へ広がる円すい台)
+    if (skirt > 0) {
+      const len = skirt * d.thigh, top = waistR * 1.06, hem = hipR * (1 + flare * Math.min(1, skirt))
+      put('root', mqCyl(hem / top), C.skirt, [0, 0.24 * T - len / 2, 0], [top, len, top * 0.82])
+    }
+    // 頭
+    ball('head', C.skin, [0, d.ry, 0], [d.rx, d.ry, d.rz])
+    if (e.face !== false && e.face !== 0) for (const sx of [-1, 1]) put('head', MQ_SPH, C.eyes, [sx * d.rx * 0.4, d.ry * 0.86, d.rz * 0.9], [d.rx * 0.13, d.ry * 0.2, d.rz * 0.06], null, null, { type: 'basic', color: C.eyes })
+  }
+  // 髪
+  if (hairStyle !== 'none') {
+    const { rx, ry, rz } = d
+    ball('head', C.hair, [0, ry * 1.22, -rz * 0.3], [rx * 1.1, ry * 0.95, rz * 1.05]) // 後ろ頭と頭頂をおおう(顔 = 耳より前・額の下は出す)
+    if (hair.bangs !== false && hair.bangs !== 0) {
+      for (let i = -2; i <= 2; i++) {
+        const x = i * 0.31 * rx, y = ry * (1.6 - 0.05 * Math.abs(i)), zz = rz * Math.sqrt(Math.max(0.05, 1 - (x / rx) ** 2 - ((y - ry) / ry) ** 2))
+        put('head', mqCyl(0), C.hair, [0, -ry * 0.17, 0], [rx * 0.21, ry * (0.34 + 0.07 * ((i + 5) % 2)), rx * 0.1], [-12, (i % 2 ? 7 : -5) + i * 4], [x, y, zz * 1.03])
+      }
+      for (const sx of [-1, 1]) tube('head', C.hair, ry * 1.25, rx * 0.13, rx * 0.03, 0, 1, 1, 0.7, [0, sx * 4], [sx * rx * 0.97, ry * 1.25, rz * 0.3])
+    }
+    if (hairStyle === 'ponytail') {
+      const L = hairLen / 3, r0 = rx * 0.5 * hairK, rr = [r0, r0 * 1.05, r0 * 0.8, r0 * 0.12]
+      for (let i = 0; i < 3; i++) {
+        const b = 'pony_' + (i + 1)
+        ball(b, C.hair, [0, 0, 0], [rr[i], rr[i], rr[i] * 0.8])
+        tube(b, C.hair, L, rr[i], rr[i + 1], 0, 1, 1, 0.8)
+      }
+      if (hair.ribbon !== false && hair.ribbon !== 0) {
+        const py = ry * 1.66, pz = -rz * 0.6
+        ball('head', C.ribbon, [0, 0, 0], rx * 0.16, null, [0, py, pz])
+        for (const sx of [-1, 1]) ball('head', C.ribbon, [sx * rx * 0.56, 0, 0], [rx * 0.6, rx * 0.3, rx * 0.1], [0, sx * 24], [0, py, pz])
+      }
+    }
+  }
+  return out
+}
+
 // ---- 本体 -----------------------------------------------------------------
 export class MeshStore {
   constructor(env) {
@@ -758,6 +1061,7 @@ export class MeshStore {
       let n = nodes[i]
       if (!isObj(o)) { this.disposeNode(n); nodes[i] = null; continue }
       const e = evalTree(o, ctx.f, ctx.fps)
+      if (e.geometry === 'mannequin') { e.children = buildMannequin(e); e.geometry = 'group' } // 関節つきの人形 → 部品のまとめ
       e.geometry ??= Array.isArray(e.children) ? 'group' : 'box'
       const isGroup = e.geometry === 'group'
       const inst = !isGroup && isObj(e.instances) && e.geometry !== 'shards' ? e.instances : null
@@ -806,6 +1110,7 @@ export class MeshStore {
       n.obj.position.set(pos[0], -pos[1], -pos[2])
       setEuler(n.obj.rotation, rot3(e.rotation))
       n.obj.scale.set(sc[0], sc[1], sc[2])
+      if (Array.isArray(e._matrix)) _m.fromArray(e._matrix).decompose(n.obj.position, n.obj.quaternion, n.obj.scale) // マネキンの部品(行列で置く)
       n.obj.visible = e.visible !== false && e.visible !== 0
       n.obj.renderOrder = num(e.render_order, 0)
       n.e = e

@@ -16,12 +16,13 @@
 | `pattern.js` | 模様(矢絣・麻の葉・青海波・市松など 20 種)。式で描く |
 | `text.js` `shape.js` `particles.js` `model.js` | 種別ごとの中身(Canvas2D のラスタライズ、粒子の式、GLB) |
 | `mesh3d.js` | **mesh レイヤー**(手続きで作る 3D): 箱・球・回転体・押し出し・立体文字(Canvas2D の字から輪郭を起こす)・管・破片と、その複製(InstancedMesh)。光・影・映り込み(式で作る環境)。three.js の通常のマテリアルで RT に描いてレイヤーに戻す(model.js と同じ流れ) |
+| `puppet.js` | **puppet レイヤー**(パーツ分解した立ち絵のリグ): コンパニオンのパペット(manifest v2 + レイヤー PNG。`/api/puppet/<id>/`)を、レイヤーごとの格子メッシュの変形で動かす(まばたき・口・首ふり = 円筒ワープ・かしげ・うなずき・体の傾き・呼吸・髪と布のゆれ)。物理の積分はせず、式だけ(決定論)。キャンバス大の RT に z 順に重ね、1 枚の絵としてレイヤーに戻す |
 | `assets.js` | 画像・動画・連番・素材情報の読み込み |
 | `player.html` | iframe / キャプチャ用のページ。`/*__COMP_BOOT__*/` を `window.__COMP_BOOT = {...};` に置き換えて使う |
 | `schema.json` | 編集画面むけの一覧(エフェクト・レイヤー種別・共通項目・合成モード・イージング・プリセット)。`test/schema_gen.py` で作る |
 | `examples/*.json` | 例(下の表) |
 | `test/render_test.py` | 描画テスト(コマの書き出し・動画・`--bench`) |
-| `test/check_test.py` | 数値の約束(50% 赤・画像 100%・`source.fit`・破線・`deg_per_px`・箱の決まり(縁取り → crop・stroke_in_box・ぼかし → flip・transparent・matte.layers・vignette_blur の円)・mesh(箱の画素数・faces の並びと回転の向き・破片の progress 0・comp テクスチャ・立体文字の輪郭・複製の決定論・被写界深度)・決定論・プレビュー = 書き出し) |
+| `test/check_test.py` | 数値の約束(50% 赤・画像 100%・`source.fit`・破線・`deg_per_px`・箱の決まり(縁取り → crop・stroke_in_box・ぼかし → flip・transparent・matte.layers・vignette_blur の円)・mesh(箱の画素数・faces の並びと回転の向き・破片の progress 0・comp テクスチャ・立体文字の輪郭・複製の決定論・被写界深度)・puppet(動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定)・決定論・プレビュー = 書き出し) |
 | `test/schema_test.py` | schema.json の全項目がエンジンで通るか。エフェクトの全項目(256 個)・レイヤーの source・共通項目・mesh の objects の全項目(152 個)を「効き目が見える場面」で動かし、絵が変わらなければ NG |
 | `test/order_test.py` | エフェクトが書いた順に掛かるか。軽いエフェクト + flip / repeat の順番つきの全部の組(812 組)を、1 個ずつ RT に描く手本と比べる。先読みの切り抜きも |
 | `test/player_test.py` | player.html と親の間の postMessage(選択・移動・拡大・回転・複数選択・キー・知らせ・下絵・目安)を、iframe に本物のマウスとキーを送って確かめる |
@@ -52,6 +53,10 @@ SwiftShader(書き出しと同じ GL)・1920×1080 での 1 コマあたりの�
 | 13 title_sequence | 19 秒・151 層(同時に 40〜60 層)。矢じりの列 48 枚、名札、3D の札 36 枚 + 被写界深度、扇の切り替え | 151 | 104 | 169 |
 | 14 mesh_3d | mesh: 押し出し文字(日本語・面取り・金)+ 回転体の宝石・ガラス・多面体 + 影 + 点の光 + 複製 90 個 + カメラ移動・被写界深度 | 5 | 196 | 276 |
 | 15 confetti_shatter | mesh: 破片 160 枚の場面転換(入れ子 `15a_shatter_card` をテクスチャに)+ 3D の紙吹雪 420 枚・花びら 160 枚 | 6 | 124 | 175 |
+| 16 fx_extras | 足した効果の見本: polar(項目つき)・rough_edges・inner_shadow + shape の破線・block_noise・lens_flare・refract(調整レイヤー)・palette / posterize・motion_blur の尾・字間・輪郭の破線 | 23 | — | — |
+| 17 mannequin_presets | mesh: `geometry: "mannequin"`(関節つきの人形)のプリセット 12 種(立つ・A/T の字・idle・歩く・走る・手を振る・座る・手を腰・ピース・前かがみ・両手を上げる)。toon + 輪郭線 + 影 | 14 | — | — |
+| 18 mannequin_walk | mesh: マネキンの歩き・走り(位相)・首のキーフレーム・`preset_mix`(立つ → 手を振る)・ポニーテールの wiggle・棒人形(`style: "stick"`) | 4 | — | — |
+| puppet_01_idle | puppet: 同じパペット(kyoko_flat。全身 + `crop` の顔の寄り)2 枚。まばたき・口・首ふり・かしげ・体の傾き・髪ゆれ + 影・白フチ | 3 | 103 | 134 |
 
 速さの勘どころ:
 - 切る・色・位置の足し算だけのレイヤーは RT を使わず 1 回の描画で済む(13 の矢じり 48 枚で 25 ms ほど)。
@@ -67,6 +72,42 @@ SwiftShader(書き出しと同じ GL)・1920×1080 での 1 コマあたりの�
 - mesh レイヤーは 1 枚ごとに three.js のシーンを 4 倍 MSAA・浮動小数の RT に描く。重いのは画素の光の計算(PBR + 映り込み + 影)で、形・複製の数ではない(複製 2000 個でも数 ms)。
   光の要らない絵(破片に絵を貼るだけ・色紙)は `unlit: true` か `type: "basic"` が軽い。形(文字の輪郭・押し出し)と環境(PMREM)は最初の 1 回だけ作って使い回す(例 14 の最初のコマで +0.3 秒ほど)。
 - 取り込んだ comp 12(キャラ羅列紹介。入れ子 + 太い縁取り 12 枚 + 影 12 枚)は 13 コマの平均 211 → 124 ms、最大 434 → 276 ms。
+
+## puppet レイヤー(立ち絵をパーツ分解して動かす)
+
+コンパニオン用のリグ(生成画像 → See-Through 分解 → `scripts/rig_compiler.py` → `backend/data/puppets/<id>/` の manifest v2 + レイヤー PNG)を、コンポジションのレイヤーとして置く。
+パペットの一覧は `GET /api/puppet/`、新しく作るのは `POST /api/puppet/decompose {project_id, asset_id, puppet_id, name}`(GPU で約 7 分)。
+
+```json
+{"id": "kyoko", "type": "puppet", "in": 0, "out": 150, "transform": {"position": [960, 560], "scale": [80, 80]},
+ "source": {"puppet_id": "kyoko_flat", "auto_blink": true, "blink_interval": 3.4,
+            "mouth": {"k": [{"f": 20, "v": 0}, {"f": 26, "v": 0.9}, {"f": 34, "v": 0}]},
+            "head_turn": {"k": [{"f": 40, "v": 0}, {"f": 62, "v": -0.8, "e": "inOutSine"}, {"f": 92, "v": 0.8, "e": "inOutSine"}]},
+            "head_tilt": 4, "body_lean": {"k": [{"f": 0, "v": -2}, {"f": 150, "v": 2, "e": "inOutSine"}]}, "sway": 1, "wind": 0.3}}
+```
+
+| 項目 | 値 | 中身 |
+|---|---|---|
+| `puppet_id` | 文字 | パペットの id。`url` を書けば `<url>/manifest`・`<url>/layer/<file>` から読む |
+| `crop` | `[左, 上, 右, 下]` | パペットのキャンバスの px。その範囲だけを箱にする(バストアップ・顔の寄り)。動いて外へ出たぶんは切れる |
+| `hide` | 名前の列 | 描かないパーツ(manifest の `layers[].name`。例 `["handwear"]`) |
+| `blink` | 0〜1 | まぶた。描いた閉じ目・半目(`rig.variants.eyes` / `rig.thaBank.eyeBlink`)があればそれに替え、無ければ目を下寄りの軸でつぶす |
+| `auto_blink` `blink_interval` `blink_seed` | bool・秒・種 | 自動まばたき。`blink_interval` 秒ごとの区間に 1 回、区間の 15〜85 % のどこか(種で決まる)。`blink` と大きいほうを使う |
+| `look` `brow` | `[x, y]`(-1〜1)・-1〜1 | 瞳だけ動かす・眉の上下 |
+| `mouth` `vowel` | 0〜1・`a i u e o` | 口の開き。描き差分(`rig.variants.mouth` / `mouthHalf`)があれば 0.12 から半開、0.5 から全開の絵に替わる(`vowel` で形)。無ければ口を縦にのばし、暗い楕円 + 歯 + 舌を重ねる |
+| `head_turn` | -1〜1 | 首ふり。顔を縦の円筒の表面とみなして回す(`x' = xl·cosφ + √(R²−xl²)·sinφ`、±1 で 0.42 rad)。全部の顔の部品に同じ写像を掛けるので部品どうしはずれない。奥行き(`depth`)の視差つき。後ろ髪は 55 % だけ乗る |
+| `head_tilt` `head_nod` `head_shift` | 度・-1〜1・`[x, y]` px | 首のかしげ(首の付け根が軸)・うなずき・頭のずらし。首のレイヤーは下の端が体、上の端が頭に付く |
+| `body_lean` | 度 | 体の傾き(足元 `pivots.body` が軸。頭も乗る) |
+| `breath` `breath_period` | 強さ(既定 1)・秒(既定 4) | 呼吸(体が 0.7 % 伸び縮み + 頭が上下)。0 で止まる |
+| `sway` `wind` | 強さ(既定 1)・-1〜1 | 髪・布のゆれと、風でなびく向き。レイヤーごとに `manifest.sway`(hair / cloth・`amp`・`pinY`)で効き方が決まる。根元(上から `pinY`)は固定、先ほど大きい |
+| `sway_speed` `sway_lag` `sway_seed` | 倍・秒・種 | ゆれの速さ(キーを打つと位相が飛ぶので定数で)・毛先の遅れ(既定 0.16 秒)・ゆれの位相 |
+
+- 数値の項目はどれもキーフレームにできる(`sway_speed` `sway_lag` と種は定数)。`vowel` は文字なので hold。
+- まとめた書き方も読む: `"sway": {"amount", "wind", "speed", "lag", "seed"}`、`"breath": {"amount", "period"}`、`"auto_blink": {"interval", "seed", "duration"}`。
+- ゆれは「うねり 3 本(0.93・2.2・5.1 rad/s)+ はためき + 房ごとのさざ波」の正弦の重ね。位相はレイヤーの名前から決まるので、髪と服が同じ瞬間に同じ向きへは動かない。
+- transform(位置・拡大・回転・不透明度・3D)・effects・マスク・親子・マット・ブレンドは image レイヤーと同じに効く(中身が 1 枚の絵として戻るため)。
+- できないこと: 腕・脚の関節(レイヤーが 1 枚なので曲げられない)、±0.42 rad より大きい首ふり(隠れていた耳・後頭部の絵が無い)、表情(笑い・怒り)の切り替え、視線の描き差分(`thaBank.gaze`)。
+- パペットの絵の質は分解しだい: 口のレイヤーが数画素しかない(`kyoko_flat`)・腕が服と 1 枚、などは manifest を見て確かめる。口が小さいパペットは `mouth` を大きくしても楕円が小さい。
 
 ## テスト
 
@@ -167,7 +208,14 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - text: `font` は CSS の並びに直す(`Noto Sans JP` → この機械の `Noto Sans CJK JP`、Serif / Mono も同様)。箱の中心が原点(`valign` を書いたときは align × valign の端)。
   文字ごとアニメ・円周の文字は「範囲の決まらない絵」なので、重いエフェクトは画面空間で掛かる(長さは画面の px)。
 - model: `{"asset_id"|"url", "height": px, "light": {"intensity","ambient","color","direction"}}`。常に 3D。
+- puppet: 書式は下の「puppet レイヤー」。ここは実装の決めだけ。
+  - 箱 = パペットのキャンバス(例 1280×1280。`crop` を書けばその範囲)。原点は箱の中心。RT の解像度は拡大率の見積もり(`fxRes`)で 0.5〜2 倍。
+  - レイヤーの PNG は `assets.image()` で読む(乗算済み・ミップマップ)。頂点はキャンバスの px のまま持ち、シェーダで RT の座標へ直す。合成は ONE / ONE_MINUS_SRC_ALPHA。
+  - 格子: 髪 18×22・布 12×14・首 6×12・顔の部品 12×12・描き差分 16×16・そのほかは 2×2(剛体)。範囲はレイヤーの bbox + 3px。
+  - 状態を持たない: どのコマも (文書, コマ) から頂点を計算し直す。毛先の遅れは「`sway_lag` 秒前の姿勢」を毛先ほど強く混ぜる(コマをまたぐ積分なし)。
+  - 何も動かさない(`breath: 0, sway: 0`)とき、絵はレイヤーの PNG を z 順に重ねたものと同じ(`check_test.py` 2f)。
 - mesh: 書式は `docs/composition-design.md` の「mesh レイヤー」。ここは実装の決めだけ。
+  - 帯(幅のある平らならせん・曲線に沿う面)= `extrude` の平たい断面(`shape: "rect"`・`size: [幅, 厚み]`)+ `path`。`path.up: [x,y,z]` で断面の向きを固定する(らせんなら軸の向き。`fixedPathFrames`)。無ければ three.js の枠で、巻くごとにねじれる。
   - 形は three.js の座標(y 上・z 手前)で作り、置くときに文書の座標(y 下・z 奥)へ直す(`FLIP · レイヤーの行列 · FLIP`。model と同じ)。文書の回転 (x, y, z) は three.js では (−x, y, −z)・XYZ 順。
   - 形は「形を決める項目」の JSON を鍵に 240 個まで使い回す(文字は書体の読み込み(fontEpoch)も鍵)。コマごとに変えるのは行列・複製の行列・破片の頂点・マテリアルの値だけ。
   - テクスチャはエンジンのもの(sRGB の値・乗算済み・画像は上が v = 0)をそのまま貼り、シェーダの `map_fragment` を差し替えて「乗算を解く → リニアへ」と読む(複製しない)。繰り返し・ずらしもシェーダの中(`fract` + `textureGrad`)。
@@ -176,6 +224,11 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
   - 複製のフェード(不透明度)は、複製ごとの属性 `aFade` + 奥からの並べ替え(CPU)。`fade_mode: "scale"` なら並べ替えも半透明も要らない。
   - 影は `renderer.shadowMap.enabled` を mesh を描く間だけ入れる(ほかの描画には影響しない)。
   - 選択枠の箱(`rect`)は、形の外接球 × 倍率 + 複製の範囲からの目安。
+  - **マネキン**(`geometry: "mannequin"`。書式は design の「mesh: マネキン」): `sync` の頭で「まとめ(group)+ 子の並び」に開く(`buildMannequin`)。子 = 単位の球・単位の円柱(上下の半径の比は 0.05 刻み)の使い回しで、
+    大きさ・向き・位置は 1 個ずつの行列(子の `_matrix` = 16 個の数。内部用)に入れる → 形のキャッシュは体格・ポーズが変わっても増えない。関節の階層(腰 → 背 → 胸 → 首 → 頭 → ポニーテール 3 節、胸 → 肩 → ひじ → 手首、腰 → 股 → ひざ → 足首)は
+    コマごとに JS で順に掛ける(20 個の行列)。部品は 1 体 60〜110 個(輪郭線つきは 2 倍)。光・影・toon は部品ごとの通常のマテリアル(`material` を土台に色だけ替える)。輪郭線は「部品を `outline.width` px 太らせた殻の裏面」を basic で描く(部品の継ぎ目にも線が出る = 人形の関節らしく見える)。
+  - **マネキンの体格**(px。`check_test.py` がこの式で手先の位置を確かめる): 頭の高さ `hh = 身長 ÷ 頭身`、あごから下 `B = 身長 − hh`。首 0.05B、脚 0.59B × `leg_length`(うち足の高さ 0.05B × `leg_length`、もも = すね)、胴 = B − 首 − 脚(腰 → 背 0.3、背 → 胸 0.3、胸 → 首 0.4)。
+    肩の関節 = 胸から横へ 0.118B × `shoulder`・上へ 胴 × 0.4 − 0.03B × `thickness`。股の関節 = 横へ 0.055B × `hip`。上腕 0.19B・前腕 0.17B・手 0.09B(× `arm_length`)。頭 = 半径 (0.43hh, 0.5hh, 0.45hh) のだ円体。棒人形の棒の半径 = 身長 × 0.012 × `thickness`、手 = その 2 倍の球。
 - `motion_blur: true`(16 回)または回数。前後 1/4 コマずつを足し込む。軽いエフェクトは 1 回ごとに、重いエフェクトは足し込んだあとの絵に掛かる。
 - `source.url` の `/...` は apiBase からの道として読む。
 - **エフェクトは書いた順に掛かる**(`order_test.py`)。軽いエフェクトはシェーダの中でまとめるが、結果は「1 個ずつ順に掛けた絵」と同じ:
@@ -222,6 +275,22 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
   AviUtl の円形配置(文字毎に個別)は `円周 % × 72 / (文字数 × 画面幅)`。`arc`(等間隔に配る範囲)を書いたときはそちらが優先。
 - 重いエフェクトのあとの `flip` / `repeat`: 範囲の決まるレイヤー(画像・単色・シェイプ・入れ子など)なら、画面より大きくても効く(レイヤーの RT のまま続ける)。
   使えないのは、範囲の決まらない絵(粒子・文字ごとアニメ・モデル)に重いエフェクトを掛けたあとだけ(警告が出る)。
+- `polar`(極座標変換)の項目: 何も書かなければ今までどおりの式(1 バイトも変わらない)。下のどれかを書くと、箱を基準にした式になる(絵の横 = 角度、縦 = 半径)。
+  `fit`: 半径の基準(省略 = 短い辺の半分 / `"cover"` = 対角の半分 = 四隅まで埋める / `"width"` / `"height"`)、`inner: "top"` = 絵の上の端が中心(省略 = 下の端)、
+  `center_width`(中心の穴 px)`scale`(半径 %)`rotation`(度)`swirl`(外周での角度のずれ。度)`cx` `cy`(中心のずらし)`clamp`(半径の外は端の色を伸ばす。cover では常に)。
+  AviUtl の 極座標変換 は `fit: "cover", inner: "top"` と読んだ(横が角度になる・四隅まで埋まる、までは完成動画で確認。上下の向き・回転の向き・渦巻の単位は推測)。
+- `rough_edges`(重い): 絵をノイズでずらして読み、アルファをしきい値で切り直す(縁がちぎれる・細い所は島になる)。`amount`(ずらす量 px)`size`(ノイズの大きさ px)
+  `threshold`(切り直す位置 %。0 = 切り直さない)`softness`(切り口 %)`seed` `evolution` `octaves`。模様は箱の左上に固定(プレビューと書き出しで同じ形)。AviUtl のスクリプト「ラフエッジ」の代わり(見た目から作った。式は同じではない)。
+- `block_noise`(重い): 四角い区画を選んで、その中の絵をずらす。`count` `width` `height` `shift_x` `shift_y` は `[最小, 最大]`(数 1 個でもよい)。`speed` = 1 秒あたりの切り替え(0 = 止める)、`amount` = 区画の数に掛ける %、`seed`。区画は 32 個まで。
+- `lens_flare`(重い): 箱の中心 + (`cx`, `cy`) に光を足す(芯の白 + 色のにじみ + 中心を通る光芒 `rays` 本 + 輪)。`radius` `streak_length` `streak_width` `angle` `spin`(度/秒)`intensity` `core` `ring` `color` `flicker`。
+  箱の外には描けないので、透明な四角(`fill: "#00000000"` の shape)に掛けるか、調整レイヤーに掛ける。
+- `refract`(重い): ガラスの屈折。`kind: "lens"`(既定)= だ円(`radius`・`radius_y`。省略 = 箱いっぱい)の中をふくらませて映す(`amount` %。負で縮む)+ `aberration`(色ずれ)`highlight`(映り込みの白)`shade`(縁の暗さ)。
+  `kind: "frost"` = すりガラス(`amount` px・`size`・`seed`)。`tint` `tint_amount` でガラスの色。**調整レイヤーに掛けると、下の絵がゆがんで映る**(範囲はマスクで切る。`cx` `cy` は画面の中心からのずれ)。mesh の `glass` マテリアルの屈折とは別物(あちらは未対応のまま)。
+- `palette`(重い扱い): `colors`(2〜32 色)のうち、いちばん近い色に置き換える(RGB の距離)。`posterize`(軽い。チャンネルごとに段を切る)と違い、色そのものを決められる(AviUtl の メディアンカット減色 は、取り込み側が絵から色を選んで渡す)。
+- `inner_shadow` に `x` `y`(px。書くと `distance`・`angle` より優先。`drop_shadow` と同じ)。
+- `motion_blur` は `{"samples": 回数, "shutter": 足し込む幅(コマ。既定 0.5), "phase": 幅の始まり(既定 -0.5 = 前後に半分ずつ。-1 = 手前へ尾を引く)}` でも書ける。`true`・回数だけのときは今までどおり。
+  AviUtl の モーションブラー(間隔・分解能)は `{"samples": 分解能, "shutter": 間隔, "phase": -1}` と読んだ(推測)。
+- 字間は text の `tracking`(px。キーフレーム可)、輪郭の破線は shape の `dash: [線, すき間]` + `dash_offset`、画像・文字の輪郭の破線は `trace_outline` の `dash_period` `dash_gap`(どれも前からある。例 16 に見本)。
 
 ## 仕様との差・できていないこと
 
@@ -238,5 +307,6 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - プレビューの動画は `<video>` のシークなのでコマ単位では甘い(書き出しは 1 コマずつの画像で正確)。capture の動画で `speed` が 1 でないときは最近傍のコマ。
 - model は GLB の見た目を出すだけ(アニメーション・環境マップなし)。
 - mesh: 屈折・オブジェクトどうしの映り込みなし(映るのは `env` だけ)。影は主光 1 本。被写界深度はレイヤーごとに一様。ほかのレイヤーとの交差なし。文字の面取りは外へ太る。動画を直接は貼れない(入れ子にして `comp_id` で貼る)。
+- mesh のマネキン: 表情・口・指 1 本ずつの関節・服のしわ・髪の房の形・スカートの揺れ(脚に付いて動かない)・肌の重み付け(関節は球でつなぐだけ)は無い。IK(手先の位置から角度を逆算)も無い = 角度を書く。テクスチャは貼れない(色だけ)。
 - プレビュー(実 GPU)と書き出し(SwiftShader)は同じコードだが、GPU が違うので 1 階調ほどの差はありうる。同じ GL なら 1 バイトも違わない。
 - コンポジションの中の音・エクスプレッションは無い(仕様どおり)。

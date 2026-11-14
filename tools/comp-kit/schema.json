@@ -1512,6 +1512,35 @@
     }
    }
   },
+  "palette": {
+   "label": "減色(決めた色だけにする)",
+   "group": "色",
+   "cheap": false,
+   "params": {
+    "colors": {
+     "type": "colors",
+     "label": "使う色(2〜32 色)",
+     "default": [
+      "#000000",
+      "#ffffff",
+      "#ff3355",
+      "#33cc66",
+      "#2244ff",
+      "#ffd23f"
+     ],
+     "animatable": false
+    },
+    "amount": {
+     "type": "percent",
+     "label": "強さ",
+     "default": 100,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
+    }
+   }
+  },
   "chroma_key": {
    "label": "クロマキー",
    "group": "色",
@@ -2218,6 +2247,26 @@
      "max": 100,
      "step": 1,
      "animatable": true
+    },
+    "x": {
+     "type": "number",
+     "label": "ずれ X(書くと 距離・角度 より優先)",
+     "default": null,
+     "min": -500,
+     "max": 500,
+     "step": 1,
+     "animatable": true,
+     "optional": true
+    },
+    "y": {
+     "type": "number",
+     "label": "ずれ Y(書くと 距離・角度 より優先)",
+     "default": null,
+     "min": -500,
+     "max": 500,
+     "step": 1,
+     "animatable": true,
+     "optional": true
     }
    }
   },
@@ -2497,6 +2546,127 @@
       }
      ],
      "animatable": false
+    }
+   }
+  },
+  "lens_flare": {
+   "label": "レンズフレア(光を足す)",
+   "group": "ぼかし・光",
+   "cheap": false,
+   "params": {
+    "cx": {
+     "type": "number",
+     "label": "中心 X",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "cy": {
+     "type": "number",
+     "label": "中心 Y",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "radius": {
+     "type": "number",
+     "label": "にじみの大きさ",
+     "default": 100,
+     "min": 0.5,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "streak_length": {
+     "type": "number",
+     "label": "光芒の長さ(片側)",
+     "default": 600,
+     "min": 0,
+     "max": 8000,
+     "step": 1,
+     "animatable": true
+    },
+    "streak_width": {
+     "type": "number",
+     "label": "光芒の太さ",
+     "default": 6,
+     "min": 0.2,
+     "max": 500,
+     "step": 0.5,
+     "animatable": true
+    },
+    "rays": {
+     "type": "number",
+     "label": "光芒の本数(中心を通る線の数。0 = なし)",
+     "default": 1,
+     "min": 0,
+     "max": 8,
+     "step": 1,
+     "animatable": true
+    },
+    "angle": {
+     "type": "angle",
+     "label": "光芒の向き",
+     "default": 90,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true
+    },
+    "spin": {
+     "type": "number",
+     "label": "光芒の回る速さ(度/秒)",
+     "default": 0,
+     "min": -3600,
+     "max": 3600,
+     "step": 1,
+     "animatable": true
+    },
+    "intensity": {
+     "type": "percent",
+     "label": "強さ",
+     "default": 100,
+     "min": 0,
+     "max": 400,
+     "step": 1,
+     "animatable": true
+    },
+    "core": {
+     "type": "percent",
+     "label": "芯の白",
+     "default": 100,
+     "min": 0,
+     "max": 400,
+     "step": 1,
+     "animatable": true
+    },
+    "ring": {
+     "type": "percent",
+     "label": "輪",
+     "default": 0,
+     "min": 0,
+     "max": 200,
+     "step": 1,
+     "animatable": true
+    },
+    "color": {
+     "type": "color",
+     "label": "光の色",
+     "default": "#9999ff",
+     "animatable": true
+    },
+    "flicker": {
+     "type": "percent",
+     "label": "ちらつき",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
     }
    }
   },
@@ -2993,6 +3163,425 @@
      "label": "逆変換",
      "default": false,
      "animatable": false
+    },
+    "fit": {
+     "type": "select",
+     "label": "半径の基準",
+     "default": "",
+     "options": [
+      {
+       "value": "",
+       "label": "短い辺の半分(円の外は透明)"
+      },
+      {
+       "value": "cover",
+       "label": "対角の半分(四隅まで埋める)"
+      },
+      {
+       "value": "width",
+       "label": "幅の半分"
+      },
+      {
+       "value": "height",
+       "label": "高さの半分"
+      }
+     ],
+     "animatable": false
+    },
+    "inner": {
+     "type": "select",
+     "label": "中心に来る端",
+     "default": "",
+     "options": [
+      {
+       "value": "",
+       "label": "絵の下の端"
+      },
+      {
+       "value": "top",
+       "label": "絵の上の端"
+      }
+     ],
+     "animatable": false
+    },
+    "center_width": {
+     "type": "number",
+     "label": "中心の穴(px)",
+     "default": 0,
+     "min": 0,
+     "max": 2000,
+     "step": 1,
+     "animatable": true
+    },
+    "scale": {
+     "type": "percent",
+     "label": "半径の拡大率",
+     "default": 100,
+     "min": 1,
+     "max": 1000,
+     "step": 1,
+     "animatable": true
+    },
+    "rotation": {
+     "type": "angle",
+     "label": "回転",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true
+    },
+    "swirl": {
+     "type": "number",
+     "label": "渦巻(外周でのずれ。度)",
+     "default": 0,
+     "min": -3600,
+     "max": 3600,
+     "step": 1,
+     "animatable": true
+    },
+    "cx": {
+     "type": "number",
+     "label": "中心 X",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "cy": {
+     "type": "number",
+     "label": "中心 Y",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true
+    },
+    "clamp": {
+     "type": "bool",
+     "label": "半径の外は端の色を伸ばす",
+     "default": false,
+     "animatable": false
+    }
+   }
+  },
+  "rough_edges": {
+   "label": "ラフエッジ(縁をちぎる)",
+   "group": "ゆがみ",
+   "cheap": false,
+   "params": {
+    "amount": {
+     "type": "number",
+     "label": "ずらす量",
+     "default": 20,
+     "min": 0,
+     "max": 1000,
+     "step": 1,
+     "animatable": true
+    },
+    "size": {
+     "type": "number",
+     "label": "ノイズの大きさ",
+     "default": 60,
+     "min": 1,
+     "max": 2000,
+     "step": 1,
+     "animatable": true
+    },
+    "threshold": {
+     "type": "percent",
+     "label": "アルファを切り直す位置(0 = 切り直さない)",
+     "default": 50,
+     "min": 0,
+     "max": 98,
+     "step": 1,
+     "animatable": true
+    },
+    "softness": {
+     "type": "percent",
+     "label": "切り口のやわらかさ",
+     "default": 5,
+     "min": 0,
+     "max": 50,
+     "step": 1,
+     "animatable": true
+    },
+    "seed": {
+     "type": "number",
+     "label": "種",
+     "default": 0,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false
+    },
+    "evolution": {
+     "type": "number",
+     "label": "変化",
+     "default": 0,
+     "min": 0,
+     "max": 1000,
+     "step": 0.01,
+     "animatable": true
+    },
+    "octaves": {
+     "type": "number",
+     "label": "細かさ",
+     "default": 3,
+     "min": 1,
+     "max": 4,
+     "step": 1,
+     "animatable": false
+    }
+   }
+  },
+  "block_noise": {
+   "label": "ブロックノイズ(四角い区画をずらす)",
+   "group": "ゆがみ",
+   "cheap": false,
+   "params": {
+    "amount": {
+     "type": "percent",
+     "label": "効く割合(区画の数に掛ける)",
+     "default": 100,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
+    },
+    "count": {
+     "type": "vec2",
+     "label": "区画の数(最小・最大)",
+     "default": [
+      5,
+      15
+     ],
+     "animatable": true
+    },
+    "width": {
+     "type": "vec2",
+     "label": "区画の幅(最小・最大)",
+     "default": [
+      300,
+      500
+     ],
+     "animatable": true
+    },
+    "height": {
+     "type": "vec2",
+     "label": "区画の高さ(最小・最大)",
+     "default": [
+      10,
+      100
+     ],
+     "animatable": true
+    },
+    "shift_x": {
+     "type": "vec2",
+     "label": "ずれ X(最小・最大)",
+     "default": [
+      -30,
+      30
+     ],
+     "animatable": true
+    },
+    "shift_y": {
+     "type": "vec2",
+     "label": "ずれ Y(最小・最大)",
+     "default": [
+      -30,
+      30
+     ],
+     "animatable": true
+    },
+    "seed": {
+     "type": "number",
+     "label": "種",
+     "default": 1,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false
+    },
+    "speed": {
+     "type": "number",
+     "label": "1 秒あたりの切り替え(0 = 止める)",
+     "default": 30,
+     "min": 0,
+     "max": 120,
+     "step": 1,
+     "animatable": false
+    }
+   }
+  },
+  "refract": {
+   "label": "ガラスの屈折(調整レイヤーに掛けると下の絵がゆがむ)",
+   "group": "ゆがみ",
+   "cheap": false,
+   "params": {
+    "kind": {
+     "type": "select",
+     "label": "種類",
+     "default": "lens",
+     "options": [
+      {
+       "value": "lens",
+       "label": "レンズ(だ円の中をふくらませる)"
+      },
+      {
+       "value": "frost",
+       "label": "すりガラス"
+      }
+     ],
+     "animatable": false
+    },
+    "amount": {
+     "type": "number",
+     "label": "強さ(レンズ = ふくらみ %、すりガラス = 乱れ px)",
+     "default": 35,
+     "min": -300,
+     "max": 95,
+     "step": 1,
+     "animatable": true
+    },
+    "radius": {
+     "type": "number",
+     "label": "レンズの半径(書かなければ箱いっぱい)",
+     "default": null,
+     "min": 1,
+     "max": 4000,
+     "step": 1,
+     "animatable": true,
+     "optional": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "radius_y": {
+     "type": "number",
+     "label": "レンズの縦の半径",
+     "default": null,
+     "min": 1,
+     "max": 4000,
+     "step": 1,
+     "animatable": true,
+     "optional": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "cx": {
+     "type": "number",
+     "label": "中心 X",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "cy": {
+     "type": "number",
+     "label": "中心 Y",
+     "default": 0,
+     "min": -4000,
+     "max": 4000,
+     "step": 1,
+     "animatable": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "aberration": {
+     "type": "percent",
+     "label": "色ずれ",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
+    },
+    "highlight": {
+     "type": "percent",
+     "label": "映り込みの白(レンズ)",
+     "default": 0,
+     "min": 0,
+     "max": 200,
+     "step": 1,
+     "animatable": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "shade": {
+     "type": "percent",
+     "label": "縁の暗さ(レンズ)",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true,
+     "when": {
+      "kind": [
+       "lens"
+      ]
+     }
+    },
+    "size": {
+     "type": "number",
+     "label": "乱れの大きさ(すりガラス)",
+     "default": 6,
+     "min": 0.5,
+     "max": 500,
+     "step": 0.5,
+     "animatable": true,
+     "when": {
+      "kind": [
+       "frost"
+      ]
+     }
+    },
+    "seed": {
+     "type": "number",
+     "label": "種(すりガラス)",
+     "default": 1,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false,
+     "when": {
+      "kind": [
+       "frost"
+      ]
+     }
+    },
+    "tint": {
+     "type": "color",
+     "label": "ガラスの色",
+     "default": "#ffffff",
+     "animatable": true
+    },
+    "tint_amount": {
+     "type": "percent",
+     "label": "色の濃さ",
+     "default": 0,
+     "min": 0,
+     "max": 100,
+     "step": 1,
+     "animatable": true
     }
    }
   }
@@ -5458,6 +6047,273 @@
    },
    "default_layer": {}
   },
+  "puppet": {
+   "label": "パペット(立ち絵のリグ)",
+   "icon": "🎭",
+   "source": {
+    "puppet_id": {
+     "type": "text",
+     "label": "パペットの id(/api/puppet/ の一覧にあるもの)",
+     "default": null,
+     "animatable": false,
+     "puppet": true,
+     "group": "素材"
+    },
+    "crop": {
+     "type": "numbers",
+     "label": "映す範囲 [左, 上, 右, 下](パペットのキャンバスの px。省略 = 全体)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "素材"
+    },
+    "hide": {
+     "type": "json",
+     "label": "隠すパーツの名前の列(例 [\"handwear\"])",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "素材"
+    },
+    "blink": {
+     "type": "number",
+     "label": "まばたき(0 = 開 〜 1 = 閉)",
+     "default": 0,
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "目"
+    },
+    "auto_blink": {
+     "type": "bool",
+     "label": "自動まばたき",
+     "default": false,
+     "animatable": false,
+     "group": "目"
+    },
+    "blink_interval": {
+     "type": "number",
+     "label": "自動まばたきの間隔(秒)",
+     "default": 3.4,
+     "min": 0.4,
+     "max": 20,
+     "step": 0.1,
+     "animatable": true,
+     "optional": true,
+     "when": {
+      "auto_blink": [
+       true
+      ]
+     },
+     "group": "目"
+    },
+    "blink_seed": {
+     "type": "number",
+     "label": "自動まばたきの種",
+     "default": 1,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false,
+     "optional": true,
+     "when": {
+      "auto_blink": [
+       true
+      ]
+     },
+     "group": "目"
+    },
+    "look": {
+     "type": "vec2",
+     "label": "視線(-1〜1。瞳だけ動く)",
+     "default": [
+      0,
+      0
+     ],
+     "animatable": true,
+     "group": "目"
+    },
+    "brow": {
+     "type": "number",
+     "label": "眉(-1 = 下げる 〜 1 = 上げる)",
+     "default": 0,
+     "min": -1,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "目"
+    },
+    "mouth": {
+     "type": "number",
+     "label": "口の開き(0〜1)",
+     "default": 0,
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "口"
+    },
+    "vowel": {
+     "type": "select",
+     "label": "母音(描き差分のあるパペットだけ)",
+     "default": "a",
+     "options": [
+      {
+       "value": "a",
+       "label": "あ"
+      },
+      {
+       "value": "i",
+       "label": "い"
+      },
+      {
+       "value": "u",
+       "label": "う"
+      },
+      {
+       "value": "e",
+       "label": "え"
+      },
+      {
+       "value": "o",
+       "label": "お"
+      }
+     ],
+     "animatable": false,
+     "optional": true,
+     "group": "口"
+    },
+    "head_turn": {
+     "type": "number",
+     "label": "首ふり(-1 = 左 〜 1 = 右。円筒ワープ)",
+     "default": 0,
+     "min": -1,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "頭"
+    },
+    "head_tilt": {
+     "type": "angle",
+     "label": "首のかしげ(度)",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true,
+     "group": "頭"
+    },
+    "head_nod": {
+     "type": "number",
+     "label": "うなずき(-1 = 上 〜 1 = 下)",
+     "default": 0,
+     "min": -1,
+     "max": 1,
+     "step": 0.01,
+     "animatable": true,
+     "group": "頭"
+    },
+    "head_shift": {
+     "type": "vec2",
+     "label": "頭のずらし(px)",
+     "default": [
+      0,
+      0
+     ],
+     "animatable": true,
+     "group": "頭"
+    },
+    "body_lean": {
+     "type": "angle",
+     "label": "体の傾き(度。足元が軸)",
+     "default": 0,
+     "min": -360,
+     "max": 360,
+     "step": 1,
+     "animatable": true,
+     "group": "体"
+    },
+    "breath": {
+     "type": "number",
+     "label": "呼吸の強さ(0 = なし)",
+     "default": 1,
+     "min": 0,
+     "max": 5,
+     "step": 0.05,
+     "animatable": true,
+     "group": "体"
+    },
+    "breath_period": {
+     "type": "number",
+     "label": "呼吸の周期(秒)",
+     "default": 4,
+     "min": 0.3,
+     "max": 20,
+     "step": 0.1,
+     "animatable": true,
+     "optional": true,
+     "group": "体"
+    },
+    "sway": {
+     "type": "number",
+     "label": "髪・布のゆれの強さ(0 = なし)",
+     "default": 1,
+     "min": 0,
+     "max": 5,
+     "step": 0.05,
+     "animatable": true,
+     "group": "ゆれ"
+    },
+    "wind": {
+     "type": "number",
+     "label": "風(-1 = 左へ 〜 1 = 右へなびく)",
+     "default": 0,
+     "min": -2,
+     "max": 2,
+     "step": 0.01,
+     "animatable": true,
+     "group": "ゆれ"
+    },
+    "sway_speed": {
+     "type": "number",
+     "label": "ゆれの速さ(倍。キーを打たず定数で)",
+     "default": 1,
+     "min": 0,
+     "max": 5,
+     "step": 0.05,
+     "animatable": false,
+     "optional": true,
+     "group": "ゆれ"
+    },
+    "sway_lag": {
+     "type": "number",
+     "label": "毛先の遅れ(秒)",
+     "default": 0.16,
+     "min": 0,
+     "max": 1,
+     "step": 0.01,
+     "animatable": false,
+     "optional": true,
+     "group": "ゆれ"
+    },
+    "sway_seed": {
+     "type": "number",
+     "label": "ゆれの種",
+     "default": 0,
+     "min": 0,
+     "max": 9999,
+     "step": 1,
+     "animatable": false,
+     "optional": true,
+     "group": "ゆれ"
+    }
+   },
+   "default_source": {
+    "puppet_id": null
+   },
+   "default_layer": {}
+  },
   "mesh": {
    "label": "3D オブジェクト",
    "icon": "💎",
@@ -5707,6 +6563,10 @@
         {
          "value": "group",
          "label": "まとめ(children)"
+        },
+        {
+         "value": "mannequin",
+         "label": "マネキン(関節つきの人形)"
         }
        ],
        "animatable": false
@@ -6501,6 +7361,13 @@
          "max": 1,
          "step": 0.01,
          "animatable": false
+        },
+        "up": {
+         "type": "vec3",
+         "label": "帯の向きを固定(押し出しの道。断面の縦がこの向き。らせんなら軸の向き = ねじれない帯)",
+         "default": null,
+         "animatable": false,
+         "optional": true
         }
        }
       },
@@ -7280,6 +8147,555 @@
          ],
          "animatable": true
         }
+       }
+      },
+      "style": {
+       "type": "select",
+       "label": "作り",
+       "default": "mannequin",
+       "options": [
+        {
+         "value": "mannequin",
+         "label": "丸みのある筒と球"
+        },
+        {
+         "value": "stick",
+         "label": "細い棒(棒人形)"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "body": {
+       "type": "object",
+       "label": "体格",
+       "fields": {
+        "height": {
+         "type": "number",
+         "label": "身長(px)",
+         "default": 600,
+         "min": 1,
+         "max": 20000,
+         "step": 1,
+         "animatable": true
+        },
+        "heads": {
+         "type": "number",
+         "label": "頭身",
+         "default": 6.5,
+         "min": 2,
+         "max": 12,
+         "step": 0.1,
+         "animatable": true
+        },
+        "thickness": {
+         "type": "number",
+         "label": "太さ(倍率)",
+         "default": 1,
+         "min": 0.05,
+         "max": 10,
+         "step": 0.01,
+         "animatable": true
+        },
+        "shoulder": {
+         "type": "number",
+         "label": "肩幅(倍率)",
+         "default": 1,
+         "min": 0.2,
+         "max": 4,
+         "step": 0.01,
+         "animatable": true
+        },
+        "hip": {
+         "type": "number",
+         "label": "腰幅(倍率)",
+         "default": 1,
+         "min": 0.2,
+         "max": 4,
+         "step": 0.01,
+         "animatable": true
+        },
+        "arm_length": {
+         "type": "number",
+         "label": "腕の長さ(倍率)",
+         "default": 1,
+         "min": 0.2,
+         "max": 3,
+         "step": 0.01,
+         "animatable": true
+        },
+        "leg_length": {
+         "type": "number",
+         "label": "脚の長さ(倍率)",
+         "default": 1,
+         "min": 0.3,
+         "max": 1.4,
+         "step": 0.01,
+         "animatable": true
+        }
+       },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "colors": {
+       "type": "object",
+       "label": "色",
+       "fields": {
+        "skin": {
+         "type": "color",
+         "label": "肌",
+         "default": "#f6d9c8",
+         "animatable": true
+        },
+        "top": {
+         "type": "color",
+         "label": "服の上",
+         "default": "#d8d8de",
+         "animatable": true
+        },
+        "bottom": {
+         "type": "color",
+         "label": "服の下",
+         "default": "#5a6278",
+         "animatable": true
+        },
+        "hair": {
+         "type": "color",
+         "label": "髪",
+         "default": "#b5334f",
+         "animatable": true
+        },
+        "shoes": {
+         "type": "color",
+         "label": "靴",
+         "default": "#3a3036",
+         "animatable": true
+        },
+        "ribbon": {
+         "type": "color",
+         "label": "リボン",
+         "default": "#1c1a1e",
+         "animatable": true
+        },
+        "eyes": {
+         "type": "color",
+         "label": "目",
+         "default": "#7a1f2c",
+         "animatable": true
+        },
+        "skirt": {
+         "type": "color",
+         "label": "スカート(省略 = 服の下)",
+         "default": null,
+         "animatable": true,
+         "optional": true
+        },
+        "sleeves": {
+         "type": "color",
+         "label": "袖(省略 = 服の上)",
+         "default": null,
+         "animatable": true,
+         "optional": true
+        },
+        "pants": {
+         "type": "color",
+         "label": "ズボン・腰(省略 = 服の下)",
+         "default": null,
+         "animatable": true,
+         "optional": true
+        },
+        "socks": {
+         "type": "color",
+         "label": "靴下(省略 = 靴)",
+         "default": null,
+         "animatable": true,
+         "optional": true
+        }
+       },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "outfit": {
+       "type": "object",
+       "label": "服",
+       "fields": {
+        "sleeves": {
+         "type": "number",
+         "label": "袖の長さ(0 = なし、1 = 手首まで)",
+         "default": 1,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "pants": {
+         "type": "number",
+         "label": "ズボンの長さ(0 = なし、1 = 足首まで)",
+         "default": 0.2,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        },
+        "skirt": {
+         "type": "number",
+         "label": "スカートの長さ(0 = なし。1 = ももの長さ)",
+         "default": 0,
+         "min": 0,
+         "max": 2,
+         "step": 0.01,
+         "animatable": true
+        },
+        "skirt_flare": {
+         "type": "number",
+         "label": "スカートの広がり",
+         "default": 0.6,
+         "min": 0,
+         "max": 4,
+         "step": 0.01,
+         "animatable": true
+        },
+        "socks": {
+         "type": "number",
+         "label": "靴下の長さ(1 = ひざまで、2 = ももの上まで)",
+         "default": 0,
+         "min": 0,
+         "max": 2,
+         "step": 0.01,
+         "animatable": true
+        },
+        "boots": {
+         "type": "number",
+         "label": "ブーツの長さ(1 = ひざまで)",
+         "default": 0,
+         "min": 0,
+         "max": 1,
+         "step": 0.01,
+         "animatable": true
+        }
+       },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "hair": {
+       "type": "object",
+       "label": "髪",
+       "fields": {
+        "style": {
+         "type": "select",
+         "label": "髪型",
+         "default": "none",
+         "options": [
+          {
+           "value": "none",
+           "label": "なし"
+          },
+          {
+           "value": "short",
+           "label": "短い(頭をおおうだけ)"
+          },
+          {
+           "value": "ponytail",
+           "label": "ポニーテール(3 節で揺らせる)"
+          }
+         ],
+         "animatable": false
+        },
+        "length": {
+         "type": "number",
+         "label": "ポニーテールの長さ(身長に対する割合)",
+         "default": 0.42,
+         "min": 0.01,
+         "max": 2,
+         "step": 0.01,
+         "animatable": true
+        },
+        "thickness": {
+         "type": "number",
+         "label": "ポニーテールの太さ(倍率)",
+         "default": 1,
+         "min": 0.1,
+         "max": 5,
+         "step": 0.01,
+         "animatable": true
+        },
+        "bangs": {
+         "type": "bool",
+         "label": "前髪・横の房",
+         "default": true,
+         "animatable": false
+        },
+        "ribbon": {
+         "type": "bool",
+         "label": "リボン(ポニーテールの根元)",
+         "default": true,
+         "animatable": false
+        }
+       },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "face": {
+       "type": "bool",
+       "label": "目を描く",
+       "default": true,
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "outline": {
+       "type": "object",
+       "label": "輪郭線(裏返しの殻)",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "fields": {
+        "width": {
+         "type": "number",
+         "label": "太さ(px)",
+         "default": 3,
+         "min": 0,
+         "max": 100,
+         "step": 0.1,
+         "animatable": true
+        },
+        "color": {
+         "type": "color",
+         "label": "色",
+         "default": "#2a1a20",
+         "animatable": true
+        }
+       },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "self_light": {
+       "type": "number",
+       "label": "自分で光る割合(暗い場面でも色が見える)",
+       "default": 0,
+       "min": 0,
+       "max": 4,
+       "step": 0.01,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "preset": {
+       "type": "select",
+       "label": "ポーズ(プリセット)",
+       "default": "stand",
+       "options": [
+        {
+         "value": "stand",
+         "label": "立つ"
+        },
+        {
+         "value": "a_pose",
+         "label": "A の字"
+        },
+        {
+         "value": "t_pose",
+         "label": "T の字"
+        },
+        {
+         "value": "idle",
+         "label": "立って小さく揺れる(phase)"
+        },
+        {
+         "value": "walk",
+         "label": "歩く(phase)"
+        },
+        {
+         "value": "run",
+         "label": "走る(phase)"
+        },
+        {
+         "value": "wave",
+         "label": "手を振る(phase)"
+        },
+        {
+         "value": "sit",
+         "label": "座る"
+        },
+        {
+         "value": "hand_on_hip",
+         "label": "手を腰に"
+        },
+        {
+         "value": "peace",
+         "label": "ピース"
+        },
+        {
+         "value": "lean_forward",
+         "label": "前かがみ"
+        },
+        {
+         "value": "cheer",
+         "label": "両手を上げる"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "phase": {
+       "type": "number",
+       "label": "位相(0〜1 で 1 周。歩き・手振りなど)",
+       "default": 0,
+       "min": -1000,
+       "max": 1000,
+       "step": 0.001,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "preset_b": {
+       "type": "select",
+       "label": "混ぜる相手のポーズ",
+       "default": "",
+       "options": [
+        {
+         "value": "",
+         "label": "(なし)"
+        },
+        {
+         "value": "stand",
+         "label": "立つ"
+        },
+        {
+         "value": "a_pose",
+         "label": "A の字"
+        },
+        {
+         "value": "t_pose",
+         "label": "T の字"
+        },
+        {
+         "value": "idle",
+         "label": "立って小さく揺れる"
+        },
+        {
+         "value": "walk",
+         "label": "歩く"
+        },
+        {
+         "value": "run",
+         "label": "走る"
+        },
+        {
+         "value": "wave",
+         "label": "手を振る"
+        },
+        {
+         "value": "sit",
+         "label": "座る"
+        },
+        {
+         "value": "hand_on_hip",
+         "label": "手を腰に"
+        },
+        {
+         "value": "peace",
+         "label": "ピース"
+        },
+        {
+         "value": "lean_forward",
+         "label": "前かがみ"
+        },
+        {
+         "value": "cheer",
+         "label": "両手を上げる"
+        }
+       ],
+       "animatable": false,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "phase_b": {
+       "type": "number",
+       "label": "混ぜる相手の位相(省略 = 位相と同じ)",
+       "default": null,
+       "min": -1000,
+       "max": 1000,
+       "step": 0.001,
+       "animatable": true,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "preset_mix": {
+       "type": "number",
+       "label": "混ぜる割合(0 = ポーズ、1 = 相手)",
+       "default": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.001,
+       "animatable": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "pose": {
+       "type": "json",
+       "label": "関節の角度(度)の上書き {関節: [a, b, c] | 数}。関節 = root spine chest neck head shoulder_l/r elbow_l/r wrist_l/r hip_l/r knee_l/r ankle_l/r pony_1〜3、ほかに offset(身長に対する割合)・hand_l/r(mitt fist open peace point)。どの数もキーフレームにできる",
+       "default": null,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "ground": {
+       "type": "bool",
+       "label": "いちばん低い足を地面に付ける(省略 = 歩き・走りだけ)",
+       "default": false,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
        }
       },
       "instances": {

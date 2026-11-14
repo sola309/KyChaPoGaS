@@ -242,6 +242,110 @@ const F = {
     void main(){ vec2 p = P(); vec4 c = S(p);
       vec4 n = S(p + vec2(1.0, 0.0)) + S(p - vec2(1.0, 0.0)) + S(p + vec2(0.0, 1.0)) + S(p - vec2(0.0, 1.0));
       vec4 o = c + (c * 4.0 - n) * uAmt; gl_FragColor = vec4(clamp(o.rgb, 0.0, c.a), c.a); }`,
+  // 極座標変換(項目つき)。uTop = 絵の上の端を中心へ、uClamp = 半径の外は端の色を伸ばす、uHole = 中心の穴、uRot・uSwirl = 回転・渦(1 周 = 1)
+  polar2: HEAD + /* glsl */ `
+    uniform vec2 uC; uniform vec4 uBox; uniform float uR, uInvP, uHole, uRot, uSwirl, uTop, uClamp;
+    void main(){
+      vec2 p = P(); vec2 q = p - uC; vec2 bs = uBox.zw - uBox.xy;
+      float span = max(uR - uHole, 1e-3);
+      if (uInvP > 0.5) {
+        vec2 t = (p - uBox.xy) / bs;
+        if (t.x < 0.0 || t.x > 1.0 || t.y < 0.0 || t.y > 1.0) { gl_FragColor = vec4(0.0); return; }
+        float v = uTop > 0.5 ? t.y : 1.0 - t.y;
+        float a = (t.x + uRot + uSwirl * v) * 6.2831853, r = uHole + v * span;
+        gl_FragColor = S(uC + vec2(sin(a), -cos(a)) * r);
+      } else {
+        float rn = (length(q) - uHole) / span;
+        float a = fract(atan(q.x, -q.y) / 6.2831853 - uRot - uSwirl * rn);
+        if (rn < 0.0 || (rn > 1.0 && uClamp < 0.5) || p.x < uBox.x || p.y < uBox.y || p.x > uBox.z || p.y > uBox.w) { gl_FragColor = vec4(0.0); return; }
+        rn = min(rn, 1.0);
+        // 箱の端の半画素は内側へ寄せる(箱の外の透明と混ざらないように)
+        vec2 t = vec2(a, uTop > 0.5 ? rn : 1.0 - rn) * bs;
+        gl_FragColor = S(uBox.xy + clamp(t, vec2(0.5), bs - 0.5));
+      }
+    }`,
+  // ラフエッジ: 絵をノイズでずらして読み、アルファをしきい値で切り直す(縁がちぎれる・島になる)。uOrg = 箱の左上(模様を箱に固定する)
+  rough: HEAD + /* glsl */ `
+    uniform vec2 uOrg; uniform float uAmt, uSize, uSeed, uEvo, uOct, uTh, uSoft;
+    float fbm(vec2 g){ float n = 0.0, am = 0.5, tot = 0.0; for (int k = 0; k < 4; k++){ if (float(k) >= uOct) break; n += VN(g) * am; tot += am; g = g * 2.03 + 11.7; am *= 0.5; } return n / tot; }
+    void main(){
+      vec2 p = P(); vec2 g = (p - uOrg) / uSize + uSeed * 13.7;
+      vec2 d = vec2(fbm(g + vec2(uEvo, 0.0)), fbm(g + vec2(37.2, 17.9 + uEvo))) - 0.5;
+      vec4 c = S(p + d * 2.0 * uAmt);
+      if (uTh > 0.0) { float a = smoothstep(uTh - uSoft, uTh + uSoft, c.a); c = c.a > 1e-5 ? vec4(c.rgb / c.a * a, a) : vec4(0.0); }
+      gl_FragColor = c;
+    }`,
+  // ブロックノイズ: 四角い区画を uN 個えらび、その中の絵をずらして読む(あとの区画が上書き)
+  blocks: HEAD + /* glsl */ `
+    uniform vec2 uOrg, uSz; uniform float uN, uSeed; uniform vec4 uW, uSh;
+    void main(){
+      vec2 p = P(); vec2 o = vec2(0.0);
+      for (float i = 0.0; i < 32.0; i += 1.0){
+        if (i >= uN) break;
+        vec2 c = uOrg + vec2(H2(vec2(i, uSeed)), H2(vec2(i + 0.5, uSeed + 3.0))) * uSz;
+        vec2 hs = 0.5 * vec2(mix(uW.x, uW.y, H2(vec2(i, uSeed + 5.0))), mix(uW.z, uW.w, H2(vec2(i, uSeed + 7.0))));
+        vec2 d = abs(p - c);
+        if (d.x < hs.x && d.y < hs.y) o = vec2(mix(uSh.x, uSh.y, H2(vec2(i, uSeed + 11.0))), mix(uSh.z, uSh.w, H2(vec2(i, uSeed + 13.0))));
+      }
+      gl_FragColor = S(p - o);
+    }`,
+  // レンズフレア: 芯(白)+ にじみ(色)+ 光芒(uRays 本。中心を通る線)+ 輪。元の絵に足す
+  flare: HEAD + /* glsl */ `
+    uniform vec2 uC; uniform float uR, uLen, uWid, uRays, uAng, uInt, uCore, uRing; uniform vec4 uColor;
+    void main(){
+      vec4 c = texture2D(tSrc, vUv);
+      vec2 q = P() - uC; float r = length(q);
+      float core = exp(-r * r / (0.08 * uR * uR + 1e-4)) * uCore;
+      float gl = pow(clamp(1.0 - r / (uR * 2.5 + 1e-4), 0.0, 1.0), 2.5) * 0.6;
+      float st = 0.0;
+      for (float i = 0.0; i < 8.0; i += 1.0){
+        if (i >= uRays) break;
+        float t = uAng + i * 3.14159265 / max(uRays, 1.0); vec2 d = vec2(sin(t), -cos(t));
+        float al = abs(dot(q, d)), ac = abs(q.x * d.y - q.y * d.x);
+        float k = clamp(1.0 - al / (uLen + 1e-4), 0.0, 1.0);
+        st += exp(-ac / (uWid * (0.25 + 0.75 * k) + 1e-4)) * k * k;
+      }
+      float ring = uRing > 0.0 ? exp(-pow((r - uR * 1.6) / (uR * 0.12 + 1e-4), 2.0)) * uRing : 0.0;
+      vec3 fl = (uColor.rgb * (gl + st + ring) + vec3(core + st * 0.6)) * uInt * uColor.a;
+      vec3 rgb = c.rgb + fl;
+      float a = clamp(max(c.a, max(rgb.r, max(rgb.g, rgb.b))), 0.0, 1.0);
+      gl_FragColor = vec4(min(rgb, vec3(a)), a);
+    }`,
+  // ガラスの屈折。uKind 0 = レンズ(だ円の中をふくらませて映す)、1 = すりガラス(細かい乱れ)。uAb = 色ごとのずれ、uHl = 映り込みの白、uShade = 縁の暗さ
+  refract: HEAD + /* glsl */ `
+    uniform vec2 uC, uRad, uOrg; uniform float uKind, uAmt, uAb, uHl, uShade, uSize, uSeed; uniform vec4 uTint;
+    void main(){
+      vec2 p = P();
+      if (uKind > 0.5) {
+        vec2 g = (p - uOrg) / uSize + uSeed * 7.3;
+        vec2 d = (vec2(VN(g), VN(g + vec2(31.7, 12.3))) - 0.5) * 2.0 * uAmt;
+        vec4 a = S(p + d * (1.0 + uAb)), b = S(p + d), c = S(p + d * (1.0 - uAb));
+        vec4 o = vec4(a.r, b.g, c.b, b.a);
+        gl_FragColor = vec4(mix(o.rgb, uTint.rgb * o.a, uTint.a), o.a);
+        return;
+      }
+      vec2 n = (p - uC) / uRad; float r = length(n);
+      vec4 own = texture2D(tSrc, vUv);
+      if (r >= 1.0) { gl_FragColor = own; return; }
+      float h = sqrt(1.0 - r * r);
+      vec2 q = p - uC;
+      vec4 a = S(uC + q * (1.0 - uAmt * (1.0 + uAb) * h)), b = S(uC + q * (1.0 - uAmt * h)), c = S(uC + q * (1.0 - uAmt * (1.0 - uAb) * h));
+      vec4 o = vec4(a.r, b.g, c.b, max(b.a, max(a.a, c.a)));
+      o.rgb = mix(o.rgb, uTint.rgb * o.a, uTint.a);
+      o.rgb *= 1.0 - uShade * pow(1.0 - h, 2.0);
+      float sp = pow(max(dot(normalize(vec3(n.x, n.y, h)), normalize(vec3(-0.45, -0.6, 0.66))), 0.0), 24.0) * uHl;
+      o = vec4(o.rgb + vec3(sp), max(o.a, sp)); o.rgb = min(o.rgb, vec3(o.a));
+      float e = clamp((1.0 - r) * min(uRad.x, uRad.y), 0.0, 1.0);
+      gl_FragColor = mix(own, o, e);
+    }`,
+  // 減色(パレット): いちばん近い色に置き換える(RGB の距離)
+  palette: HEAD + /* glsl */ `
+    uniform vec3 uPal[32]; uniform float uN, uAmt;
+    void main(){
+      vec4 c = texture2D(tSrc, vUv); vec3 s = unpm(c); float bd = 1e9; vec3 best = s;
+      for (int i = 0; i < 32; i++){ if (float(i) >= uN) break; vec3 d = s - uPal[i]; float dd = dot(d, d); if (dd < bd) { bd = dd; best = uPal[i]; } }
+      gl_FragColor = vec4(mix(s, best, uAmt) * c.a, c.a);
+    }`,
 }
 
 const D2R = Math.PI / 180
@@ -275,7 +379,15 @@ const PAD = {
   polar: () => 0,
   sharpen: () => 0,
   vignette_blur: () => 0,
+  rough_edges: (p) => Math.abs(num(p.amount, 20)) + 1,
+  block_noise: (p) => Math.max(...rng(p.shift_x, -30, 30).map(Math.abs), ...rng(p.shift_y, -30, 30).map(Math.abs)) + 1,
+  lens_flare: () => 0,
+  refract: () => 0,
+  palette: () => 0,
 }
+// [最小, 最大] の組(数 1 個なら ± その数)
+function rng(v, a, b) { return Array.isArray(v) ? [num(v[0], a), num(v[1] ?? v[0], b)] : v == null ? [a, b] : [-Math.abs(num(v, 0)), Math.abs(num(v, 0))] }
+function rngPos(v, a, b) { return Array.isArray(v) ? [num(v[0], a), num(v[1] ?? v[0], b)] : v == null ? [a, b] : [num(v, a), num(v, a)] }
 // まわりの画素だけで決まるパス(あとに続く切り抜きの範囲 + はみ出しぶんだけ描けば、同じ絵になる)
 export const LOCAL_PASS = new Set(['blur', 'glow', 'rgb_shift', 'drop_shadow', 'inner_shadow', 'stroke_outline', 'outline', 'directional_blur', 'long_shadow', 'feather', 'sharpen'])
 export const isPass = (type) => type in PAD
@@ -525,8 +637,20 @@ export class Effects {
         m.uniforms.uN.value.set(n[0], n[1])
         return this.run1('mirror', null, src, { uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs) })
       }
-      case 'polar':
+      case 'polar': {
+        // 項目つき(fit / inner / center_width / scale / rotation / swirl / cx / cy / clamp のどれかを書いたとき)。書かなければ下の、今までどおりの式
+        if (p.fit != null || p.inner != null || p.center_width != null || p.scale != null || p.rotation != null || p.swirl != null || p.cx != null || p.cy != null || p.clamp != null) {
+          const bw = b[2] - b[0], bh = b[3] - b[1]
+          const R0 = p.fit === 'cover' ? Math.hypot(bw, bh) / 2 : p.fit === 'width' ? bw / 2 : p.fit === 'height' ? bh / 2 : Math.min(bw, bh) / 2
+          const m = this.mat('polar2', { uC: V2(), uBox: V4(), uR: 1, uInvP: 0, uHole: 0, uRot: 0, uSwirl: 0, uTop: 0, uClamp: 0 })
+          m.uniforms.uBox.value.set(b[0], b[1], b[2], b[3])
+          return this.run1('polar2', null, src, {
+            uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs), uR: Math.max(1, (R0 * num(p.scale, 100)) / 100), uInvP: p.invert ? 1 : 0,
+            uHole: Math.max(0, num(p.center_width, 0)) * rs, uRot: num(p.rotation, 0) / 360, uSwirl: num(p.swirl, 0) / 360, uTop: p.inner === 'top' ? 1 : 0, uClamp: p.fit === 'cover' || p.clamp ? 1 : 0,
+          })
+        }
         return this.run1('polar', { uC: V2(), uR: 1, uInvP: 0 }, src, { uC: this.v2.set(cx, cy), uR: Math.max(1, Math.min(b[2] - b[0], b[3] - b[1]) / 2), uInvP: p.invert ? 1 : 0 })
+      }
       case 'vignette_blur': {
         // amount = 周辺の暗さ %、blur = 周辺のぼかし px、radius = 効き始める位置(%。箱の対角の半分が 100)、softness = 効ききるまでの幅 %
         // shape: 'box'(既定。箱の縦横比のだ円)/ 'circle'(正円。どの向きにも同じ距離)。ramp: 'smooth'(既定)/ 'linear'
@@ -548,6 +672,67 @@ export class Effects {
       }
       case 'sharpen':
         return this.run1('sharpen', { uAmt: 0 }, src, { uAmt: num(p.amount, 50) / 100 })
+      case 'rough_edges': {
+        // amount = ずらす量 px、size = ノイズの大きさ px、threshold = アルファを切り直す位置 %(0 = 切り直さない)、softness = 切り口のやわらかさ %
+        const amt = num(p.amount, 20) * rs
+        if (Math.abs(amt) < 0.01 && !(num(p.threshold, 50) > 0)) return null
+        return this.run1('rough', { uOrg: V2(), uAmt: 0, uSize: 100, uSeed: 0, uEvo: 0, uOct: 2, uTh: 0, uSoft: 0.05 }, src, {
+          uOrg: this.v2.set(b[0], b[1]), uAmt: amt, uSize: Math.max(1, num(p.size, 60) * rs), uSeed: num(p.seed, 0), uEvo: num(p.evolution, 0),
+          uOct: clamp(Math.round(num(p.octaves, 3)), 1, 4), uTh: clamp(num(p.threshold, 50) / 100, 0, 0.98), uSoft: clamp(num(p.softness, 5) / 100, 0.002, 0.5),
+        })
+      }
+      case 'block_noise': {
+        // count = 区画の数([最小, 最大] なら、切り替わるたびに乱数で決める)、width / height = 区画の大きさ px、shift_x / shift_y = ずらす量 px(どれも [最小, 最大])
+        // speed = 1 秒あたりの切り替え回数(0 = 止める)、amount = 効く割合 %(区画の数に掛ける)
+        const sp = num(p.speed, info.fps), tick = sp > 0 ? Math.floor((info.f / info.fps) * sp + 1e-6) : 0
+        const seed = ((Math.round(num(p.seed, 1)) * 31 + tick * 17) % 4096 + 4096) % 4096
+        const cn = rngPos(p.count, 5, 15), w = rngPos(p.width, 300, 500), h = rngPos(p.height, 10, 100), sx = rng(p.shift_x, -30, 30), sy = rng(p.shift_y, -30, 30)
+        const n = Math.round((cn[0] + (cn[1] - cn[0]) * (((seed * 2654435761) >>> 0) / 4294967296)) * clamp(num(p.amount, 100) / 100, 0, 1))
+        if (n <= 0) return null
+        const m = this.mat('blocks', { uOrg: V2(), uSz: V2(), uN: 0, uSeed: 0, uW: V4(), uSh: V4() })
+        m.uniforms.uSz.value.set(b[2] - b[0], b[3] - b[1])
+        m.uniforms.uW.value.set(w[0] * rs, w[1] * rs, h[0] * rs, h[1] * rs)
+        m.uniforms.uSh.value.set(sx[0] * rs, sx[1] * rs, sy[0] * rs, sy[1] * rs)
+        return this.run1('blocks', null, src, { uOrg: this.v2.set(b[0], b[1]), uN: Math.min(32, n), uSeed: seed })
+      }
+      case 'lens_flare': {
+        // 箱の中心 + (cx, cy) に光を足す。radius = にじみの半径 px、streak_length = 光芒の長さ px(中心から片側)、streak_width = 光芒の太さ px、rays = 光芒の本数(中心を通る線の数。0 = なし)
+        const c = toColor(p.color ?? '#9999ff')
+        let it = num(p.intensity, 100) / 100
+        const fl = clamp(num(p.flicker, 0) / 100, 0, 1)
+        if (fl > 0) it *= 1 - fl * (((Math.imul(Math.floor(info.f) + 1, 2654435761) >>> 0) % 1000) / 1000)
+        if (it <= 0) return null
+        const m = this.mat('flare', { uC: V2(), uR: 1, uLen: 1, uWid: 1, uRays: 1, uAng: 0, uInt: 1, uCore: 1, uRing: 0, uColor: V4() })
+        return this.run1('flare', null, src, {
+          uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs), uR: Math.max(0.5, num(p.radius, 100) * rs), uLen: Math.max(0, num(p.streak_length, 600) * rs),
+          uWid: Math.max(0.2, num(p.streak_width, 6) * rs), uRays: clamp(Math.round(num(p.rays, 1)), 0, 8), uAng: (num(p.angle, 90) + num(p.spin, 0) * (info.f / info.fps)) * D2R, uInt: it,
+          uCore: clamp(num(p.core, 100) / 100, 0, 4), uRing: clamp(num(p.ring, 0) / 100, 0, 2), uColor: m.uniforms.uColor.value.set(c[0], c[1], c[2], c[3]),
+        })
+      }
+      case 'refract': {
+        // kind: 'lens'(既定。だ円の中をふくらませて映す)/ 'frost'(すりガラス)。調整レイヤーに掛けると、下の絵がゆがんで映る
+        // lens: radius(px。書かなければ箱いっぱいのだ円)・amount(ふくらみ %。正 = 拡大、負 = 縮小)・aberration(色ずれ %)・highlight(映り込み %)・shade(縁の暗さ %)
+        // frost: amount(乱れ px)・size(乱れの大きさ px)・seed
+        const frost = p.kind === 'frost'
+        const t = toColor(p.tint ?? '#ffffff'), ta = clamp(num(p.tint_amount, 0) / 100, 0, 1)
+        const m = this.mat('refract', { uC: V2(), uRad: V2(), uOrg: V2(), uKind: 0, uAmt: 0, uAb: 0, uHl: 0, uShade: 0, uSize: 8, uSeed: 0, uTint: V4() })
+        const rx = p.radius != null ? num(p.radius, 100) * rs : (b[2] - b[0]) / 2, ry = p.radius != null ? num(p.radius_y ?? p.radius, 100) * rs : (b[3] - b[1]) / 2
+        m.uniforms.uRad.value.set(Math.max(1, rx), Math.max(1, ry))
+        m.uniforms.uOrg.value.set(b[0], b[1])
+        return this.run1('refract', null, src, {
+          uC: this.v2.set(cx + num(p.cx, 0) * rs, cy + num(p.cy, 0) * rs), uKind: frost ? 1 : 0, uAmt: frost ? num(p.amount, 8) * rs : clamp(num(p.amount, 35) / 100, -3, 0.95),
+          uAb: clamp(num(p.aberration, 0) / 100, 0, 1), uHl: clamp(num(p.highlight, 0) / 100, 0, 2), uShade: clamp(num(p.shade, 0) / 100, 0, 1), uSize: Math.max(0.5, num(p.size, 6) * rs), uSeed: num(p.seed, 1),
+          uTint: m.uniforms.uTint.value.set(t[0], t[1], t[2], ta),
+        })
+      }
+      case 'palette': {
+        // colors = 使う色(2〜32 色)。いちばん近い色に置き換える。amount = 強さ %
+        const cols = Array.isArray(p.colors) ? p.colors.slice(0, 32) : []
+        if (cols.length < 1) return null
+        const m = this.mat('palette', { uPal: Array.from({ length: 32 }, () => new THREE.Vector3()), uN: 0, uAmt: 1 })
+        cols.forEach((v, i) => { const c = toColor(v); m.uniforms.uPal.value[i].set(c[0], c[1], c[2]) })
+        return this.run1('palette', null, src, { uN: cols.length, uAmt: clamp(num(p.amount, 100) / 100, 0, 1) })
+      }
     }
     return null
   }

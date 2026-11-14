@@ -1,0 +1,382 @@
+{
+ "id": "ex18",
+ "name": "18 mannequin walk",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": null,
+  "layers": [
+   {
+    "id": "cap",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      1010
+     ]
+    },
+    "source": {
+     "text": "mannequin: walk / run の位相・首のキーフレーム・preset_mix(stand → wave)・ポニーテールの wiggle",
+     "font": "Noto Sans JP",
+     "weight": 500,
+     "size": 30,
+     "fill": "#55506a"
+    }
+   },
+   {
+    "id": "fig",
+    "type": "mesh",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      0
+     ]
+    },
+    "source": {
+     "light": {
+      "ambient": 1.0,
+      "intensity": 1.8,
+      "direction": [
+       -0.6,
+       -1,
+       -0.7
+      ],
+      "shadows": true,
+      "shadow_area": 2600,
+      "shadow_opacity": 0.55
+     },
+     "objects": [
+      {
+       "geometry": "plane",
+       "size": [
+        3600,
+        1200
+       ],
+       "position": [
+        0,
+        360,
+        0
+       ],
+       "rotation": [
+        -90,
+        0,
+        0
+       ],
+       "cast_shadow": false,
+       "material": {
+        "type": "shadow",
+        "opacity": 0.3
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "style": "stick",
+       "position": [
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -560
+          },
+          {
+           "f": 180,
+           "v": 640
+          }
+         ]
+        },
+        360,
+        300
+       ],
+       "rotation": [
+        0,
+        62,
+        0
+       ],
+       "body": {
+        "height": 420,
+        "heads": 5.5,
+        "thickness": 1.2
+       },
+       "colors": {
+        "skin": "#4a4660",
+        "top": "#4a4660",
+        "bottom": "#4a4660",
+        "shoes": "#4a4660",
+        "hair": "#4a4660",
+        "ribbon": "#e0607a"
+       },
+       "hair": {
+        "style": "ponytail"
+       },
+       "material": {
+        "type": "basic"
+       },
+       "preset": "run",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 36,
+          "v": 1
+         }
+        ],
+        "loop": true
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "position": [
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -760
+          },
+          {
+           "f": 180,
+           "v": 40
+          }
+         ]
+        },
+        360,
+        0
+       ],
+       "rotation": [
+        0,
+        62,
+        0
+       ],
+       "body": {
+        "height": 520,
+        "heads": 6.2
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#a32f48",
+        "bottom": "#e68aa8",
+        "hair": "#b5334f",
+        "shoes": "#5a2030",
+        "ribbon": "#1c1a1e",
+        "socks": "#3b2233"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.5,
+        "thickness": 1.1
+       },
+       "outfit": {
+        "sleeves": 0.15,
+        "pants": 0,
+        "skirt": 0.75,
+        "skirt_flare": 0.9,
+        "boots": 0.9
+       },
+       "outline": {
+        "width": 3,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "walk",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 54,
+          "v": 1
+         }
+        ],
+        "loop": true
+       },
+       "pose": {
+        "head": [
+         0,
+         {
+          "k": [
+           {
+            "f": 60,
+            "v": 0,
+            "e": "inOutSine"
+           },
+           {
+            "f": 90,
+            "v": -55,
+            "e": "inOutSine"
+           },
+           {
+            "f": 140,
+            "v": -55,
+            "e": "inOutSine"
+           },
+           {
+            "f": 165,
+            "v": 0
+           }
+          ]
+         },
+         0
+        ]
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "position": [
+        560,
+        360,
+        -40
+       ],
+       "rotation": [
+        0,
+        -20,
+        0
+       ],
+       "body": {
+        "height": 500,
+        "heads": 6.2
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.48
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 3,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon"
+       },
+       "preset": "stand",
+       "preset_b": "wave",
+       "preset_mix": {
+        "k": [
+         {
+          "f": 50,
+          "v": 0,
+          "e": "outBack"
+         },
+         {
+          "f": 75,
+          "v": 1
+         }
+        ]
+       },
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 40,
+          "v": 1
+         }
+        ],
+        "loop": true
+       },
+       "pose": {
+        "pony_1": [
+         0,
+         {
+          "v": 0,
+          "wiggle": {
+           "amp": 9,
+           "freq": 0.7,
+           "seed": 3
+          }
+         },
+         0
+        ],
+        "pony_2": [
+         0,
+         {
+          "v": 0,
+          "wiggle": {
+           "amp": 12,
+           "freq": 0.7,
+           "seed": 4
+          }
+         },
+         0
+        ],
+        "chest": [
+         {
+          "k": [
+           {
+            "f": 0,
+            "v": 0,
+            "e": "inOutSine"
+           },
+           {
+            "f": 45,
+            "v": 2,
+            "e": "inOutSine"
+           },
+           {
+            "f": 90,
+            "v": 0
+           }
+          ],
+          "loop": true
+         },
+         0,
+         0
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "bg",
+    "type": "solid",
+    "in": 0,
+    "out": 180,
+    "source": {
+     "fill": {
+      "gradient": {
+       "angle": 180,
+       "stops": [
+        [
+         0,
+         "#cfe3f2"
+        ],
+        [
+         1,
+         "#f4efe8"
+        ]
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}

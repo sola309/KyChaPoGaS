@@ -1,0 +1,528 @@
+{
+ "id": "ex_puppet_01",
+ "name": "puppet 01 立ち絵のアイドル(まばたき・口・髪ゆれ・体の傾き・首ふり)",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 150,
+ "data": {
+  "version": 1,
+  "bg": "#dfe7ea",
+  "layers": [
+   {
+    "id": "label",
+    "type": "text",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      960,
+      1052
+     ]
+    },
+    "source": {
+     "text": "puppet レイヤー: 同じパペットを 2 枚(全身 / crop で顔の寄り)。値はどちらも同じ",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 30,
+     "fill": "#33444d"
+    }
+   },
+   {
+    "id": "face",
+    "type": "puppet",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      1300,
+      520
+     ],
+     "scale": [
+      240,
+      240
+     ]
+    },
+    "source": {
+     "puppet_id": "kyoko_flat",
+     "mouth": {
+      "k": [
+       {
+        "f": 18,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 24,
+        "v": 0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 30,
+        "v": 0.3,
+        "e": "inOutSine"
+       },
+       {
+        "f": 36,
+        "v": 0.9,
+        "e": "inOutSine"
+       },
+       {
+        "f": 42,
+        "v": 0.25,
+        "e": "inOutSine"
+       },
+       {
+        "f": 48,
+        "v": 0.8,
+        "e": "inOutSine"
+       },
+       {
+        "f": 56,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_turn": {
+      "k": [
+       {
+        "f": 40,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 62,
+        "v": -0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 92,
+        "v": 0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 118,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_tilt": {
+      "k": [
+       {
+        "f": 96,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 110,
+        "v": 7,
+        "e": "inOutSine"
+       },
+       {
+        "f": 128,
+        "v": -5,
+        "e": "inOutSine"
+       },
+       {
+        "f": 146,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_nod": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 10,
+        "v": 0.5,
+        "e": "inOutSine"
+       },
+       {
+        "f": 20,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "body_lean": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 50,
+        "v": -2.2,
+        "e": "inOutSine"
+       },
+       {
+        "f": 100,
+        "v": 2.2,
+        "e": "inOutSine"
+       },
+       {
+        "f": 150,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "look": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 62,
+        "v": [
+         -0.8,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 92,
+        "v": [
+         0.8,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 118,
+        "v": [
+         0,
+         0
+        ],
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "blink": {
+      "k": [
+       {
+        "f": 126,
+        "v": 0
+       },
+       {
+        "f": 129,
+        "v": 1,
+        "e": "inQuad"
+       },
+       {
+        "f": 133,
+        "v": 1
+       },
+       {
+        "f": 140,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "auto_blink": true,
+     "blink_interval": 1.7,
+     "blink_seed": 3,
+     "sway": 1,
+     "wind": {
+      "k": [
+       {
+        "f": 60,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 90,
+        "v": 0.9,
+        "e": "inOutSine"
+       },
+       {
+        "f": 130,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "sway_speed": 1,
+     "sway_seed": 2,
+     "breath": 1.5,
+     "breath_period": 3,
+     "crop": [
+      413,
+      20,
+      873,
+      440
+     ]
+    },
+    "effects": [
+     {
+      "type": "stroke_outline",
+      "params": {
+       "width": 8,
+       "color": "#ffffff"
+      }
+     }
+    ]
+   },
+   {
+    "id": "body",
+    "type": "puppet",
+    "in": 0,
+    "out": 150,
+    "transform": {
+     "position": [
+      470,
+      520
+     ],
+     "scale": [
+      78,
+      78
+     ]
+    },
+    "source": {
+     "puppet_id": "kyoko_flat",
+     "mouth": {
+      "k": [
+       {
+        "f": 18,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 24,
+        "v": 0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 30,
+        "v": 0.3,
+        "e": "inOutSine"
+       },
+       {
+        "f": 36,
+        "v": 0.9,
+        "e": "inOutSine"
+       },
+       {
+        "f": 42,
+        "v": 0.25,
+        "e": "inOutSine"
+       },
+       {
+        "f": 48,
+        "v": 0.8,
+        "e": "inOutSine"
+       },
+       {
+        "f": 56,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_turn": {
+      "k": [
+       {
+        "f": 40,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 62,
+        "v": -0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 92,
+        "v": 0.85,
+        "e": "inOutSine"
+       },
+       {
+        "f": 118,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_tilt": {
+      "k": [
+       {
+        "f": 96,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 110,
+        "v": 7,
+        "e": "inOutSine"
+       },
+       {
+        "f": 128,
+        "v": -5,
+        "e": "inOutSine"
+       },
+       {
+        "f": 146,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "head_nod": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 10,
+        "v": 0.5,
+        "e": "inOutSine"
+       },
+       {
+        "f": 20,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "body_lean": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 50,
+        "v": -2.2,
+        "e": "inOutSine"
+       },
+       {
+        "f": 100,
+        "v": 2.2,
+        "e": "inOutSine"
+       },
+       {
+        "f": 150,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "look": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 62,
+        "v": [
+         -0.8,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 92,
+        "v": [
+         0.8,
+         0
+        ],
+        "e": "inOutSine"
+       },
+       {
+        "f": 118,
+        "v": [
+         0,
+         0
+        ],
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "blink": {
+      "k": [
+       {
+        "f": 126,
+        "v": 0
+       },
+       {
+        "f": 129,
+        "v": 1,
+        "e": "inQuad"
+       },
+       {
+        "f": 133,
+        "v": 1
+       },
+       {
+        "f": 140,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "auto_blink": true,
+     "blink_interval": 1.7,
+     "blink_seed": 3,
+     "sway": 1,
+     "wind": {
+      "k": [
+       {
+        "f": 60,
+        "v": 0,
+        "e": "inOutSine"
+       },
+       {
+        "f": 90,
+        "v": 0.9,
+        "e": "inOutSine"
+       },
+       {
+        "f": 130,
+        "v": 0,
+        "e": "inOutSine"
+       }
+      ]
+     },
+     "sway_speed": 1,
+     "sway_seed": 2,
+     "breath": 1.5,
+     "breath_period": 3
+    },
+    "effects": [
+     {
+      "type": "drop_shadow",
+      "params": {
+       "x": 14,
+       "y": 14,
+       "blur": 18,
+       "color": "#56707c",
+       "opacity": 45
+      }
+     }
+    ]
+   }
+  ]
+ }
+}

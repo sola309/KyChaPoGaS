@@ -753,6 +753,27 @@ class SceneBuilder:
             return [self.fx('blur', {'variant': 'directional', 'radius': P('範囲'), 'angle': P('角度')})]
         if n == '放射ブラー':
             return [self.fx('blur', {'variant': 'radial', 'radius': P('範囲'), 'cx': P('X'), 'cy': P('Y')})]
+        if n == '極座標変換':
+            # 組み込みの 極座標変換(中心幅・拡大率・回転・渦巻): 絵の横 = 角度、縦 = 半径。箱いっぱい(四隅まで)に描く。
+            # スクリプトの本文は読めていない。S5 のしま → S4 のカードの放射状の光(455〜566)で「横が角度になり、カードの四隅まで埋まる」ことだけ確かめた。
+            # 上の端が中心になる(inner: top)・半径の基準が対角の半分(fit: cover)・回転の向き・渦巻の単位は推測
+            p = {'fit': 'cover', 'inner': 'top'}
+            if cv.const(fi, '中心幅') or cv.is_anim(fi, '中心幅'):
+                p['center_width'] = P('中心幅')
+            if cv.const(fi, '拡大率') != 100 or cv.is_anim(fi, '拡大率'):
+                p['scale'] = P('拡大率')
+            if cv.const(fi, '回転') or cv.is_anim(fi, '回転'):
+                p['rotation'] = P('回転')
+            if cv.const(fi, '渦巻') or cv.is_anim(fi, '渦巻'):
+                p['swirl'] = P('渦巻', lambda v: round(v * 360, 3))
+                self.rep['notes']['極座標変換の 渦巻(単位は推測: 1 = 外周で 1 回転)'] += 1
+            return [self.fx('polar', p)]
+        if n == 'モーションブラー':
+            # 組み込みの モーションブラー(間隔・分解能): 1 つ前のコマからいまのコマまでの動きを 分解能 回に分けて重ねる(手前へ尾を引く。推測)。
+            # エンジンではレイヤーの motion_blur(build の後処理で、付いていたレイヤー・グループの対象に配る)
+            self.rep['effects_mapped']['layer.motion_blur'] += 1
+            return [{'type': '_motion_blur', 'params': {'samples': int(max(2, min(64, cv.const(fi, '分解能') or 10))),
+                                                         'shutter': float(cv.const(fi, '間隔') or 1), 'phase': -1}}]
         if n in ('アニメーション効果', 'カメラ効果'):
             return self.script_effect(c, cv, fi, f, src)
         return [self.raw_fx(f, cv, fi)]
@@ -902,9 +923,10 @@ class SceneBuilder:
                 self.rep['notes']['ランダム配置@ANM1: 自分の幅が分からず 画面幅 × 範囲 にした'] += 1
             return [self.fx('repeat', p, _after=True)]
         if name == '輪郭追跡拡張機能@輪郭追跡':
-            # 次の「輪郭追跡(表示)」の線を破線にする設定(変数を渡すだけ)。エンジンの trace_outline に破線が無いので残す。
-            self.rep['effects_unmapped'][name] += 1
-            return [{'type': 'aviutl_script', 'name': name,
+            # 次の「輪郭追跡(表示)」の線を破線にする設定(変数を渡すだけ)。build の後処理で、対象の trace_outline の dash_period / dash_gap に配る
+            # (ivf = track0 %(破線の周期)、ivl = track1 %(すき間)。表示側は count*ivf < t <= (count+1)*ivf - ivl の所だけ描く)
+            self.rep['effects_mapped']['trace_outline.dash'] += 1
+            return [{'type': '_trace_dash', 'span': [c.start, c.end + 1],
                      'params': {'dash_period': T(0), 'dash_gap': T(1), 'smooth': T(2), 'body_opacity': T(3, lambda v: 100 - v),
                                 'shape': prm.get('fig'), 'along_path': bool(prm.get('td')), 'head': bool(prm.get('senp')),
                                 'head_shape': prm.get('senz'), 'head_size': prm.get('sens')},
@@ -985,7 +1007,8 @@ class SceneBuilder:
                     # 完成動画と合うのは 判別分析法(大津)のしきい値(シーン 36 の縁: 手動値 9 ではなく 13〜14)。
                     # 直前で色を置き換えた素材(か、画像そのもの)の輝度から求めて焼く。
                     path = ov['path'] if ov and ov.get('mode') == 'replace_color' and ov.get('entry') else (c.o['filters'][0]['exdata'].get('file') if c.kind == '画像ファイル' else None)
-                    loc = self.mats.local(AM.norm(path)) if path else None
+                    # 作り直しモード(元の素材を読まない)では、置き換え先の新しい絵から求める
+                    loc = (self.new_image_path(path) if getattr(self.mats, 'rebuild', False) else self.mats.local(AM.norm(path))) if path else None
                     if loc and os.path.exists(loc):
                         try:
                             from PIL import Image
@@ -1003,6 +1026,44 @@ class SceneBuilder:
             if chk:
                 p.update({'light': col_param(prm.get('col1'), '#ffffff'), 'dark': col_param(prm.get('col2'), '#000000')})
             return [self.fx('threshold', p)]
+        if name == 'ラフエッジ':
+            # 「ラフエッジ」(本文は読めていない。推測): track0 = ずれの大きさ px、track2 = アルファを切り直す位置 %。track1・track3 の意味は分からない(params に残す)。
+            # 完成版 441〜444(S4 のシルエットが、ちぎれた島から元の形へ戻る)を見て、ノイズで絵をずらして読み + しきい値で切り直す形にした。ノイズの大きさ 80 px は見た目から
+            return [self.fx('rough_edges', {'amount': T(0), 'size': 80, 'threshold': T(2), 'octaves': 3, 'seed': int(prm.get('seed', 0) or 0),
+                                            'aviutl': {'track1': K(1), 'track3': K(3), 'opts': prm}})]
+        if name == '内側シャドー@ANM1':
+            # @ANM1.anm「内側シャドー」(本文は読めていない。推測): track0・1 = X・Y のずれ px、track2 = 濃さ %、track3 = 拡散 px、color = 影の色
+            return [self.fx('inner_shadow', {'x': T(0), 'y': T(1), 'opacity': T(2), 'blur': T(3), 'color': col_param(prm.get('color'), '#000000')})]
+        if name == 'メディアンカット減色@T_Color_Module':
+            # @T_Color_Module.anm「メディアンカット減色」: track0 = 色数。絵が決まっているとき(画像ファイル + 置き換え先の新しい絵がある)は、
+            # その絵からメディアンカットで色を選んで palette に焼く。無ければ posterize(色数の 3 乗根の段)で代える
+            ncol = int(max(2, min(32, K(0) or 16)))
+            cols = None
+            path = c.o['filters'][0]['exdata'].get('file') if c.kind == '画像ファイル' else None
+            loc = self.new_image_path(path) if path else None
+            if loc:
+                try:
+                    from PIL import Image
+                    im = Image.open(loc).convert('RGBA')
+                    im.thumbnail((512, 512))
+                    bg = Image.new('RGB', im.size, (255, 255, 255))
+                    bg.paste(im, mask=im.split()[3])
+                    q = bg.quantize(ncol, method=Image.Quantize.MEDIANCUT)
+                    pal = q.getpalette()[:ncol * 3]
+                    cols = ['#%02x%02x%02x' % tuple(pal[i:i + 3]) for i in range(0, len(pal), 3)]
+                except Exception:
+                    cols = None
+            if cols:
+                self.rep['notes']['メディアンカット減色: 新しい絵から色を選んで palette に焼いた'] += 1
+                return [self.fx('palette', {'colors': cols, 'count_aviutl': ncol})]
+            self.rep['notes']['メディアンカット減色: 絵が決まらないので posterize で代えた'] += 1
+            return [self.fx('posterize', {'levels': max(2, round(ncol ** (1 / 3))), 'count_aviutl': ncol})]
+        if name == 'Text 字間調整@hksy' and src is not None and 'text' in src and isinstance(src.get('tracking', 0), (int, float)):
+            # @hksy「Text 字間調整」(本文は読めていない。推測): track0 = 字間に足す px。完成版 3838〜3852(S30 の赤い帯の品書き: 1000 → 0 で字が寄ってくる)で確かめる
+            base = src.get('tracking', 0) or 0
+            src['tracking'] = T(0, lambda v: round(v + base, 3))
+            self.rep['effects_mapped']['text.tracking'] += 1
+            return []
         if name == 'ハーフトーンT':
             return [self.fx('halftone', {'size': T(0), 'min': T(1), 'max': T(2), 'angle': T(3),
                                          'shape': prm.get('fig', '円'), 'fg': col_param(prm.get('col1')), 'bg': col_param(prm.get('col2')),
@@ -1044,6 +1105,29 @@ class SceneBuilder:
                 return [self.fx('offset', {key: Conv._kf(keys) if len(keys) > 1 else keys[0][1]})]
             return [self.fx('offset', {key: {'k': [{'f': c.start, 'v': val(a), 'e': ez}, {'f': c.end, 'v': val(b)}]}})]
         return [self.raw_fx(f, cv, fi, name)]
+
+    def new_image_path(self, path):
+        """作り直しモード: 置き換え表の新しい絵のファイル(asset_id → /api/assets の file_path)。無ければ None。元の素材は読まない。"""
+        if not (self.mats and path):
+            return None
+        try:
+            e = self.mats.replaced(AM.norm(path))
+        except Exception:
+            e = None
+        if not e or not getattr(self.mats, 'api', None):
+            return None
+        cache = getattr(self.mats, '_asset_paths', None)
+        if cache is None:
+            cache = {}
+            try:
+                import urllib.request
+                with urllib.request.urlopen(f"{self.mats.api}/api/assets/?project_id={self.mats.project_id}", timeout=60) as r:
+                    cache = {a['id']: a.get('file_path') for a in json.load(r)}
+            except Exception:
+                cache = {}
+            self.mats._asset_paths = cache
+        loc = cache.get(e['asset_id'])
+        return loc if loc and os.path.exists(loc) else None
 
     # ---- 素材 ----
     def video_source(self, c, cv, fi, path, layer):
@@ -1238,7 +1322,13 @@ class SceneBuilder:
         elif kind == '画像ファイル':
             rm = getattr(self.opts, 'recreate_map', None) or {}
             skey = 'still:' + AM.rel_of(AM.norm(x0.get('file', '')))
-            e = self.still(x0.get('file', '')) if not (rm.get(skey, {}).get('comp_id') and not os.path.exists(self.mats.local(x0.get('file', '')) if self.mats else '')) else None
+            if self.mats and getattr(self.mats, 'rebuild', False):
+                # 作り直しモード: 置き換え表の新しい絵 → 無ければ作り直した comp(recreate の 'still:')→ 無ければ仮の板
+                e = self.still(x0.get('file', '')) if (self.mats.replaced(x0.get('file', '')) or not rm.get(skey, {}).get('comp_id')) else None
+                if e is not None:
+                    self.rep['notes']['静止画 → ' + {'placeholder': '仮の板(置き換え先なし)'}.get(e.get('rebuilt'), '新しい絵(' + str(e.get('rebuilt')) + ')')] += 1
+            else:
+              e = self.still(x0.get('file', '')) if not (rm.get(skey, {}).get('comp_id') and not os.path.exists(self.mats.local(x0.get('file', '')) if self.mats else '')) else None
             if e is None and rm.get(skey, {}).get('comp_id'):
                 # 手元にも PC にも無い静止画(元絵が要る)→ 同じ大きさの仮の板のコンポジション(recreate.py。キーは 'still:<相対パス>')
                 L = self.base_layer(c, 'comp')
@@ -1326,6 +1416,8 @@ class SceneBuilder:
                     e['enabled'] = False
                 effects.append(e)
         effects = self.effect_first_order(effects)
+        if getattr(c, '_pre_fx', None):
+            effects = list(c._pre_fx) + effects      # カスタムオブジェクトが自分で持つ効果(フレア・ブロックノイズ)は先頭
         vg = self._vignette.get(c.id)
         if vg is not None:
             # 周辺ボケ光量: 調整レイヤーの先頭に vignette_blur。中心 = オブジェクトの X・Y。
@@ -1343,7 +1435,7 @@ class SceneBuilder:
             effects = [{'type': 'vignette_blur', 'params': vg}] + rest
         if has_draw:
             L['transform'] = self.draw_transform(c, cv, last)
-            if vg is not None:
+            if vg is not None or getattr(c, '_screen_fx', False):
                 L['transform'] = {'position': [self.W / 2, self.H / 2, 0], 'opacity': L['transform']['opacity']}
             bn = fs[last]['exdata'].get('blend_name', '通常')
             if bn != '通常':
@@ -1513,6 +1605,49 @@ class SceneBuilder:
                            'border': cv.prop(0, 'track3'), 'opts': prm}
             self._vignette[c.id] = p
             self.rep['effects_mapped']['vignette_blur'] += 1
+            return L, {}
+        if name == 'フレア':
+            # exedit.obj「フレア」(本文は読めていない。推測): track0 = 大きさ(にじみの半径 ≒ track0 × 1.5 px。完成版 3014 で測った)、track1 = 強さ %、track3 = 光芒の長さ px、
+            # h_num = 光芒の本数、f_col = 光の色、c_alp = 芯の濃さ。完成版 3012〜3021(S23 の目の横の光。横一文字の光芒 + 青白いにじみ)を見て合わせた。
+            # 透明な板(カメラ制御の対象にできるよう shape)に lens_flare を掛ける。板の大きさは光芒が収まる幅
+            t0 = [k[1] for k in cv.scalar(0, 'track0')]
+            t3 = [k[1] for k in cv.scalar(0, 'track3')]
+            L = self.base_layer(c, 'shape')
+            src = {'kind': 'rect', 'width': int(min(4096, 2 * max(t3 + [200]) + 200)), 'height': int(min(2304, 3 * max(t0 + [100]) + 200)), 'fill': '#00000000'}
+            c._pre_fx = [self.fx('lens_flare', {
+                'radius': cv.prop(0, 'track0', lambda v: round(v * 0.6, 3)), 'intensity': cv.prop(0, 'track1', lambda v: round(v * 1.5, 3)),
+                'streak_length': cv.prop(0, 'track3'), 'streak_width': cv.prop(0, 'track0', lambda v: round(4 + v / 40, 3)),
+                'rays': int(prm.get('h_num', 1) or 0), 'angle': 90, 'color': col_param(prm.get('f_col'), '#ffffff'),
+                'core': round(200 * float(prm.get('c_alp', 0.5) or 0), 3), 'aviutl': dict(prm, track2=K(2))})]
+            self.rep['notes']['カスタムオブジェクト フレア → lens_flare(値の読みは推測)'] += 1
+            return L, src
+        if name == '雪':
+            # exedit.obj「雪」(本文は読めていない。推測): track0 = 速さ %、size = 粒の大きさ %、col = 色、name = 粒の形。
+            # 完成版 3600〜3760(S30。画面全体に、ぼけた白い粒がまばらにゆっくり落ちる)を見て、粒子で代えた(1 粒ずつの位置は合わない)
+            L = self.base_layer(c, 'particles')
+            sp = float(K(0) or 100) / 100
+            sz = float(prm.get('size', 100) or 100) / 100
+            src = {'seed': c.id % 9973 + 1, 'emitter': {
+                'sprite': 'soft', 'blend': 'normal', 'emit': 'box', 'position': [0, 0, 0], 'area': [round(self.W * 1.15), round(self.H * 1.15), 0],
+                'rate': 14, 'burst': 60, 'life': 5, 'life_random': 0.3, 'speed': round(70 * sp, 2), 'speed_random': 0.5, 'direction': 180, 'spread': 24,
+                'size': [round(30 * sz, 2), round(30 * sz, 2)], 'size_random': 0.7, 'opacity': [95, 0], 'color': col_param(prm.get('col'), '#ffffff')},
+                'aviutl': dict(prm, **{f'track{i}': K(i) for i in range(4)})}
+            self.rep['effects_mapped']['particles.snow'] += 1
+            self.rep['notes']['カスタムオブジェクト 雪 → particles(数・速さ・大きさは見た目からの推測)'] += 1
+            return L, src
+        if name == '本当のブロックノイズ':
+            # 「本当のブロックノイズ」(本文は読めていない。推測): 画面の四角い区画をずらす。kazu = 区画の数、xsize・ysize = 区画の大きさ、xzure・yzure = ずれ(どれも {最小, 最大})。
+            # track0 を「効く割合 %」と読んだ(S8 1166〜1377 は track0 = 0 で、完成版の続きの 3 コマを比べても区画のずれは見えない)
+            def pair(v, d):
+                m = re.findall(r'-?\d+(?:\.\d+)?', str(v)) if v is not None else []
+                return [float(m[0]), float(m[1])] if len(m) >= 2 else d
+            L = self.base_layer(c, 'adjustment')
+            c._pre_fx = [self.fx('block_noise', {
+                'amount': cv.prop(0, 'track0'), 'count': pair(prm.get('kazu'), [5, 15]), 'width': pair(prm.get('xsize'), [300, 500]),
+                'height': pair(prm.get('ysize'), [10, 100]), 'shift_x': pair(prm.get('xzure'), [-30, 30]), 'shift_y': pair(prm.get('yzure'), [-30, 30]),
+                'seed': c.id % 997, 'aviutl': dict({f'track{i}': K(i) for i in range(4)}, opts=prm)})]
+            c._screen_fx = True
+            self.rep['notes']['カスタムオブジェクト 本当のブロックノイズ → block_noise(track0 = 効く割合 は推測)'] += 1
             return L, {}
         L = self.base_layer(c, 'null')
         self.rep['effects_unmapped'][f'カスタムオブジェクト:{name}'] += 1
@@ -1876,6 +2011,7 @@ class SceneBuilder:
                                 if isinstance(kk.get('v'), (int, float)):
                                     kk['v'] = round(kk['v'] * 100 / d, 3)
                     self.rep['notes']['グループのランダム配置: 相手の拡大率で範囲を割った'] += 1
+        self.spread_markers(out)
         data = {'version': 1, 'bg': None if self.sc.get('alpha') else '#000000', 'layers': out,
                 'aviutl': {'scene': self.no, 'source': os.path.basename(self.doc['project'].get('project_path', '').replace('\\', '/'))}}
         self.rep['duration'] = dur
@@ -1883,6 +2019,66 @@ class SceneBuilder:
         self.rep['ease'] = dict(self.stats['ease'])
         self.rep['baked_props'] = self.stats['baked']
         return data, dur
+
+
+def _spread_markers(self, out):
+    """effects に残した印を、効く相手へ配る。
+    _motion_blur: 付いていたレイヤー(グループなら対象の絵)の motion_blur にする。
+    _trace_dash(輪郭追跡拡張機能): 付いていたレイヤー(グループなら対象)の trace_outline に dash_period / dash_gap を書く。
+      同じ相手に時間をずらして何個か付くとき(中間点で切ったグループ)は、キーをつないで 1 本にする。拡張機能が付いていない時間は実線(周期 0)。"""
+    byid = {L['id']: L for L in out}
+    NOT_DRAWN = ('group', 'camera', 'null', 'adjustment')
+    dash = collections.defaultdict(list)       # 相手の id → [(in, out, params)]
+    for G in out:
+        fx = G.get('effects')
+        if not fx or not any(e.get('type') in ('_motion_blur', '_trace_dash') for e in fx):
+            continue
+        targets = [byid[i] for i in G.get('scope', []) if i in byid] if G.get('type') == 'group' else [G]
+        for e in fx:
+            if e.get('enabled') is False:
+                continue
+            if e.get('type') == '_motion_blur':
+                for L in targets:
+                    if L.get('type') not in NOT_DRAWN:
+                        L['motion_blur'] = dict(e['params'])
+            elif e.get('type') == '_trace_dash':
+                for L in targets:
+                    if any(x.get('type') == 'trace_outline' for x in L.get('effects', [])):
+                        dash[L['id']].append((e['span'][0], e['span'][1], e['params']))
+        G['effects'] = [e for e in fx if e.get('type') not in ('_motion_blur', '_trace_dash')]
+        if not G['effects']:
+            del G['effects']
+    def keys_of(v, a, b):
+        if isinstance(v, dict) and 'k' in v:
+            return [dict(k) for k in v['k']]
+        return [{'f': a, 'v': v}, {'f': b - 1, 'v': v}]
+    for lid, spans in dash.items():
+        L = byid[lid]
+        spans.sort(key=lambda x: x[0])
+        merged = {}
+        for name in ('dash_period', 'dash_gap'):
+            ks = []
+            if L.get('in', 0) < spans[0][0]:
+                ks.append({'f': L.get('in', 0), 'v': 0, 'e': 'hold'})
+            for a, b, prm in spans:
+                kk = keys_of(prm.get(name, 0), a, b)
+                if name == 'dash_period':
+                    # 周期 0 は、エンジンでは「実線」。AviUtl では何も描かれない(すき間 > 0 のとき)→ ごく小さい周期にして、すき間で消す
+                    for k in kk:
+                        if isinstance(k['v'], (int, float)) and k['v'] <= 0:
+                            k['v'] = 0.01
+                kk[-1]['e'] = 'hold'
+                ks += kk
+            if L.get('out', spans[-1][1]) > spans[-1][1]:
+                ks.append({'f': spans[-1][1], 'v': 0})
+            merged[name] = {'k': ks}
+        for x in L['effects']:
+            if x.get('type') == 'trace_outline':
+                x['params'].update(merged)
+                x['params']['dash_aviutl'] = {k: v for k, v in spans[0][2].items() if k not in ('dash_period', 'dash_gap')}
+
+
+SceneBuilder.spread_markers = _spread_markers
 
 
 def AM_BLEND(i):
@@ -2031,6 +2227,8 @@ def main():
     ap.add_argument('--matte-copy', action='store_true', help='マット元の写しを作る(matte.keep_source が無いエンジン向け)')
     ap.add_argument('--no-nested', action='store_true', help='中に置くシーンを一緒に取り込まない')
     ap.add_argument('--report-dir', default=None)
+    ap.add_argument('--rebuild', action='store_true',
+                    help='作り直しモード: 元の素材(materials/)を使わず、置き換え表(sakura/rebuild/replace_*.json)の新しい絵・作り直した comp・仮の板だけで組む')
     a = ap.parse_args()
     a._stack = []
     doc = json.load(open(a.json, encoding='utf-8'))
@@ -2070,7 +2268,10 @@ def main():
     dry = bool(a.dry_run)
     api = None if dry else Api(a.api)
     mats = AM.Materials(sakura=sakura, root=a.materials_root, api=None if dry else a.api,
-                        project_id=a.project_id, budget_mb=a.budget_mb)
+                        project_id=a.project_id, budget_mb=a.budget_mb, rebuild=a.rebuild)
+    if a.rebuild:
+        a.fetch = False
+        a.report_dir = a.report_dir or os.path.join(sakura, 'rebuild', 'import_reports')
     map_path = os.path.join(sakura, 'comp_map.json')
     cmap = {}
     if os.path.exists(map_path):

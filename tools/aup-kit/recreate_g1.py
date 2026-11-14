@@ -136,7 +136,7 @@ def b05(ctx):
 
 # ---------------------------------------------------------------- B03 文字散らせ(ポッキーの箱・紙片・槍)
 # 完成版: 赤(Rocky)と緑(PRETZ)の箱と細い紙片が 3D で舞い、槍(白い矢じり + 赤 + 金の柄)が奥へ並ぶ。小さな字の輪。カメラは前へ進む。
-PKG_COMP = 55      # S48 ポッキープリッツパッケージ(箱の展開図。105 コマ目 = 赤い Rocky、10 コマ目 = PRETZ)
+PKG_COMP = scene_comps().get('48', 55)      # S48 ポッキープリッツパッケージ(箱の展開図。105 コマ目 = 赤い Rocky、10 コマ目 = PRETZ)
 
 
 def _mesh(id, n, objects, light=None, **kw):
@@ -199,23 +199,37 @@ def _b01_petals(n, seed):
             petals('pet_far', n, seed=seed + 1, rate=22, life=4, size=20, wind=(-60, 0, 0), gravity=(0, 80, 0), colors=('#f6c1d2', '#f4aac4', '#ffffff'))]
 
 
-@reg(S4 + '01_線路花びら1-44/1.02', 'B01', 'shape(path の扇形 3 枚)+ 模様つきのだ円(道)+ particles')
+@reg('aux:B01_waves', 'B01w', 'pattern(waves。白い道の縞。mesh の床に貼る)')
+def b01_waves(ctx):
+    return doc('部品 B01 道の波縞', 1, [layer('w', 'pattern', 1, {'kind': 'waves', 'colors': ['#ffffff', '#e2e2e4'], 'size': 128, 'width': 2048, 'height': 2048}, pos=[1024, 1024])],
+               bg='#ffffff', w=2048, h=2048)
+
+
+@reg(S4 + '01_線路花びら1-44/1.02', 'B01', 'mesh(3D の床: 遠くの 1 点から手前へ広がる扇形の板 3 枚 + 波縞の円盤の道)+ camera + particles')
 def b01(ctx):
+    # 2 巡目: 床を 3D に。床は水平な面で、遠くの 1 点(奥行き D)から手前へ細い扇形(赤・紫・青)が広がる。視点が上がる(床が下がる)と、
+    # 透視で頂点が地平線から下りてきて、扇の辺が立ってくる(完成版の辺の傾き 439: 0.22 → 445: 0.82 → 452: 1.17 と頂点の高さから、扇の角度 4.8°・7.3°・16.5° と「高さ ÷ 奥行き」のキーを決めた)。
+    # 12 コマ目から白い波縞の円盤(道)が下からせり上がる。
     n = 44
-    far = 4000
-    ap = layer('ap', 'null', n, transform={'position': kf((0, [960, 540]), (2, [960, 540], 'inOutQuad'), (8, [960, 700]), (14, [960, 900]), (22, [960, 1250])),
-                                           'scale': kf((0, [100, 100]), (2, [100, 100]), (10, [100, 190]))})
-    def wedge(i, pts, col):
-        return layer(f'w{i}', 'shape', 24, {'kind': 'path', 'closed': True, 'points': pts, 'fill': col}, parent='ap', transform={'position': [0, 0]})
-    road = layer('road', 'shape', n, {'kind': 'ellipse', 'width': 3000, 'height': 1100,
-                                      'fill': {'pattern': {'kind': 'waves', 'colors': ['#ffffff', '#e2e2e4'], 'size': 46}}}, t0=12,
-                 transform={'position': kf((12, [960, 1700], 'outCubic'), (26, [960, 1420]), (n, [960, 1330]))})
+    D, Lw = 20000, 23000
+    ratio = [(0, 0.0185), (2, 0.0395), (4, 0.057), (6, 0.069), (9, 0.085), (13, 0.098), (17, 0.11), (21, 0.12), (26, 0.135)]
+    hk = kf(*[(f, [0, r * D, 0]) for f, r in ratio])
+    t = lambda deg: Lw * math.tan(math.radians(deg))    # noqa: E731
+
+    def wedge(a0, a1, col, dy):
+        return {'geometry': 'extrude', 'points': [[0, 0], [t(a0), Lw], [t(a1), Lw]], 'depth': 0, 'rotation': [90, 0, 0], 'position': [0, dy, D - 1024],
+                'material': {'type': 'basic', 'color': col, 'side': 'double'}}
+    floor = {'geometry': 'group', 'position': hk, 'children': [wedge(-16.5, -4.8, '#d2283c', 0), wedge(-4.8, 0, '#8e78c0', 0), wedge(0, 7.3, '#6ab4c8', 0)]}
+    wv = ctx.comp('aux:B01_waves')
+    road = {'geometry': 'ring', 'inner': 0, 'outer': 4000, 'segments': 128, 'rotation': [90, 0, 0],
+            'position': kf((12, [0, 4409, 2376], 'outCubic'), (26, [0, 2385, 2376]), (n, [0, 1734, 2376])),
+            'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', **({'texture': {'comp_id': wv, 'frame': 0}, 'texture_repeat': [2, 2]} if wv else {})}}
+    cam = layer('cam', 'camera', n, {'zoom': 1024, 'target': [960, 540, 0]}, transform={'position': [960, 540, -1024]})
     return doc('再現 B01 線路花びら 1.02', n, [
-        *_b01_petals(n, 21), road,
-        wedge(0, [[0, 0], [-far, far * 0.104], [-far, far * 0.208]], '#d2283c'),
-        wedge(1, [[0, 0], [-far, far * 0.208], [-far, far], [0, far]], '#8e78c0'),
-        wedge(2, [[0, 0], [0, far], [far, far], [far, far * 0.208]], '#6ab4c8'),
-        ap])
+        cam, *_b01_petals(n, 21),
+        layer('road', 'mesh', n, {'unlit': True, 'objects': [road]}, pos=[960, 540, 0], t0=12),
+        layer('floor', 'mesh', n, {'unlit': True, 'objects': [floor]}, pos=[960, 540, 0], t1=21),
+    ])
 
 
 @reg(S4 + '01_線路花びら1-44/1.01/花びらのみ', 'B01', 'particles(petals)')
@@ -226,10 +240,10 @@ def b01_petals(ctx):
 
 # ---------------------------------------------------------------- B02 螺旋線路
 # 完成版: 紫・黄・青・赤の 4 本の帯の対数らせん(帯の幅は半径に比例 = 奥へ続く線路)が回り、白い立体の板(枕木)が手前を横切る。10 コマごとに寄りが変わる。
-def _spiral_band(j, turns=2.7, r0=40, grow=4.2, d=0.36, step=5):
+def _spiral_band(j, turns=2.7, r0=40, grow=4.2, d=0.36, step=5, a0=0):
     k = math.log(grow) / 360.0
     inner, outer = [], []
-    a = 0
+    a = a0          # a0 = 内側の巻きを省く角度(完成版の帯は半径 200 あたりから始まる)
     while a <= turns * 360:
         r = r0 * math.exp(k * a)
         c, s = math.cos(math.radians(a)), math.sin(math.radians(a))
@@ -239,20 +253,24 @@ def _spiral_band(j, turns=2.7, r0=40, grow=4.2, d=0.36, step=5):
     return inner + outer[::-1]
 
 
-@reg(S4 + '03_螺旋線路/1.01', 'B02', 'shape(path = 対数らせんの帯 4 本)+ mesh(白い板 = box の ring 複製)')
+@reg(S4 + '03_螺旋線路/1.01', 'B02', 'mesh(3D の面に対数らせんの帯 4 本 = extrude の points・厚み 0 を傾けて透視で)+ mesh(白い板 = box の ring 複製)+ camera')
 def b02(ctx):
     n = 102
     cols = ['#5f3a6e', '#e8cf62', '#6fb5c5', '#d0283e']      # 内 → 外
     # 10 コマごとの寄り(拡大)と目の位置。回転は 1 コマ −7°
     segs = [(0, 150, [1090, 250]), (8, 210, [930, 330]), (18, 200, [900, 390]), (28, 230, [960, 390]), (38, 330, [1010, 500]), (48, 250, [900, 450]),
             (60, 300, [1150, 520]), (70, 270, [1000, 420]), (80, 240, [940, 480]), (92, 330, [1300, 560])]
+    # 2 巡目: らせんは 3D の面。完成版の帯は「幅が半径に比例する対数らせん」(平らな渦の線路を斜め上から見た形)なので、
+    # 対数らせんの帯 4 本を厚み 0 の押し出し(extrude の points)で 1 枚の平面に作り、group ごと傾けて(x 24°・y −16°)透視のカメラで見る。面の中で 1 コマ −7° 回る。
+    # (helix の道に沿う帯 = extrude + path + path.up も試したが、巻きごとの縮み方が完成版(1 巻きで約 4 倍)と合わないので、平らな対数らせんにした)
     sk, pk = [], []
     for i, (f, sc, p) in enumerate(segs):
         f1 = segs[i + 1][0] if i + 1 < len(segs) else n
-        sk += [(f, [sc * 0.62, sc * 0.62]), (f1 - 0.01, [sc * 0.74, sc * 0.74])]
-        pk += [(f, p), (f1 - 0.01, [p[0] + 30, p[1] + 20])]
-    sp = layer('sp', 'null', n, transform={'position': kf(*pk), 'scale': kf(*sk), 'rotation': kf((0, 0), (n, -7 * n))})
-    bands = [layer(f'band{j}', 'shape', n, {'kind': 'path', 'closed': True, 'points': _spiral_band(j), 'fill': cols[j]}, parent='sp', transform={'position': [0, 0]}) for j in range(4)]
+        sk += [(f, [sc * 0.0062] * 3), (f1 - 0.01, [sc * 0.0074] * 3)]
+        pk += [(f, [p[0] - 960, p[1] - 540, 0]), (f1 - 0.01, [p[0] + 30 - 960, p[1] + 20 - 540, 0])]
+    ribbons = [{'geometry': 'extrude', 'points': _spiral_band(j, turns=3.0, a0=320), 'depth': 0, 'position': [0, 0, j * 0.5], 'material': {'type': 'basic', 'color': cols[j], 'side': 'double'}} for j in range(4)]
+    spiral = layer('spiral', 'mesh', n, {'unlit': True, 'objects': [
+        {'geometry': 'group', 'position': kf(*pk), 'scale': kf(*sk), 'rotation': [24, -16, kf((0, 0), (n, -7 * n))], 'children': ribbons}]}, pos=[960, 540, 0])
     white = {'color': '#f4f4f4', 'roughness': 0.9}
     boards = _mesh('boards', n, [
         {'geometry': 'box', 'size': [900, 110, 46], 'material': white, 'rotation': [0, 0, kf((0, 0), (n, 300))],
@@ -263,7 +281,7 @@ def b02(ctx):
                        'offset': kf((0, 0.3), (n, -0.5))}},
     ], light={'ambient': 2.2, 'intensity': 0.9, 'direction': [-0.3, -1, -0.6]})
     cam = layer('cam', 'camera', n, {'zoom': 1024, 'target': [960, 540, 0]}, transform={'position': [960, 540, -1024]})
-    return doc('再現 B02 螺旋線路', n, [cam, boards, *bands, sp])
+    return doc('再現 B02 螺旋線路', n, [cam, boards, spiral])
 
 
 # ---------------------------------------------------------------- B06 桜吹雪トランジション

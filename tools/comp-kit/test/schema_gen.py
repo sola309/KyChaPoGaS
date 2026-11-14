@@ -57,6 +57,7 @@ fx("invert", "色の反転", G3, {"amount": P("強さ"), "luma_only": B("輝度�
 fx("levels", "レベル補正", G3, {"in_black": N("入力 黒", 0, 0, 255, 1), "in_white": N("入力 白", 255, 0, 255, 1), "gamma": N("ガンマ", 1, 0.1, 5, 0.01), "out_black": N("出力 黒", 0, 0, 255, 1), "out_white": N("出力 白", 255, 0, 255, 1)}, True)
 fx("gradient_map", "グラデーションマップ", G3, {"colors": {"type": "colors", "label": "色(暗 → 明、2〜4 色)", "default": ["#000000", "#ffffff"], "animatable": False}, "amount": P("強さ")}, True)
 fx("posterize", "ポスタリゼーション", G3, {"levels": N("階調の数", 4, 2, 32, 1)}, True)
+fx("palette", "減色(決めた色だけにする)", G3, {"colors": {"type": "colors", "label": "使う色(2〜32 色)", "default": ["#000000", "#ffffff", "#ff3355", "#33cc66", "#2244ff", "#ffd23f"], "animatable": False}, "amount": P("強さ")}, False)
 fx("chroma_key", "クロマキー", G3, {"color": C("抜く色", "#00ff00"), "hue_range": N("色相範囲", 24, 0, 256, 1), "sat_range": N("彩度範囲", 96, 0, 256, 1), "edge": N("境界補正", 1, 0, 5, 1), "spill": P("色かぶりを抑える", 0)}, True)
 fx("luma_key", "ルミナンスキー", G3, {"threshold": N("しきい値", 128, 0, 255, 1), "softness": N("なめらかさ", 10, 0, 128, 1), "invert": B("明るい所を抜く")}, True)
 fx("vignette", "周辺減光", G3, {"amount": P("強さ", 50), "radius": P("半径", 50), "softness": P("ぼかし", 50), "color": C("色", "#000000")}, True)
@@ -70,7 +71,8 @@ fx("overlay_source", "画像・動画・コンポジションの合成", G7, {"a
 # --- 縁・影(RT を使う) ---
 fx("stroke_outline", "縁取り", G4, {"width": N("サイズ", 4, 0, 200, 1), "color": C("色", "#000000"), "blur": N("ぼかし", 0, 0, 200, 1), "position": S("位置", "outer", [("outer", "外側"), ("inner", "内側"), ("center", "中央")]), "opacity": P("不透明度"), "only": B("縁だけ")}, False)
 fx("drop_shadow", "シャドー", G4, {"distance": N("距離", 12, 0, 1000, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60)}, False)
-fx("inner_shadow", "内側シャドー", G4, {"distance": N("距離", 6, 0, 500, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60)}, False)
+fx("inner_shadow", "内側シャドー", G4, {"distance": N("距離", 6, 0, 500, 1), "angle": A("角度", 135), "blur": N("拡散", 12, 0, 300, 1), "color": C("色", "#000000"), "opacity": P("濃さ", 60),
+    "x": N("ずれ X(書くと 距離・角度 より優先)", None, -500, 500, 1, optional=True), "y": N("ずれ Y(書くと 距離・角度 より優先)", None, -500, 500, 1, optional=True)}, False)
 fx("long_shadow", "ロングシャドー", G4, {"length": N("長さ", 100, 0, 2000, 1), "angle": A("角度", 135), "color": C("色", "#000000"), "opacity": P("濃さ", 50), "fade": P("先を薄く", 0)}, False)
 fx("trace_outline", "輪郭追跡", G4, {"progress": P("描画度"), "width": N("線幅", 8, 1, 100, 1), "start": P("開始点", 0), "threshold": N("閾値", 128, 1, 254, 1), "color": C("色", "#ffffff"), "only_line": B("輪郭のみ"),
     "dash_period": P("破線の周期(1 周に対する %。0 = 実線)", 0), "dash_gap": P("破線のすき間(%。周期より小さく)", 0)}, False)
@@ -80,6 +82,9 @@ fx("blur", "ぼかし", G5, {"radius": N("範囲", 10, 0, 500, 1)}, False)
 fx("directional_blur", "方向ブラー", G5, {"length": N("範囲", 40, 0, 1000, 1), "angle": A("角度", 90)}, False)
 fx("radial_blur", "放射ブラー", G5, {"amount": N("範囲", 20, 0, 200, 1), "mode": S("種類", "zoom", [("zoom", "ズーム"), ("spin", "回転")]), "cx": CX(), "cy": CY()}, False)
 fx("glow", "グロー", G5, {"radius": N("拡散", 20, 0, 300, 1), "strength": N("強さ", 1, 0, 5, 0.05), "threshold": P("しきい値", 50), "variant": S("種類", "", [("", "グロー(足し算)"), ("diffuse", "拡散光(ぼかしとの明るいほうへ寄せる)")])}, False)
+fx("lens_flare", "レンズフレア(光を足す)", G5, {"cx": CX(), "cy": CY(), "radius": N("にじみの大きさ", 100, 0.5, 4000, 1), "streak_length": N("光芒の長さ(片側)", 600, 0, 8000, 1), "streak_width": N("光芒の太さ", 6, 0.2, 500, 0.5),
+    "rays": N("光芒の本数(中心を通る線の数。0 = なし)", 1, 0, 8, 1), "angle": A("光芒の向き", 90), "spin": N("光芒の回る速さ(度/秒)", 0, -3600, 3600, 1), "intensity": P("強さ", 100, 0, 400), "core": P("芯の白", 100, 0, 400),
+    "ring": P("輪", 0, 0, 200), "color": C("光の色", "#9999ff"), "flicker": P("ちらつき", 0)}, False)
 fx("sharpen", "シャープ", G5, {"amount": P("強さ", 50, 0, 400)}, False)
 fx("vignette_blur", "周辺ボケ光量", G5, {"amount": P("周辺の暗さ", 60), "blur": N("周辺のぼかし", 8, 0, 200, 0.5), "radius": P("効き始める位置", 50, 0, 200), "softness": P("効ききるまでの幅", 50, 0, 200),
     "color_shift": N("周辺の色ずれ", 0, 0, 100, 0.5), "color": C("暗くする色", "#000000"), "cx": CX(), "cy": CY(),
@@ -94,7 +99,18 @@ fx("halftone", "ハーフトーン", G6, {"size": N("サイズ", 8, 2, 200, 1), 
 fx("rgb_shift", "色ずれ", G6, {"amount": N("ずれ幅", 4, 0, 200, 1), "angle": A("角度", 90)}, False)
 fx("glitch", "グリッチ", G6, {"amount": N("ずれ幅", 40, 0, 500, 1), "block": N("帯の高さ", 24, 1, 500, 1), "rate": P("乱れる割合", 35), "rgb_shift": N("色ずれ", 6, 0, 100, 1), "seed": N("種", 1, 0, 9999, 1, False), "speed": N("1 秒あたりの変化", 30, 0, 120, 1, False)}, False)
 fx("mirror", "ミラー", G6, {"angle": A("角度", 90), "cx": CX(), "cy": CY()}, False)
-fx("polar", "極座標変換", G6, {"invert": B("逆変換")}, False)
+fx("polar", "極座標変換", G6, {"invert": B("逆変換"),
+    "fit": S("半径の基準", "", [("", "短い辺の半分(円の外は透明)"), ("cover", "対角の半分(四隅まで埋める)"), ("width", "幅の半分"), ("height", "高さの半分")]),
+    "inner": S("中心に来る端", "", [("", "絵の下の端"), ("top", "絵の上の端")]), "center_width": N("中心の穴(px)", 0, 0, 2000, 1), "scale": P("半径の拡大率", 100, 1, 1000),
+    "rotation": A("回転"), "swirl": N("渦巻(外周でのずれ。度)", 0, -3600, 3600, 1), "cx": CX(), "cy": CY(), "clamp": B("半径の外は端の色を伸ばす")}, False)
+fx("rough_edges", "ラフエッジ(縁をちぎる)", G6, {"amount": N("ずらす量", 20, 0, 1000, 1), "size": N("ノイズの大きさ", 60, 1, 2000, 1), "threshold": P("アルファを切り直す位置(0 = 切り直さない)", 50, 0, 98), "softness": P("切り口のやわらかさ", 5, 0, 50),
+    "seed": N("種", 0, 0, 9999, 1, False), "evolution": N("変化", 0, 0, 1000, 0.01), "octaves": N("細かさ", 3, 1, 4, 1, False)}, False)
+fx("block_noise", "ブロックノイズ(四角い区画をずらす)", G6, {"amount": P("効く割合(区画の数に掛ける)", 100), "count": V2("区画の数(最小・最大)", [5, 15]), "width": V2("区画の幅(最小・最大)", [300, 500]), "height": V2("区画の高さ(最小・最大)", [10, 100]),
+    "shift_x": V2("ずれ X(最小・最大)", [-30, 30]), "shift_y": V2("ずれ Y(最小・最大)", [-30, 30]), "seed": N("種", 1, 0, 9999, 1, False), "speed": N("1 秒あたりの切り替え(0 = 止める)", 30, 0, 120, 1, False)}, False)
+fx("refract", "ガラスの屈折(調整レイヤーに掛けると下の絵がゆがむ)", G6, {"kind": S("種類", "lens", [("lens", "レンズ(だ円の中をふくらませる)"), ("frost", "すりガラス")]), "amount": N("強さ(レンズ = ふくらみ %、すりガラス = 乱れ px)", 35, -300, 95, 1),
+    "radius": N("レンズの半径(書かなければ箱いっぱい)", None, 1, 4000, 1, optional=True), "radius_y": N("レンズの縦の半径", None, 1, 4000, 1, optional=True), "cx": CX(), "cy": CY(),
+    "aberration": P("色ずれ", 0), "highlight": P("映り込みの白(レンズ)", 0, 0, 200), "shade": P("縁の暗さ(レンズ)", 0), "size": N("乱れの大きさ(すりガラス)", 6, 0.5, 500, 0.5), "seed": N("種(すりガラス)", 1, 0, 9999, 1, False),
+    "tint": C("ガラスの色", "#ffffff"), "tint_amount": P("色の濃さ", 0)}, False)
 ALIASES = {"clip": "crop", "tile": "repeat", "binarize": "threshold", "outline": "stroke_outline", "mask": "mask_shape", "gradient": "gradient_overlay"}
 
 # ---------- レイヤーの種類 ----------
@@ -169,11 +185,30 @@ LT["camera"] = {"label": "カメラ", "icon": "🎥", "source": {"zoom": N("距�
     "dof": {"type": "object", "label": "被写界深度", "default": None, "animatable": False, "optional": True, "group": "被写界深度", "fields": {"focus_distance": N("ピントの距離(0 = zoom)", 0, 0, 100000, 1), "aperture": N("ぼけの強さ", 20, 0, 500, 1), "max_blur": N("ぼけの上限", 60, 0, 300, 1, False)}}},
     "default_source": {"zoom": 1024}, "default_layer": {}}
 LT["model"] = {"label": "3D モデル", "icon": "🧊", "source": {"asset_id": N("素材(GLB)", None, anim=False, asset="model", **g("素材")), "height": N("高さ", 540, 1, 8000, 1, **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {}}
+# ---- puppet(パーツ分解した立ち絵を格子メッシュの変形で動かす)。エンジンは puppet.js ----
+LT["puppet"] = {"label": "パペット(立ち絵のリグ)", "icon": "🎭", "source": {
+    "puppet_id": T("パペットの id(/api/puppet/ の一覧にあるもの)", None, puppet=True, **g("素材")),
+    "crop": {"type": "numbers", "label": "映す範囲 [左, 上, 右, 下](パペットのキャンバスの px。省略 = 全体)", "default": None, "animatable": False, "optional": True, "group": "素材"},
+    "hide": {"type": "json", "label": "隠すパーツの名前の列(例 [\"handwear\"])", "default": None, "animatable": False, "optional": True, "group": "素材"},
+    "blink": N("まばたき(0 = 開 〜 1 = 閉)", 0, 0, 1, 0.01, **g("目")), "auto_blink": B("自動まばたき", **g("目")),
+    "blink_interval": N("自動まばたきの間隔(秒)", 3.4, 0.4, 20, 0.1, optional=True, when={"auto_blink": [True]}, **g("目")),
+    "blink_seed": N("自動まばたきの種", 1, 0, 9999, 1, False, optional=True, when={"auto_blink": [True]}, **g("目")),
+    "look": V2("視線(-1〜1。瞳だけ動く)", [0, 0], **g("目")), "brow": N("眉(-1 = 下げる 〜 1 = 上げる)", 0, -1, 1, 0.01, **g("目")),
+    "mouth": N("口の開き(0〜1)", 0, 0, 1, 0.01, **g("口")),
+    "vowel": S("母音(描き差分のあるパペットだけ)", "a", [("a", "あ"), ("i", "い"), ("u", "う"), ("e", "え"), ("o", "お")], optional=True, **g("口")),
+    "head_turn": N("首ふり(-1 = 左 〜 1 = 右。円筒ワープ)", 0, -1, 1, 0.01, **g("頭")), "head_tilt": A("首のかしげ(度)", 0, **g("頭")),
+    "head_nod": N("うなずき(-1 = 上 〜 1 = 下)", 0, -1, 1, 0.01, **g("頭")), "head_shift": V2("頭のずらし(px)", [0, 0], **g("頭")),
+    "body_lean": A("体の傾き(度。足元が軸)", 0, **g("体")),
+    "breath": N("呼吸の強さ(0 = なし)", 1, 0, 5, 0.05, **g("体")), "breath_period": N("呼吸の周期(秒)", 4, 0.3, 20, 0.1, optional=True, **g("体")),
+    "sway": N("髪・布のゆれの強さ(0 = なし)", 1, 0, 5, 0.05, **g("ゆれ")), "wind": N("風(-1 = 左へ 〜 1 = 右へなびく)", 0, -2, 2, 0.01, **g("ゆれ")),
+    "sway_speed": N("ゆれの速さ(倍。キーを打たず定数で)", 1, 0, 5, 0.05, False, optional=True, **g("ゆれ")),
+    "sway_lag": N("毛先の遅れ(秒)", 0.16, 0, 1, 0.01, False, optional=True, **g("ゆれ")), "sway_seed": N("ゆれの種", 0, 0, 9999, 1, False, optional=True, **g("ゆれ"))},
+    "default_source": {"puppet_id": None}, "default_layer": {}}
 # ---- mesh(手続きの 3D: 箱・球・回転体・押し出し・立体文字・管・破片、その複製)。エンジンは mesh3d.js ----
 def WG(d, *kinds): d["when"] = {"geometry": list(kinds)}; return d
 JS = lambda label, default=None, **kw: {"type": "json", "label": label, "default": default, "animatable": False, "optional": True, **kw}
 GEOS = [("box", "箱"), ("plane", "板"), ("sphere", "球"), ("cylinder", "円柱"), ("cone", "円すい"), ("torus", "ドーナツ"), ("ring", "輪(平ら)"), ("lathe", "回転体(profile)"), ("extrude", "押し出し(shape / points)"), ("text", "立体文字"),
-        ("tube", "管(path)"), ("shards", "破片(割れる板)"), ("icosahedron", "20 面体"), ("octahedron", "8 面体"), ("dodecahedron", "12 面体"), ("tetrahedron", "4 面体"), ("group", "まとめ(children)")]
+        ("tube", "管(path)"), ("shards", "破片(割れる板)"), ("icosahedron", "20 面体"), ("octahedron", "8 面体"), ("dodecahedron", "12 面体"), ("tetrahedron", "4 面体"), ("group", "まとめ(children)"), ("mannequin", "マネキン(関節つきの人形)")]
 POLY = ("icosahedron", "octahedron", "dodecahedron", "tetrahedron")
 MESH_SHAPES = [(x, x) for x in ["star", "heart", "petal", "flower", "polygon", "hexagon", "pentagon", "triangle", "rect", "rounded_rect", "ellipse", "ring", "burst", "arrow", "cross", "chevron", "bubble", "pie"]]
 AXES = [("y", "y(縦の軸)"), ("x", "x(横の軸)"), ("z", "z(奥行きの軸)")]
@@ -194,6 +229,8 @@ MESH_PATH = {"type": "object", "label": "道(管・道に沿った押し出し�
     "turns": N("巻き数(らせん)", 3, -100, 100, 0.01), "height": N("高さ(らせん。正 = 上へ進む)", 400, -20000, 20000, 1), "axis": S("軸", "y", AXES), "start": A("開始角"), "arc": A("範囲(円)", 360),
     "from": V3("始点(直線)", [-200, 0, 0]), "to": V3("終点(直線)", [200, 0, 0]), "points": JS("点 [[x,y,z],…](点の列)"), "closed": B("閉じる(点の列)"), "curve": S("つなぎ方(点の列)", "catmullrom", [("catmullrom", "なめらか"), ("linear", "折れ線")]),
     "tension": N("曲がりの強さ(なめらか)", 0.5, 0, 1, 0.01, False)}}
+MESH_PATH_OBJ = {**MESH_PATH, "fields": {**MESH_PATH["fields"],
+    "up": {**V3("帯の向きを固定(押し出しの道。断面の縦がこの向き。らせんなら軸の向き = ねじれない帯)", [0, -1, 0]), "default": None, "optional": True, "animatable": False}}}   # オブジェクトの道だけ(複製の along の道には効かない)
 MESH_INST = {"type": "object", "label": "複製(3D の粒・並び)", "default": None, "animatable": False, "optional": True, "fields": {
     "count": N("個数", 100, 1, 20000, 1, False), "seed": N("種", 1, 0, 99999, 1, False),
     "layout": S("最初の並び", "box", [("box", "箱の中にばらまく"), ("sphere", "球の中にばらまく"), ("grid", "格子"), ("ring", "円周"), ("along", "道(path)に沿って"), ("point", "1 点")]),
@@ -222,7 +259,7 @@ MESH_OBJ = {
     "smooth_angle": WG(N("この角度までの折れ目はなめらかに", 40, 0, 180, 1, False), "extrude", "text"),
     "text": WG(T("文字", "文字"), "text"), "font": WG(T("書体", "Noto Sans JP", font=True), "text"), "weight": WG(N("太さ", 700, 100, 900, 100, False), "text"), "italic": WG(B("斜体"), "text"), "font_size": WG(N("文字の大きさ", 200, 1, 4000, 1), "text"),
     "tracking": WG(N("字間(px)", 0, -500, 2000, 1), "text"), "leading": WG(N("行送り(文字の大きさに対する倍率)", 1.2, 0.1, 10, 0.01), "text"), "align": WG(S("行揃え", "center", [("center", "中央"), ("left", "左"), ("right", "右")]), "text"),
-    "path": MESH_PATH,
+    "path": MESH_PATH_OBJ,
     "count": WG(N("破片の数(およそ)", 120, 1, 6000, 1, False), "shards"), "seed": WG(N("種", 1, 0, 99999, 1, False), "shards"), "cut": WG(S("割り方", "voronoi", [("voronoi", "不ぞろいな多角形"), ("triangles", "三角"), ("grid", "四角の升")]), "shards"), "jitter": WG(N("不ぞろいさ", 1, 0, 1, 0.01, False), "shards"),
     "progress": WG(N("割れ具合(0 = 元の板、1 = 飛び散った)", 0, 0, 1, 0.001), "shards"), "stagger": WG(S("割れていく順", "none", [("none", "一斉"), ("left_to_right", "左から"), ("right_to_left", "右から"), ("top_to_bottom", "上から"), ("bottom_to_top", "下から"), ("center_out", "中心から"), ("edges_in", "外側から"), ("random", "ばらばら")]), "shards"),
     "stagger_amount": WG(N("順番の時間差(0 = 一斉、大きいほど順々)", 0.5, 0, 0.95, 0.01), "shards"), "direction": WG(V3("全体が流れる先(px)", [0, 0, 0]), "shards"), "spread": WG(N("飛び散る距離(px)", 600, -20000, 20000, 1), "shards"), "spread_z": WG(N("奥行きの散り(px。省略 = 距離の半分)", None, 0, 20000, 1, optional=True), "shards"),
@@ -230,6 +267,28 @@ MESH_OBJ = {
     "fade": WG(N("終わりに消える割合(0 = 消えない)", 0, 0, 1, 0.01), "shards"),
     "material": {"type": "object", "label": "マテリアル", "fields": MESH_MAT},
     "faces": {"type": "list", "label": "面ごとのマテリアル(箱 = 右・左・上・下・手前・奥 / 押し出し・文字 = 表裏・側面 / 円柱 = 側面・上・下)", "default": None, "animatable": False, "optional": True, "item": MESH_MAT},
+    # マネキン(関節つきの人形。mesh3d.js の buildMannequin)。原点 = 両足の間の地面、rotation 0 でこちら向き
+    "style": WG(S("作り", "mannequin", [("mannequin", "丸みのある筒と球"), ("stick", "細い棒(棒人形)")]), "mannequin"),
+    "body": WG({"type": "object", "label": "体格", "fields": {"height": N("身長(px)", 600, 1, 20000, 1), "heads": N("頭身", 6.5, 2, 12, 0.1), "thickness": N("太さ(倍率)", 1, 0.05, 10, 0.01), "shoulder": N("肩幅(倍率)", 1, 0.2, 4, 0.01),
+        "hip": N("腰幅(倍率)", 1, 0.2, 4, 0.01), "arm_length": N("腕の長さ(倍率)", 1, 0.2, 3, 0.01), "leg_length": N("脚の長さ(倍率)", 1, 0.3, 1.4, 0.01)}}, "mannequin"),
+    "colors": WG({"type": "object", "label": "色", "fields": {"skin": C("肌", "#f6d9c8"), "top": C("服の上", "#d8d8de"), "bottom": C("服の下", "#5a6278"), "hair": C("髪", "#b5334f"), "shoes": C("靴", "#3a3036"), "ribbon": C("リボン", "#1c1a1e"), "eyes": C("目", "#7a1f2c"),
+        "skirt": C("スカート(省略 = 服の下)", None, optional=True), "sleeves": C("袖(省略 = 服の上)", None, optional=True), "pants": C("ズボン・腰(省略 = 服の下)", None, optional=True), "socks": C("靴下(省略 = 靴)", None, optional=True)}}, "mannequin"),
+    "outfit": WG({"type": "object", "label": "服", "fields": {"sleeves": N("袖の長さ(0 = なし、1 = 手首まで)", 1, 0, 1, 0.01), "pants": N("ズボンの長さ(0 = なし、1 = 足首まで)", 0.2, 0, 1, 0.01), "skirt": N("スカートの長さ(0 = なし。1 = ももの長さ)", 0, 0, 2, 0.01),
+        "skirt_flare": N("スカートの広がり", 0.6, 0, 4, 0.01), "socks": N("靴下の長さ(1 = ひざまで、2 = ももの上まで)", 0, 0, 2, 0.01), "boots": N("ブーツの長さ(1 = ひざまで)", 0, 0, 1, 0.01)}}, "mannequin"),
+    "hair": WG({"type": "object", "label": "髪", "fields": {"style": S("髪型", "none", [("none", "なし"), ("short", "短い(頭をおおうだけ)"), ("ponytail", "ポニーテール(3 節で揺らせる)")]), "length": N("ポニーテールの長さ(身長に対する割合)", 0.42, 0.01, 2, 0.01),
+        "thickness": N("ポニーテールの太さ(倍率)", 1, 0.1, 5, 0.01), "bangs": B("前髪・横の房", True), "ribbon": B("リボン(ポニーテールの根元)", True)}}, "mannequin"),
+    "face": WG(B("目を描く", True), "mannequin"),
+    "outline": WG({"type": "object", "label": "輪郭線(裏返しの殻)", "default": None, "animatable": False, "optional": True, "fields": {"width": N("太さ(px)", 3, 0, 100, 0.1), "color": C("色", "#2a1a20")}}, "mannequin"),
+    "self_light": WG(N("自分で光る割合(暗い場面でも色が見える)", 0, 0, 4, 0.01), "mannequin"),
+    "preset": WG(S("ポーズ(プリセット)", "stand", [("stand", "立つ"), ("a_pose", "A の字"), ("t_pose", "T の字"), ("idle", "立って小さく揺れる(phase)"), ("walk", "歩く(phase)"), ("run", "走る(phase)"), ("wave", "手を振る(phase)"), ("sit", "座る"),
+        ("hand_on_hip", "手を腰に"), ("peace", "ピース"), ("lean_forward", "前かがみ"), ("cheer", "両手を上げる")]), "mannequin"),
+    "phase": WG(N("位相(0〜1 で 1 周。歩き・手振りなど)", 0, -1000, 1000, 0.001), "mannequin"),
+    "preset_b": WG(S("混ぜる相手のポーズ", "", [("", "(なし)"), ("stand", "立つ"), ("a_pose", "A の字"), ("t_pose", "T の字"), ("idle", "立って小さく揺れる"), ("walk", "歩く"), ("run", "走る"), ("wave", "手を振る"), ("sit", "座る"),
+        ("hand_on_hip", "手を腰に"), ("peace", "ピース"), ("lean_forward", "前かがみ"), ("cheer", "両手を上げる")]), "mannequin"),
+    "phase_b": WG(N("混ぜる相手の位相(省略 = 位相と同じ)", None, -1000, 1000, 0.001, optional=True), "mannequin"),
+    "preset_mix": WG(N("混ぜる割合(0 = ポーズ、1 = 相手)", 0, 0, 1, 0.001), "mannequin"),
+    "pose": WG(JS("関節の角度(度)の上書き {関節: [a, b, c] | 数}。関節 = root spine chest neck head shoulder_l/r elbow_l/r wrist_l/r hip_l/r knee_l/r ankle_l/r pony_1〜3、ほかに offset(身長に対する割合)・hand_l/r(mitt fist open peace point)。どの数もキーフレームにできる"), "mannequin"),
+    "ground": WG(B("いちばん低い足を地面に付ける(省略 = 歩き・走りだけ)", False, optional=True), "mannequin"),
     "instances": MESH_INST, "cast_shadow": B("影を落とす", True), "receive_shadow": B("影を受ける", True), "render_order": N("描く順(半透明の重なり。大きいほどあと)", 0, -100, 100, 1, False)}
 LT["mesh"] = {"label": "3D オブジェクト", "icon": "💎", "source": {
     "unlit": B("光を使わない(色・絵そのまま)", **g("光")), "light.ambient": N("環境光", 0.6, 0, 10, 0.05, **g("光")), "light.intensity": N("主光の強さ", 2, 0, 20, 0.05, **g("光")), "light.color": C("主光の色", "#ffffff", **g("光")),
@@ -336,6 +395,7 @@ RP = E["repeat"]["params"]
 for k, modes in {"count_y": ["grid"], "gap_y": ["grid"], "spacing_x": ["grid"], "spacing_y": ["grid"], "stagger_rows": ["grid"], "scroll_x": ["grid"], "scroll_y": ["grid"], "mirror": ["grid"],
                  "angle": ["line", "circle"], "radius": ["circle"], "sweep": ["circle"], "rotate": ["circle"], "both": ["line"],
                  "area_x": ["random"], "area_y": ["random"], "seed": ["random"], "random_rotation": ["random"], "scale_min": ["random"], "scale_max": ["random"]}.items(): when(RP, k, "mode", modes)
+for k, kinds in {"radius": ["lens"], "radius_y": ["lens"], "cx": ["lens"], "cy": ["lens"], "highlight": ["lens"], "shade": ["lens"], "size": ["frost"], "seed": ["frost"]}.items(): when(E["refract"]["params"], k, "kind", kinds)
 when(E["iris"]["params"], "sides", "shape", ["star", "polygon"]); when(E["iris"]["params"], "inner", "shape", ["star"]); when(E["mask_shape"]["params"], "radius", "shape", ["rect"])
 schema["notes"]["when"] = "when: {\"<項目名>\": [値...]} = 同じ一覧の中のその項目が、どれかの値のときだけ効く(layer_common では点つきの道そのまま。例 transition_in.type / repeater.mode)。値が * = その項目が書かれているとき。編集画面が関係ない項目を隠すための目安で、エンジンは見ない"
 schema["notes"]["scope"] = "type: scope = 数(下の N 層。0 = 下すべて)か、レイヤー id の配列。type: layers = レイヤー id の配列。type: numbers = 数の配列"

@@ -7,7 +7,8 @@
 確かめること:
   1. 不透明度 50% の赤 → 画素が rgba(255,0,0,128)(ストレートアルファで出る)
   2. 画像を 100% で置く → 元の画素と 1 バイトも違わない(軽いエフェクト・位置の足し算を付けても同じ)
-  2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度
+  2f. puppet レイヤー: 動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定
+  2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度・マネキン(手先の位置・ひじ 90 度・角度のキーフレーム・歩きの位相)
   3. 決定論: コマを描く順を変えても同じ絵(md5)
   4. プレビュー経路 = 書き出し経路(同じ GL なら同じ絵)
 """
@@ -198,6 +199,47 @@ def main():
         ok("on_circle.deg_per_px = 180/π/半径 は既定と同じ並び", d01 < 40, f"違う画素 {d01}")
         ok("on_circle.deg_per_px を 2 倍 → 横に広がる", s2 and s0 and (s2[1] - s2[0]) > (s0[1] - s0[0]) * 1.4, f"{s0} {s2}")
 
+        # 2f. 足した効果(極座標の項目・減色・ラフエッジ・ブロックノイズ・フレア・屈折・モーションブラーの書き方)
+        GR = {"gradient": {"angle": 90, "stops": [[0, "#ff0000"], [1, "#0000ff"]]}}
+        fxl = lambda effects=None, **kw: comp([{"id": "s", "type": "shape", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"kind": "rect", "width": 100, "height": 100, "fill": GR},  # noqa: E731
+                                               **({"effects": effects} if effects else {}), **kw}])
+        shot = lambda c, f=0: px(asyncio.run(grab(c, [f], base))[f])  # noqa: E731
+        plain_im = shot(fxl())
+        near = lambda p_, q_, t=4: all(abs(x - y) <= t for x, y in zip(p_, q_))  # noqa: E731
+        im = shot(fxl([{"type": "polar", "params": {"fit": "cover"}}]))
+        ok("polar fit: cover = 角度だけで色が決まる(同じ向きの 2 点が同じ色・右と左は違う色)・四隅まで埋まる",
+           near(im.getpixel((125, 100)), im.getpixel((145, 100))) and not near(im.getpixel((130, 100)), im.getpixel((70, 100)), 30) and im.getpixel((52, 52))[3] == 255 and im.getpixel((147, 147))[3] == 255,
+           f"{im.getpixel((125, 100))} {im.getpixel((145, 100))} {im.getpixel((70, 100))} {im.getpixel((52, 52))}")
+        im0 = shot(fxl([{"type": "polar", "params": {}}]))
+        ok("polar(項目なし)= 今までどおりの式(円の外は透明・何かは映る)", im0.getpixel((52, 52))[3] == 0 and any(im0.getpixel((x, y))[3] > 0 for y in range(50, 150, 5) for x in range(50, 150, 5)), f"{im0.getpixel((52, 52))}")
+        im = shot(fxl([{"type": "palette", "params": {"colors": ["#ff0000", "#0000ff"]}}]))
+        cols = {im.getpixel((x, y))[:3] for y in range(55, 145, 3) for x in range(55, 145)}
+        ok("palette: 決めた 2 色だけになる", cols == {(255, 0, 0), (0, 0, 255)}, f"{sorted(cols)[:6]}")
+        ok("rough_edges 量 0・しきい値 0 / block_noise 効く割合 0 / refract 強さ 0 は元の絵と同じ",
+           shot(fxl([{"type": "rough_edges", "params": {"amount": 0, "threshold": 0}}])).tobytes() == plain_im.tobytes()
+           and shot(fxl([{"type": "block_noise", "params": {"amount": 0}}])).tobytes() == plain_im.tobytes()
+           and max(abs(x - y) for x, y in zip(shot(fxl([{"type": "refract", "params": {"amount": 0}}])).tobytes(), plain_im.tobytes())) <= 1)
+        r1 = shot(fxl([{"type": "rough_edges", "params": {"amount": 30, "size": 20}}]), 0); r2 = shot(fxl([{"type": "rough_edges", "params": {"amount": 30, "size": 20}}]), 7)
+        ed = [r1.getpixel((x, 100))[3] for x in range(20, 180)]
+        ok("rough_edges: 縁がずれる・アルファは 2 値に近い・コマで変わらない(evolution を動かさなければ)", r1.tobytes() != plain_im.tobytes() and r1.tobytes() == r2.tobytes() and sum(1 for v in ed if 20 < v < 235) <= 8, f"中間のアルファ {sum(1 for v in ed if 20 < v < 235)}")
+        b1 = shot(fxl([{"type": "block_noise", "params": {"count": [8, 8], "width": [30, 60], "height": [10, 30], "speed": 0}}]), 0); b2 = shot(fxl([{"type": "block_noise", "params": {"count": [8, 8], "width": [30, 60], "height": [10, 30], "speed": 0}}]), 5)
+        ok("block_noise: 区画がずれる・speed 0 ならコマで変わらない", b1.tobytes() != plain_im.tobytes() and b1.tobytes() == b2.tobytes())
+        fl = shot(comp([{"id": "s", "type": "shape", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"kind": "rect", "width": 200, "height": 200, "fill": "#00000000"},
+                         "effects": [{"type": "lens_flare", "params": {"radius": 20, "streak_length": 90, "rays": 1, "angle": 90}}]}]))
+        ok("lens_flare: 中心は白・光芒は横(右 60px は光る・上 60px は光らない)・角は透明",
+           min(fl.getpixel((100, 100))) > 240 and fl.getpixel((160, 100))[3] > 20 and fl.getpixel((100, 40))[3] < 12 and fl.getpixel((4, 4))[3] < 4, f"{fl.getpixel((100, 100))} {fl.getpixel((160, 100))} {fl.getpixel((100, 40))}")
+        le = shot(fxl([{"type": "refract", "params": {"amount": 60, "radius": 40}}]))
+        ok("refract(レンズ): 中をふくらませる(中心は同じ色・半径の中は中心寄りの色・外はそのまま)",
+           near(le.getpixel((100, 100)), plain_im.getpixel((100, 100)), 6) and near(le.getpixel((120, 100)), plain_im.getpixel((110, 100)), 40) and not near(le.getpixel((120, 100)), plain_im.getpixel((120, 100)), 12) and le.getpixel((146, 100)) == plain_im.getpixel((146, 100)),
+           f"{le.getpixel((120, 100))} 元 {plain_im.getpixel((120, 100))} 中心寄り {plain_im.getpixel((110, 100))}")
+        MV = {"k": [{"f": 0, "v": [60, 100]}, {"f": 4, "v": [140, 100]}]}
+        mbc = lambda mb: comp([{"id": "s", "type": "solid", "in": 0, "out": 10, "transform": {"position": MV}, "source": {"color": "#ff0000", "width": 20, "height": 20}, "motion_blur": mb}])  # noqa: E731
+        m0 = shot(mbc(True), 2); m1 = shot(mbc({"samples": 16, "shutter": 0.5, "phase": -0.5}), 2); m2 = shot(mbc({"samples": 16, "shutter": 1, "phase": -1}), 2)
+        cov = lambda im_: [x for x in range(200) if im_.getpixel((x, 100))[3] > 8]  # noqa: E731
+        c0, c2 = cov(m0), cov(m2)
+        ok("motion_blur {samples,shutter,phase}: 既定の値は true と同じ絵・phase -1 / shutter 1 は手前(左)へ 1 コマぶん尾を引く",
+           m0.tobytes() == m1.tobytes() and c2 and c0 and abs((c2[-1] - c2[0]) - 39) <= 3 and abs(c2[-1] - 110) <= 2 and abs((c0[-1] - c0[0]) - 29) <= 3, f"true {c0[0]}..{c0[-1]} / 尾 {c2[0]}..{c2[-1]}")
+
         # 2e. mesh レイヤー(手続きの 3D)
         mesh = lambda objs, **src: {"id": "m", "type": "mesh", "in": 0, "out": 60, "transform": {"position": [100, 100, 0]}, "source": {"objects": objs, **src}}  # noqa: E731
         # 光なしの赤い箱 100×60×40。手前の面を z = 0 に置く → 画面では 100×60 px ちょうど(既定のカメラは z = 0 が等倍)
@@ -265,9 +307,65 @@ def main():
         soft = lambda im_: sum(1 for y in range(0, 200, 2) for x in range(0, 200, 2) if 8 < im_.getpixel((x, y))[3] < 247)  # noqa: E731
         s0, s1 = soft(px(asyncio.run(grab(dofc(False), [0], base))[0])), soft(px(asyncio.run(grab(dofc(True), [0], base))[0]))
         ok("mesh: 被写界深度が掛かる(ぼけて半透明の縁が広がる)", s1 > s0 + 200, f"半透明の画素 {s0} → {s1}")
+        # マネキン(関節つきの人形): 手先が体格の式どおりの位置に来る・ひじを 90 度曲げると前腕ぶん動く・角度のキーフレーム・位相は 1 で 1 周
+        MH = 160.0; Bq = MH - MH / 6.5; msw, mU, mF, mr = 0.118 * Bq, 0.19 * Bq, 0.17 * Bq, 0.012 * MH
+        mT = Bq - 0.05 * Bq - 0.59 * Bq; msh = 0.59 * Bq + 0.6 * mT + 0.4 * mT - 0.03 * Bq   # 肩の高さ(足もとから)
+        mq = lambda **kw: comp([mesh([{"geometry": "mannequin", "style": "stick", "position": [0, 80, 0], "body": {"height": MH, "heads": 6.5}, "colors": {"skin": "#ff0000", "top": "#00ff00", "bottom": "#0000ff", "shoes": "#0000ff"}, **kw}], unlit=True)])  # noqa: E731
+        def hand(im, left=True):
+            pts = [(x, y) for y in range(200) for x in (range(128, 200) if left else range(0, 72)) if im.getpixel((x, y))[0] > 200 and im.getpixel((x, y))[1] < 60 and im.getpixel((x, y))[3] > 200]
+            return (sum(q[0] for q in pts) / len(pts) + 0.5, sum(q[1] for q in pts) / len(pts) + 0.5) if pts else (-1, -1)
+        near = lambda a, b, tol=1.2: abs(a[0] - b[0]) <= tol and abs(a[1] - b[1]) <= tol  # noqa: E731
+        imT = px(asyncio.run(grab(mq(preset="t_pose"), [0], base))[0])
+        hl, hr = hand(imT), hand(imT, False)
+        wantT = (100 + msw + mU + mF + mr, 180 - msh)
+        ok("mesh: マネキンの T の字 = 手先が (肩幅 + 上腕 + 前腕) の位置・左右対称", near(hl, wantT) and near(hr, (200 - wantT[0], wantT[1])), f"左 {hl} 右 {hr} 期待 {wantT}")
+        bent = {"shoulder_l": [0, -90, 90], "elbow_l": 90}
+        imB = px(asyncio.run(grab(mq(preset="t_pose", pose=bent), [0], base))[0])
+        hb = hand(imB)
+        wantB = (100 + msw + mU, 180 - msh - mF - mr)
+        ok("mesh: マネキンのひじを 90 度曲げる(上腕を外へひねって)→ 手先が前腕ぶん内へ・上へ", near(hb, wantB) and near(hand(imB, False), (200 - wantT[0], wantT[1])), f"{hb} 期待 {wantB}")
+        gk = asyncio.run(grab(mq(preset="t_pose", pose={"shoulder_l": [0, -90, 90], "elbow_l": {"k": [{"f": 0, "v": 0}, {"f": 8, "v": 90}]}}), [0, 4, 8], base))
+        ok("mesh: マネキンの角度はキーフレームにできる(0 コマ = T の字、8 コマ = 90 度と同じ絵、途中は別の絵)", px(gk[0]).tobytes() == imT.tobytes() and px(gk[8]).tobytes() == imB.tobytes() and px(gk[4]).tobytes() not in (imT.tobytes(), imB.tobytes()))
+        wk = [px(asyncio.run(grab(mq(preset="walk", phase=ph, rotation=[0, 70, 0], hair={"style": "ponytail"}), [0], base))[0]) for ph in (0, 1, 0.25)]
+        dif = lambda a, b: sum(1 for u, v in zip(a.tobytes(), b.tobytes()) if abs(u - v) > 8)  # noqa: E731
+        ok("mesh: マネキンの歩き = 位相 1 で 1 周(0 と同じ絵)・0.25 は別の絵", dif(wk[0], wk[1]) < 8 and dif(wk[0], wk[2]) > 300, f"0↔1 の差 {dif(wk[0], wk[1])}・0↔0.25 の差 {dif(wk[0], wk[2])}")
+
+        # 2f. puppet レイヤー(本番の既存のパペット kyoko_flat を /api/puppet/ から読む。無ければ飛ばす)
+        try:
+            import urllib.request
+            man = json.loads(urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_flat/manifest", timeout=10).read())
+        except Exception:  # noqa: BLE001
+            man = None
+            print("  -- puppet: 本番にパペット kyoko_flat が無いので飛ばす")
+        if man:
+            crop = [440, 40, 840, 440]
+            pl = lambda **src: comp([{"id": "p", "type": "puppet", "in": 0, "out": 120, "transform": {"position": [200, 200]}, "source": {"puppet_id": "kyoko_flat", "crop": crop, **src}}], 400, 400, dur=120)  # noqa: E731
+            # 何も動かさない(呼吸 0・ゆれ 0)= レイヤーの PNG を z 順に重ねただけの絵
+            flat = Image.new("RGBA", tuple(man["canvas"]))
+            for ly in sorted(man["layers"], key=lambda x: x["z"]):
+                flat.alpha_composite(Image.open(io.BytesIO(urllib.request.urlopen(f"{rt.BACKEND}/api/puppet/kyoko_flat/layer/{ly['file']}", timeout=20).read())).convert("RGBA"))
+            want = flat.crop(tuple(crop))
+            got = px(asyncio.run(grab(pl(breath=0, sway=0), [7], base))[7])
+            # 半透明の線を何枚も重ねる所は、8 ビットの乗算済みの丸めで数段ずれる(PIL はストレートで計算する)
+            dif = [max(abs(x - y) for x, y in zip(p1, p2)) if p1[3] > 250 and p2[3] > 250 else abs(p1[3] - p2[3]) for p1, p2 in zip(got.getdata(), want.getdata())]
+            n3 = sum(1 for v in dif if v > 3)
+            ok("puppet: 動かさない姿 = レイヤーの PNG を重ねた絵(最大の差 10 以下・差 3 超えは 0.5% 未満)", max(dif) <= 10 and n3 < len(dif) * 0.005, f"最大の差 {max(dif)}・差 3 超え {n3} 画素")
+            mv = pl(auto_blink=True, blink_interval=0.6, mouth={"k": [{"f": 0, "v": 0}, {"f": 30, "v": 1}]}, head_turn={"k": [{"f": 0, "v": -1}, {"f": 60, "v": 1}]}, head_tilt={"k": [{"f": 0, "v": 0}, {"f": 80, "v": 9}]},
+                    body_lean={"k": [{"f": 0, "v": -3}, {"f": 90, "v": 3}]}, wind={"k": [{"f": 0, "v": 0}, {"f": 50, "v": 1}]}, sway=1.5)
+            p1 = asyncio.run(grab(mv, [5, 41, 77], base))
+            p2 = asyncio.run(grab(mv, [77, 5, 41], base))
+            ok("puppet: 決定論(描く順を変えても同じ絵・コマごとに違う絵)", all(p1[f] == p2[f] for f in (5, 41, 77)) and len({hashlib.md5(p1[f]).digest() for f in (5, 41, 77)}) == 3)
+            # 首ふり: 顔の中心(目・鼻・口)が輪郭より大きく動く = 画面の重心が首ふりの向きへ寄る。根元の固定: 風を変えても頭頂は動かない
+            t0, t1 = (px(asyncio.run(grab(pl(breath=0, sway=0, head_turn=v), [0], base))[0]) for v in (-1, 1))
+            dark = lambda im_: [x for y in range(150, 200) for x in range(100, 300) if im_.getpixel((x, y))[0] > 190 and 60 < im_.getpixel((x, y))[1] < 150 and im_.getpixel((x, y))[2] < 60]  # noqa: E731  橙の虹彩の画素の x
+            m0, m1 = (sum(d_) / max(1, len(d_)) for d_ in (dark(t0), dark(t1)))
+            ok("puppet: 首ふりで目が左右へ動く(右向き − 左向き > 12px)", m1 - m0 > 12, f"目の重心 x {m0:.1f} → {m1:.1f}")
+            w0, w1 = (px(asyncio.run(grab(pl(breath=0, sway=2, wind=v), [20], base))[20]) for v in (-1, 1))
+            top_same = w0.crop((0, 0, 400, 45)).tobytes() == w1.crop((0, 0, 400, 45)).tobytes()
+            ok("puppet: 風を変えても髪の根元(頭頂)は動かず、毛先は動く", top_same and w0.crop((0, 250, 400, 400)).tobytes() != w1.crop((0, 250, 400, 400)).tobytes())
 
         # 3. 決定論 / 4. プレビュー一致
-        exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter"]
+        exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter", "puppet_01_idle"]
         for ex in exs:
             c = json.loads((KIT / "examples" / f"{ex}.json").read_text(encoding="utf-8"))
             d = c["duration_frames"]

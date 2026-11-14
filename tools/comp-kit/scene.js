@@ -14,13 +14,14 @@ import { fillParticles, SPRITE_KINDS, PARTICLE_PRESETS } from './particles.js'
 import { canvasTexture } from './assets.js'
 import { ModelStore } from './model.js'
 import { MeshStore } from './mesh3d.js'
+import { PuppetStore } from './puppet.js'
 import { patternUniforms } from './pattern.js'
 import { INLINE, opsGlsl, MAX_OP_VEC4, MAX_OP_TEX } from './ops.js'
 import { isPass, BLUR_THR, DOF_THR, LOCAL_PASS } from './effects.js'
 
 const D2R = Math.PI / 180
 const DEFAULT_FOV = 39.6 // AE の 50mm 相当(水平画角)
-const DRAWABLE = new Set(['image', 'video', 'sequence', 'text', 'shape', 'solid', 'pattern', 'comp', 'model', 'mesh', 'particles', 'adjustment'])
+const DRAWABLE = new Set(['image', 'video', 'sequence', 'text', 'shape', 'solid', 'pattern', 'comp', 'model', 'mesh', 'puppet', 'particles', 'adjustment'])
 const KNOWN = new Set([...DRAWABLE, 'null', 'camera', 'group'])
 const SHADER_BLEND = {
   multiply: 0, overlay: 1, lighten: 2, darken: 3, difference: 4, normal: 5, add: 6, screen: 7,
@@ -471,6 +472,7 @@ export class CompScene {
   }
   // mesh レイヤーの置き場(最初に使うときに作る)
   meshes() { return (this.env.meshes ??= new MeshStore(this.env)) }
+  puppets() { return (this.env.puppets ??= new PuppetStore(this.env)) }
   is3d(L) { return !!L.def.three_d || L.type === 'model' || L.type === 'mesh' }
   mvp(L, f) {
     if (L.mvpStamp === f) return L.mvp
@@ -610,6 +612,7 @@ export class CompScene {
       }
       case 'model': { const h = num(s.height, this.H * 0.5); return box(h, h) }
       case 'mesh': return this.meshes().bounds(L)
+      case 'puppet': return this.puppets().bounds(this, L)
     }
     return null
   }
@@ -898,6 +901,13 @@ export class CompScene {
         C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true; C.screen = true; C.toSrgb = true
         C.rect = { x: 0, y: 0, w: this.W, h: this.H }
         C.ink = null
+        break
+      }
+      case 'puppet': {
+        // パーツ分解した立ち絵(puppet.js)。キャンバス大の絵(sRGB の値・乗算済み)で戻る。あとは image と同じ
+        const rt = this.puppets().render(this, L, f)
+        if (!rt) return null
+        C.temp = rt; C.texture = rt.texture; C.uvRect = this.puppets().uvRect(this, L); C.edge = true
         break
       }
       default: return null
@@ -1657,7 +1667,7 @@ export class CompScene {
   timeVarying(L) {
     if (L.tv === undefined) {
       const d = L.def
-      L.tv = d.type === 'video' || d.type === 'comp' || d.type === 'sequence' || d.type === 'particles' || d.type === 'mesh' || anyAnimated(d.source) || anyAnimated(d.effects) || !!d.transition_in || !!d.transition_out || !!d.source?.per_char
+      L.tv = d.type === 'video' || d.type === 'comp' || d.type === 'sequence' || d.type === 'particles' || d.type === 'mesh' || d.type === 'puppet' || anyAnimated(d.source) || anyAnimated(d.effects) || !!d.transition_in || !!d.transition_out || !!d.source?.per_char
     }
     return L.tv
   }
@@ -1723,9 +1733,11 @@ export class CompScene {
     const acc = g.acquire(bw, bh, { float: true })
     g.clear(acc)
     let drew = false, last = null
-    const N = clamp(typeof L.def.motion_blur === 'number' ? Math.round(L.def.motion_blur) : MB_SAMPLES, 2, 64)
+    // motion_blur: true(16 回)/ 回数 / {samples, shutter(足し込む幅。コマ。既定 0.5), phase(幅の始まり。既定 -0.5 = 前後に半分ずつ、-1 = 手前へ尾を引く)}
+    const mb = L.def.motion_blur, mbo = mb && typeof mb === 'object' ? mb : null
+    const N = clamp(typeof mb === 'number' ? Math.round(mb) : mbo ? Math.round(num(mbo.samples, MB_SAMPLES)) : MB_SAMPLES, 2, 64)
     for (let i = 0; i < N; i++) {
-      const fs = f + ((i + 0.5) / N - 0.5) * MB_SHUTTER
+      const fs = mbo ? f + ((i + 0.5) / N + num(mbo.phase, -0.5)) * num(mbo.shutter, MB_SHUTTER) : f + ((i + 0.5) / N - 0.5) * MB_SHUTTER
       const S = this.build(L, fs, stack, this.chain(L, fs), true)
       if (!S) continue
       const M = S.screenContent ? this.p2d : this.mvp(L, fs)
@@ -1977,6 +1989,7 @@ export class CompScene {
           else env.font(fontSpec(s, 32), s.counter ? '0123456789' : String(evalProp(s.text, tl, this.fps) ?? ''))
         } else if (L.type === 'model') env.models.prepare(this, L)
         else if (L.type === 'mesh') this.meshes().prepare(this, L, tl, stack)
+        else if (L.type === 'puppet') this.puppets().prepare(this, L, tl)
         else if (L.type === 'particles') this.particleSprite(L)
         else if (L.type === 'comp' && s.comp_id != null) this.prepareComp(s.comp_id, (this.srcFrame(L, tl) / this.fps), stack, L)
         if (Array.isArray(L.def.effects)) {

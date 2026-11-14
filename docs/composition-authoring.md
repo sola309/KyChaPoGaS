@@ -322,6 +322,84 @@
 ]
 ```
 
+### マネキン(関節つきの人形)を立たせる・歩かせる・ポーズを付ける
+
+3D の人物の「仮置き」や、立体のアタリに。`mesh` レイヤーの objects に `geometry: "mannequin"` を 1 個書くと 1 体。原点 = 両足の間の地面(`position` = 足もと)、`rotation: [0, 0, 0]` でこちら向き(y を正にすると画面の右を向く。180 = 後ろ姿)。
+`body` = 体格(`height` 身長 px・`heads` 頭身)、`colors` = 肌・服の上・服の下・髪・靴・リボン、`outfit` = 袖・ズボン・スカート・靴下・ブーツの長さ、`hair.style: "ponytail"` = 長いポニーテール + 黒いリボン。
+ポーズは `preset`(12 種。`walk` `run` `wave` `idle` は `phase` 0〜1 で 1 周 → `{"k": [{"f": 0, "v": 0}, {"f": 54, "v": 1}], "loop": true}` で歩き続ける)に、`pose` の関節の角度(度)を上書きする。
+`pose` の数はどれもキーフレーム・wiggle にできる(下の例は 首を振り向かせる・ポニーテールを揺らす)。`preset_b` + `preset_mix`(0〜1)で 2 つのポーズの間をなめらかに移る。見本は `examples/17_mannequin_presets.json` `18_mannequin_walk.json`。
+
+```json
+[
+ {"id": "fig", "type": "mesh", "in": 0, "out": 90, "transform": {"position": [960, 540, 0]}, "source": {"light": {"ambient": 1.0, "intensity": 1.8, "direction": [-0.6, -1, -0.7], "shadows": true, "shadow_area": 2400, "shadow_opacity": 0.5}, "objects": [
+  {"geometry": "plane", "size": [3000, 1200], "position": [0, 380, 0], "rotation": [-90, 0, 0], "cast_shadow": false, "material": {"type": "shadow", "opacity": 0.3}},
+  {"geometry": "mannequin", "position": [{"k": [{"f": 0, "v": -500}, {"f": 90, "v": -60}]}, 380, 0], "rotation": [0, 62, 0], "body": {"height": 520, "heads": 6.2},
+   "colors": {"top": "#a32f48", "bottom": "#a32f48", "skirt": "#e68aa8", "hair": "#b5334f", "socks": "#3b2233", "shoes": "#5a2030"}, "hair": {"style": "ponytail", "length": 0.5},
+   "outfit": {"sleeves": 0.15, "pants": 0.05, "skirt": 0.75, "skirt_flare": 0.9, "socks": 1.5}, "outline": {"width": 3, "color": "#3a2028"}, "material": {"type": "toon"},
+   "preset": "walk", "phase": {"k": [{"f": 0, "v": 0}, {"f": 54, "v": 1}], "loop": true},
+   "pose": {"head": [0, {"k": [{"f": 40, "v": 0, "e": "inOutSine"}, {"f": 60, "v": -55}]}, 0]}},
+  {"geometry": "mannequin", "position": [520, 380, 0], "rotation": [0, -20, 0], "body": {"height": 500}, "colors": {"top": "#86ab9d", "bottom": "#55698f"}, "hair": {"style": "ponytail"}, "outline": {"width": 3}, "material": {"type": "toon"},
+   "preset": "stand", "preset_b": "wave", "preset_mix": {"k": [{"f": 30, "v": 0, "e": "outBack"}, {"f": 50, "v": 1}]}, "phase": {"k": [{"f": 0, "v": 0}, {"f": 40, "v": 1}], "loop": true},
+   "pose": {"pony_1": [0, {"v": 0, "wiggle": {"amp": 9, "freq": 0.7, "seed": 3}}, 0], "pony_2": [0, {"v": 0, "wiggle": {"amp": 12, "freq": 0.7, "seed": 4}}, 0]}}]}},
+ {"id": "bg", "type": "solid", "in": 0, "out": 90, "source": {"color": "#e9e4dc"}}
+]
+```
+
+- 角度の読み方(本人から見た向き。`_l` = 本人の左 = こちら向きのとき画面の右): 肩・股 `[前へ上げる, 内へひねる, 外へ開く]`、ひじ `[曲げる, 前腕のひねり]`、ひざ `曲げる`、体の軸(root spine chest neck head)`[前へ倒す, 向きを変える, 横へ傾ける]`、ポニーテール `[後ろへ振る, 横へ振る]`。
+  数 1 個なら 1 つ目だけを替える(`"elbow_r": 90`)。配列の `null` はプリセットの値のまま。ひじは「前へ」曲がるので、横に上げた腕の前腕を上へ立てるには上腕を外へひねる(`"shoulder_r": [0, -90, 90], "elbow_r": 90`)。
+- 手の形は `pose.hand_l` `hand_r`: `mitt`(既定)`fist` `open` `peace` `point`。座らせるときは `preset: "sit"`(腰がももの長さだけ下がる)+ 椅子の箱。体を持ち上げる・沈めるのは `pose.offset: [x, y, z]`(身長に対する割合)。
+- 暗い場面で服の色が沈むときは `self_light: 0.3` ほど。棒人形は `style: "stick"`。顔の大写しは、身長を大きくして(頭の高さ = 身長 ÷ 頭身)レイヤーの位置で頭を画面に入れる。
+- 表情・服の細部・指の関節は無い(仮置き用)。本番の絵は、絵の素材(puppet レイヤー)か、3D モデル(model レイヤー)に差し替える。
+### 足した効果の使い方(極座標・ラフエッジ・フレア・ガラス・減色ほか)
+
+見本は `tools/comp-kit/examples/16_fx_extras.json`(8 個を 1 枚に並べた)。どれも `effects` の列に書く。
+
+```json
+[
+ {"id": "rays", "type": "pattern", "in": 0, "out": 90, "source": {"kind": "stripes", "colors": ["#d9b65a", "#b08f3c"], "size": 107},
+  "effects": [{"type": "polar", "params": {"fit": "cover", "inner": "top"}}]},
+ {"id": "tear", "type": "image", "in": 0, "out": 90, "transform": {"position": [960, 540]}, "source": {"asset_id": 935},
+  "effects": [{"type": "rough_edges", "params": {"amount": {"k": [{"f": 0, "v": 140, "e": "outQuad"}, {"f": 12, "v": 0}]}, "size": 80, "threshold": 50}}]},
+ {"id": "flare", "type": "shape", "in": 0, "out": 90, "transform": {"position": [960, 540]}, "source": {"kind": "rect", "width": 1920, "height": 1080, "fill": "#00000000"},
+  "effects": [{"type": "lens_flare", "params": {"cx": 300, "cy": -80, "radius": 120, "streak_length": 1600, "rays": 1, "color": "#9999ff"}}]},
+ {"id": "glass", "type": "adjustment", "in": 0, "out": 90, "masks": [{"shape": "ellipse", "x": 760, "y": 340, "w": 400, "h": 400}],
+  "effects": [{"type": "refract", "params": {"radius": 200, "amount": 45, "aberration": 6, "highlight": 60, "shade": 35}}]}
+]
+```
+
+- しま模様 → 放射状の光: `pattern`(stripes)に `polar`(`fit: "cover"`)。しまの本数 = 光の本数。`swirl` を動かすと渦になる。
+- ちぎれて現れる・消える: `rough_edges` の `amount` を大きい値 → 0(現れる)。`threshold: 0` にすると切り直さず、ゆがむだけ。
+- 光(フレア): 透明な四角(画面大)に `lens_flare`。光芒は `rays` 本(1 = 一文字、2 = 十字)、`angle: 90` で横。カメラに付けたいときは、その四角を 3D にする。
+- ガラス玉・レンズ: 調整レイヤー + だ円のマスク + `refract`(`radius` はマスクの半径に合わせる。`cx` `cy` は画面の中心からのずれ)。すりガラスは `kind: "frost"` + 角丸のマスク。
+- 区画がずれるノイズ: 調整レイヤーに `block_noise`(`count: [5, 15]`、`shift_x: [-30, 30]`)。`speed` で切り替えの速さ。
+- 色数を絞る: 色を決めたいなら `palette`(`colors` に 2〜32 色)、段だけ切るなら `posterize`(`levels`)。
+- 内側の影: `inner_shadow`(`x` `y` `blur` `opacity` `color`)。白い `color` + 小さい `x` `y` で、縁の内側の光にもなる。
+- 動きに尾を引かせる: レイヤーに `"motion_blur": {"samples": 10, "shutter": 1, "phase": -1}`(1 コマ前からいままでを重ねる)。`true` だけなら前後 1/4 コマずつ。
+- 字が寄ってくる: text の `tracking` を `{"k": [{"f": 0, "v": 1000, "e": "outExpo"}, {"f": 16, "v": 0}]}`。
+- 破線: shape の線は `"dash": [28, 16]`(`dash_offset` を動かすと流れる)。画像・文字の輪郭は `trace_outline` の `dash_period`(1 周に対する %)`dash_gap`。
+
+### 立ち絵を少し動かす(puppet。まばたき・口・髪ゆれ・首ふり)
+
+パーツ分解済みの立ち絵(コンパニオンのパペット)を置き、値を書くだけで動く。例: `tools/comp-kit/examples/puppet_01_idle.json`。
+
+```json
+{"id": "kyoko", "type": "puppet", "in": 0, "out": 150, "transform": {"position": [960, 560], "scale": [80, 80]},
+ "source": {"puppet_id": "kyoko_flat", "auto_blink": true, "sway": 1,
+            "wind": {"k": [{"f": 60, "v": 0}, {"f": 90, "v": 0.9, "e": "inOutSine"}, {"f": 130, "v": 0, "e": "inOutSine"}]},
+            "head_turn": {"k": [{"f": 40, "v": 0}, {"f": 62, "v": -0.8, "e": "inOutSine"}, {"f": 92, "v": 0.3, "e": "inOutSine"}]},
+            "head_tilt": {"k": [{"f": 96, "v": 0}, {"f": 110, "v": 6, "e": "inOutSine"}]},
+            "mouth": {"k": [{"f": 18, "v": 0}, {"f": 24, "v": 0.85}, {"f": 30, "v": 0.3}, {"f": 36, "v": 0.9}, {"f": 44, "v": 0}]}}}
+```
+
+- 使えるパペットは `GET /api/puppet/`。パーツは `GET /api/puppet/<id>/manifest` の `layers`(名前・bbox・`sway`)。箱はパペットのキャンバス(1280×1280 など)なので、`transform.scale` で大きさを決める。
+- 顔の寄り・バストアップは `"crop": [左, 上, 右, 下]`(キャンバスの px)。箱がその範囲になるので、`position` はその中心を置く場所。
+- 「立っているだけ」の間は `auto_blink` + 既定の `breath` `sway` で十分動いて見える。首ふりは ±0.5 くらいまでが自然(±1 は端の絵が足りなくなる)。動かす前後に 6〜10 コマのためを作り、`inOutSine` でつなぐ。
+- 風で髪をなびかせるときは `wind` にキーを打つ(0 → 0.9 → 0)。`sway_speed` にはキーを打たない(位相が飛ぶ)。
+- 影・白フチ・光は effects で(`drop_shadow` `stroke_outline` `glow`)。登場は transition か `offset`。腕を振る・歩くはできない(関節が無い)。そういう動きは別の絵を作るか、映像生成に回す。
+- 新しい立ち絵から作る: 全身・正面・腕を体から離さず下ろした絵(`arms at sides, straight-on view, symmetrical, flat color, simple background`)を 1 枚作り、
+  `POST /api/puppet/decompose {"project_id", "asset_id", "puppet_id", "name"}`(GPU を約 7 分占有。ほかの生成と重ねない)→ できた id を `puppet_id` に書く。
+- 書いたら 12 コマおきに `thumb` で見る(顔の部品のずれ・髪の根元・首の継ぎ目)。
+
 ### レシピを組み合わせるコツ
 
 - **重い順**: mesh(光・影・映り込みつき)≒ 入れ子 > 被写界深度つき 3D > 粒子 > ぼかし・縁・影 > 切り抜き・色。同時に映るレイヤーを 40〜60 枚に抑えると、プレビューが軽い。

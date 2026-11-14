@@ -7,7 +7,7 @@
   立体は板(2D の入れ子)で組んだ: 箱の回転は「長い軸まわりの回転 = 横幅 × cos」で表と裏の板を出し分ける。
 - B10 ソウルジェムトランジション 01〜04: 紫のソウルジェムの影絵が下からせり上がり、卵形の窓の中に S22 が見える。
   そのあとカメラが台座へ寄って画面が紫で埋まり、右へ抜ける。
-- B11 杏子立ち絵(3D モデルの書き出し)8 組: 元絵が要る → 同じ位置・大きさの影絵の仮の板。
+- B11 杏子立ち絵(3D モデルの書き出し)8 組: 元絵が要る → 同じ位置・大きさ・ポーズのマネキン(mesh の mannequin)で仮置き。
 """
 import json
 import math
@@ -15,8 +15,8 @@ import os
 
 from recreate_lib import *   # noqa: F401,F403
 
-_CM = json.load(open(os.path.join(SAKURA, 'comp_map.json'), encoding='utf-8'))['36']
-C_S21, C_S22, C_S48 = _CM['21'], _CM['22'], _CM['48']
+_CM = scene_comps()
+C_S21, C_S22, C_S48 = _CM.get('21'), _CM.get('22'), _CM.get('48')
 PURPLE = '#673a73'
 
 
@@ -156,59 +156,60 @@ for _a in _B10:
     _mk_b10(*_a)
 
 
-# ---------------------------------------------------------------- B11 杏子立ち絵(仮の板)
+# ---------------------------------------------------------------- B11 杏子立ち絵(仮: マネキン)
+# 元は杏子の 3D モデル(8 着)の書き出し。2 巡目は comp-kit の mesh の mannequin(関節つきの人形)で仮置きする。
+# 完成版のコマを見て合わせたもの: 頭の位置・大きさ(頭の中心 ≈ (888, 216)・頭の高さ ≈ 215)、腰の高さ、腕のポーズ(4 組)、服の色。
 
 _K = 'scene/20_キャラ紹介後半/Blender/杏子立ち絵/'
-SKIN, HAIR = '#f7dccd', '#93304d'
-# (枝番, 連番フォルダ, 枚数, 上の服, 下の服, 脚)
+SKIN, HAIR = '#f7dccd', '#a8324e'
+# ポーズ(本人の右 = 画面の左): G1 = 右手を腰・左手を斜め下へ広げる / G2 = 左手を上げて振る / G3 = 右手を胸の前 / G4 = 左手を肩の高さでピース
+_B11_POSE = {
+    1: {'shoulder_r': [-22, 62, 46], 'elbow_r': 98, 'hand_r': 'fist', 'shoulder_l': [8, -30, 50], 'elbow_l': 12, 'hand_l': 'open'},
+    2: {'shoulder_l': [0, -90, 118], 'elbow_l': 'WAVE', 'hand_l': 'open', 'shoulder_r': [0, 0, 30], 'elbow_r': 10, 'hand_r': 'open'},
+    3: {'shoulder_r': [38, 25, 14], 'elbow_r': 138, 'hand_r': 'fist', 'shoulder_l': [0, -20, 30], 'elbow_l': 12, 'hand_l': 'open'},
+    4: {'shoulder_l': [12, -80, 48], 'elbow_l': 118, 'hand_l': 'peace', 'shoulder_r': [0, 0, 28], 'elbow_r': 14, 'hand_r': 'mitt'},
+}
+# (枝番, 連番フォルダ, 枚数, ポーズの組, 色, 服)
 _B11 = [
-    ('01-1 私服パーカー', _K + '01-1_私服パーカー/1.02', 166, '#86ab9d', '#55698f', SKIN),
-    ('01-2 魔法少女服', _K + '01-2_魔法少女服/1.02', 166, '#a32f48', '#e68aa8', '#3b2233'),
-    ('02-1 制服', _K + '02-1_制服/1.02', 141, '#efe7d2', '#5d5a4b', SKIN),
-    ('02-2 水着', _K + '02-2_水着/1.02', 141, '#b12c3d', '#f0a696', SKIN),
-    ('03-1 赤ワンピ', _K + '03-1_赤ワンピ/1.03', 141, '#b93b3b', '#b93b3b', SKIN),
-    ('03-2 白ワンピ', _K + '03-2_白ワンピ/1.02', 141, '#ffffff', '#ffffff', SKIN),
-    ('04-1 シスター杏子', _K + '04-1_シスター杏子/1.04', 166, '#1d1b22', '#1d1b22', SKIN),
-    ('04-2 シスター杏子2', _K + '04-2_シスター杏子2/1.04', 166, '#1d1b22', '#1d1b22', SKIN),
+    ('01-1 私服パーカー', _K + '01-1_私服パーカー/1.02', 166, 1, {'top': '#8fb3a6', 'bottom': '#55698f', 'shoes': '#6a4a4a'}, {'sleeves': 1, 'pants': 0.1}),
+    ('01-2 魔法少女服', _K + '01-2_魔法少女服/1.02', 166, 1, {'top': '#a32f48', 'bottom': '#a32f48', 'skirt': '#e68aa8', 'socks': '#3b2233', 'shoes': '#7a2338'}, {'sleeves': 0, 'pants': 0.08, 'skirt': 0.62, 'skirt_flare': 0.9, 'socks': 1.55}),
+    ('02-1 制服', _K + '02-1_制服/1.02', 141, 2, {'top': '#efe7d2', 'bottom': '#6b6a5a', 'skirt': '#6b6a5a', 'socks': '#2c2a33', 'shoes': '#4a3a34'}, {'sleeves': 1, 'pants': 0.08, 'skirt': 0.6, 'skirt_flare': 0.8, 'socks': 1.3}),
+    ('02-2 水着', _K + '02-2_水着/1.02', 141, 2, {'top': '#b12c3d', 'bottom': '#b12c3d', 'skirt': '#f0a696', 'shoes': SKIN}, {'sleeves': 0, 'pants': 0.06, 'skirt': 0.95, 'skirt_flare': 0.5}),
+    ('03-1 赤ワンピ', _K + '03-1_赤ワンピ/1.03', 141, 3, {'top': '#c0434a', 'bottom': '#c0434a', 'skirt': '#c0434a', 'shoes': '#6a3a3a'}, {'sleeves': 0.2, 'pants': 0.05, 'skirt': 1.3, 'skirt_flare': 0.9}),
+    ('03-2 白ワンピ', _K + '03-2_白ワンピ/1.02', 141, 3, {'top': '#ffffff', 'bottom': '#ffffff', 'skirt': '#ffffff', 'shoes': '#e8e0d8'}, {'sleeves': 0, 'pants': 0.05, 'skirt': 1.3, 'skirt_flare': 0.9}),
+    ('04-1 シスター杏子', _K + '04-1_シスター杏子/1.04', 166, 4, {'top': '#1d1b22', 'bottom': '#1d1b22', 'skirt': '#1d1b22', 'shoes': '#2a2228'}, {'sleeves': 0.8, 'pants': 0.05, 'skirt': 1.15, 'skirt_flare': 1.0}),
+    ('04-2 シスター杏子2', _K + '04-2_シスター杏子2/1.04', 166, 4, {'top': '#1d1b22', 'bottom': '#1d1b22', 'skirt': '#1d1b22', 'shoes': '#2a2228'}, {'sleeves': 0.8, 'pants': 0.05, 'skirt': 1.15, 'skirt_flare': 1.0}),
 ]
+B11_GEOM = {'x': 915, 'feet_y': 1450, 'height': 1350, 'heads': 5.6}     # 連番の画面(1920×1080)での足もと・身長(完成版から目で合わせた)
 
 
-def _b11_doc(tag, n, top, bottom, leg):
-    """3D モデルの立ち絵の代わりの影絵。足もと(915, 1080)を軸に小さく揺れる。座標は連番の画面(1920×1080)。"""
-    ox, oy = 915, 1080
-
-    def sh(id, src, x, y, rot=0):
-        return layer(id, 'shape', n, src, parent='fig', transform={'position': [x - ox, y - oy], 'rotation': rot})
-
-    def poly(id, pts, color, cx, cy):
-        return sh(id, {'kind': 'path', 'closed': True, 'fill': color, 'points': [[px - cx, py - cy] for px, py in pts]}, cx, cy)
-
-    def limb(id, pts, color, w):
-        cx, cy = pts[0]
-        return sh(id, {'kind': 'path', 'closed': False, 'fill': None, 'stroke': color, 'stroke_width': w, 'cap': 'round', 'join': 'round',
-                       'points': [[px - cx, py - cy] for px, py in pts]}, cx, cy)
-    fig = layer('fig', 'null', n, transform={'position': [ox, oy], 'rotation': kf((0, -1.2), (n // 3, 1.0, 'inOutSine'), (2 * n // 3, -0.8, 'inOutSine'), (n, 0.8, 'inOutSine'))})
-    L = [
-        sh('ribbon', {'kind': 'rect', 'width': 150, 'height': 46, 'fill': '#1c1a1e', 'radius': 10}, 930, 78, -8),
-        sh('bangs', {'kind': 'ellipse', 'width': 214, 'height': 120, 'fill': HAIR}, 915, 185),
-        sh('face', {'kind': 'ellipse', 'width': 176, 'height': 196, 'fill': SKIN}, 915, 252),
-        limb('armL', [(812, 410), (700, 560), (806, 650)], top, 62),
-        limb('armR', [(1022, 410), (1190, 560), (1330, 690)], top, 62),
-        poly('torso', [(800, 372), (1036, 372), (1010, 700), (826, 700)], top, 918, 536),
-        poly('skirt', [(822, 690), (1014, 690), (1066, 872), (772, 872)], bottom, 918, 780),
-        limb('legL', [(868, 860), (862, 1100)], leg, 74),
-        limb('legR', [(972, 860), (982, 1100)], leg, 74),
-        sh('hair', {'kind': 'ellipse', 'width': 262, 'height': 270, 'fill': HAIR}, 918, 222),
-        sh('tail', {'kind': 'ellipse', 'width': 120, 'height': 640, 'fill': HAIR}, 1066, 470, -9),
-        fig,
-    ]
-    return doc(f'再現 B11 杏子立ち絵 {tag}(仮の板)', n, L)
+def _sway(n, amp, ph=0.0, base=0.0, per=None):
+    """ゆっくりした往復(呼吸・ゆれ)。n コマの間に per コマ周期の sin を 8 コマおきのキーで書く。"""
+    per = per or max(60, n * 0.6)
+    return {'k': [dict(f=f, v=round(base + amp * math.sin(2 * math.pi * (f / per + ph)), 3)) for f in range(0, n + 8, 8)]}
 
 
-def _mk_b11(tag, key, n, top, bottom, leg):
-    @reg(key, 'B11', '仮の板: shape の影絵(頭・髪・服・手足)。元絵 = 杏子の 3D モデルの書き出し', placeholder=True)
+def _b11_doc(tag, n, grp, colors, outfit):
+    """3D モデルの立ち絵の代わりのマネキン(仮)。座標は連番の画面(1920×1080)。立って、呼吸・体のゆれ・髪のゆれ・(G2 は)手を振る。"""
+    g = B11_GEOM
+    pose = dict(_B11_POSE[grp])
+    if pose.get('elbow_l') == 'WAVE':
+        pose['elbow_l'] = _sway(n, 14, 0.0, 48, per=44)
+    pose.update({'root': [0, 0, _sway(n, 1.0)], 'chest': [_sway(n, 1.2, 0.25, 1.0, per=90), 0, _sway(n, -0.8)], 'head': [0, _sway(n, 2.5, 0.1), _sway(n, 2.0, 0.3, -3.0 if grp in (3, 4) else 0)],
+                 'pony_1': [_sway(n, 3, 0.4, 4), _sway(n, 4, 0.55, 16), 0], 'pony_2': [0, _sway(n, 5, 0.7, 8), 0], 'pony_3': [0, _sway(n, 6, 0.85), 0]})
+    fig = {'geometry': 'mannequin', 'style': 'mannequin', 'position': [0, 0, 0], 'rotation': [0, _sway(n, 3.0, 0.5, -4), 0],
+           'body': {'height': g['height'], 'heads': g['heads'], 'thickness': 0.95, 'shoulder': 0.95},
+           'colors': {'skin': SKIN, 'hair': HAIR, 'ribbon': '#1c1a1e', 'eyes': '#8a2030', **colors},
+           'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.05}, 'outfit': outfit,
+           'outline': {'width': 3, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand', 'pose': pose}
+    L = [layer('fig', 'mesh', n, {'light': {'ambient': 1.5, 'intensity': 1.3, 'direction': [-0.4, -0.8, -1]}, 'objects': [fig]}, pos=[g['x'], g['feet_y'], 0])]
+    return doc(f'再現 B11 杏子立ち絵 {tag}(仮: マネキン)', n, L)
+
+
+def _mk_b11(tag, key, n, grp, colors, outfit):
+    @reg(key, 'B11', '仮: マネキン(mesh の mannequin。体格・ポーズ・服の色を完成版に合わせた関節つきの人形)。元絵 = 杏子の 3D モデルの書き出し', placeholder=True)
     def _f(ctx):
-        return _b11_doc(tag, n, top, bottom, leg)
+        return _b11_doc(tag, n, grp, colors, outfit)
     return _f
 
 
@@ -271,7 +272,7 @@ def _s17_doc(strip, color, mirror, name):
     import aup_to_comp as A
     if 'doc' not in _AUP:
         _AUP['doc'] = json.load(open(os.path.join(SAKURA, '1.05.json'), encoding='utf-8'))
-        _AUP['mats'] = AM.Materials(sakura=SAKURA, root=None, api='http://127.0.0.1:8002', project_id=36, budget_mb=0)
+        _AUP['mats'] = AM.Materials(sakura=SAKURA, root=None, api='http://127.0.0.1:8002', project_id=PID, budget_mb=0, rebuild=REBUILD)
     src = _AUP['doc']
     lo, hi = _S17_STRIPS[strip - 1]
     objs = []

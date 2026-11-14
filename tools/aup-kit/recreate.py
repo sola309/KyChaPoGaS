@@ -20,11 +20,16 @@ import sys
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+for _i, _a in enumerate(sys.argv):      # 作り直しの本体(recreate_g*.py)が読み込まれる前に、作る先のプロジェクトを環境変数へ
+    if _a == '--project-id' and _i + 1 < len(sys.argv):
+        os.environ['AUP_PROJECT'] = sys.argv[_i + 1]
+    elif _a.startswith('--project-id='):
+        os.environ['AUP_PROJECT'] = _a.split('=', 1)[1]
 import aup_materials as AM   # noqa: E402
 import urllib.request   # noqa: E402
 from recreate_lib import BUILDERS, SAKURA   # noqa: E402
 import importlib   # noqa: E402
-for _m in ('recreate_g1', 'recreate_g2', 'recreate_g3', 'recreate_g4'):     # 作り直しの本体(シーンの組ごと)
+for _m in ('recreate_g1', 'recreate_g2', 'recreate_g3', 'recreate_g4', 'recreate_g5', 'recreate_g6'):     # 作り直しの本体(シーンの組ごと)
     try:
         importlib.import_module(_m)
     except ModuleNotFoundError as _e:
@@ -54,6 +59,15 @@ class Ctx:
 
     def asset(self, part):
         """元素材(PC のパスの一部で引く)→ asset_map の項目。無ければ None。"""
+        if self.project_id != 36:
+            # 作り直し(2 巡目): 元の素材は使わない。置き換え表(rebuild/replace_*.json)の新しい絵だけを返す
+            import glob
+            q = part.replace('\\', '/')
+            for rp in sorted(glob.glob(os.path.join(SAKURA, 'rebuild', 'replace_*.json'))):
+                for k, v in json.load(open(rp, encoding='utf-8')).items():
+                    if q in k and v.get('asset_id'):
+                        return v
+            return None
         for k, v in self.amap.items():
             if part in k and v.get('project_id') == self.project_id:
                 return v

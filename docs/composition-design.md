@@ -441,6 +441,8 @@ Blender で作っていた立体(押し出し文字・宝石・箱・レール�
 | `line` | `from: [x,y,z]` `to: [x,y,z]` |
 | `points` | `points: [[x,y,z], …]`、`closed`、`curve`(`"catmullrom"` = なめらか / `"linear"` = 折れ線)、`tension`(0.5) |
 
+- `path.up: [x,y,z]`(`extrude` の道だけ。2026-11-14 追加): 断面の向きを固定する。断面の縦(y)= `up` の向き、横(x)= 道と `up` に直角。らせんで `up` を軸の向き(軸 z なら `[0,0,1]`)にすると、横が半径の向き = **ねじれない帯**(幅のある平らならせん)になる。省略 = 今までどおり(three.js の平行移動の枠。らせんでは巻くごとに少しずつねじれる)。
+
 **マテリアル(`material`・`faces[]`)**
 
 | 項目 | 既定 | 意味 |
@@ -524,6 +526,45 @@ i 番目の姿は (種, i, 時刻) の式で決まる。時刻 = `(コマ − �
   子を直したあとは親を自分で描き直す。
 - 編集画面の選択枠は目安(形の外接球からの四角)。編集画面で 3D として扱わせたいとき(z のつまみなど)は、レイヤーに `three_d: true` も書いておく(エンジンは無くても 3D)。
 
+### v1.1 の追加(mesh: マネキン・2026-11-14): 関節つきの人形
+
+3D モデルの人物が要る場面を、モデルのファイルなしでアプリの中だけで「仮置き」できるようにした(Blender を使わない方針の続き)。書式は **追加だけ**(mesh の objects の `geometry` に `"mannequin"` が増えた。既存の例の絵は変わらない)。
+エンジンは `mesh3d.js` の `buildMannequin`、例は `examples/17_mannequin_presets.json` `18_mannequin_walk.json`、作り方は `composition-authoring.md` の「マネキン」。
+
+考え方: 人形は「関節の木 + 部品(球・円柱)」。書くのは体格と角度だけで、形はエンジンが決める。角度は **どれも普通のプロパティ値**(定数 / キーフレーム / loop / wiggle)なので、アニメーションの仕組みは既存のまま。
+よく使う姿は `preset`(式で作る。歩きは位相の sin)で出し、`pose` で一部の関節だけ上書きする。原点は足もと(置く・歩かせる・カメラを合わせるのが楽)。光・影・toon・`unlit` は mesh の通常の仕組みにそのまま乗る。
+
+```json
+{"geometry": "mannequin", "position": [0, 300, 0], "rotation": [0, 30, 0],
+ "style": "mannequin", "body": {"height": 600, "heads": 6.5}, "colors": {"top": "#86ab9d", "bottom": "#55698f", "hair": "#b5334f"},
+ "hair": {"style": "ponytail", "length": 0.45}, "outfit": {"sleeves": 1, "pants": 0.2}, "outline": {"width": 3}, "material": {"type": "toon"},
+ "preset": "hand_on_hip", "pose": {"head": [0, 20, 0], "elbow_l": {"k": [{"f": 0, "v": 10}, {"f": 30, "v": 80}]}}}
+```
+
+| 項目 | 既定 | 意味 |
+|---|---|---|
+| `position` `rotation` `scale` `visible` `cast_shadow` `receive_shadow` `render_order` | | ほかのオブジェクトと同じ。原点 = 両足の間の地面。`rotation` 0 = こちら向き(z 負の側)、y 正 = 画面の右を向く |
+| `style` | `"mannequin"` | `mannequin` = 丸みのある筒と球 / `stick` = 細い棒(棒人形。関節に小さい球) |
+| `body` | | `height` 身長(600 px)・`heads` 頭身(6.5)・`thickness` 太さ・`shoulder` 肩幅・`hip` 腰幅・`arm_length`・`leg_length`(どれも倍率 1)。式は README の「マネキンの体格」 |
+| `colors` | | `skin` `top`(服の上)`bottom`(服の下)`hair` `shoes` `ribbon` `eyes`、省略できる `skirt`(= bottom)`sleeves`(= top)`pants`(= bottom)`socks`(= shoes)。キーフレーム可 |
+| `outfit` | | `sleeves` 袖(0〜1。1 = 手首まで。既定 1)・`pants` ズボン(0〜1。既定 0.2 = 短パン)・`skirt` スカート(0 = なし。1 = ももの長さ。腰から広がる円すい台)・`skirt_flare` 広がり(0.6)・`socks`(1 = ひざ、2 = ももの上)・`boots`(1 = ひざ) |
+| `hair` | | `style`: `none`(既定)/ `short` / `ponytail`(頭の後ろ上から下がる太い房。関節 3 個 `pony_1〜3`)。`length`(身長に対する割合 0.42)`thickness` `bangs`(前髪と横の房)`ribbon`(根元の黒いリボン) |
+| `face` | true | 目(2 個の小さいだ円)を描く。顔の向きが分かる |
+| `outline` | なし | `{width, color}`: 輪郭線(部品を width px 太らせた殻の裏面)。数 1 個なら width |
+| `self_light` | 0 | 自分で光る割合(部品の色 × この値を発光に足す。暗い光の場面むけ) |
+| `material` | | 部品すべての土台のマテリアル(`type: "toon"` など。色は `colors` が上書き) |
+| `preset` | `"stand"` | `stand` `a_pose` `t_pose` `idle` `walk` `run` `wave` `sit` `hand_on_hip` `peace` `lean_forward` `cheer` |
+| `phase` | 0 | 位相(0〜1 で 1 周)。`idle` `walk` `run` `wave` が見る |
+| `preset_b` `preset_mix` `phase_b` | なし・0 | 2 つ目のプリセットと、混ぜる割合(関節の角度を線形に混ぜる。手の形・接地は 0.5 で切り替わる) |
+| `pose` | | 関節ごとの角度(度)の上書き。`{関節: [a, b, c] | 数}`。数 1 個 = 1 つ目だけ。配列の `null` = プリセットのまま。ほかに `offset`(体の移動。身長に対する割合 [x, y 下, z 奥])、`hand_l` `hand_r`(`mitt` `fist` `open` `peace` `point`) |
+| `ground` | walk・run だけ true | いちばん低い足の裏を地面(y = 0)に付ける(歩きの上下動がこれで出る) |
+
+関節と角度(度。本人から見た向き。`_l` = 本人の左): 体の軸 `root`(腰)`spine`(背)`chest`(胸)`neck` `head` = `[前へ倒す, 向きを変える(rotation の y と同じ向き), 横へ傾ける(画面で時計回り)]`。
+`shoulder_l/r` `hip_l/r` = `[前へ上げる, 内へひねる, 外へ開く]`(掛ける順は ひねり → 前後 → 開き)。`elbow_l/r` = `[曲げる(前へ), 前腕を内へひねる]`。`knee_l/r` = 曲げる(後ろへ)。`wrist_l/r` = `[前へ曲げる, 内へひねる, 外へ]`。
+`ankle_l/r` = `[つま先を下げる, 内へ向ける]`。`pony_1〜3` = `[後ろへ振る, 横へ振る]`(何も書かなければ、後ろへ出てから下がる形)。
+
+できないこと: 表情・口・まばたき、指の関節(手の形 5 種だけ)、服のしわ・フード・襟などの形、スカート・髪の物理(揺れは角度のキーか wiggle で書く)、手先から角度を決める IK、部品へのテクスチャ。関節は球でつなぐだけ(皮膚の変形なし)。
+仮置き・アタリ・群衆の遠景むけ。顔の寄りの本番には使えない。
 ### v1.1 の追加(6 回目・2026-11-14): AviUtl 取り込みの全編再現で足した物
 
 - `overlay_source` の `mode: "atop"`(絵のある所にだけ重ねる。アルファはそのまま)。
@@ -531,3 +572,42 @@ i 番目の姿は (種, i, 時刻) の式で決まる。時刻 = `(コマ − �
 - `duotone` の `gray: "max"`(明るさを RGB の最大値で取る白黒)。
 - text の `per_char.hide_outside`(順番が来る前・消えたあとの文字を描かない)。
 - 書き出し(capture)での静止画テクスチャの上限(160 M 画素。古い物から捨てて、要るときに読み直す)。文書の書式には関係しない。
+
+### v1.1 の追加(7 回目・2026-11-14): 取り込みで「未対応」だった効果
+
+どれも書式は足しただけ(既存の文書の意味は変わらない。例 00〜15 の絵は 1 バイトも変わらない)。式は `tools/comp-kit/effects.js`、項目の一覧は `schema.json`、見本は `examples/16_fx_extras.json`。
+
+| 書式 | 何をする | AviUtl の何に当たるか |
+|---|---|---|
+| `polar` に `fit` `inner` `center_width` `scale` `rotation` `swirl` `cx` `cy` `clamp` | 極座標変換を箱基準で。`fit: "cover"` で四隅まで埋める | 極座標変換(中心幅・拡大率・回転・渦巻) |
+| `rough_edges` | ノイズで絵をずらし、アルファを切り直す | スクリプト「ラフエッジ」 |
+| `block_noise` | 四角い区画をずらす | カスタムオブジェクト「本当のブロックノイズ」 |
+| `lens_flare` | 芯・にじみ・光芒・輪の光を足す | カスタムオブジェクト「フレア」 |
+| `refract` | レンズ / すりガラス。調整レイヤーで下の絵をゆがめる | (取り込みでは未使用。ガラスの見た目用) |
+| `palette` | 決めた色のうち近い色へ置き換える | メディアンカット減色@T_Color_Module(色は取り込み側で選ぶ) |
+| `inner_shadow` の `x` `y` | 影のずれを px で | 内側シャドー@ANM1 |
+| `motion_blur: {samples, shutter, phase}` | 足し込む幅と位置を決める | モーションブラー(間隔・分解能) |
+
+- 決定論: 乱数はコマ・種・区画の番号から決まる(時計も Math.random も使わない)。ノイズ・区画の座標は箱の左上を原点にした px(RT の余白や解像度に左右されない)。
+- 取り込み側(`aup_to_comp.py`)の読みのうち、スクリプトの本文を読めていない物(ラフエッジ・内側シャドー・字間調整・フレア・雪・ブロックノイズ・モーションブラー・極座標変換の細部)は、完成動画のコマを見て合わせた**推測**(コメントに書いた)。
+- グループ制御に付いた「輪郭追跡拡張機能」(破線)と「モーションブラー」は、取り込みの後処理で対象のレイヤーへ配る(エンジンのグループの effects は 1 枚ずつに掛かるので、意味は同じ)。
+
+### v1.1 の追加(puppet・2026-11-14): puppet レイヤー(パーツ分解した立ち絵のリグ)
+
+Live2D のように、1 枚の立ち絵を意味ごとの透過レイヤーに分けて、格子メッシュの変形で動かす。分解とリグの元はコンパニオン機能のもの
+(See-Through 分解 → `scripts/rig_compiler.py` → `backend/data/puppets/<id>/manifest.json`(v2: レイヤーの z 順・bbox・depth・sway の分類・`pivots`・`rig.eye / mouth / variants`)+ ハロー除去済みの PNG)をそのまま使う。
+エンジンは `tools/comp-kit/puppet.js`。バックエンドは既存の `GET /api/puppet/<id>/manifest`・`/layer/<file>` を読むだけ(変更なし)。
+
+- **書式**: `{"type": "puppet", "source": {"puppet_id", "crop", "hide", "blink", "auto_blink", "blink_interval", "blink_seed", "look", "brow", "mouth", "vowel",
+  "head_turn", "head_tilt", "head_nod", "head_shift", "body_lean", "breath", "breath_period", "sway", "wind", "sway_speed", "sway_lag", "sway_seed"}}`。
+  項目の表は `tools/comp-kit/README.md` の「puppet レイヤー」、編集画面むけの一覧は `schema.json` の `layer_types.puppet`。
+- **決定論**: コンパニオンの画面(`PuppetStage.ts`)は実時間のばね(前のコマの位置・速さを持つ)で髪を動かすが、コンポジションでは使えない(コマを飛ばして描く・並列に書き出す)。
+  puppet.js は状態を持たず、(文書, コマ) だけから頂点を決める: ゆれ = 正弦の重ね(レイヤーごとの位相)、毛先の遅れ = `sway_lag` 秒前の頭・体の行列を毛先ほど強く混ぜる、
+  自動まばたき = 区間ごとに種から決まる時刻。同じコマは何度描いても、どの順で描いても同じ絵(`check_test.py` 2f)。
+- **変形の考え方**(PuppetStage.ts と同じ): 体 = 足元を軸にしたアフィン(傾き・呼吸)。頭 = 首の付け根を軸にしたアフィンが体に乗る。
+  首ふり = 顔を縦の円筒の前面とみなした写像を、顔の全部の部品に共通で掛ける(同じ x は同じ x' へ行くので部品どうしがずれない)+ 奥行きの視差。
+  首 = 下端は体・上端は頭の行列を smoothstep で混ぜる。髪・布 = 根元(`pinY` まで)は頭・体に固定、先ほど大きくゆれる。
+- **描き方**: パペットのキャンバス大の RT に z 順で重ね、その 1 枚を image レイヤーと同じ道(transform・effects・マスク・マット・親子・3D・ブレンド)に流す。
+- **限界**: 腕・脚は曲げられない(See-Through の層が腕 1 枚・脚 1 枚で、関節の位置も無い)。首ふりは ±0.42 rad まで。表情の切り替え・視線の描き差分は未対応。
+  絵の質は分解しだい(口が数画素・腕が服と 1 枚、など)。新しいパペットは `POST /api/puppet/decompose`(GPU 約 7 分)。
+- **次の候補**(調査 2026-11-14、未導入・許可待ち): See-Through の層に DWPose の骨と頂点スキニングを足す(Stretchy Studio の方式)と腕・脚が曲げられる。

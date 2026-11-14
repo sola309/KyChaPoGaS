@@ -148,22 +148,58 @@ def figure(pos, color, h=165, name='figure', rot=None):
 
 ROOF_CAM = dict(
     zoom=1400,
-    pos=[(0, (0, -800, 670)), (25, (0, -310, 670), 'easeOutCubic'), (71, (0, -310, 670), 'easeInOutSine'), (101, (0, -200, 150), 'easeOutSine'),
-         (143, (0, -260, -200), 'easeInSine'), (165, (-420, -560, -1200), 'easeOutSine'), (188, (-300, -420, -1830), 'easeOutCubic'), (245, (-120, -420, -1850))],
-    tgt=[(0, (0, -508, 2670)), (25, (0, -18, 2670), 'easeOutCubic'), (71, (0, -18, 2670), 'easeInOutSine'), (101, (0, 0, 1500), 'linear'), (143, (0, 0, 1500), 'easeInSine'),
+    pos=[(0, (0, -800, 670)), (25, (0, -310, 670), 'easeOutCubic'), (71, (0, -310, 670), 'easeInOutSine'), (101, (0, -141, 163), 'easeOutSine'), (116, (0, -141, 163), 'easeInOutSine'),
+         (143, (0, -230, 10), 'easeInSine'), (165, (-420, -560, -1200), 'easeOutSine'), (188, (-300, -420, -1830), 'easeOutCubic'), (245, (-120, -420, -1850))],
+    tgt=[(0, (0, -508, 2670)), (25, (0, -18, 2670), 'easeOutCubic'), (71, (0, -18, 2670), 'easeInOutSine'), (101, (0, 56, 1500), 'linear'), (116, (0, 56, 1500), 'easeInOutSine'), (143, (0, 0, 1500), 'easeInSine'),
          (165, (-100, 0, 300), 'easeOutSine'), (188, (-260, 157, -830), 'easeOutCubic'), (245, (-80, 157, -850))],
 )
 
-KYOKO = [  # 3D モデルの杏子たち(仮の板)。足もとの位置と、服の色の見当
-    ((60, 0, 420), '#6fa3a0'),        # 緑のパーカー(最初に後ろ姿で映る)
-    ((-640, 0, -1260), '#3a3238'),   # 黒のワンピース
-    ((-460, 0, -1060), '#f2ecdc'),   # 白のセーター
-    ((-300, 0, -1330), '#f5f0e2'),   # 白のワンピース
-    ((-170, 0, -1120), '#6fa3a0'),   # 緑のパーカー(後半の並び)
-    ((-60, 0, -1000), '#c6303a'),    # 赤い服
-    ((120, 0, -1150), '#2e2a30'),    # 黒い服
-    ((230, 0, -1350), '#d8a090'),    # 水着
-]
+# 3D モデルの杏子たち(仮: マネキン = mesh の mannequin)。足もとの位置は、完成版 3580 の足の画面位置を ROOF_CAM から床へ逆算した値。
+# 服の色・ポーズは完成版を見て決めた(本人の右 = こちら向きのとき画面の左)。
+_KSKIN, _KHAIR = '#f7dccd', '#a8324e'
+_HIP_R = {'shoulder_r': [-22, 62, 46], 'elbow_r': 98, 'hand_r': 'fist'}
+
+
+def kyoko(pos, colors, outfit, pose=None, preset='stand', rot=0, h=220, phase=None, n=245, seed=0, **kw):
+    """人物の仮置き(マネキン)。足もとが pos。こちら(カメラ側 = z 負)を向く。小さく体がゆれる。"""
+    per = 70 + seed * 7
+    sw = lambda amp, ph=0.0, base=0.0: {'k': [dict(f=f, v=round(base + amp * math.sin(2 * math.pi * (f / per + ph + seed * 0.13)), 3)) for f in range(0, n + 10, 10)]}  # noqa: E731
+    ps = {'root': [0, 0, sw(1.2)], 'chest': [sw(1.2, 0.25, 1), 0, sw(-1.0)], 'head': [0, sw(4, 0.1), sw(2, 0.3)], 'pony_1': [sw(3, 0.4, 3), sw(5, 0.5), 0], 'pony_2': [0, sw(6, 0.65), 0], 'pony_3': [0, sw(7, 0.8), 0]}
+    ps.update(pose or {})
+    o = {'geometry': 'mannequin', 'position': list(pos), 'rotation': [0, rot, 0], 'body': {'height': h, 'heads': 5.6, 'thickness': 0.95, 'shoulder': 0.95},
+         'colors': {'skin': _KSKIN, 'hair': _KHAIR, 'ribbon': '#1c1a1e', 'eyes': '#8a2030', **colors}, 'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.05}, 'outfit': outfit,
+         'outline': {'width': h / 330, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'self_light': 0.35, 'preset': preset, 'pose': ps}
+    if phase is not None:
+        o['phase'] = phase
+    o.update(kw)
+    return o
+
+
+def roof_figures(n):
+    HOOD = ({'top': '#8fb3a6', 'bottom': '#55698f', 'socks': '#2a2630', 'shoes': '#2a2630'}, {'sleeves': 1, 'pants': 0.1, 'socks': 0.85})
+    wave = {'k': [dict(f=f, v=round(48 + 14 * math.sin(2 * math.pi * f / 44), 2)) for f in range(0, n + 8, 8)]}
+    F = [
+        # 1 人目: 金網の前で街を見ている後ろ姿(緑のパーカー・右手を腰)。完成版 3475〜3550
+        kyoko((15, 0, 420), *HOOD, pose={**_HIP_R, 'shoulder_l': [0, 0, 14], 'elbow_l': 10, 'hip_l': [0, 0, 6], 'hip_r': [0, 0, 6]}, rot=180, h=165, n=n, seed=0),
+        # 後半の並び(完成版 3565〜3633)。左から: 黒のロングワンピース(右手でピース)/ 白のセーター + スカート(両手を広げる)/ 白のワンピース / 緑のパーカー(手を腰)/ 赤のワンピース(手を胸)/ 黒のシスター服(片足を上げて駆ける)/ 水着(左手を振る)
+        kyoko((-715, 0, -1119), {'top': '#2a262c', 'bottom': '#2a262c', 'skirt': '#3a3a34', 'shoes': '#2a2228'}, {'sleeves': 0.3, 'pants': 0.05, 'skirt': 1.75, 'skirt_flare': 0.7},
+              pose={'shoulder_r': [12, -80, 48], 'elbow_r': 118, 'hand_r': 'peace', 'shoulder_l': [0, 0, 20]}, rot=-12, n=n, seed=1),
+        kyoko((-563, 0, -998), {'top': '#f2ecdc', 'bottom': '#8a8468', 'skirt': '#8a8468', 'shoes': '#b03040'}, {'sleeves': 1, 'pants': 0.05, 'skirt': 0.6, 'skirt_flare': 0.8},
+              pose={'shoulder_l': [0, -30, 55], 'shoulder_r': [0, -30, 55], 'elbow_l': 10, 'elbow_r': 10, 'hand_l': 'open', 'hand_r': 'open'}, rot=-6, n=n, seed=2),
+        kyoko((-336, 0, -1301), {'top': '#f8f4ea', 'bottom': '#f8f4ea', 'skirt': '#f8f4ea', 'shoes': '#e8e0d8'}, {'sleeves': 0, 'pants': 0.05, 'skirt': 1.35, 'skirt_flare': 0.9},
+              pose={'shoulder_l': [0, 0, 24], 'shoulder_r': [0, 0, 24], 'hand_l': 'open', 'hand_r': 'open'}, n=n, seed=3),
+        kyoko((-235, 0, -1039), *HOOD, pose={**_HIP_R, 'shoulder_l': [0, 0, 16]}, rot=4, n=n, seed=4),
+        kyoko((-136, 0, -832), {'top': '#c0434a', 'bottom': '#c0434a', 'skirt': '#c0434a', 'shoes': '#6a3a3a'}, {'sleeves': 0.2, 'pants': 0.05, 'skirt': 1.3, 'skirt_flare': 0.9},
+              pose={'shoulder_r': [38, 25, 14], 'elbow_r': 138, 'hand_r': 'fist', 'shoulder_l': [0, 0, 22]}, rot=6, n=n, seed=5),
+        kyoko((83, 0, -930), {'top': '#1d1b22', 'bottom': '#1d1b22', 'skirt': '#1d1b22', 'shoes': '#2a2228'}, {'sleeves': 0.8, 'pants': 0.05, 'skirt': 1.0, 'skirt_flare': 1.0},
+              preset='run', phase=0.18, ground=False, pose={}, rot=28, n=n, seed=6),
+        kyoko((112, 0, -1253), {'top': '#b12c3d', 'bottom': '#b12c3d', 'skirt': '#e87a5a', 'shoes': _KSKIN}, {'sleeves': 0, 'pants': 0.06, 'skirt': 1.1, 'skirt_flare': 0.6},
+              pose={'shoulder_l': [0, -90, 118], 'elbow_l': wave, 'hand_l': 'open', 'shoulder_r': [0, 0, 26]}, rot=8, n=n, seed=7),
+        # ベンチに座る魔法少女(槍を持つ)
+        kyoko((300, -58, -1690), {'top': '#a32f48', 'bottom': '#a32f48', 'skirt': '#e68aa8', 'socks': '#3b2233', 'shoes': '#7a2338'}, {'sleeves': 0, 'pants': 0.08, 'skirt': 0.62, 'skirt_flare': 0.9, 'socks': 1.55, 'boots': 0.9},
+              preset='sit', pose={'shoulder_l': [50, 0, 20], 'elbow_l': 70, 'hand_l': 'fist'}, rot=-150, h=200, n=n, seed=8),
+    ]
+    return F
 
 
 def roof_parts(n, parts, figures=False):
@@ -207,9 +243,7 @@ def roof_parts(n, parts, figures=False):
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
     if figures:
-        for i, (p, c) in enumerate(KYOKO):
-            O.append(figure(p, c))
-        O.append(figure((300, -116, -1700), '#c6303a', h=110))                                                  # ベンチに座る杏子(魔法少女)
+        O.extend(roof_figures(n))                                                                                # 人物 = 仮: マネキン
         O.append(box((4, 4, 330), (270, -190, -1700), '#b0343a', rot=(30, 40, 0)))                              # 槍
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
     return [cam(n, ROOF_CAM['zoom'], ROOF_CAM['pos'], ROOF_CAM['tgt']), mesh('stage', n, O, light=lt)]
@@ -230,7 +264,7 @@ _roof(_S30 + '1.03足場2中', 'B14', ['sc2'])
 _roof(_S30 + '1.03足場3右', 'B14', ['sc3'])
 _roof(_S30 + '1.03フェンス', 'B14', ['fence'])
 _roof(_S30 + '1.03高台足場', 'B14', ['roof'])
-_roof(_S30 + '1.08', 'B14', ['bg', 'roof', 'city', 'sc1', 'sc2', 'sc3', 'fence', 'stand'], n=245, figures=True, bg='#eef0f0', note='。人物は仮の板(3D モデルの元絵が要る)')
+_roof(_S30 + '1.08', 'B14', ['bg', 'roof', 'city', 'sc1', 'sc2', 'sc3', 'fence', 'stand'], n=245, figures=True, bg='#eef0f0', note='。人物は仮: マネキン(mesh の mannequin 9 体。元絵 = 3D モデルの杏子)')
 
 
 # ================================================================ B18 廊下(S32 3977-4179)

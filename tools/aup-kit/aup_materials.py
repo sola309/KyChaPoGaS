@@ -58,7 +58,7 @@ def video_meta(exdata):
 
 
 class Materials:
-    def __init__(self, sakura=SAKURA, root=None, api=None, project_id=None, budget_mb=3000):
+    def __init__(self, sakura=SAKURA, root=None, api=None, project_id=None, budget_mb=3000, rebuild=False):
         self.sakura = sakura
         self.root = root or os.path.join(sakura, 'materials')
         self.api = api
@@ -66,6 +66,19 @@ class Materials:
         self.budget = budget_mb * 1e6
         self.map_path = os.path.join(sakura, 'asset_map.json')
         self.log_path = os.path.join(self.root, '_transfer_log.json')
+        # 作り直しモード(--rebuild): 元の素材(materials/)を 1 つも使わない。素材は置き換え表(rebuild/replace_*.json)だけから引き、
+        # 表に無い物は同じ大きさの「仮の板」(PIL で描く)を当てる。元の asset_map.json からは大きさ(w, h)だけ読む。
+        self.rebuild = bool(rebuild)
+        if self.rebuild:
+            self.rb_dir = os.path.join(sakura, 'rebuild')
+            self.orig_sizes = {rel_of(k): (v.get('w'), v.get('h')) for k, v in self._load(self.map_path, {}).items() if v.get('kind') == 'image'}
+            self.root = os.path.join(self.rb_dir, '_no_materials')      # 手元の元素材は見ない(このフォルダは空)
+            self.map_path = os.path.join(self.rb_dir, f'asset_map_{project_id}.json')
+            self.log_path = os.path.join(self.rb_dir, '_transfer_log.json')
+            self.replace = {}
+            import glob as _glob
+            for rp in sorted(_glob.glob(os.path.join(self.rb_dir, 'replace_*.json'))):
+                self.replace.update(self._load(rp, {}))
         self.amap = self._load(self.map_path, {})
         self.tlog = self._load(self.log_path, {'bytes': 0, 'files': 0})
         self._listing = None
@@ -162,6 +175,8 @@ class Materials:
     def still_asset(self, path, fetch=False):
         """静止画 → {'asset_id', 'w', 'h'} か None。"""
         key = norm(path)
+        if self.rebuild:
+            return self.rebuilt_still(key)
         e = self.amap.get(key)
         if e and e.get('project_id') == self.project_id:
             return e
@@ -179,8 +194,54 @@ class Materials:
         self.save()
         return e
 
+    def replaced(self, path):
+        """作り直しモード: 置き換え表にある新しい絵(asset_id つき)か None。"""
+        if not self.rebuild:
+            return None
+        rel = rel_of(norm(path))
+        e = self.replace.get(rel) or self.replace.get('still:' + rel)
+        return e if e and e.get('asset_id') else None
+
+    def rebuilt_still(self, key):
+        """作り直しモードの静止画: 置き換え表 → 無ければ同じ大きさの仮の板(灰色の市松 + 「仮」の字。PIL で描いて登録)。"""
+        rel = rel_of(key)
+        e = self.replaced(key)
+        if e:
+            return {'asset_id': e['asset_id'], 'w': e.get('w'), 'h': e.get('h'), 'kind': 'image', 'project_id': self.project_id,
+                    'rebuilt': e.get('kind'), 'status': e.get('status')}
+        c = self.amap.get(key)
+        if c and c.get('project_id') == self.project_id and c.get('rebuilt') == 'placeholder':
+            return c
+        if self.api is None:
+            w, h = self.orig_sizes.get(rel, (1000, 1000))
+            return {'asset_id': -1, 'w': w, 'h': h, 'kind': 'image', 'project_id': self.project_id, 'rebuilt': 'placeholder'}
+        w, h = self.orig_sizes.get(rel, (1000, 1000))
+        from PIL import Image, ImageDraw, ImageFont
+        im = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        m = max(4, min(w, h) // 40)
+        d.rectangle((0, 0, w - 1, h - 1), fill=(150, 150, 160, 150), outline=(255, 0, 160, 255), width=m)
+        d.line((0, 0, w, h), fill=(255, 0, 160, 255), width=m)
+        d.line((0, h, w, 0), fill=(255, 0, 160, 255), width=m)
+        try:
+            f = ImageFont.truetype('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc', max(14, min(w, h) // 6))
+            d.text((w // 2, h // 2), '仮', font=f, fill=(255, 255, 255, 255), anchor='mm', stroke_width=max(2, m // 2), stroke_fill=(255, 0, 160, 255))
+        except Exception:
+            pass
+        os.makedirs(os.path.join(self.rb_dir, 'placeholders'), exist_ok=True)
+        hname = hashlib.md5(rel.encode()).hexdigest()[:10]
+        loc = os.path.join(self.rb_dir, 'placeholders', f'ph_{hname}.png')
+        im.save(loc)
+        a = self.upload(loc, f'placeholder_{hname}.png')
+        e = {'asset_id': a['id'], 'w': w, 'h': h, 'kind': 'image', 'project_id': self.project_id, 'rebuilt': 'placeholder', 'for': rel}
+        self.amap[key] = e
+        self.save()
+        return e
+
     def file_asset(self, key, local_path, extra=None):
         """手元のファイル(下絵など)をそのまま登録。"""
+        if self.rebuild:
+            return None         # 下絵(元の OP 動画)などは作り直しでは使わない
         e = self.amap.get(key)
         if e and e.get('project_id') == self.project_id:
             return e
@@ -214,6 +275,8 @@ class Materials:
         return d, first, digits, ext, nums
 
     def seq_asset(self, path, lo, hi, fps=60.0, fetch=False):
+        if self.rebuild:
+            return None         # 元の連番は使わない(作り直した comp が無ければ「素材なし」)
         """連番の lo〜hi 番目(1 始まり・最初のファイルが 1)を含む動画素材。
         返り値 {'asset_id', 'first': 動画の 0 コマ目が連番の何番目か(1 始まり), 'count', 'fps'} か None。
         すでに登録済みの範囲に入っていればそれを返す(入っていなければ、ある分だけで返す)。"""

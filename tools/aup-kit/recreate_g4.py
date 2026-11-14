@@ -115,43 +115,41 @@ def v06b(ctx):
 
 
 # ---- B25: ポッキーゲーム 1.11(247 コマ = ルートの 5183〜5429)。箱が飛び込み、開いて銀の袋から 1 本出て、
-#      カメラが棒に寄り、後半は 3D モデルの杏子(パーカー)がくわえる。箱・袋・棒は mesh、杏子は影絵の仮の板 ----
+#      カメラが棒に寄り、後半は 3D モデルの杏子(パーカー)がくわえる。箱・袋・棒は mesh、杏子は仮: マネキン(mesh の mannequin)----
 def sh(id, n, kind, w, h, fill, pos, rot=0, **src):
     s = {'kind': kind, 'width': w, 'height': h, 'fill': fill}
     s.update(src)
     return layer(id, 'shape', n, s, transform={'position': list(pos), 'rotation': [0, 0, rot]})
 
 
-@reg('aux:B25_chara', 'B25c', '仮の板(3D モデルの杏子の影絵: shape)', placeholder=True)
+@reg('aux:B25_chara', 'B25c', '仮: マネキン(mesh の mannequin。パーカー姿の横顔・右手を口もとへ・ポニーテールが後ろへなびく)。元絵 = 3D モデルの杏子', placeholder=True)
 def b25c(ctx):
-    # 元絵が要る: パーカー姿の杏子の 3D モデル(横顔〜斜め。ポッキーをくわえ、右手を添える)。口 = (760, 520)
-    n = 1
+    # 元は パーカー姿の杏子の 3D モデル(横顔〜斜め。ポッキーをくわえ、右手を添える)。口 = (760, 520)・頭の中心 ≈ (560, 380)・頭の高さ ≈ 450(1 巡目の影絵と同じ目印)
+    n = 170
     w, h = 1400, 1800
-    hair, skin, hood = '#a5324c', '#f7dcc8', '#8fa695'
+    HH, HEADS = 450, 5.6
+    Hh = HH * HEADS
+
+    def sw(amp, ph=0.0, base=0.0, per=64):
+        return {'k': [dict(f=f, v=round(base + amp * math.sin(2 * math.pi * (f / per + ph)), 3)) for f in range(0, n + 8, 8)]}
+    fig = {'geometry': 'mannequin', 'position': [0, 0, 0], 'rotation': [0, 60, 0], 'body': {'height': Hh, 'heads': HEADS, 'thickness': 0.95, 'shoulder': 0.95},
+           'colors': {'skin': '#f7dcc8', 'hair': '#a5324c', 'ribbon': '#2a2226', 'eyes': '#8a2030', 'top': '#8fa695', 'bottom': '#55698f'},
+           'hair': {'style': 'ponytail', 'length': 0.5, 'thickness': 1.1}, 'outfit': {'sleeves': 1, 'pants': 0.1},
+           'outline': {'width': 5, 'color': '#4a2a34'}, 'material': {'type': 'toon', 'toon_steps': 3}, 'preset': 'stand',
+           'pose': {'shoulder_r': [70, 20, 6], 'elbow_r': [95, 0], 'hand_r': 'fist', 'head': [sw(1.5, 0.2, -4), sw(2, 0.0), 0], 'chest': [sw(1.0, 0.3, 2), 0, 0],
+                    'pony_1': [sw(5, 0.0, 14), sw(4, 0.3), 0], 'pony_2': [sw(7, 0.15, 22), sw(5, 0.45), 0], 'pony_3': [sw(9, 0.3, 14), sw(6, 0.6), 0]}}   # 髪は風で後ろへなびく
     L = [
-        layer('stick', 'shape', n, {'kind': 'line', 'points': [[0, 0], [100, 29]], 'stroke': '#5a3327', 'stroke_width': 5, 'cap': 'round', 'fill': None},
-              pos=[760, 520]),
-        sh('hand', n, 'ellipse', 90, 120, skin, (890, 590), 20),
-        sh('bang', n, 'pie', 430, 430, hair, (560, 330), 0, start=-150, end=110),
-        sh('eye', n, 'ellipse', 34, 60, '#b03a3a', (700, 400)),
-        sh('face', n, 'ellipse', 330, 400, skin, (620, 420)),
-        sh('ear', n, 'ellipse', 70, 100, skin, (470, 440)),
-        sh('ribbon', n, 'ellipse', 90, 130, '#2a2226', (330, 250), -30),
-        sh('head', n, 'ellipse', 470, 470, hair, (520, 360)),
-        sh('neck', n, 'rect', 110, 160, skin, (540, 640)),
-        sh('arm', n, 'rect', 110, 420, hood, (870, 830), -18, radius=50),
-        sh('body', n, 'rect', 460, 1100, hood, (520, 1260), 0, radius=120),
-        sh('tail', n, 'ellipse', 620, 170, hair, (80, 420), -18),
-        sh('tail2', n, 'ellipse', 520, 130, hair, (-250, 560), -32),
+        layer('stick', 'shape', n, {'kind': 'line', 'points': [[0, 0], [150, 30]], 'stroke': '#5a3327', 'stroke_width': 7, 'cap': 'round', 'fill': None}, pos=[736, 500]),
+        layer('fig', 'mesh', n, {'light': {'ambient': 1.5, 'intensity': 1.3, 'direction': [-0.4, -0.8, -1]}, 'objects': [fig]}, pos=[560, 380 - HH / 2 + Hh, 0]),
     ]
-    return doc('仮の板 B25 杏子(3D モデルの代わりの影絵)', n, L, w=w, h=h)
+    return doc('仮: マネキン B25 杏子(3D モデルの代わり)', n, L, w=w, h=h)
 
 
-@reg('scene/38_えちえち杏子ちゃん/Blender_ポッキーゲーム/1.11', 'B25', 'mesh(箱・袋・棒)+ 仮の板(杏子)+ particles')
+@reg('scene/38_えちえち杏子ちゃん/Blender_ポッキーゲーム/1.11', 'B25', 'mesh(箱・袋・棒)+ 仮: マネキン(杏子)+ particles')
 def b25(ctx):
     n = 247
     red, silver, choco, bisc = '#d8141f', '#b9b9b9', '#55301f', '#c98d4d'
-    tex = {'comp_id': 55, 'frame': 130}     # S48 のパッケージの展開図(130 コマ目 = 赤いロッキー)
+    tex = {'comp_id': scene_comps().get('48', 55), 'frame': 130}     # S48 のパッケージの展開図(130 コマ目 = 赤いロッキー)
     front = {'color': '#ffffff', 'roughness': 0.6, 'texture': dict(tex), 'texture_repeat': [0.235, 0.66], 'texture_offset': [0.0, 0.0]}
     back = {'color': '#ffffff', 'roughness': 0.6, 'texture': dict(tex), 'texture_repeat': [0.235, 0.66], 'texture_offset': [0.235, 0.0]}
     plain = {'color': red, 'roughness': 0.6}
@@ -176,12 +174,12 @@ def b25(ctx):
     L = [
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
         layer('charaB', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=101,
-              transform={'anchor': [60, -380, 0], 'position': kf((101, [930, 470, 0]), (150, [975, 465, 0]), (177, [1100, 700, 0], 'inOutCubic'), (246, [1120, 720, 0])),
-                         'scale': kf((101, [60, 60]), (150, [62, 62]), (177, [170, 170], 'inOutCubic'), (246, [190, 190]))}, start=0, speed=0),
+              transform={'anchor': [60, -380, 0], 'position': kf((101, [930, 470, 0]), (150, [975, 465, 0]), (177, [1100, 610, 0], 'inOutCubic'), (246, [1110, 600, 0])),
+                         'scale': kf((101, [60, 60]), (150, [62, 62]), (177, [118, 118], 'inOutCubic'), (246, [120, 120]))}),
         layer('charaA', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=81, t1=101,
-              transform={'anchor': [60, -380, 0], 'position': kf((81, [380, 340, 0]), (85, [400, 350, 0]), (93, [700, 500, 0], 'inOutCubic'), (100, [690, 505, 0])),
-                         'scale': kf((81, [1240, 1240]), (85, [1200, 1200]), (93, [260, 260], 'inOutCubic'), (100, [255, 255])),
-                         'rotation': kf((81, [0, 0, 3]), (93, [0, 0, 0]))}, start=0, speed=0),
+              transform={'anchor': [60, -380, 0], 'position': kf((81, [380, 340, 0]), (85, [400, 350, 0]), (93, [880, 520, 0], 'inOutCubic'), (100, [875, 522, 0])),
+                         'scale': kf((81, [715, 715]), (85, [690, 690]), (93, [150, 150], 'inOutCubic'), (100, [147, 147])),
+                         'rotation': kf((81, [0, 0, 3]), (93, [0, 0, 0]))}),
         layer('macro', 'shape', n, {'kind': 'rect', 'width': 3200, 'height': 180, 'radius': 90,
                                     'fill': {'gradient': {'angle': 90, 'stops': [[0, '#6b3f2c'], [0.45, '#55301f'], [1, '#2e1810']]}}}, t0=64, t1=81,
               transform={'position': kf((64, [820, 420, 0]), (73, [960, 540, 0], 'outCubic'), (80, [990, 550, 0])),

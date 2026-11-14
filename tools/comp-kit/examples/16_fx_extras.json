@@ -1,0 +1,802 @@
+{
+ "id": 9016,
+ "name": "16 足した効果(極座標・ラフエッジ・ブロックノイズ・フレア・屈折・減色ほか)",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 90,
+ "data": {
+  "version": 1,
+  "bg": "#12131a",
+  "layers": [
+   {
+    "id": "hex",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1680,
+      905
+     ]
+    },
+    "source": {
+     "kind": "polygon",
+     "sides": 6,
+     "width": 200,
+     "height": 200,
+     "fill": "#3a3f58"
+    },
+    "effects": [
+     {
+      "type": "trace_outline",
+      "params": {
+       "width": 6,
+       "color": "#ffd23f",
+       "dash_period": 33.34,
+       "dash_gap": {
+        "k": [
+         {
+          "f": 0,
+          "v": 33.34
+         },
+         {
+          "f": 60,
+          "v": 0
+         }
+        ]
+       },
+       "only_line": false
+      }
+     }
+    ]
+   },
+   {
+    "id": "trk",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1680,
+      760
+     ]
+    },
+    "source": {
+     "text": "字間 TRACKING",
+     "size": 34,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP",
+     "tracking": {
+      "k": [
+       {
+        "f": 0,
+        "v": 60,
+        "e": "outExpo"
+       },
+       {
+        "f": 60,
+        "v": 0
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "mb",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         1500,
+         670
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 30,
+        "v": [
+         1860,
+         670
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 60,
+        "v": [
+         1500,
+         670
+        ],
+        "e": "easeInOut"
+       },
+       {
+        "f": 90,
+        "v": [
+         1860,
+         670
+        ]
+       }
+      ]
+     }
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 60,
+     "height": 60,
+     "fill": "#ff4d6d"
+    },
+    "motion_blur": {
+     "samples": 12,
+     "shutter": 1,
+     "phase": -1
+    }
+   },
+   {
+    "id": "cap31",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1680,
+      575
+     ]
+    },
+    "source": {
+     "text": "motion_blur / tracking / 破線",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "post",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1305,
+      870
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 250,
+     "height": 250,
+     "fill": {
+      "gradient": {
+       "angle": 120,
+       "stops": [
+        [
+         0,
+         "#ff3355"
+        ],
+        [
+         0.5,
+         "#33cc66"
+        ],
+        [
+         1,
+         "#2244ff"
+        ]
+       ]
+      }
+     }
+    },
+    "effects": [
+     {
+      "type": "posterize",
+      "params": {
+       "levels": 4
+      }
+     }
+    ]
+   },
+   {
+    "id": "pal",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1095,
+      770
+     ]
+    },
+    "source": {
+     "kind": "ellipse",
+     "width": 250,
+     "height": 250,
+     "fill": {
+      "gradient": {
+       "angle": 120,
+       "stops": [
+        [
+         0,
+         "#ff3355"
+        ],
+        [
+         0.5,
+         "#33cc66"
+        ],
+        [
+         1,
+         "#2244ff"
+        ]
+       ]
+      }
+     }
+    },
+    "effects": [
+     {
+      "type": "palette",
+      "params": {
+       "colors": [
+        "#ff3355",
+        "#ff8855",
+        "#ddcc44",
+        "#33cc66",
+        "#22aaaa",
+        "#2244ff",
+        "#8844cc",
+        "#222222"
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "cap21",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1200,
+      575
+     ]
+    },
+    "source": {
+     "text": "palette(8 色)/ posterize(4 段)",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "frost",
+    "type": "adjustment",
+    "in": 0,
+    "out": 90,
+    "masks": [
+     {
+      "shape": "rounded_rect",
+      "radius": 16,
+      "x": 760,
+      "y": 820,
+      "w": 150,
+      "h": 150
+     }
+    ],
+    "effects": [
+     {
+      "type": "refract",
+      "params": {
+       "kind": "frost",
+       "amount": 10,
+       "size": 5,
+       "tint": "#ffffff",
+       "tint_amount": 15
+      }
+     }
+    ]
+   },
+   {
+    "id": "lens",
+    "type": "adjustment",
+    "in": 0,
+    "out": 90,
+    "masks": [
+     {
+      "shape": "ellipse",
+      "x": 530,
+      "y": 650,
+      "w": 220,
+      "h": 220
+     }
+    ],
+    "effects": [
+     {
+      "type": "refract",
+      "params": {
+       "cx": -320,
+       "cy": 220,
+       "radius": 110,
+       "amount": 45,
+       "aberration": 6,
+       "highlight": 60,
+       "shade": 35
+      }
+     }
+    ]
+   },
+   {
+    "id": "refbg",
+    "type": "pattern",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      720,
+      810
+     ]
+    },
+    "source": {
+     "kind": "stripes",
+     "colors": [
+      "#3fa7d6",
+      "#f9f9f9",
+      "#ee6352"
+     ],
+     "size": 30,
+     "angle": 45,
+     "width": 420,
+     "height": 380,
+     "offset": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0
+        ]
+       },
+       {
+        "f": 90,
+        "v": [
+         120,
+         0
+        ]
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "cap11",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      720,
+      575
+     ]
+    },
+    "source": {
+     "text": "refract(調整レイヤー: lens / frost)",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "flare",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      240,
+      810
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 420,
+     "height": 380,
+     "fill": "#00000000"
+    },
+    "effects": [
+     {
+      "type": "lens_flare",
+      "params": {
+       "cx": {
+        "k": [
+         {
+          "f": 0,
+          "v": -120
+         },
+         {
+          "f": 90,
+          "v": 120
+         }
+        ]
+       },
+       "cy": -30,
+       "radius": {
+        "k": [
+         {
+          "f": 0,
+          "v": 30
+         },
+         {
+          "f": 90,
+          "v": 70
+         }
+        ]
+       },
+       "streak_length": 380,
+       "streak_width": 5,
+       "rays": {
+        "k": [
+         {
+          "f": 0,
+          "v": 1
+         },
+         {
+          "f": 45,
+          "v": 1
+         },
+         {
+          "f": 46,
+          "v": 3
+         }
+        ]
+       },
+       "angle": 90,
+       "color": "#9999ff",
+       "ring": 40
+      }
+     }
+    ],
+    "blend": "add"
+   },
+   {
+    "id": "flarebg",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      240,
+      810
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "width": 420,
+     "height": 380,
+     "fill": "#1a1030"
+    }
+   },
+   {
+    "id": "cap01",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      240,
+      575
+     ]
+    },
+    "source": {
+     "text": "lens_flare(光芒 1 本 → 3 本)",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "blocks",
+    "type": "pattern",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1680,
+      290
+     ]
+    },
+    "source": {
+     "kind": "checker",
+     "colors": [
+      "#e84a5f",
+      "#2a363b",
+      "#fecea8"
+     ],
+     "size": 50,
+     "width": 400,
+     "height": 400
+    },
+    "effects": [
+     {
+      "type": "block_noise",
+      "params": {
+       "count": [
+        4,
+        9
+       ],
+       "width": [
+        120,
+        260
+       ],
+       "height": [
+        10,
+        60
+       ],
+       "shift_x": [
+        -40,
+        40
+       ],
+       "shift_y": 0,
+       "speed": 10,
+       "seed": 5
+      }
+     }
+    ]
+   },
+   {
+    "id": "cap30",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1680,
+      55
+     ]
+    },
+    "source": {
+     "text": "block_noise",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "dash",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1200,
+      290
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "radius": 56,
+     "width": 420,
+     "height": 360,
+     "fill": "none",
+     "stroke": "#ffd23f",
+     "stroke_width": 6,
+     "dash": [
+      28,
+      16
+     ],
+     "dash_offset": {
+      "k": [
+       {
+        "f": 0,
+        "v": 0
+       },
+       {
+        "f": 90,
+        "v": 88
+       }
+      ]
+     }
+    }
+   },
+   {
+    "id": "inner",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1200,
+      290
+     ]
+    },
+    "source": {
+     "kind": "rect",
+     "radius": 40,
+     "width": 360,
+     "height": 300,
+     "fill": "#f4f1ea"
+    },
+    "effects": [
+     {
+      "type": "inner_shadow",
+      "params": {
+       "x": 0,
+       "y": 0,
+       "blur": 40,
+       "opacity": 80,
+       "color": "#5a3b1c"
+      }
+     }
+    ]
+   },
+   {
+    "id": "cap20",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      1200,
+      55
+     ]
+    },
+    "source": {
+     "text": "inner_shadow / shape の dash",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "rough",
+    "type": "shape",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      720,
+      290
+     ]
+    },
+    "source": {
+     "kind": "star",
+     "sides": 5,
+     "inner": 0.5,
+     "width": 380,
+     "height": 380,
+     "fill": "#2f3640"
+    },
+    "effects": [
+     {
+      "type": "rough_edges",
+      "params": {
+       "amount": {
+        "k": [
+         {
+          "f": 0,
+          "v": 120,
+          "e": "easeOut"
+         },
+         {
+          "f": 60,
+          "v": 0
+         }
+        ]
+       },
+       "size": 70,
+       "threshold": 50,
+       "seed": 3
+      }
+     }
+    ]
+   },
+   {
+    "id": "cap10",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      720,
+      55
+     ]
+    },
+    "source": {
+     "text": "rough_edges  amount 120 → 0",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   },
+   {
+    "id": "polar",
+    "type": "pattern",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      240,
+      290
+     ]
+    },
+    "source": {
+     "kind": "stripes",
+     "colors": [
+      "#d9b65a",
+      "#b08f3c"
+     ],
+     "size": 44,
+     "angle": 0,
+     "width": 400,
+     "height": 400,
+     "offset": {
+      "k": [
+       {
+        "f": 0,
+        "v": [
+         0,
+         0
+        ]
+       },
+       {
+        "f": 90,
+        "v": [
+         88,
+         0
+        ]
+       }
+      ]
+     }
+    },
+    "effects": [
+     {
+      "type": "polar",
+      "params": {
+       "fit": "cover",
+       "inner": "top",
+       "swirl": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 90,
+          "v": 120
+         }
+        ]
+       }
+      }
+     }
+    ]
+   },
+   {
+    "id": "cap00",
+    "type": "text",
+    "in": 0,
+    "out": 90,
+    "transform": {
+     "position": [
+      240,
+      55
+     ]
+    },
+    "source": {
+     "text": "polar  fit: cover(しま → 放射)",
+     "size": 26,
+     "weight": 700,
+     "fill": "#ffffff",
+     "font": "Noto Sans JP"
+    }
+   }
+  ]
+ }
+}

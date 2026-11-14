@@ -11,6 +11,15 @@ import aup_materials as AM   # noqa: E402
 
 SAKURA = AM.SAKURA
 W, H, FPS = 1920, 1080, 60
+PID = int(os.environ.get('AUP_PROJECT', '36'))     # 作る先のプロジェクト(recreate.py --project-id が環境変数に入れる。37 = 元素材を使わない作り直し)
+REBUILD = PID != 36
+
+
+def scene_comps():
+    """AviUtl のシーン番号(文字列)→ そのプロジェクトでの comp id。"""
+    return json.load(open(os.path.join(SAKURA, 'comp_map.json'), encoding='utf-8')).get(str(PID), {})
+
+
 BUILDERS = {}     # key(連番フォルダの相対パス)→ (台帳 ID, 関数, メモ)
 
 

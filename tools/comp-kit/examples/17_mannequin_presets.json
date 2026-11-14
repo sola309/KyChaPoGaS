@@ -1,0 +1,1122 @@
+{
+ "id": "ex17",
+ "name": "17 mannequin presets",
+ "width": 1920,
+ "height": 1080,
+ "fps": 30,
+ "duration_frames": 180,
+ "data": {
+  "version": 1,
+  "bg": "#f1ede6",
+  "layers": [
+   {
+    "id": "cap",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      60
+     ]
+    },
+    "source": {
+     "text": "mesh: mannequin(関節つきの人形)— preset 12 種。体格・色・髪・服は項目、角度はどれもキーフレームにできる",
+     "font": "Noto Sans JP",
+     "weight": 500,
+     "size": 30,
+     "fill": "#55506a"
+    }
+   },
+   {
+    "id": "t0",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      210.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "stand",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t1",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      510.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "a_pose",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t2",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      810.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "t_pose",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t3",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1110.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "idle",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t4",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1410.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "walk",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t5",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1710.0,
+      544
+     ]
+    },
+    "source": {
+     "text": "run",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t6",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      210.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "wave",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t7",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      510.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "sit",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t8",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      810.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "hand_on_hip",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t9",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1110.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "peace",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t10",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1410.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "lean_forward",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "t11",
+    "type": "text",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      1710.0,
+      1024
+     ]
+    },
+    "source": {
+     "text": "cheer",
+     "font": "Noto Sans JP",
+     "weight": 700,
+     "size": 28,
+     "fill": "#3a3a4a"
+    }
+   },
+   {
+    "id": "fig",
+    "type": "mesh",
+    "in": 0,
+    "out": 180,
+    "transform": {
+     "position": [
+      960,
+      540,
+      0
+     ]
+    },
+    "source": {
+     "light": {
+      "ambient": 1.1,
+      "intensity": 1.6,
+      "direction": [
+       -0.5,
+       -1,
+       -0.9
+      ],
+      "shadows": true,
+      "shadow_area": 2600,
+      "shadow_opacity": 0.6
+     },
+     "objects": [
+      {
+       "geometry": "plane",
+       "size": [
+        2400,
+        900
+       ],
+       "position": [
+        0,
+        -40,
+        0
+       ],
+       "rotation": [
+        -90,
+        0,
+        0
+       ],
+       "material": {
+        "type": "shadow",
+        "opacity": 0.25
+       },
+       "cast_shadow": false
+      },
+      {
+       "geometry": "plane",
+       "size": [
+        2400,
+        900
+       ],
+       "position": [
+        0,
+        440,
+        0
+       ],
+       "rotation": [
+        -90,
+        0,
+        0
+       ],
+       "material": {
+        "type": "shadow",
+        "opacity": 0.25
+       },
+       "cast_shadow": false
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -750.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "stand"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -450.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "a_pose"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -150.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "t_pose"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        150.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "idle",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 90,
+          "v": 1
+         }
+        ],
+        "loop": true
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        450.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "walk",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 60,
+          "v": 1
+         }
+        ],
+        "loop": true
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        750.0,
+        -40,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "run",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 60,
+          "v": 1
+         }
+        ],
+        "loop": true
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -750.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "wave",
+       "phase": {
+        "k": [
+         {
+          "f": 0,
+          "v": 0
+         },
+         {
+          "f": 60,
+          "v": 1
+         }
+        ],
+        "loop": true
+       }
+      },
+      {
+       "geometry": "box",
+       "size": [
+        150,
+        14,
+        150
+       ],
+       "position": [
+        -450.0,
+        351.6,
+        30
+       ],
+       "material": {
+        "color": "#c9b08a"
+       }
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -450.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "sit"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        -150.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "hand_on_hip"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        150.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "peace"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        450.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "lean_forward"
+      },
+      {
+       "geometry": "mannequin",
+       "style": "mannequin",
+       "position": [
+        750.0,
+        440,
+        0
+       ],
+       "rotation": [
+        0,
+        {
+         "k": [
+          {
+           "f": 0,
+           "v": -25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 90,
+           "v": 25,
+           "e": "inOutSine"
+          },
+          {
+           "f": 180,
+           "v": -25
+          }
+         ]
+        },
+        0
+       ],
+       "body": {
+        "height": 360,
+        "heads": 6
+       },
+       "colors": {
+        "skin": "#f6d9c8",
+        "top": "#86ab9d",
+        "bottom": "#55698f",
+        "hair": "#b5334f",
+        "shoes": "#6a3a3a",
+        "ribbon": "#1c1a1e"
+       },
+       "hair": {
+        "style": "ponytail",
+        "length": 0.45
+       },
+       "outfit": {
+        "sleeves": 1,
+        "pants": 0.18
+       },
+       "outline": {
+        "width": 2.5,
+        "color": "#3a2028"
+       },
+       "material": {
+        "type": "toon",
+        "toon_steps": 3
+       },
+       "preset": "cheer"
+      }
+     ]
+    }
+   }
+  ]
+ }
+}

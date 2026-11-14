@@ -311,6 +311,7 @@ export class CompEngine {
     this.env.assets.dispose()
     this.env.models.dispose()
     this.env.meshes?.dispose()
+    this.env.puppets?.dispose()
     for (const t of this.env.sprites.values()) t.dispose()
     this.env.gfx.dispose()
     this.renderer.dispose()

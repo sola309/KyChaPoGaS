@@ -117,7 +117,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f = EXTRA_DIR / f.name
             comp = json.loads(f.read_text(encoding="utf-8"))
             return self._send(200, build_html(comp, "preview", "").encode(), MIME[".html"])
-        if path.startswith("/api/assets/"):
+        if path.startswith(("/api/assets/", "/api/puppet/")):
             # 本番へは GET の中継だけ(Range も通す。動画のシークに要る)
             req = urllib.request.Request(BACKEND + self.path)
             if self.headers.get("Range"):
