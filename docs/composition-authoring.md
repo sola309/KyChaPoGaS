@@ -350,6 +350,24 @@
 - 手の形は `pose.hand_l` `hand_r`: `mitt`(既定)`fist` `open` `peace` `point`。座らせるときは `preset: "sit"`(腰がももの長さだけ下がる)+ 椅子の箱。体を持ち上げる・沈めるのは `pose.offset: [x, y, z]`(身長に対する割合)。
 - 暗い場面で服の色が沈むときは `self_light: 0.3` ほど。棒人形は `style: "stick"`。顔の大写しは、身長を大きくして(頭の高さ = 身長 ÷ 頭身)レイヤーの位置で頭を画面に入れる。
 - 表情・服の細部・指の関節は無い(仮置き用)。本番の絵は、絵の素材(puppet レイヤー)か、3D モデル(model レイヤー)に差し替える。
+### VRM の人物を立たせる・ポーズと表情を付ける(model レイヤー + `vrm`)
+
+```json
+{"id": "kyoko", "type": "model", "in": 0, "out": 180, "transform": {"position": [960, 1000, 0], "rotation": [0, 20, 0]},
+ "source": {"asset_id": 11160, "height": 900, "shadow": {"opacity": 0.35},
+  "vrm": {"preset": "hand_on_hip", "pose": {"head": [0, {"k": [{"f": 0, "v": -10}, {"f": 60, "v": 15, "e": "inOutSine"}]}, 0]},
+          "expressions": {"Joy": {"k": [{"f": 30, "v": 0}, {"f": 45, "v": 1}]}, "A": 0.4}, "auto_blink": {"interval": 3},
+          "outline": {"all": true, "width": 2.2}, "shade": {"color": "#d6c2d6", "shift": -0.1}}}}
+```
+
+- `source.vrm` を書くと VRM として読む。素材は `.vrm` を `.glb` の名前で上げたもの。原点は足もと、`height` は身長(px)、`rotation` の y で向き(0 = こちら向き、180 = 後ろ姿)。
+- ポーズはマネキンと同じ: `preset`(12 種)+ `phase`、`preset_b` + `preset_mix` で 2 つのポーズの間を動かす、`pose` で関節ごとに上書き(どの数もキーにできる)。
+  腕を下ろしたポーズで腕が上着に埋まるときは `arm_open` を増やす。手は `pose.hand_l / hand_r` か `grip_l / grip_r`。
+- 表情は `expressions` に名前と重み。まばたきは `auto_blink`。髪・服の揺れは頭・体の動きに付いてくる(速く振りすぎると丸まるので、`spring: {"stiffness": 2, "gravity": 0.15}` で固め・重めにできる)。
+- 影の段と服の輪郭線はモデルの設定しだい(設定が無いモデルは `shade`・`outline.all` で足す)。光は `light.direction`(光の来る方向。こちら側から当てるなら z を負に)。
+- 床・背景は mesh レイヤーなどを**下**に置く(同じカメラで合う。`shadow` の影はその上に重なる)。人物より手前に来る物は、別の mesh レイヤーにして**上**に置く。
+- 試験の例(project 35): comp 415(6 方向)・416(プリセット 12 種)・417(表情・まばたき・揺れ)・418(屋上の後ろ姿を回りこむ)・419(キャラ紹介の正面)。
+
 ### 足した効果の使い方(極座標・ラフエッジ・フレア・ガラス・減色ほか)
 
 見本は `tools/comp-kit/examples/16_fx_extras.json`(8 個を 1 枚に並べた)。どれも `effects` の列に書く。

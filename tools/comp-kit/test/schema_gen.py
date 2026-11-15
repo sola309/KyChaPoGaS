@@ -191,6 +191,28 @@ LT["camera"] = {"label": "カメラ", "icon": "🎥", "source": {"zoom": N("距�
     "dof": {"type": "object", "label": "被写界深度", "default": None, "animatable": False, "optional": True, "group": "被写界深度", "fields": {"focus_distance": N("ピントの距離(0 = zoom)", 0, 0, 100000, 1), "aperture": N("ぼけの強さ", 20, 0, 500, 1), "max_blur": N("ぼけの上限", 60, 0, 300, 1, False)}}},
     "default_source": {"zoom": 1024}, "default_layer": {}}
 LT["model"] = {"label": "3D モデル", "icon": "🧊", "source": {"asset_id": N("素材(GLB)", None, anim=False, asset="model", **g("素材")), "height": N("高さ", 540, 1, 8000, 1, **g("素材"))}, "default_source": {"asset_id": None}, "default_layer": {}}
+_VJ = lambda label: {"type": "json", "label": label, "default": None, "animatable": False, "optional": True}
+# ---- model の VRM(人型モデル)。source.vrm を書いたときだけ vrm.js(+ three-vrm)で読む。ポーズの書き方はマネキンと同じ ----
+_VP = [("stand", "立つ"), ("a_pose", "A ポーズ"), ("t_pose", "T ポーズ"), ("idle", "立ちの揺れ"), ("walk", "歩く"), ("run", "走る"), ("wave", "手を振る"), ("sit", "座る"), ("hand_on_hip", "手を腰に"), ("peace", "ピース"), ("lean_forward", "前かがみ"), ("cheer", "両手を上げる")]
+LT["model"]["source"]["light"] = {"type": "object", "label": "光", "default": None, "animatable": False, "optional": True, "group": "光", "fields": {
+    "intensity": N("主光(GLB の既定 2.5 / VRM の既定 1 = テクスチャの色そのまま)", None, 0, 20, 0.01, optional=True), "ambient": N("環境光(GLB の既定 1.6 / VRM の既定 0)", None, 0, 20, 0.01, optional=True),
+    "color": C("色", "#ffffff"), "direction": V3("光の来る方向(文書の座標。既定は左上手前)", None, optional=True)}}
+LT["model"]["source"]["vrm"] = {"type": "object", "label": "VRM(人型モデル。書くと VRM として読む)", "default": None, "animatable": False, "optional": True, "group": "VRM", "fields": {
+    "preset": S("ポーズ(マネキンと同じ 12 種)", "stand", _VP), "phase": N("位相(0〜1 で 1 周。歩き・手振りなど)", 0, -1000, 1000, 0.001),
+    "preset_b": S("混ぜる相手のポーズ", None, _VP, optional=True), "phase_b": N("混ぜる相手の位相", None, -1000, 1000, 0.001, optional=True), "preset_mix": N("混ぜる割合(0 = ポーズ、1 = 相手)", 0, 0, 1, 0.001),
+    "pose": _VJ("関節の角度(度)の上書き {関節: [a, b, c] | 数}。マネキンと同じ関節名(root spine chest neck head shoulder_l/r elbow_l/r wrist_l/r hip_l/r knee_l/r ankle_l/r)と offset・hand_l/r(mitt fist open peace point)。どの数もキーフレームにできる。pony_1〜3 は無い(髪は揺れ物が動かす)"),
+    "bones": _VJ("人型ボーンの名前でじかに足す回転 {leftShoulder: [x, y, z] …}(度・XYZ。正面 = +z・本人の左 = +x)。指 1 本ずつ・つま先・肩など"),
+    "ground": B("いちばん低い足を地面に付ける(省略 = 歩き・走りだけ)", False, optional=True),
+    "arm_open": N("下ろした腕を少し開く(度。服に腕が埋まるのを避ける。0 = マネキンと同じ角度)", 10, -30, 60, 0.1),
+    "grip_l": N("左手の握り(0 = 開く 〜 1 = 握る。書くと hand_l より優先)", None, 0, 1, 0.01, optional=True), "grip_r": N("右手の握り", None, 0, 1, 0.01, optional=True),
+    "expressions": _VJ("表情 {名前: 重み 0〜1}。VRM 0.x の名前(A I U E O Blink Joy Angry Sorrow Fun Blink_L …)も 1.0 の名前(aa happy …)も、モデル独自の名前(JawOpen など。頭の BlendShape. は省ける)も書ける。重みはキーフレームにできる"),
+    "auto_blink": _VJ("自動まばたき: true か {interval: 秒(既定 3.4), duration: 秒(既定 0.24), seed}。puppet と同じ式(コマだけで決まる)"),
+    "spring": _VJ("揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量}"),
+    "outline": _VJ("輪郭線: false で消す / 数 = 太さの倍率 / {width: 倍率, color, all: true(モデルが輪郭線なしにしている素材にも付ける)}"),
+    "shade": _VJ("影の段(省略 = モデルの設定): {color: 影の色(テクスチャに掛ける), shift: 境目の位置 −1〜1, toony: 境目の硬さ 0〜1}"),
+    "origin": S("原点", "feet", [("feet", "足もと(マネキンと同じ)"), ("center", "箱の中心(GLB と同じ)")])}}
+LT["model"]["source"]["shadow"] = {"type": "object", "label": "床に落ちる影(VRM のとき。足もとの高さの見えない床に落とす)", "default": None, "animatable": False, "optional": True, "group": "VRM", "when": {"vrm": ["*"]}, "fields": {
+    "opacity": N("濃さ", 0.35, 0, 1, 0.01), "color": C("色", "#000000"), "blur": N("ぼかし", 3, 0, 20, 0.1, False), "area": N("影を計算する範囲(px。省略 = 高さの 3 倍)", None, 10, 20000, 1, False, optional=True), "floor_size": N("床の広さ(m)", 12, 0.1, 200, 0.1, False)}}
 # ---- puppet(パーツ分解した立ち絵を格子メッシュの変形で動かす)。エンジンは puppet.js ----
 LT["puppet"] = {"label": "パペット(立ち絵のリグ)", "icon": "🎭", "source": {
     "puppet_id": T("パペットの id(/api/puppet/ の一覧にあるもの)", None, puppet=True, **g("素材")),

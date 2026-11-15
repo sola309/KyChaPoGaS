@@ -30,7 +30,7 @@
 配信は `comp-kit` と `mg-libs` を同じ URL(`/api/comps/engine/`)に平らに並べる。
 - どの応答にも `Access-Control-Allow-Origin: *` が要る(キャプチャのページは `set_content` で作るのでオリジンが無い。モジュール・画像・動画のコマ・書体すべて CORS 扱い)。
 - `.js` は `text/javascript` で返す。動画ファイルは Range(206)に対応していること。
-- model レイヤーは `GLTFLoader.js` を後から読む。`'three'` の import map は player.html が自分で入れる。mesh レイヤーは `mesh3d.js` だけで、three.js の追加モジュールは使わない。
+- model レイヤーは `GLTFLoader.js` を後から読む。`source.vrm` があるときは `vrm.js` と `three-vrm.module.min.js`(@pixiv/three-vrm 3.4.5・MIT。`three-vrm.LICENSE.txt`)も後から読む。`'three'` の import map は player.html が自分で入れる。mesh レイヤーは `mesh3d.js` だけで、three.js の追加モジュールは使わない。
 
 ## 例と速さ
 
@@ -222,6 +222,19 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - text: `font` は CSS の並びに直す(`Noto Sans JP` → この機械の `Noto Sans CJK JP`、Serif / Mono も同様)。箱の中心が原点(`valign` を書いたときは align × valign の端)。
   文字ごとアニメ・円周の文字は「範囲の決まらない絵」なので、重いエフェクトは画面空間で掛かる(長さは画面の px)。
 - model: `{"asset_id"|"url", "height": px, "light": {"intensity","ambient","color","direction"}}`。常に 3D。
+  - **VRM(人型モデル)**: `source.vrm`(`{}` でもよい)を書くと VRM として読む(`vrm.js` + 同梱の `three-vrm.module.min.js` を後読み。書かなければ今までどおりの GLB)。
+    素材は `.vrm` を `.glb` の名前で上げる(中身は GLB。上げ口は `.glb` だけを 3D モデルと見る)。VRM 0.x は読み込み時に正面を手前(+z)へ回す。
+    - 見た目 = モデルの MToon(影の段・影色・輪郭線・透明・両面)そのまま。主光 `light.intensity` の既定は 1 = テクスチャの色そのまま(内部で π を掛ける)、`ambient` の既定は 0。
+      `vrm.shade {color, shift, toony}` で影の段を上書き、`vrm.outline`(`false` / 倍率 / `{width, color, all}`)。`all: true` はモデルが輪郭線なしにしている素材(服など)にも裏返しの殻を付ける。
+    - ポーズ = マネキンと同じ書き方(`vrm.preset`(= `pose_preset`)・`phase`・`preset_b`・`preset_mix`・`pose {関節: [a, b, c]}`・`ground`)。関節名と角度の決まりもマネキンと同じで、
+      T ポーズ基準の差(腕は z 軸まわり ∓90°)は vrm.js が吸収する。`pony_1〜3` は無い(髪は揺れ物)。`arm_open`(既定 10°)= 下ろした腕を少し開く(服に埋まるのを避ける。開きが 30° より小さいときだけ効く)。
+      指 = `pose.hand_l / hand_r`(mitt・open・fist・peace・point)か `grip_l / grip_r`(0 開く 〜 1 握る。キー可)。ほかの骨は `vrm.bones {leftShoulder: [x, y, z]}`(人型ボーンの名前・度)。
+    - 表情 = `vrm.expressions {名前: 重み}`(VRM 0.x の名前 A・Blink・Joy…、1.0 の名前、モデル独自の名前。大文字小文字は見ない)。`vrm.auto_blink`(`true` / `{interval, duration, seed}`。puppet と同じ式)。
+    - 揺れ物(髪・服)= three-vrm のばね。**状態を持たない**: 毎コマ `spring.warmup` 秒(既定 1)前の静止から 1 コマずつ回し直す(前に描いたコマの結果を使わない)ので、どのコマから描いても同じ絵。
+      `vrm.spring: false` で止める。`{stiffness, drag}` = モデルの設定に掛ける倍率、`gravity` = 足す量。計算はメートルの空間で回す(レイヤーの拡大に左右されない)。
+    - 原点 = 足もと(`vrm.origin: "center"` で GLB と同じ箱の中心)。`height` = T ポーズの箱の高さ(px)。`source.shadow {opacity, color, blur, area}` = 足もとの高さの見えない床に影を落とす(下の mesh の床に重なる)。
+    - mesh レイヤーと同じ 3D 空間・同じカメラ。ただしレイヤーごとに別の絵として描くので、mesh の物との前後は奥行きではなくレイヤーの順で決まる(人物が物の後ろに回る場面は、レイヤーを分けて順を入れ替える)。
+    - 重さ(1920×1080・書き出しと同じ SwiftShader・屋上の試験 comp): VRM 253 ms / コマ(揺れ物なし 217)、同じ場面のマネキン 203。メモリは約 1.1 GB(マネキン 0.64)。
 - puppet: 書式は下の「puppet レイヤー」。ここは実装の決めだけ。
   - 箱 = パペットのキャンバス(例 1280×1280。`crop` を書けばその範囲)。原点は箱の中心。RT の解像度は拡大率の見積もり(`fxRes`)で 0.5〜2 倍。
   - レイヤーの PNG は `assets.image()` で読む(乗算済み・ミップマップ)。頂点はキャンバスの px のまま持ち、シェーダで RT の座標へ直す。合成は ONE / ONE_MINUS_SRC_ALPHA。
@@ -333,6 +346,7 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - `repeater.time_offset` で中身まで時刻をずらすのは 64 個まで(それより多いと変形・不透明度だけ)。
 - プレビューの動画は `<video>` のシークなのでコマ単位では甘い(書き出しは 1 コマずつの画像で正確)。capture の動画で `speed` が 1 でないときは最近傍のコマ。
 - model は GLB の見た目を出すだけ(アニメーション・環境マップなし)。
+- VRM: 視線(LookAt)の骨・UV アニメは動かさない。揺れ物は warmup より前の動きを覚えていない(長く尾を引く揺れは短く切れる)。体に落ちる影(セルフシャドウ)は使わない。mesh レイヤーの物との奥行きの前後は付かない。
 - mesh: 屈折・オブジェクトどうしの映り込みなし(映るのは `env` だけ)。影は主光 1 本。被写界深度はレイヤーごとに一様。ほかのレイヤーとの交差なし。文字の面取りは外へ太る。動画を直接は貼れない(入れ子にして `comp_id` で貼る)。
 - mesh のマネキンの顔: `face: false` = のっぺらぼう(仮置きで目だけの顔が気になるとき)、`face_guide: true` = ごく薄い十字の当たり線(顔の中心線と目の高さ。色は `colors.guide`)。既定は今までどおり `face: true`(目 2 個)・当たり線なし。
 - mesh のマネキン: 表情・口・指 1 本ずつの関節・服のしわ・髪の房の形・スカートの揺れ(脚に付いて動かない)・肌の重み付け(関節は球でつなぐだけ)は無い。IK(手先の位置から角度を逆算)も無い = 角度を書く。テクスチャは貼れない(色だけ)。

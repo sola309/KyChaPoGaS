@@ -635,3 +635,19 @@ Live2D のように、1 枚の立ち絵を意味ごとの透過レイヤーに�
   文書は書き換えず、エンジンが読むとき(`normalize` → `expandStagger`)に写しを作って足す。1 枚のレイヤーの複製なら今までどおり `repeater.time_offset`、文字なら `per_char.stagger`。
 - **レイヤーのプリセット**(schema.json の presets、group「気持ちよさ」): `feel_snap_in` `feel_overshoot_in` `feel_pop_in` `feel_whip_out` `feel_in_hold_out` `feel_drift_hold`。
 
+### v1.2 の追加(VRM・2026-11-15): model レイヤーで VRM(人型モデル)を読む
+書式は **追加だけ**(model の `source` に `vrm`・`shadow` が増えた。`vrm` を書かない model は今までどおり GLB として描く)。エンジンは `tools/comp-kit/vrm.js`(model.js から後読み)。
+
+- **方式**: @pixiv/three-vrm 3.4.5(MIT)を `tools/comp-kit/three-vrm.module.min.js` として同梱(同梱の three r180 でそのまま動いた。`'three'` は player.html の import map)。
+  自前の簡易トゥーンにしなかった理由 = MToon の影の段・輪郭線の太さのテクスチャ・VRM 0.x → 1.0 の読み替え・人型ボーンの正規化(T ポーズで回転なし)・表情・揺れ物(当たり判定つき)を、モデルの設定どおりに再現できるため。
+- **書式**: `{"type": "model", "source": {"asset_id", "height", "light", "shadow": {"opacity"}, "vrm": {"preset", "phase", "preset_b", "preset_mix", "pose", "bones", "ground", "arm_open", "grip_l", "grip_r",
+  "expressions", "auto_blink", "spring", "outline", "shade", "origin"}}}`。項目の説明は `tools/comp-kit/README.md` の model の項、一覧は `schema.json` の `layer_types.model`。
+- **ポーズ**: mesh3d.js の `mqPose` / `mqQuat`(マネキンのプリセットと角度の決まり)をそのまま使い、人型ボーンへ写す(root → hips、shoulder → UpperArm、elbow → LowerArm、wrist → Hand、hip → UpperLeg、knee → LowerLeg、ankle → Foot)。
+  マネキンの腕は「下ろした形」が基準なので、腕の鎖だけ z 軸まわり ∓90° の差を掛ける。VRM 0.x は全体を y 軸で 180° 回して読むので、骨の回転は x・z を裏返す。
+- **決定論**: vrm.js は状態を持たない。表情・まばたきは (文書, コマ) の式。揺れ物は毎コマ `warmup` 秒前の静止(reset)から 1/fps ずつ回し直す。
+  コマ 272 を「単独」「順送り」「逆順」で描いて PNG が一致するのを確かめた。代わりに 1 コマあたり warmup × fps 回ぶんのポーズ評価とばねの計算が掛かる(60 回で約 35 ms)。
+- **光**: three.js の光は 1/π が掛かるので、主光 1 = テクスチャの色そのままになるよう π を掛けている(実測で肌の色がテクスチャと一致)。
+- **影・空間**: `shadow` はモデルの足もとの高さに影だけを受ける見えない床を置く。mesh レイヤーと座標・カメラは同じだが、レイヤーごとに別の絵なので奥行きの前後は付かない(レイヤーの順)。
+- **素材**: 上げ口(`/api/assets/upload`)は `.glb` / `.gltf` だけを 3D モデルと見るので、`.vrm` は `.glb` の名前で上げる(中身は同じ)。**要る変更(backend)**: `media_info.probe` に `.vrm` を足すと名前を変えずに上げられる。
+  利用条件が「作者のみ・再配布禁止」のモデルは、git・共有サーバーに置かない(`backend/data/assets` は git の外)。
+

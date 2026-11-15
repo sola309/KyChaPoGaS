@@ -787,6 +787,8 @@ function mqSkeleton(d, pose, hairLen) {
   }
   return W
 }
+// VRM(vrm.js)が同じポーズの書き方を使う
+export { mqPose as mannequinPose, mqQuat as mannequinQuat, mqDims as mannequinDims, evalTree }
 // → まとめの子の並び(部品ごとに {geometry…, _matrix: 16 個, material})
 function buildMannequin(e) {
   const d = mqDims(e), pose = mqPose(e, d)

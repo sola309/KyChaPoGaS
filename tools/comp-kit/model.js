@@ -19,6 +19,21 @@ export class ModelStore {
     const s = L.def.source || {}
     return s.url ? scene.srcUrl(s.url) : s.asset_id != null ? scene.assetUrl(s.asset_id, 'model') : null
   }
+  // VRM(人型)は source.vrm があるときだけ(vrm.js と three-vrm を後読み)。GLB の流れは変えない
+  isVrm(L) { const v = (L.def.source || {}).vrm; return v === true || (v !== null && typeof v === 'object') }
+  vrmEntry(url) {
+    const key = 'vrm:' + url
+    let e = this.items.get(key)
+    if (!e) {
+      e = { state: 'loading', vrm: null, promise: null }
+      this.vrmP ??= import('./vrm.js')
+      e.promise = this.vrmP.then((mod) => mod.loadVrm(this.env, url)).then((m) => { e.vrm = m; e.state = 'ready'; this.env.invalidate() })
+        .catch((err) => { e.state = 'error'; console.warn('[comp-engine] VRM を読めない:', url, err); this.env.report?.('error', `VRM を読めない: ${err && err.message || err}`) })
+      this.items.set(key, e)
+    }
+    if (e.state === 'loading') this.env.pending.push(e.promise)
+    return e
+  }
   entry(url) {
     let e = this.items.get(url)
     if (!e) {
@@ -47,11 +62,12 @@ export class ModelStore {
   }
   prepare(scene, L) {
     const url = this.url(scene, L)
-    if (url) this.entry(url)
+    if (url) this.isVrm(L) ? this.vrmEntry(url) : this.entry(url)
   }
   // → リニア・乗算済みの RT(呼び出し側が release)。まだ読めていなければ null
   render(scene, L, f) {
     const url = this.url(scene, L)
+    if (url && this.isVrm(L)) { const ve = this.vrmEntry(url); return ve.state === 'ready' ? ve.vrm.render(scene, L, f) : null }
     const e = url && this.entry(url)
     if (!e || e.state !== 'ready') return null
     const env = this.env, g = env.gfx, s = L.def.source || {}
@@ -84,6 +100,7 @@ export class ModelStore {
   }
   dispose() {
     for (const e of this.items.values()) {
+      e.vrm?.dispose()
       e.root?.traverse((o) => {
         o.geometry?.dispose?.()
         for (const m of [].concat(o.material || [])) { for (const v of Object.values(m)) v?.isTexture && v.dispose(); m.dispose?.() }

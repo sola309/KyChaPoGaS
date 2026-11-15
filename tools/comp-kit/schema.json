@@ -6188,6 +6188,359 @@
      "step": 1,
      "animatable": true,
      "group": "素材"
+    },
+    "light": {
+     "type": "object",
+     "label": "光",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "光",
+     "fields": {
+      "intensity": {
+       "type": "number",
+       "label": "主光(GLB の既定 2.5 / VRM の既定 1 = テクスチャの色そのまま)",
+       "default": null,
+       "min": 0,
+       "max": 20,
+       "step": 0.01,
+       "animatable": true,
+       "optional": true
+      },
+      "ambient": {
+       "type": "number",
+       "label": "環境光(GLB の既定 1.6 / VRM の既定 0)",
+       "default": null,
+       "min": 0,
+       "max": 20,
+       "step": 0.01,
+       "animatable": true,
+       "optional": true
+      },
+      "color": {
+       "type": "color",
+       "label": "色",
+       "default": "#ffffff",
+       "animatable": true
+      },
+      "direction": {
+       "type": "vec3",
+       "label": "光の来る方向(文書の座標。既定は左上手前)",
+       "default": null,
+       "animatable": true,
+       "optional": true
+      }
+     }
+    },
+    "vrm": {
+     "type": "object",
+     "label": "VRM(人型モデル。書くと VRM として読む)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "VRM",
+     "fields": {
+      "preset": {
+       "type": "select",
+       "label": "ポーズ(マネキンと同じ 12 種)",
+       "default": "stand",
+       "options": [
+        {
+         "value": "stand",
+         "label": "立つ"
+        },
+        {
+         "value": "a_pose",
+         "label": "A ポーズ"
+        },
+        {
+         "value": "t_pose",
+         "label": "T ポーズ"
+        },
+        {
+         "value": "idle",
+         "label": "立ちの揺れ"
+        },
+        {
+         "value": "walk",
+         "label": "歩く"
+        },
+        {
+         "value": "run",
+         "label": "走る"
+        },
+        {
+         "value": "wave",
+         "label": "手を振る"
+        },
+        {
+         "value": "sit",
+         "label": "座る"
+        },
+        {
+         "value": "hand_on_hip",
+         "label": "手を腰に"
+        },
+        {
+         "value": "peace",
+         "label": "ピース"
+        },
+        {
+         "value": "lean_forward",
+         "label": "前かがみ"
+        },
+        {
+         "value": "cheer",
+         "label": "両手を上げる"
+        }
+       ],
+       "animatable": false
+      },
+      "phase": {
+       "type": "number",
+       "label": "位相(0〜1 で 1 周。歩き・手振りなど)",
+       "default": 0,
+       "min": -1000,
+       "max": 1000,
+       "step": 0.001,
+       "animatable": true
+      },
+      "preset_b": {
+       "type": "select",
+       "label": "混ぜる相手のポーズ",
+       "default": null,
+       "options": [
+        {
+         "value": "stand",
+         "label": "立つ"
+        },
+        {
+         "value": "a_pose",
+         "label": "A ポーズ"
+        },
+        {
+         "value": "t_pose",
+         "label": "T ポーズ"
+        },
+        {
+         "value": "idle",
+         "label": "立ちの揺れ"
+        },
+        {
+         "value": "walk",
+         "label": "歩く"
+        },
+        {
+         "value": "run",
+         "label": "走る"
+        },
+        {
+         "value": "wave",
+         "label": "手を振る"
+        },
+        {
+         "value": "sit",
+         "label": "座る"
+        },
+        {
+         "value": "hand_on_hip",
+         "label": "手を腰に"
+        },
+        {
+         "value": "peace",
+         "label": "ピース"
+        },
+        {
+         "value": "lean_forward",
+         "label": "前かがみ"
+        },
+        {
+         "value": "cheer",
+         "label": "両手を上げる"
+        }
+       ],
+       "animatable": false,
+       "optional": true
+      },
+      "phase_b": {
+       "type": "number",
+       "label": "混ぜる相手の位相",
+       "default": null,
+       "min": -1000,
+       "max": 1000,
+       "step": 0.001,
+       "animatable": true,
+       "optional": true
+      },
+      "preset_mix": {
+       "type": "number",
+       "label": "混ぜる割合(0 = ポーズ、1 = 相手)",
+       "default": 0,
+       "min": 0,
+       "max": 1,
+       "step": 0.001,
+       "animatable": true
+      },
+      "pose": {
+       "type": "json",
+       "label": "関節の角度(度)の上書き {関節: [a, b, c] | 数}。マネキンと同じ関節名(root spine chest neck head shoulder_l/r elbow_l/r wrist_l/r hip_l/r knee_l/r ankle_l/r)と offset・hand_l/r(mitt fist open peace point)。どの数もキーフレームにできる。pony_1〜3 は無い(髪は揺れ物が動かす)",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "bones": {
+       "type": "json",
+       "label": "人型ボーンの名前でじかに足す回転 {leftShoulder: [x, y, z] …}(度・XYZ。正面 = +z・本人の左 = +x)。指 1 本ずつ・つま先・肩など",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "ground": {
+       "type": "bool",
+       "label": "いちばん低い足を地面に付ける(省略 = 歩き・走りだけ)",
+       "default": false,
+       "animatable": false,
+       "optional": true
+      },
+      "arm_open": {
+       "type": "number",
+       "label": "下ろした腕を少し開く(度。服に腕が埋まるのを避ける。0 = マネキンと同じ角度)",
+       "default": 10,
+       "min": -30,
+       "max": 60,
+       "step": 0.1,
+       "animatable": true
+      },
+      "grip_l": {
+       "type": "number",
+       "label": "左手の握り(0 = 開く 〜 1 = 握る。書くと hand_l より優先)",
+       "default": null,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": true,
+       "optional": true
+      },
+      "grip_r": {
+       "type": "number",
+       "label": "右手の握り",
+       "default": null,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": true,
+       "optional": true
+      },
+      "expressions": {
+       "type": "json",
+       "label": "表情 {名前: 重み 0〜1}。VRM 0.x の名前(A I U E O Blink Joy Angry Sorrow Fun Blink_L …)も 1.0 の名前(aa happy …)も、モデル独自の名前(JawOpen など。頭の BlendShape. は省ける)も書ける。重みはキーフレームにできる",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "auto_blink": {
+       "type": "json",
+       "label": "自動まばたき: true か {interval: 秒(既定 3.4), duration: 秒(既定 0.24), seed}。puppet と同じ式(コマだけで決まる)",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "spring": {
+       "type": "json",
+       "label": "揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量}",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "outline": {
+       "type": "json",
+       "label": "輪郭線: false で消す / 数 = 太さの倍率 / {width: 倍率, color, all: true(モデルが輪郭線なしにしている素材にも付ける)}",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "shade": {
+       "type": "json",
+       "label": "影の段(省略 = モデルの設定): {color: 影の色(テクスチャに掛ける), shift: 境目の位置 −1〜1, toony: 境目の硬さ 0〜1}",
+       "default": null,
+       "animatable": false,
+       "optional": true
+      },
+      "origin": {
+       "type": "select",
+       "label": "原点",
+       "default": "feet",
+       "options": [
+        {
+         "value": "feet",
+         "label": "足もと(マネキンと同じ)"
+        },
+        {
+         "value": "center",
+         "label": "箱の中心(GLB と同じ)"
+        }
+       ],
+       "animatable": false
+      }
+     }
+    },
+    "shadow": {
+     "type": "object",
+     "label": "床に落ちる影(VRM のとき。足もとの高さの見えない床に落とす)",
+     "default": null,
+     "animatable": false,
+     "optional": true,
+     "group": "VRM",
+     "when": {
+      "vrm": [
+       "*"
+      ]
+     },
+     "fields": {
+      "opacity": {
+       "type": "number",
+       "label": "濃さ",
+       "default": 0.35,
+       "min": 0,
+       "max": 1,
+       "step": 0.01,
+       "animatable": true
+      },
+      "color": {
+       "type": "color",
+       "label": "色",
+       "default": "#000000",
+       "animatable": true
+      },
+      "blur": {
+       "type": "number",
+       "label": "ぼかし",
+       "default": 3,
+       "min": 0,
+       "max": 20,
+       "step": 0.1,
+       "animatable": false
+      },
+      "area": {
+       "type": "number",
+       "label": "影を計算する範囲(px。省略 = 高さの 3 倍)",
+       "default": null,
+       "min": 10,
+       "max": 20000,
+       "step": 1,
+       "animatable": false,
+       "optional": true
+      },
+      "floor_size": {
+       "type": "number",
+       "label": "床の広さ(m)",
+       "default": 12,
+       "min": 0.1,
+       "max": 200,
+       "step": 0.1,
+       "animatable": false
+      }
+     }
     }
    },
    "default_source": {
