@@ -119,6 +119,12 @@ def main():
             if v.get('rebuilt') == 'placeholder':
                 ph[v['asset_id']] = k
 
+    # ユーザー提供の素材(v7: ユーザー本人が作った 3D モデルなど。rebuild/user_provided_<pid>.json に {素材番号: {what, file, note}})。元素材(materials/・完成版)とは別の区分
+    userp = {}
+    upp = os.path.join(SAKURA, 'rebuild', f'user_provided_{pid}.json')
+    if os.path.exists(upp):
+        userp = {int(k): v for k, v in json.load(open(upp, encoding='utf-8')).items()}
+
     # 元素材の md5(materials/ の全ファイル + 元プロジェクトの全素材 + 完成版など)
     orig_md5 = {}
     for root, _d, files in os.walk(os.path.join(SAKURA, 'materials')):
@@ -152,6 +158,9 @@ def main():
         if aid in repl:
             r = repl[aid]
             return r['kind'], f"{r['table']}: {r.get('how', '')}", []
+        if aid in userp:
+            u = userp[aid]
+            return 'user', f"ユーザー提供: {u.get('what', '')}({u.get('file', '')})。{u.get('note', '')}", []
         if aid in ph:
             return 'placeholder', '取り込み器の仮の板(PIL: 灰色の板 + 桃色の × + 「仮」)', []
         if x.get('asset_type') == 'generated' and gp.get('prompt') is not None:
@@ -248,7 +257,7 @@ def main():
         lines.append(f'  - 違反: {v}')
     lines += ['', '## 素材の出どころ(分類ごとの数)', '', '| 分類 | 数 | 意味 |', '|---|---|---|']
     mean = {'proc': '手続きで描いた絵(PIL など。置き換え表に作り方)', 'gen': 'アプリの生成ジョブ(WAI txt2img)で新しく作った絵', 'gen+proc': '生成した絵 + 手続きの加工(枠・字・切り抜きの配置)',
-            'placeholder': '仮の板(置き換え先がまだ無い)', 'derived': 'アプリの加工ジョブ(切り抜きなど)の結果', 'unknown': '出どころ不明(違反)'}
+            'placeholder': '仮の板(置き換え先がまだ無い)', 'derived': 'アプリの加工ジョブ(切り抜きなど)の結果', 'user': 'ユーザー提供の素材(ユーザー本人が作った 3D モデルなど。rebuild/user_provided_*.json に明記)', 'unknown': '出どころ不明(違反)'}
     for k, n in sorted(kinds.items(), key=lambda kv: -kv[1]):
         lines.append(f'| {k} | {n} | {mean.get(k, "")} |')
     ms = [r for r in rows if '※測' in str(r['how'])]

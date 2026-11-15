@@ -8,6 +8,7 @@
 import base64
 import io
 import math
+import os
 
 from recreate_lib import *   # noqa: F401,F403
 
@@ -174,6 +175,53 @@ def _pull(a, b, f0=114, f1=130, r=1.6):
     return out
 
 
+# ---- v7(VRMSAK): 前半のカメラ。人物(後ろ姿の VRM)の立つ所 ROOF_P を中心に、完成版のコマを 100px の目盛りで目で測った数から作る ----
+# 止め(3414〜3503。完成版 3500): 金網の上端 y=294・下端 818、人物の髪の頭頂 185・短パンのすそ 735 → カメラの高さ 151・金網まで 393.5・見下ろし 9.75°、人物は髪の頭頂 165・カメラから 198
+# 引きの終わり(3519): 金網 293〜696、人物 240〜882 → 高さ 153・見下ろし 10°・人物まで 330
+# 回りこみ(3520〜3552): 人物の画面位置(x・頭頂・足もと)と見える向きから、コマごとの (向き φ・距離 r・高さ・見下ろし θ・人物を画面の左へ外す角 δ)。
+#   完成版は人物の右側へ 150° ほど回りながら上がって離れ、人物は画面の左へ流れる(v6 までは 60° ほどで、動きの量が手本の半分だった)
+ROOF_P = (9.0, 1312.0)      # 後ろ姿の人物の足もと(x, z)。金網(z=1500)の 188 手前
+ROOF_ORBIT_KEYS = [  # (コマ, φ, r, 高さ, θ, δ)
+    (130, 0, 340, 153, 10.0, 0.4), (140, 15, 371, 172, 12.5, 5.3), (150, 35, 394, 203, 15.6, 12.8), (156, 52, 417, 233, 19.0, 19.2),
+    (159, 65, 459, 267, 23.0, 23.2), (161, 75, 507, 292, 26.0, 25.3), (162, 90, 544, 307, 28.5, 23.0), (163, 105, 577, 320, 30.0, 22.0)]
+# 人物は回りこみの終わりにカメラのほうへ振り向きはじめる(完成版 3549 で真横・3552 で斜め前が見える。カメラの回りより 25〜45° 多い)
+ROOF_TURN = [(150, 0), (156, 8), (159, 25), (161, 30), (162, 40), (163, 45)]
+
+
+def _pchip(xs, ys, x):
+    """単調な 3 次補間(行き過ぎない)。"""
+    n = len(xs)
+    h = [xs[i + 1] - xs[i] for i in range(n - 1)]
+    d = [(ys[i + 1] - ys[i]) / h[i] for i in range(n - 1)]
+    m = [d[0]] + [0.0 if d[i - 1] * d[i] <= 0 else 3 * (h[i - 1] + h[i]) / ((2 * h[i] + h[i - 1]) / d[i - 1] + (h[i] + 2 * h[i - 1]) / d[i]) for i in range(1, n - 1)] + [d[-1]]
+    i = max(0, min(n - 2, max(j for j in range(n) if xs[j] <= x) if x >= xs[0] else 0))
+    t = (x - xs[i]) / h[i]
+    return ((2 * t ** 3 - 3 * t ** 2 + 1) * ys[i] + (t ** 3 - 2 * t ** 2 + t) * h[i] * m[i] + (-2 * t ** 3 + 3 * t ** 2) * ys[i + 1] + (t ** 3 - t ** 2) * h[i] * m[i + 1])
+
+
+def _orbit_cam(phi, r, hc, th, dl, L=600.0):
+    """人物のまわりの (φ, r, 高さ, θ, δ) → カメラの位置・注視点(mesh の座標。y は下が正)"""
+    ph, t, dd = math.radians(phi), math.radians(th), math.radians(dl)
+    cx, cz = ROOF_P[0] + r * math.sin(ph), ROOF_P[1] - r * math.cos(ph)
+    dx, dz = -math.sin(ph), math.cos(ph)                                              # カメラ → 人物
+    vx, vz = dx * math.cos(dd) + dz * math.sin(dd), -dx * math.sin(dd) + dz * math.cos(dd)      # 右へ δ 振る(人物は画面の左へ)
+    return (round(cx, 2), round(-hc, 2), round(cz, 2)), (round(cx + L * vx * math.cos(t), 2), round(-hc + L * math.sin(t), 2), round(cz + L * vz * math.cos(t), 2))
+
+
+def _roof_front_cam():
+    hold = ((0, -151, 1106.5), (0, -83.4, 1500))
+    P0, T0 = _orbit_cam(*ROOF_ORBIT_KEYS[0][1:])
+    pos = [(0, (0, hold[0][1] - 490, hold[0][2]), 'outCubic'), (8, hold[0]), (114, hold[0])] + _pull(hold[0], P0, r=1.3)
+    tgt = [(0, (0, hold[1][1] - 490, hold[1][2]), 'outCubic'), (8, hold[1]), (114, hold[1])] + _pull(hold[1], T0, r=1.3)
+    xs = [k[0] for k in ROOF_ORBIT_KEYS]
+    for f in range(130, 164):
+        P, T = _orbit_cam(*[_pchip(xs, [k[j] for k in ROOF_ORBIT_KEYS], f) for j in range(1, 6)])
+        pos.append((f, P)); tgt.append((f, T))
+    return {'pos': pos, 'tgt': tgt}
+
+
+_RF = _roof_front_cam()
+
 ROOF_CAM = dict(
     zoom=kf((0, 1400), (163, 1400, 'hold'), (164, 2600), (245, 2600)),      # v6: 後半は望遠
     # v4: 前半(〜164)を完成版 3440〜3550 から測り直した。3414〜3503 は止まったまま(人物は斜めのワイプで現れる)→ 3503 から引き、3543〜3550 で右へ回りこむ。
@@ -185,12 +233,9 @@ ROOF_CAM = dict(
     #     (v5 は終わりの 7 コマが 60 で頭打ち・量は手本の約 1/3)、切り替わりは 3553(v5 は 2 コマ遅い 3555)。切り替わりのあと(3553〜3590)は速い横移動が 10 コマで収まり、
     #     そのあと 1 コマ 1.0%→0.1% のゆるい寄りが 3590 まで減速しながら続く(v5 は 3566 で止まっていた)。
     #     回りこみの進み方 = 完成版の 1 コマごとの速さ(ROOF_ORBIT_SPEED)を足し上げた割合。回りこむ量は x 450 → ROOF_ORBIT_END(空の板の外が映らないよう、空の左右に壁を足した)
-    pos=([(0, (0, -636, 1075), 'outCubic'), (8, (0, -146, 1075)), (114, (0, -146, 1075))] + _pull((0, -146, 1075), (40, -172, 929))
-         + _orbit((40, -172, 929), ROOF_ORBIT_END[0])
-         + [(163, ROOF_ORBIT_END[0], 'hold'), (164, (-304, -397, -2685), 'outCubic'), (204, (-284, -380, -2615)), (245, (-316, -380, -2606))]),
-    tgt=([(0, (0, -563, 1500), 'outCubic'), (8, (0, -73, 1500)), (114, (0, -73, 1500))] + _pull((0, -73, 1500), (40, -50, 1500))
-         + _orbit((40, -50, 1500), ROOF_ORBIT_END[1])
-         + [(163, ROOF_ORBIT_END[1], 'hold'), (164, (232, -154, -1610), 'outQuad'), (174, (39, -142, -1554), 'outCubic'), (204, (26, -124, -1550)), (245, (-6, -124, -1541))]),
+    # v7(VRMSAK): 前半(〜163)を、人物(VRM)の頭頂・すそ・足もとと金網の上下の画面位置から合わせ直した(_roof_front_cam)。v6 までの値は R/VRMSAK/recreate_g3.before_vrmsak.py
+    pos=(_RF['pos'][:-1] + [(163, _RF['pos'][-1][1], 'hold'), (164, (-304, -397, -2685), 'outCubic'), (204, (-284, -380, -2615)), (245, (-316, -380, -2606))]),
+    tgt=(_RF['tgt'][:-1] + [(163, _RF['tgt'][-1][1], 'hold'), (164, (232, -154, -1610), 'outQuad'), (174, (39, -142, -1554), 'outCubic'), (204, (26, -124, -1550)), (245, (-6, -124, -1541))]),
     # v6: 後半(164〜)のカメラを測り直した。完成版 3585 の 7 体の頭頂・足もと・柵の下の線・柱の上下を 100px の目盛りで目で測り、さらに柵の柱の傾き(左 −4.2°〜右 +3.3°)から望遠だと分かり、zoom 2600(前半は 1400 のまま)・高さ 380・見下ろし 13°・柵に対して 16° 斜め、と出した
     #     (R/V6/fitcam2.py・roofcam.json。柱の高さが左 201・右 197 でそろうので向きは合っている)。前は高さ 420・見下ろし 34°で、柵とベンチが 3 倍ほど大きく映っていた。
     #     FEEL2 の動き(切り替わりの直後の速い横移動 10 コマ → ゆるい寄り)は、キーの時刻と差分をそのまま新しい土台に移した
@@ -262,7 +307,12 @@ def roof_people_how():
     names = ['1 人目(後ろ姿 A)', 'G', 'C', 'F', 'A', 'E', 'H', 'D', '座る B']
     pu = [nm for nm, g in zip(names, ROOF_PUPPETS) if g]
     mq = [nm for nm, g in zip(names, ROOF_PUPPETS) if not g and nm != '座る B']
-    return ('。人物は仮: ' + (f'2D 立ち絵 + 分解の板(puppet)= {"・".join(pu)}' if pu else '') + ('、' if pu and mq else '') + (f'マネキン = {"・".join(mq)}' if mq else '')
+    vr = os.environ.get('AUP_VRM', '1') != '0' and PEOPLE != 'mannequin'
+    if vr:      # v7: 私服パーカーの 2 体は VRM
+        pu = [x for x in pu if x not in ('1 人目(後ろ姿 A)', 'A')]
+        mq = [x for x in mq if x not in ('1 人目(後ろ姿 A)', 'A')]
+    return (('。私服パーカーの 2 体(1 人目の後ろ姿・並びの A)= ユーザー提供の 3D モデル(VRM。ユーザー本人の作)を model レイヤーで。AUP_VRM=0 で前の立ち絵に戻る' if vr else '')
+            + '。人物は仮: ' + (f'2D 立ち絵 + 分解の板(puppet)= {"・".join(pu)}' if pu else '') + ('、' if pu and mq else '') + (f'マネキン = {"・".join(mq)}' if mq else '')
             + '、座る B = 新しく生成した座り姿の絵の板(v4:roof/B_sit.png)(puppet・絵は板なので、回りこみは出せない)')
 
 
@@ -381,14 +431,60 @@ def roof_parts(n, parts, figures=False, ctx=None):
         O.append(box((110, 150, 110), (-331, -75, -1700), '#e0b040', material=mat('#e0b040', wireframe=True)))
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
+    extra = []
     if figures:
         F = roof_figures(n, ctx)
         sit_pic = bool(F[8].pop('B_sit', False))
-        O.extend(F)
+        if ctx is not None and VRM_ON:      # v7: 私服パーカーの 2 体(1 人目の後ろ姿・並びの A)は VRM の model レイヤー(舞台の mesh の上に重ねる)
+            F[0] = F[4] = None
+            extra = roof_vrm_layers(n, VRM_PARKA[ctx.project_id])
+        O.extend(x for x in F if x)
         if not sit_pic:
             O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                          # 槍(座り姿の絵には槍が描いてある)
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
-    return [cam(n, ROOF_CAM['zoom'], ROOF_CAM['pos'], ROOF_CAM['tgt']), mesh('stage', n, O, light=lt)]
+    c = cam(n, ROOF_CAM['zoom'], ROOF_CAM['pos'], ROOF_CAM['tgt'])
+    if extra:
+        c['source']['zbuffer'] = False      # レイヤーを奥行きで並べ替えない(舞台の mesh の原点はカメラの後ろに来るので、並べ替えると人物が舞台の下に隠れる)
+    return [c] + extra + [mesh('stage', n, O, light=lt)]
+
+
+# ---- v7(VRMSAK): 屋上の私服パーカー 2 体 = VRM(ユーザー提供の 3D モデル) ----
+from recreate_g2 import VRM_PARKA, VRM_ON, VRM_LOOK      # noqa: E402
+ROOF_VRM = dict(
+    back=dict(h=168, yaw=180),                  # 1 人目(後ろ姿): 髪の頭頂が 165 になる身長(リボン・あほ毛こみの箱の高さ)
+    line=dict(pos=ROOF_FEET_V6[4], h=216, yaw=0),      # 並びの A
+)
+
+
+def roof_vrm_layers(n, aid):
+    """上から順に: 手前の柵(並びの A の脚に重なる分だけ)・並びの A・1 人目の後ろ姿。model レイヤーは mesh と奥行きの前後が付かないので、人物より手前の物は別の mesh で上に重ねる"""
+    R = ROOF_VRM
+    w = lambda amp, per, base=0.0, ph=0.0: psway(n, amp, per, ph, base)      # noqa: E731
+    # 1 人目: 金網の前で街を見る後ろ姿。右手を腰・左手は下ろして少し開く・足を肩幅に。光は左の低い所から(完成版 3519 の床の影は足もとから右へのびる・濃さは床の 1 割弱)
+    back = layer('vrm_back', 'model', n, {
+        'asset_id': aid, 'height': R['back']['h'], 'shadow': {'opacity': 0.12, 'color': '#4a3a30', 'blur': 4},
+        'light': {'direction': [-1, -1.1, -0.3], 'intensity': 1.1, 'ambient': 0.0},
+        'vrm': dict(VRM_LOOK, shade={'shift': -0.7, 'toony': 0.95}, preset='hand_on_hip', pose={'shoulder_l': [0, 0, 16], 'elbow_l': [8, 0, 0], 'hand_l': 'open', 'hip_l': [0, 0, 11], 'hip_r': [0, 0, 3],
+                                                             'head': [0, w(1.2, 170, 0), 0], 'chest': [w(0.4, 130, 0), 0, 0],
+                                                             'root': [0, dict(kf(*[(f, round(R['back'].get('turn_sign', -1) * _pchip([k[0] for k in ROOF_TURN], [k[1] for k in ROOF_TURN], f), 2)) for f in range(150, 164)]), interp='linear'), 0]},
+                    auto_blink={'interval': 3.4, 'seed': 3}, spring={'stiffness': 2.5, 'gravity': 0.2})},
+        t1=164, transform={'position': [CX + ROOF_P[0], CY, ROOF_P[1]], 'rotation': [0, R['back']['yaw'], 0]})      # 向きはレイヤーでは動かさない(キーにすると後ろ姿が正面向きに描かれた)。振り向きは体の軸(root)で
+    # 並びの A(後半 164〜): こちら向き・右手を腰。後半は日かげなので光を弱める
+    lx, lz = R['line']['pos']
+    cx, _cy, cz = ROOF_CAM['pos'][-2][1]
+    line = layer('vrm_line', 'model', n, {
+        'asset_id': aid, 'height': R['line']['h'], 'shadow': {'opacity': 0.14, 'color': '#2a2620', 'blur': 4},
+        'light': {'direction': [-0.5, -1, -0.8], 'intensity': 1.06, 'ambient': 0.0},
+        'vrm': dict(VRM_LOOK, preset='hand_on_hip', pose={'shoulder_l': [0, 0, 14], 'elbow_l': [8, 0, 0], 'hand_l': 'open', 'hip_l': [0, 0, 8], 'hip_r': [0, 0, 8], 'head': [0, w(2.0, 150, 0), w(1.0, 190, 0, 0.3)]},
+                    expressions={'Joy': 0.3}, auto_blink={'interval': 3.1, 'seed': 8}, spring={'stiffness': 2.5, 'gravity': 0.2})},
+        t0=164, transform={'position': [CX + lx, CY, lz], 'rotation': [0, R['line']['yaw'] + round(math.degrees(math.atan2(cx - lx, -(cz - lz))), 1) * R['line'].get('sign', 1), 0]})
+    # 手前の柵(金網 + 柱)のうち、カメラから A を見る線が通る所だけ(x −24〜136。金網の目 8・柱の間 55 に合わせた切り方)
+    front = mesh('front', n, [
+        plane((160, 200), (56, -100, -1510), '#ffffff', tname='net', repeat=(20, 25), type='basic', transparent=True, alpha_test=0.05),
+        {'geometry': 'box', 'size': [5, 200, 5], 'position': [55, -100, -1510], 'material': mat('#9a9a5c'), 'instances': {'count': 3, 'layout': 'grid', 'grid': [3, 1, 1], 'spacing': [55, 0, 0]}}],
+        light={'direction': [-0.4, -1, -0.5], 'intensity': 0.6, 'ambient': 0.42})
+    front['in'] = 164
+    return [front, line, back]
 
 
 def _roof(key, lid, parts, n=144, figures=False, bg=None, note=''):

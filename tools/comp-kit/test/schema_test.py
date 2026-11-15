@@ -312,6 +312,8 @@ def mesh_ctx(tex_a, tex_b):
         "instances.emit_duration": _in(0.9, velocity=[100, 0, 0]), "instances.colors": _in(["#102030", "#f0c812", "#ff00aa"]), "instances.fade_in": _in(2), "instances.fade_out": _in(0.8, lifetime=1),
         "instances.fade_mode": _in("scale", fade_in=2), "instances.time_offset": _in(1, velocity=[60, 20, 0]),
         # マネキン(関節つきの人形)
+        "material.near": {**_mat(type="depth", far=600), "_value": 300}, "material.far": {**_mat(type="depth"), "_value": 500},
+        "face_points": _mq(style="openpose", _value=False), "line_width": _mq(style="openpose", _value=6),
         "style": _mq(_value="stick"), "face": _mq(), "face_guide": _mq(face=False), "colors.guide": _mq(face=False, face_guide=True), "self_light": _mq(_value=1.5), "preset": _mq(_value="wave"), "phase": _mq(preset="walk", _value=0.3),
         "preset_b": _mq(preset_mix=1, _value="cheer"), "phase_b": _mq(preset_b="walk", preset_mix=1, _value=0.3), "preset_mix": _mq(preset_b="cheer", _value=1),
         "pose": _mq(_value={"shoulder_l": [0, 0, 90], "head": [0, 40, 0]}), "ground": _mq(pose={"offset": [0, -0.2, 0]}, _value=True),

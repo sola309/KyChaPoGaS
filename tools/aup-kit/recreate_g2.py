@@ -240,7 +240,33 @@ def _b11_bone_pose(n, grp):
     return {'pose': {'shoulder_l': 44, 'elbow_l': [96, 0.95], 'shoulder_r': 26}}      # 左手を肩の高さでピース(手の形は変わらない)
 
 
+# ---- v7(VRMSAK): 私服パーカー(A)は VRM モデル(ユーザー本人の作。project 37 の素材 11163 = .vrm を .glb の名前で上げた物)。AUP_VRM=0 で前の立ち絵に戻る ----
+VRM_PARKA = {37: 11163, 35: 11160}
+VRM_ON = os.environ.get('AUP_VRM', '1') != '0' and PEOPLE != 'mannequin'
+# 見た目(完成版 1650・3500 を見て数にした): 肌 #fde9d5 で顔に影の段なし・髪 明 #c3687d / 暗い筋 #77464d・パーカー #a0b8b4 で影はしわの細い筋だけ・輪郭線は 1080p で 1.5〜2px の暗い茶。
+# → 光は正面やや上から、影の境目を奥へずらして(shift −0.35)顔に影の塊を出さない。輪郭線は服にも付ける
+VRM_LOOK = {'outline': {'all': True, 'width': 1.6}, 'shade': {'shift': -0.35, 'toony': 0.95}}
+VRM_LIGHT = {'direction': [0.15, -0.35, -1], 'intensity': 1.0, 'ambient': 0.0}
+B11_VRM = {'x': 920, 'feet_y': 1420, 'height': 1380, 'yaw': 16, 'pitch': -13, 'head_yaw': 8}      # 完成版は少し上から見た絵(頭が大きく、リボンが頭の上に見える)→ 体を手前へ 13° 倒し、頭を 12° 前へ
+
+
+def _b11_vrm_doc(tag, n, aid):
+    """キャラ紹介の私服パーカー = VRM。完成版 1630〜1690: ほぼ正面(体はわずかに本人の右へ)・右手を腰・左手を斜め下へ開く・口を開けた笑顔。動きは小さい呼吸と首だけ、まばたき、髪の揺れは固め"""
+    G = B11_VRM
+    w = lambda amp, per, base=0.0, ph=0.0: psway(n, amp, per, ph, base)      # noqa: E731
+    vrm = dict(VRM_LOOK, preset='hand_on_hip',
+               pose={'shoulder_l': [14, -25, 40], 'elbow_l': [8, 0, 0], 'hand_l': 'open', 'head': [12, w(1.5, 150, G['head_yaw']), w(1.0, 190, -2, 0.3)], 'chest': [w(0.5, 120, 0), 0, -2]},
+               expressions={'A': w(0.08, 70, 0.7)}, auto_blink={'interval': 3.4, 'seed': 5}, spring={'stiffness': 2.5, 'gravity': 0.2})
+    L = [layer('fig', 'model', n, {'asset_id': aid, 'height': G['height'], 'light': dict(VRM_LIGHT), 'vrm': vrm}, transform={'position': [G['x'], G['feet_y'], 0], 'rotation': [G['pitch'], w(1.0, 200, G['yaw']), 0]})]
+    return doc(f'再現 B11 杏子立ち絵 {tag}(VRM: ユーザー提供の 3D モデル)', n, L)
+
+
 def _mk_b11(sym, tag, key, n, grp, colors, outfit):
+    if sym == 'A' and VRM_ON:
+        @reg(key, 'B11', 'ユーザー提供の 3D モデル(VRM。kyoko_sola_model_02_4.200_parka = ユーザー本人の作)を model レイヤーで描く。ポーズ・向き・大きさ・光は完成版を見て合わせた。AUP_VRM=0 で前の 2D 立ち絵に戻る', placeholder=False)
+        def _fv(ctx):
+            return _b11_vrm_doc(tag, n, VRM_PARKA[ctx.project_id])
+        return _fv
     g = find_puppet(sym)
     bone = g is not None and use_bones(g['puppet_id'])      # 関節は、そのパペットに bones.json があるときだけ
     if g:
