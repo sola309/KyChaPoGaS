@@ -163,8 +163,19 @@ def _orbit(a, b, f0=130):
     return out[:-1]      # 終わり(163)は hold のキーで置く
 
 
+def _pull(a, b, f0=114, f1=130, r=1.6):
+    """v6: 引き(3503〜3519)の途中のキー。人物までの距離が 245 → 391(r = 1.6 倍)に伸びるので、まっすぐ等速で下がると画面の動きは頭が速く終わりが遅い山になる
+    (区間描きで 6・17・22・20・18・16・13・7・4。完成版は 12・11・11・10・10・10・9・9・9 でほぼ一定)。距離が等比で伸びるように進ませて、画面の動きを一定にする"""
+    out = []
+    for f in range(f0 + 2, f1, 2):
+        t = (f - f0) / (f1 - f0)
+        u = (r ** t - 1) / (r - 1)
+        out.append((f, tuple(round(x + (y - x) * u, 2) for x, y in zip(a, b))))
+    return out
+
+
 ROOF_CAM = dict(
-    zoom=1400,
+    zoom=kf((0, 1400), (163, 1400, 'hold'), (164, 2600), (245, 2600)),      # v6: 後半は望遠
     # v4: 前半(〜164)を完成版 3440〜3550 から測り直した。3414〜3503 は止まったまま(人物は斜めのワイプで現れる)→ 3503 から引き、3543〜3550 で右へ回りこむ。
     #     カメラの高さ ≈ 金網の上端(地平線と金網の上端が重なる)。人物(165)は金網の 180 手前
     # v5(feel-kit で完成版を 1 コマずつ測った): 頭のせり上がりは 8 コマで止まる(3390〜3397)。3504 から引き(減速)、右への回りこみは 3519 から切り替わり(3553)へ向けて
@@ -174,12 +185,15 @@ ROOF_CAM = dict(
     #     (v5 は終わりの 7 コマが 60 で頭打ち・量は手本の約 1/3)、切り替わりは 3553(v5 は 2 コマ遅い 3555)。切り替わりのあと(3553〜3590)は速い横移動が 10 コマで収まり、
     #     そのあと 1 コマ 1.0%→0.1% のゆるい寄りが 3590 まで減速しながら続く(v5 は 3566 で止まっていた)。
     #     回りこみの進み方 = 完成版の 1 コマごとの速さ(ROOF_ORBIT_SPEED)を足し上げた割合。回りこむ量は x 450 → ROOF_ORBIT_END(空の板の外が映らないよう、空の左右に壁を足した)
-    pos=([(0, (0, -636, 1075), 'outCubic'), (8, (0, -146, 1075)), (114, (0, -146, 1075))]
+    pos=([(0, (0, -636, 1075), 'outCubic'), (8, (0, -146, 1075)), (114, (0, -146, 1075))] + _pull((0, -146, 1075), (40, -172, 929))
          + _orbit((40, -172, 929), ROOF_ORBIT_END[0])
-         + [(163, ROOF_ORBIT_END[0], 'hold'), (164, (-278, -420, -1832), 'outCubic'), (204, (-284, -420, -1790)), (245, (-317, -420, -1790))]),
-    tgt=([(0, (0, -563, 1500), 'outCubic'), (8, (0, -73, 1500)), (114, (0, -73, 1500))]
+         + [(163, ROOF_ORBIT_END[0], 'hold'), (164, (-304, -397, -2685), 'outCubic'), (204, (-284, -380, -2615)), (245, (-316, -380, -2606))]),
+    tgt=([(0, (0, -563, 1500), 'outCubic'), (8, (0, -73, 1500)), (114, (0, -73, 1500))] + _pull((0, -73, 1500), (40, -50, 1500))
          + _orbit((40, -50, 1500), ROOF_ORBIT_END[1])
-         + [(163, ROOF_ORBIT_END[1], 'hold'), (164, (147, 157, -846), 'outQuad'), (174, (-238, 180, -846), 'outCubic'), (204, (-262, 215, -846)), (245, (-295, 215, -846))]),      # 寄りで手前の座る子が下に切れないよう、注視点を少し下げる
+         + [(163, ROOF_ORBIT_END[1], 'hold'), (164, (232, -154, -1610), 'outQuad'), (174, (39, -142, -1554), 'outCubic'), (204, (26, -124, -1550)), (245, (-6, -124, -1541))]),
+    # v6: 後半(164〜)のカメラを測り直した。完成版 3585 の 7 体の頭頂・足もと・柵の下の線・柱の上下を 100px の目盛りで目で測り、さらに柵の柱の傾き(左 −4.2°〜右 +3.3°)から望遠だと分かり、zoom 2600(前半は 1400 のまま)・高さ 380・見下ろし 13°・柵に対して 16° 斜め、と出した
+    #     (R/V6/fitcam2.py・roofcam.json。柱の高さが左 201・右 197 でそろうので向きは合っている)。前は高さ 420・見下ろし 34°で、柵とベンチが 3 倍ほど大きく映っていた。
+    #     FEEL2 の動き(切り替わりの直後の速い横移動 10 コマ → ゆるい寄り)は、キーの時刻と差分をそのまま新しい土台に移した
 )
 
 # 3D モデルの杏子たち(仮: マネキン = mesh の mannequin)。足もとの位置は、完成版 3580 の足の画面位置を ROOF_CAM から床へ逆算した値。
@@ -221,7 +235,7 @@ def _p2d_comp(g, n=245):
         @reg(key, 'B13p', f'仮: puppet レイヤー {g["puppet_id"]} を 1 体置いた透明の comp(屋上の板に貼る。新しく生成した立ち絵・ユーザー未確認)', placeholder=True)
         def _f(ctx, g=g, cw=cw, ch=ch):
             src = dict(ROOF_POSE.get(str(g.get('key')), {})) if use_bones(g['puppet_id']) else {}      # 関節のあるパペットは完成版のポーズに寄せる
-            L = [puppet_layer('p', n, g, [g['head'][0], g['head'][1]], g['head_h'], seed=len(g['puppet_id']) % 7, turn=0.18, wind=0.25, source=src)]
+            L = [puppet_layer('p', n, g, [g['head'][0], g['head'][1]], g['head_h'], seed=len(g["puppet_id"]) % 7, turn=0.06, wind=0.25, source=src)]
             return doc('仮: 2D 立ち絵 + 分解 ' + g['puppet_id'], n, L, w=cw, h=ch)
     return key
 
@@ -261,8 +275,15 @@ def _cam_yaw(x, z):
     return kf(*ks)
 
 
+# v6: 並ぶ 7 体の足もと(完成版 3585 の足の画面位置を、測り直したカメラから床へ逆算。R/V6/roofcam.json)と、座る B の板(ベンチの上・高さ 128)
+ROOF_FEET_V6 = {1: (-299, -1022), 2: (-71, -724), 3: (-22, -1437), 4: (189, -1082), 5: (478, -573), 6: (597, -919), 7: (454, -1457)}
+ROOF_BSIT_V6 = dict(pos=(-30, -83, -2004), h=138)
+
+
 def roof_figures(n, ctx=None):
     F = _roof_mannequins(n)
+    for i, (x, z) in ROOF_FEET_V6.items():
+        F[i]['position'] = [x, 0, z]
     if ctx is None:
         return F
     for i, g in enumerate(ROOF_PUPPETS):
@@ -271,12 +292,15 @@ def roof_figures(n, ctx=None):
         m = F[i]
         px, py, pz = m['position']
         F[i] = board(ctx, g, (px, py, pz), m['body']['height'], yaw=_cam_yaw(px, pz) if i == 0 else 0)
+        if i == 0:      # v6: 1 人目(後ろ姿)は後半のカットには居ない(完成版 3553〜)。後半は床の下へ
+            y0 = F[i]['position'][1]
+            F[i]['position'][1] = kf((0, y0), (163, y0, 'hold'), (164, y0 + 3000), (245, y0 + 3000))
     a = ctx.asset(B_SIT_KEY)
     if a and PEOPLE != 'mannequin':      # v4: 座る B = 新しく生成した座り姿の絵(槍つき。仮・ユーザー未確認)の板。高さ 200・下端はベンチの下の床
-        h = 200
+        h = ROOF_BSIT_V6['h']
         w = h * a['w'] / a['h']
-        px, py, pz = F[8]['position']
-        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px + 20, -26 - h / 2, pz - 70], 'B_sit': True,
+        px, py, pz = ROOF_BSIT_V6['pos']
+        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px, py + 1 - h / 2, pz], 'B_sit': True,
                 'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'asset_id': a['asset_id']}}}
     return F
 
@@ -342,14 +366,19 @@ def roof_parts(n, parts, figures=False, ctx=None):
                   'instances': {'count': 81, 'layout': 'grid', 'grid': [81, 1, 1], 'spacing': [40, 0, 0]}})
         O.append(box((3200, 3.5, 3.5), (0, -154, 1500), '#33463a'))
     if 'stand' in P:  # 高台: 床・細い柵・ベンチ・塔屋(戸口が光る)
-        O.append(plane((3200, 1200), (0, -2, -900), '#77705c', rot=(90, 0, 0), type='basic'))                 # 後半に映る側の床は日かげ(暗い)
-        O.append(box((3600, 2800, 1300), (0, 1340, -2150), '#c9c2ae', material=mat('#ffffff', 'floor', (8, 4))))
-        O.append({'geometry': 'box', 'size': [7, 170, 7], 'position': [0, -145, -1510], 'material': mat('#9a9a5c'),
-                  'instances': {'count': 45, 'layout': 'grid', 'grid': [45, 1, 1], 'spacing': [80, 0, 0]}})
-        O.append(box((3600, 7, 7), (0, -230, -1510), '#9a9a5c'))
-        for bx in (-180, -20):                                                                                 # ベンチ(完成版 3580 の画面位置から逆算: 右下へ斜めに 2 枚)
-            O.append(box((80, 12, 340), (bx, -110, -1510), '#6f5a44', rot=(0, -45, 0)))
-        O.append(box((240, 150, 240), (-620, -135, -1760), '#e0b040', material=mat('#e0b040', wireframe=True)))
+        O.append(plane((3200, 2100), (0, -2, -450), '#77705c', rot=(90, 0, 0), type='basic'))
+        O.append(plane((3200, 900), (0, 0, 1050), '#77705c', rot=(90, 0, 0), type='basic'))      # v6: 後半は奥の床も日かげ(前半は床の下に隠しておく)
+        O[-1]['position'][1] = kf((0, 40), (163, 40, 'hold'), (164, -2), (245, -2))                 # 後半に映る側の床は日かげ(暗い)
+        # v6(完成版 3585 を測り直した): 手前の床は柵の向こうと同じ高さ。柵 = 高さ 200・柱の間 55 の細い柱 + 金網(上の横木は映っていない)。ベンチ = 高さ 83 の板 2 枚が柵から手前へまっすぐのびる
+        O.append(box((3600, 2800, 1300), (0, 1400, -2150), '#b5a26e', material=mat('#b5a26e', 'floor', (8, 4))))
+        O.append(plane((3200, 200), (0, -100, -1510), '#ffffff', tname='net', repeat=(400, 25), type='basic', transparent=True, alpha_test=0.05))
+        O.append({'geometry': 'box', 'size': [5, 200, 5], 'position': [0, -100, -1510], 'material': mat('#9a9a5c'),
+                  'instances': {'count': 59, 'layout': 'grid', 'grid': [59, 1, 1], 'spacing': [55, 0, 0]}})
+        for bx, bw in ((45, 110), (158, 80)):
+            O.append(box((bw, 10, 320), (bx, -78, -1933), '#6f5a44'))
+            for lx in (-bw / 2 + 6, bw / 2 - 6):
+                O.append(box((8, 78, 8), (bx + lx, -39, -1780), '#d9a040'))
+        O.append(box((110, 150, 110), (-331, -75, -1700), '#e0b040', material=mat('#e0b040', wireframe=True)))
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
     if figures:

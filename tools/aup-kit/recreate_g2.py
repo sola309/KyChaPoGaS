@@ -184,6 +184,11 @@ _B11 = [
 B11_GEOM = {'x': 915, 'feet_y': 1450, 'height': 1350, 'heads': 5.6}     # 連番の画面(1920×1080)での足もと・身長(完成版から目で合わせた)
 
 
+# v6: 新しい立ち絵(r3・斜め 3/4 向き)の合わせ直し。(大きさの倍率, 横, 縦)。完成版 1645・1725・2045・2095・2345・2395・2705・2795 と再現を 100px の目盛りで並べて、
+# 頭頂・あご・顔の中心・服のすそを目で測った差から決めた(頭は絵ごとに頭身が違うので、頭と体の中間に寄せた)
+B11_ADJ = {'A': (1.07, 0, 12), 'C': (1.10, 0, -28), 'D': (1.08, 0, -8), 'E': (1.08, 0, -18), 'F': (1.10, 15, -8), 'H': (1.0, 15, 0)}
+
+
 def _sway(n, amp, ph=0.0, base=0.0, per=None):
     """ゆっくりした往復(呼吸・ゆれ)。n コマの間に per コマ周期の sin を 8 コマおきのキーで書く。"""
     per = per or max(60, n * 0.6)
@@ -213,10 +218,12 @@ def _b11_puppet_doc(tag, n, grp, g, bone=False):
     G = B11_GEOM
     hh = G['height'] / G['heads']
     head = [G['x'], G['feet_y'] - G['height'] + hh / 2]
+    m, dx, dy = B11_ADJ.get(str(g.get('key'))[:1], (1.0, 0, 0)) if str(g.get('puppet_id', '')).endswith('_r3') else (1.0, 0, 0)
+    hh, head = hh * m, [head[0] + dx, head[1] + dy]
     src = {}
     if bone:
         src.update(_b11_bone_pose(n, grp))
-    L = [puppet_layer('fig', n, g, head, hh, seed=grp, wind=0.15, source=src)]
+    L = [puppet_layer('fig', n, g, head, hh, seed=grp, wind=0.15, turn=0.08, source=src)]      # v6: 首ふりは小さく(斜め向きの絵は大きく振ると顔が崩れる)
     return doc(f'再現 B11 杏子立ち絵 {tag}(仮: 2D 立ち絵 + 分解{" + 関節" if bone else ""} {g["puppet_id"]})', n, L)
 
 
