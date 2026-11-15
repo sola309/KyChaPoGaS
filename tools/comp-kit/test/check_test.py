@@ -339,6 +339,16 @@ def main():
         soft = lambda im_: sum(1 for y in range(0, 200, 2) for x in range(0, 200, 2) if 8 < im_.getpixel((x, y))[3] < 247)  # noqa: E731
         s0, s1 = soft(px(asyncio.run(grab(dofc(False), [0], base))[0])), soft(px(asyncio.run(grab(dofc(True), [0], base))[0]))
         ok("mesh: 被写界深度が掛かる(ぼけて半透明の縁が広がる)", s1 > s0 + 200, f"半透明の画素 {s0} → {s1}")
+        # 制御用の映像(2026-11-15): 深度のマテリアル(near = 白 → far = 黒、距離に直線)と OpenPose の色分けした骨
+        dcam = {"id": "cam", "type": "camera", "in": 0, "out": 60, "source": {"zoom": 400}}
+        dm = {"type": "depth", "near": 300, "far": 500}
+        imD = px(asyncio.run(grab(comp([dcam, mesh([{"geometry": "plane", "size": [60, 60], "position": [-40, 0, 0], "material": dm}, {"geometry": "plane", "size": [60, 60], "position": [40, 0, -50], "material": dm}])], bg="#000000"), [0], base))[0])
+        dA, dB = imD.getpixel((60, 100)), imD.getpixel((135, 100))
+        ok("mesh: 深度のマテリアル(距離 400 → 128、350 → 191。光・色に左右されない灰色)", abs(dA[0] - 128) <= 2 and abs(dB[0] - 191) <= 2 and dA[0] == dA[1] == dA[2], f"{dA} {dB}")
+        imO = px(asyncio.run(grab(comp([mesh([{"geometry": "mannequin", "style": "openpose", "preset": "t_pose", "position": [0, 80, 0], "body": {"height": 160.0, "heads": 6.5}}], unlit=True)], bg="#000000"), [0], base))[0])
+        cnt = lambda rng, c: sum(1 for y in range(200) for x in rng if all(abs(imO.getpixel((x, y))[i] - c[i]) <= 6 for i in range(3)))  # noqa: E731
+        ok("mesh: OpenPose の骨(本人の右手首 = 黄 = 画面の左、左手首 = 緑 = 画面の右、鼻 = 赤)", cnt(range(0, 70), (255, 255, 0)) >= 4 and cnt(range(130, 200), (0, 255, 85)) >= 4 and cnt(range(130, 200), (255, 255, 0)) == 0 and cnt(range(80, 120), (255, 0, 0)) >= 4,
+           f"{cnt(range(0, 70), (255, 255, 0))} {cnt(range(130, 200), (0, 255, 85))} {cnt(range(80, 120), (255, 0, 0))}")
         # マネキン(関節つきの人形): 手先が体格の式どおりの位置に来る・ひじを 90 度曲げると前腕ぶん動く・角度のキーフレーム・位相は 1 で 1 周
         MH = 160.0; Bq = MH - MH / 6.5; msw, mU, mF, mr = 0.118 * Bq, 0.19 * Bq, 0.17 * Bq, 0.012 * MH
         mT = Bq - 0.05 * Bq - 0.59 * Bq; msh = 0.59 * Bq + 0.6 * mT + 0.4 * mT - 0.03 * Bq   # 肩の高さ(足もとから)

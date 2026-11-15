@@ -253,13 +253,14 @@ MESH_TEX = {"type": "object", "label": "貼る絵", "default": None, "animatable
     "frame": N("子のコマ(固定。省略 = レイヤーの時刻)", None, 0, 10000000, 1, optional=True), "start": N("子の開始コマ", 0, -10000000, 10000000, 1, optional=True), "speed": N("子の再生速度", 1, -16, 16, 0.01, optional=True),
     "loop": B("子を繰り返す", optional=True), "transparent": B("子の背景色を塗らない", optional=True)}}
 MESH_MAT = {
-    "type": S("種類", "standard", [("standard", "標準(光・映り込み)"), ("basic", "光なし(色・絵そのまま)"), ("emissive", "発光(色 × 強さ)"), ("glass", "ガラス"), ("toon", "トゥーン(段々の陰)"), ("shadow", "影だけ受ける(透明な床)")]),
+    "type": S("種類", "standard", [("standard", "標準(光・映り込み)"), ("basic", "光なし(色・絵そのまま)"), ("emissive", "発光(色 × 強さ)"), ("glass", "ガラス"), ("toon", "トゥーン(段々の陰)"), ("shadow", "影だけ受ける(透明な床)"), ("depth", "深度(near = 白 → far = 黒。制御用の映像)")]),
     "color": C("色", "#ffffff"), "opacity": N("不透明度(0〜1。省略 = 1、ガラス 0.25、影 0.4)", 1, 0, 1, 0.01, optional=True),
     "metalness": N("金属らしさ", 0, 0, 1, 0.01), "roughness": N("粗さ(省略 = 0.5、ガラス 0.05)", 0.5, 0, 1, 0.01, optional=True),
     "emissive": C("自分で光る色", "#000000"), "emissive_intensity": N("光る強さ", 1, 0, 20, 0.05), "env_intensity": N("映り込みの強さ", 1, 0, 10, 0.05), "clearcoat": N("クリア塗装", 0, 0, 1, 0.01),
     "side": S("描く面", "", [("", "自動(板・開いた形は両面)"), ("front", "表"), ("back", "裏"), ("double", "両面")], optional=True), "flat": B("面ごとに平らな陰(カット面)"), "wireframe": B("ワイヤーフレーム"),
     "transparent": B("半透明として描く(透過 PNG を貼るとき)", optional=True), "alpha_test": N("この値より薄い所は描かない(切り抜き)", 0, 0, 1, 0.01), "toon_steps": N("陰の段数(トゥーン)", 3, 2, 16, 1, False),
-    "texture": MESH_TEX, "texture_repeat": V2("絵の繰り返し", [1, 1]), "texture_offset": V2("絵のずれ(0〜1)", [0, 0])}
+    "texture": MESH_TEX, "texture_repeat": V2("絵の繰り返し", [1, 1]), "texture_offset": V2("絵のずれ(0〜1)", [0, 0]),
+    "near": N("深度: 白になる距離(カメラから。px)", 0, 0, 1000000, 1, optional=True), "far": N("深度: 黒になる距離(px)", 2000, 0, 1000000, 1, optional=True)}
 MESH_PATH = {"type": "object", "label": "道(管・道に沿った押し出し・複製の along)", "default": None, "animatable": False, "optional": True, "fields": {
     "type": S("種類", "helix", [("helix", "らせん"), ("circle", "円"), ("line", "直線"), ("points", "点の列")]), "radius": N("半径", 300, 0, 20000, 1), "radius_end": N("終わりの半径(らせん)", None, 0, 20000, 1, optional=True),
     "turns": N("巻き数(らせん)", 3, -100, 100, 0.01), "height": N("高さ(らせん。正 = 上へ進む)", 400, -20000, 20000, 1), "axis": S("軸", "y", AXES), "start": A("開始角"), "arc": A("範囲(円)", 360),
@@ -304,7 +305,7 @@ MESH_OBJ = {
     "material": {"type": "object", "label": "マテリアル", "fields": MESH_MAT},
     "faces": {"type": "list", "label": "面ごとのマテリアル(箱 = 右・左・上・下・手前・奥 / 押し出し・文字 = 表裏・側面 / 円柱 = 側面・上・下)", "default": None, "animatable": False, "optional": True, "item": MESH_MAT},
     # マネキン(関節つきの人形。mesh3d.js の buildMannequin)。原点 = 両足の間の地面、rotation 0 でこちら向き
-    "style": WG(S("作り", "mannequin", [("mannequin", "丸みのある筒と球"), ("stick", "細い棒(棒人形)")]), "mannequin"),
+    "style": WG(S("作り", "mannequin", [("mannequin", "丸みのある筒と球"), ("stick", "細い棒(棒人形)"), ("openpose", "OpenPose の色分けした骨(制御用の映像)")]), "mannequin"),
     "body": WG({"type": "object", "label": "体格", "fields": {"height": N("身長(px)", 600, 1, 20000, 1), "heads": N("頭身", 6.5, 2, 12, 0.1), "thickness": N("太さ(倍率)", 1, 0.05, 10, 0.01), "shoulder": N("肩幅(倍率)", 1, 0.2, 4, 0.01),
         "hip": N("腰幅(倍率)", 1, 0.2, 4, 0.01), "arm_length": N("腕の長さ(倍率)", 1, 0.2, 3, 0.01), "leg_length": N("脚の長さ(倍率)", 1, 0.3, 1.4, 0.01)}}, "mannequin"),
     "colors": WG({"type": "object", "label": "色", "fields": {"skin": C("肌", "#f6d9c8"), "top": C("服の上", "#d8d8de"), "bottom": C("服の下", "#5a6278"), "hair": C("髪", "#b5334f"), "shoes": C("靴", "#3a3036"), "ribbon": C("リボン", "#1c1a1e"), "eyes": C("目", "#7a1f2c"),
@@ -315,6 +316,7 @@ MESH_OBJ = {
         "thickness": N("ポニーテールの太さ(倍率)", 1, 0.1, 5, 0.01), "bangs": B("前髪・横の房", True), "ribbon": B("リボン(ポニーテールの根元)", True)}}, "mannequin"),
     "face": WG(B("目を描く(切る = のっぺらぼう)", True), "mannequin"), "face_guide": WG(B("顔の当たり線(ごく薄い十字: 顔の中心線と目の高さ)"), "mannequin"),
     "outline": WG({"type": "object", "label": "輪郭線(裏返しの殻)", "default": None, "animatable": False, "optional": True, "fields": {"width": N("太さ(px)", 3, 0, 100, 0.1), "color": C("色", "#2a1a20")}}, "mannequin"),
+    "face_points": WG(B("OpenPose の骨: 鼻・目の点を描く(後ろ姿では切る)", True, optional=True), "mannequin"), "line_width": WG(N("OpenPose の骨: 線の太さ(半径 px。省略 = 身長の 1.1%)", None, 0, 1000, 0.1, optional=True), "mannequin"),
     "self_light": WG(N("自分で光る割合(暗い場面でも色が見える)", 0, 0, 4, 0.01), "mannequin"),
     "preset": WG(S("ポーズ(プリセット)", "stand", [("stand", "立つ"), ("a_pose", "A の字"), ("t_pose", "T の字"), ("idle", "立って小さく揺れる(phase)"), ("walk", "歩く(phase)"), ("run", "走る(phase)"), ("wave", "手を振る(phase)"), ("sit", "座る"),
         ("hand_on_hip", "手を腰に"), ("peace", "ピース"), ("lean_forward", "前かがみ"), ("cheer", "両手を上げる")]), "mannequin"),

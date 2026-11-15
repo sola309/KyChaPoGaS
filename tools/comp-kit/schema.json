@@ -8383,6 +8383,10 @@
           {
            "value": "shadow",
            "label": "影だけ受ける(透明な床)"
+          },
+          {
+           "value": "depth",
+           "label": "深度(near = 白 → far = 黒。制御用の映像)"
           }
          ],
          "animatable": false
@@ -8608,6 +8612,26 @@
           0
          ],
          "animatable": true
+        },
+        "near": {
+         "type": "number",
+         "label": "深度: 白になる距離(カメラから。px)",
+         "default": 0,
+         "min": 0,
+         "max": 1000000,
+         "step": 1,
+         "animatable": true,
+         "optional": true
+        },
+        "far": {
+         "type": "number",
+         "label": "深度: 黒になる距離(px)",
+         "default": 2000,
+         "min": 0,
+         "max": 1000000,
+         "step": 1,
+         "animatable": true,
+         "optional": true
         }
        }
       },
@@ -8646,6 +8670,10 @@
           {
            "value": "shadow",
            "label": "影だけ受ける(透明な床)"
+          },
+          {
+           "value": "depth",
+           "label": "深度(near = 白 → far = 黒。制御用の映像)"
           }
          ],
          "animatable": false
@@ -8871,6 +8899,26 @@
           0
          ],
          "animatable": true
+        },
+        "near": {
+         "type": "number",
+         "label": "深度: 白になる距離(カメラから。px)",
+         "default": 0,
+         "min": 0,
+         "max": 1000000,
+         "step": 1,
+         "animatable": true,
+         "optional": true
+        },
+        "far": {
+         "type": "number",
+         "label": "深度: 黒になる距離(px)",
+         "default": 2000,
+         "min": 0,
+         "max": 1000000,
+         "step": 1,
+         "animatable": true,
+         "optional": true
         }
        }
       },
@@ -8886,6 +8934,10 @@
         {
          "value": "stick",
          "label": "細い棒(棒人形)"
+        },
+        {
+         "value": "openpose",
+         "label": "OpenPose の色分けした骨(制御用の映像)"
         }
        ],
        "animatable": false,
@@ -9228,6 +9280,33 @@
          "animatable": true
         }
        },
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "face_points": {
+       "type": "bool",
+       "label": "OpenPose の骨: 鼻・目の点を描く(後ろ姿では切る)",
+       "default": true,
+       "animatable": false,
+       "optional": true,
+       "when": {
+        "geometry": [
+         "mannequin"
+        ]
+       }
+      },
+      "line_width": {
+       "type": "number",
+       "label": "OpenPose の骨: 線の太さ(半径 px。省略 = 身長の 1.1%)",
+       "default": null,
+       "min": 0,
+       "max": 1000,
+       "step": 0.1,
+       "animatable": true,
+       "optional": true,
        "when": {
         "geometry": [
          "mannequin"

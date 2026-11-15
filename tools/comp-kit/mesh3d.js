@@ -489,6 +489,7 @@ const OPEN_GEO = new Set(['plane', 'ring', 'shards', 'lathe', 'tube'])
 // エンジンのテクスチャ(sRGB の値・乗算済み)をそのまま貼れるよう、色の読み方を差し替える。複製ごとのフェード(aFade)もここで足す
 function patchMaterial(mat, opt) {
   const u = (mat.userData.u = { uMapTf: { value: new THREE.Vector4(1, 1, 0, 0) }, uMapWrap: { value: 0 } })
+  if (opt.depth) u.uDepthNF = { value: new THREE.Vector2(0, 2000) }
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uMapTf = u.uMapTf; sh.uniforms.uMapWrap = u.uMapWrap
     sh.fragmentShader = sh.fragmentShader
@@ -504,6 +505,12 @@ function patchMaterial(mat, opt) {
       sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aFade;\nvarying float vFade;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvFade = aFade;')
       sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vFade;')
     }
+    if (opt.depth) {
+      // 深度の出力(制御用の映像): カメラからの距離 near → 白、far → 黒(画素の値が距離に直線)
+      sh.uniforms.uDepthNF = u.uDepthNF
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec2 uDepthNF;')
+        .replace('#include <opaque_fragment>', `{ float dv = 1.0 - clamp( ( 1.0 / gl_FragCoord.w - uDepthNF.x ) / max( uDepthNF.y - uDepthNF.x, 1e-4 ), 0.0, 1.0 ); outgoingLight = sRGBTransferEOTF( vec4( vec3( dv ), 1.0 ) ).rgb; }\n#include <opaque_fragment>`)
+    }
     if (opt.glass) {
       // ガラス: 本体は透ける色、映り込みとハイライトは透けずに乗る
       sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', /* glsl */ `{
@@ -513,7 +520,7 @@ function patchMaterial(mat, opt) {
 }`)
     }
   }
-  mat.customProgramCacheKey = () => `mesh3d|${opt.fade ? 'f' : ''}${opt.glass ? 'g' : ''}`
+  mat.customProgramCacheKey = () => `mesh3d|${opt.fade ? 'f' : ''}${opt.glass ? 'g' : ''}${opt.depth ? 'D' : ''}`
 }
 const toonMaps = new Map()
 function toonMap(steps) {
@@ -533,7 +540,7 @@ const sideOf = (m, open) => (m.side === 'double' ? THREE.DoubleSide : m.side ===
 // 作り直しが要る違い(種類・フラグ)だけを並べた署名
 function matSig(m, unlit, fade, vcol) {
   let type = m.type || 'standard'
-  if (unlit && type !== 'shadow') type = type === 'emissive' ? 'emissive' : 'basic'
+  if (unlit && type !== 'shadow' && type !== 'depth') type = type === 'emissive' ? 'emissive' : 'basic'
   if (type === 'standard' && num(m.clearcoat, 0) > 0) type = 'physical'
   const tr = m.transparent ?? (type === 'glass' || type === 'shadow' || num(m.opacity, 1) < 1 || toColor(m.color)[3] < 1 || fade || vcol)
   return `${type}|${m.side || ''}|${m.wireframe ? 'w' : ''}${m.flat ? 'f' : ''}${tr ? 't' : ''}${fade ? 'F' : ''}${vcol ? 'V' : ''}${m.depth_write === false ? 'd' : ''}|${type === 'toon' ? num(m.toon_steps, 3) : ''}`
@@ -542,7 +549,7 @@ function makeMaterial(sig, m, open) {
   const [type] = sig.split('|'), flags = sig.split('|')[2]
   const fade = flags.includes('F'), tr = flags.includes('t')
   let mat
-  if (type === 'basic' || type === 'emissive') mat = new THREE.MeshBasicMaterial()
+  if (type === 'basic' || type === 'emissive' || type === 'depth') mat = new THREE.MeshBasicMaterial()
   else if (type === 'toon') mat = new THREE.MeshToonMaterial({ gradientMap: toonMap(num(m.toon_steps, 3)) })
   else if (type === 'shadow') mat = new THREE.ShadowMaterial()
   else if (type === 'glass' || type === 'physical') mat = new THREE.MeshPhysicalMaterial()
@@ -554,7 +561,7 @@ function makeMaterial(sig, m, open) {
   mat.depthWrite = m.depth_write ?? !(type === 'glass' || type === 'shadow')
   mat.vertexColors = flags.includes('V')
   mat.userData.type = type
-  if (type !== 'shadow') patchMaterial(mat, { fade, glass: type === 'glass' })
+  if (type !== 'shadow') patchMaterial(mat, { fade, glass: type === 'glass', depth: type === 'depth' })
   return mat
 }
 // コマごとの値(色・質感・テクスチャ)を入れる
@@ -582,6 +589,7 @@ function updateMaterial(mat, m, tex) {
     const map = tex ? tex.tex : null
     if ((mat.map || null) !== map) { if (!mat.map !== !map) mat.needsUpdate = true; mat.map = map }
     const u = mat.userData.u
+    if (u.uDepthNF) u.uDepthNF.value.set(num(m.near, 0), num(m.far, 2000))
     const rp = pair(m.texture_repeat, 1, 1), of = pair(m.texture_offset, 0, 0)
     // 画像は上が v = 0、入れ子の絵(RT)は上が v = 1。形の uv は上が v = 1
     if (tex && tex.flipV) u.uMapTf.value.set(rp[0], -rp[1], of[0], 1 + of[1])
@@ -832,6 +840,34 @@ function buildMannequin(e) {
   const sleeve = clamp(num(of.sleeves, 1), 0, 1), pants = clamp(num(of.pants, 0.2), 0, 1), boots = clamp(num(of.boots, 0), 0, 1), socks = clamp(num(of.socks, 0), 0, 2)
   const skirt = clamp(num(of.skirt, 0), 0, 2), flare = clamp(num(of.skirt_flare, 0.6), 0, 4)
   const B = d.B, th = d.th
+  if (e.style === 'openpose') {
+    // OpenPose(18 点)の色分けした骨。制御用の映像に使う(光なしの色そのまま。背景は黒にする)
+    const OC = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255], [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85]]
+    const hex = (c, k) => '#' + c.map((v) => Math.round(v * k).toString(16).padStart(2, '0')).join('')
+    const at = (bone, x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z).applyMatrix4(W[bone])
+    const sl = at('shoulder_l'), sr = at('shoulder_r')
+    // 0 鼻 1 首 2-4 右腕 5-7 左腕 8-10 右脚 11-13 左脚 14 右目 15 左目 16 右耳 17 左耳(右 = 本人の右)
+    const K = [at('head', 0, d.ry * 0.62, d.rz), sl.clone().add(sr).multiplyScalar(0.5), sr, at('elbow_r'), at('wrist_r'), sl, at('elbow_l'), at('wrist_l'),
+      at('hip_r'), at('knee_r'), at('ankle_r'), at('hip_l'), at('knee_l'), at('ankle_l'),
+      at('head', -d.rx * 0.42, d.ry * 0.92, d.rz * 0.85), at('head', d.rx * 0.42, d.ry * 0.92, d.rz * 0.85), at('head', -d.rx, d.ry * 0.8, 0), at('head', d.rx, d.ry * 0.8, 0)]
+    const LIMB = [[1, 2], [1, 5], [2, 3], [3, 4], [5, 6], [6, 7], [1, 8], [8, 9], [9, 10], [1, 11], [11, 12], [12, 13], [1, 0], [0, 14], [14, 16], [0, 15], [15, 17]]
+    const face = e.face_points === undefined ? true : (typeof e.face_points === 'number' ? e.face_points > 0.5 : !!e.face_points) // 後ろ姿では鼻・目を切る(耳は残す)
+    const r = Math.max(1e-3, num(e.line_width, 0.011 * d.H * th)), up = new THREE.Vector3(0, 1, 0)
+    const add = (geo, m, c) => out.push({ ...geo, _matrix: m.toArray(), material: { type: 'basic', color: c }, cast_shadow: false, receive_shadow: false, render_order: ro0 + out.length * 1e-5 })
+    LIMB.forEach(([a, b], i) => {
+      if (!face && (a === 0 || b === 0) && i > 12) return
+      if (!face && i === 12) return
+      const A = K[a], Bp = K[b], len = A.distanceTo(Bp)
+      if (!(len > 1e-6)) return
+      const q = new THREE.Quaternion().setFromUnitVectors(up, Bp.clone().sub(A).normalize())
+      add(mqCyl(1), new THREE.Matrix4().compose(A.clone().add(Bp).multiplyScalar(0.5), q, new THREE.Vector3(r, len, r)), hex(OC[i], 0.6))
+    })
+    K.forEach((p, i) => {
+      if (!face && (i === 0 || i === 14 || i === 15)) return
+      add(MQ_SPH, new THREE.Matrix4().compose(p, new THREE.Quaternion(), new THREE.Vector3(r * 1.25, r * 1.25, r * 1.25)), hex(OC[i], 1))
+    })
+    return out
+  }
   if (stick) {
     const r = 0.012 * d.H * th
     const line = (bone, color, len, rr, pv) => tube(bone, color, len, r, r, 0, 1, 1, 1, rr, pv)
