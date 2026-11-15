@@ -6447,7 +6447,7 @@
       },
       "spring": {
        "type": "json",
-       "label": "揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量}",
+       "label": "揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量, wind: [x, y, z](重力に足す一定の力。文書の座標・x 正 = 右・y 正 = 下・z 正 = 奥)か [{force, bones}, …], wind_bones: 骨の名前の一部(その骨だけに風), turn_inertia: 0〜1(レイヤーの回転が髪を振る強さ。既定 1)}",
        "default": null,
        "animatable": false,
        "optional": true

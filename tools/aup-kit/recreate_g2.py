@@ -247,17 +247,41 @@ VRM_ON = os.environ.get('AUP_VRM', '1') != '0' and PEOPLE != 'mannequin'
 # → 光は正面やや上から、影の境目を奥へずらして(shift −0.35)顔に影の塊を出さない。輪郭線は服にも付ける
 VRM_LOOK = {'outline': {'all': True, 'width': 1.6}, 'shade': {'shift': -0.35, 'toony': 0.95}}
 VRM_LIGHT = {'direction': [0.15, -0.35, -1], 'intensity': 1.0, 'ambient': 0.0}
-B11_VRM = {'x': 920, 'feet_y': 1420, 'height': 1380, 'yaw': 16, 'pitch': -13, 'head_yaw': 8}      # 完成版は少し上から見た絵(頭が大きく、リボンが頭の上に見える)→ 体を手前へ 13° 倒し、頭を 12° 前へ
+# v8(VRMFIX): 体を手前へ倒すごまかし(pitch −13°)をやめ、カメラ(画角・距離・高さ)で完成版の見え方に合わせる。
+#   cam_fov = 横の画角(度)、cam_dist = 人物からカメラまで(身長に対する割合)、cam_h / tgt_h = カメラ・注視点の高さ(足もとから。身長に対する割合)、cam_side = カメラの横ずれ(同)
+#   yaw = 体の向き(度。負 = 本人の左肩が手前 = 画面の右にポニーテールが見える側)。v7 は +16 と書いていたが、要素ごとのキーが読めない不具合で 0 のまま描かれていた
+B11_VRM = {'x': 920, 'feet_y': 1420, 'height': 1380, 'yaw': -6, 'head': [6, -7, -5], 'chest': [0, 0, -2],
+           # カメラ: 胸の高さ(身長の 0.75)・距離は身長の 1.42 倍・横の画角 50°。完成版は頭・肩より腰・ももが大きめに写る(= 頭より低いカメラ)。頭は前へ 6° + 首 3°(これより倒すと目が細く見える。倒さないと頭のうしろのリボンは髪に隠れぎみ = モデルのリボンの形・位置の違い)
+           'cam_fov': 50, 'cam_dist': 1.42, 'cam_h': 0.75, 'tgt_h': 0.665, 'cam_side': 0.0, 'pan': 3,
+           'shoulder_l': [14, -25, 40], 'elbow_l': [8, 0, 0], 'pose': {'neck': [3, 0, 0]}, 'bones': {},
+           # 表情: 口を開けた笑顔(A + 少し E)・目を開く。まばたきは 1 回だけ(完成版 1630〜1767 は目を開けたまま → 区間の終わり近くに 1 回)
+           'expr': {'A': 0.55, 'E': 0.15, 'BlendShape.EyeWideLeft': 1, 'BlendShape.EyeWideRight': 1}, 'blink': {'interval': 3.4, 'seed': 5},
+           # ポニーテール: モデルの設定は重力 0・背中の真後ろに垂れる形(正面からは見えない)。完成版は画面の右、腕の後ろに長く垂れている → 房(Ponytail1・2)にだけ 下 + 少し右 の力
+           'spring': {'stiffness': 1.5, 'gravity': 0.2, 'wind': [0.35, 1.2, 0.1], 'wind_bones': ['Ponytail1', 'Ponytail2']}}
 
 
 def _b11_vrm_doc(tag, n, aid):
-    """キャラ紹介の私服パーカー = VRM。完成版 1630〜1690: ほぼ正面(体はわずかに本人の右へ)・右手を腰・左手を斜め下へ開く・口を開けた笑顔。動きは小さい呼吸と首だけ、まばたき、髪の揺れは固め"""
+    """キャラ紹介の私服パーカー = VRM。完成版 1630〜1690: 体は少し斜め(ポニーテールが画面の右に垂れて見える)・顔はほぼ正面・右手を腰・左手を斜め下へ開く・目を大きく開けて口を開けた笑顔。
+    動きは小さい呼吸と首だけ、まばたき、髪の揺れは固め"""
     G = B11_VRM
     w = lambda amp, per, base=0.0, ph=0.0: psway(n, amp, per, ph, base)      # noqa: E731
-    vrm = dict(VRM_LOOK, preset='hand_on_hip',
-               pose={'shoulder_l': [14, -25, 40], 'elbow_l': [8, 0, 0], 'hand_l': 'open', 'head': [12, w(1.5, 150, G['head_yaw']), w(1.0, 190, -2, 0.3)], 'chest': [w(0.5, 120, 0), 0, -2]},
-               expressions={'A': w(0.08, 70, 0.7)}, auto_blink={'interval': 3.4, 'seed': 5}, spring={'stiffness': 2.5, 'gravity': 0.2})
-    L = [layer('fig', 'model', n, {'asset_id': aid, 'height': G['height'], 'light': dict(VRM_LIGHT), 'vrm': vrm}, transform={'position': [G['x'], G['feet_y'], 0], 'rotation': [G['pitch'], w(1.0, 200, G['yaw']), 0]})]
+    hd, ch = G['head'], G['chest']
+    pose = {'shoulder_l': G['shoulder_l'], 'elbow_l': G['elbow_l'], 'hand_l': 'open', 'head': [hd[0], w(1.5, 150, hd[1]), w(1.0, 190, hd[2], 0.3)], 'chest': [w(0.5, 120, ch[0]), ch[1], ch[2]]}
+    pose.update(G['pose'])
+    ex = dict(G['expr'])
+    if 'A' in ex:
+        ex['A'] = w(0.08, 70, ex['A'])
+    vrm = dict(VRM_LOOK, preset='hand_on_hip', pose=pose, expressions=ex, spring=G['spring'])
+    if G.get('blink'):
+        vrm['auto_blink'] = G['blink']
+    if G['bones']:
+        vrm['bones'] = G['bones']
+    H = G['height']
+    px = G['x'] + G.get('pan', 0)      # pan = カメラと注視点を一緒に横へ(px。正 = 人物が画面の左へ寄る)
+    cam = layer('cam', 'camera', n, {'fov': G['cam_fov'], 'target': [px, G['feet_y'] - G['tgt_h'] * H, 0]},
+                transform={'position': [px + G['cam_side'] * H, G['feet_y'] - G['cam_h'] * H, -G['cam_dist'] * H]})
+    L = [cam, layer('fig', 'model', n, {'asset_id': aid, 'height': H, 'light': dict(VRM_LIGHT), 'vrm': vrm},
+                    transform={'position': [G['x'], G['feet_y'], 0], 'rotation': {'k': [dict(f=k['f'], v=[0, k['v'], 0]) for k in w(1.0, 200, G['yaw'])['k']]}})]
     return doc(f'再現 B11 杏子立ち絵 {tag}(VRM: ユーザー提供の 3D モデル)', n, L)
 
 

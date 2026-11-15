@@ -466,9 +466,11 @@ def roof_vrm_layers(n, aid):
         'light': {'direction': [-1, -1.1, -0.3], 'intensity': 1.1, 'ambient': 0.0},
         'vrm': dict(VRM_LOOK, shade={'shift': -0.7, 'toony': 0.95}, preset='hand_on_hip', pose={'shoulder_l': [0, 0, 16], 'elbow_l': [8, 0, 0], 'hand_l': 'open', 'hip_l': [0, 0, 11], 'hip_r': [0, 0, 3],
                                                              'head': [0, w(1.2, 170, 0), 0], 'chest': [w(0.4, 130, 0), 0, 0],
-                                                             'root': [0, dict(kf(*[(f, round(R['back'].get('turn_sign', -1) * _pchip([k[0] for k in ROOF_TURN], [k[1] for k in ROOF_TURN], f), 2)) for f in range(150, 164)]), interp='linear'), 0]},
+                                                             'root': [0, 0, 0]},
                     auto_blink={'interval': 3.4, 'seed': 3}, spring={'stiffness': 2.5, 'gravity': 0.2})},
-        t1=164, transform={'position': [CX + ROOF_P[0], CY, ROOF_P[1]], 'rotation': [0, R['back']['yaw'], 0]})      # 向きはレイヤーでは動かさない(キーにすると後ろ姿が正面向きに描かれた)。振り向きは体の軸(root)で
+        t1=164, transform={'position': [CX + ROOF_P[0], CY, ROOF_P[1]],
+                           # v8(VRMFIX): 振り向きはレイヤーの向きのキーで(v7 は「キーにすると後ろ姿が正面向きに描かれる」不具合を避けて体の軸 root で回していた。原因 = 要素ごとのキーが 0 と読まれた。scene.js を直した)
+                           'rotation': dict(kf(*([(0, [0, R['back']['yaw'], 0])] + [(f, [0, round(R['back']['yaw'] + R['back'].get('turn_sign', -1) * _pchip([k[0] for k in ROOF_TURN], [k[1] for k in ROOF_TURN], f), 2), 0]) for f in range(150, 164)])), interp='linear')})
     # 並びの A(後半 164〜): こちら向き・右手を腰。後半は日かげなので光を弱める
     lx, lz = R['line']['pos']
     cx, _cy, cz = ROOF_CAM['pos'][-2][1]

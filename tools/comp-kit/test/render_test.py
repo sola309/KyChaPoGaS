@@ -44,6 +44,16 @@ EXTRA_DIR = KIT / "examples"  # 例の JSON を置いた場所(examples の外�
 _vframe_dir = Path(tempfile.mkdtemp(prefix="compkit_vframe_"))
 
 
+def test_vrm_path():
+    """試験に使う VRM(無ければ None)。COMPKIT_TEST_VRM=ファイル、または <repo の親>/reference/models3d/**/*.vrm の最初の 1 つ"""
+    import os
+    e = os.environ.get("COMPKIT_TEST_VRM")
+    if e:
+        return Path(e) if Path(e).is_file() else None
+    c = sorted((REPO.parent / "reference" / "models3d").glob("**/*.vrm"))
+    return c[0] if c else None
+
+
 def build_html(comp: dict, mode: str, api_base: str) -> str:
     boot = {"comp": comp, "mode": mode, "apiBase": api_base, "engineBase": "/api/comps/engine/"}
     html = (KIT / "player.html").read_text(encoding="utf-8")
@@ -95,6 +105,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 if f.is_file():
                     return self._send(200, f.read_bytes(), MIME.get(f.suffix, "application/octet-stream"))
             return self._send(404, b"not found")
+        if path == "/test-vrm.glb":
+            # VRM の試験用(check_test の 2i)。モデルは repo に入れない: 環境変数 COMPKIT_TEST_VRM か、repo の外の reference/models3d/ にあるときだけ返す
+            f = test_vrm_path()
+            return self._send(200, f.read_bytes(), MIME[".glb"]) if f else self._send(404, b"not found")
         if path.startswith("/api/comps/vframe/"):
             _, _, _, _, aid, n = path.split("/")
             fps = float(dict(q.split("=") for q in query.split("&") if "=" in q).get("fps", 30))

@@ -9,6 +9,7 @@
   2. 画像を 100% で置く → 元の画素と 1 バイトも違わない(軽いエフェクト・位置の足し算を付けても同じ)
   2f. puppet レイヤー: 動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定
   2g. puppet のボーン: 肩 90° で腕が真横・動かさない姿 = PNG・決定論・preset wave で腕が上がる
+  2i. 要素ごとのキー(transform.rotation [0, {k}, 0] = 定数・ベクトルのキーと同じ絵)。VRM(モデルがあるときだけ: 描ける・後ろ姿・表情・視線・揺れ物の決定論・風)
   2h. 動きの気持ちよさ: interp spline(キーを通る・折れない・行き過ぎない)・イージングの別名とプリセット・data.stagger
   2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度・マネキン(手先の位置・ひじ 90 度・角度のキーフレーム・歩きの位相)
   3. 決定論: コマを描く順を変えても同じ絵(md5)
@@ -475,6 +476,65 @@ def main():
         row = lambda y: [x for x in range(400) if im.getpixel((x, y))[3] > 128]
         r1, r2 = row(10), row(30)
         ok("data.stagger: 2 枚目のキーが 4 コマ遅れる(5 コマ目 = 1 枚目は半分・2 枚目は 1 コマぶん)", r1 and r2 and (r1[0] + r1[-1] + 1) / 2 == 120 and (r2[0] + r2[-1] + 1) / 2 == 40, f"{r1[:1]} {r2[:1]}")
+
+        # 2i. 要素ごとのキー(transform.rotation [0, {k}, 0])と VRM(2026-11-15)
+        def boxc(rot, cam=False):
+            L = []
+            if cam:
+                L.append({"id": "cam", "type": "camera", "in": 0, "out": 30, "source": {"fov": 40}, "transform": {"position": [100, 80, -500]}})
+            L.append({"id": "m", "type": "mesh", "in": 0, "out": 30, "transform": {"position": [100, 170, 0], "rotation": rot},
+                      "source": {"objects": [{"geometry": "box", "size": [70, 110, 30], "position": [0, -55, 0], "faces": [{"color": c_} for c_ in ("#e33", "#3e3", "#33e", "#ee3", "#3ee", "#e3e")]}]}})
+            return comp(L, dur=30)
+        for cam in (False, True):
+            g = lambda rot: asyncio.run(grab(boxc(rot, cam), [10], base))[10]  # noqa: E731
+            cst, el, vk, zero = g([0, 150, 0]), g([0, {"k": [{"f": 0, "v": 150}, {"f": 20, "v": 150}]}, 0]), g({"k": [{"f": 0, "v": [0, 150, 0]}, {"f": 20, "v": [0, 150, 0]}]}), g([0, 0, 0])
+            ok(f"回転の要素ごとのキー [0, {{k}}, 0] = 定数 = ベクトルのキー(カメラ{'あり' if cam else 'なし'})。0° とは違う絵", cst == el == vk and cst != zero)
+            mv = g([0, {"k": [{"f": 0, "v": 100}, {"f": 20, "v": 200}]}, 0])
+            ok(f"回転の要素ごとのキー: 途中の値(10 コマ目 = 150°)(カメラ{'あり' if cam else 'なし'})", mv == cst)
+        ofs = lambda rot: asyncio.run(grab(comp([{"id": "m", "type": "solid", "in": 0, "out": 30, "source": {"color": "#ff0000", "width": 80, "height": 20}, "effects": [{"type": "offset", "params": {"rotation": rot}}]}], dur=30), [10], base))[10]  # noqa: E731
+        ok("offset の回転も要素ごとのキーを読む", ofs([0, 0, {"k": [{"f": 0, "v": 30}, {"f": 20, "v": 30}]}]) == ofs([0, 0, 30]) != ofs(0))
+
+        if rt.test_vrm_path() is None:
+            print("  --  VRM の試験は飛ばした(モデルが無い。COMPKIT_TEST_VRM=…vrm か reference/models3d/ に置くと走る)")
+        else:
+            def vc(vrm=None, rot=(0, 0, 0), cam=True, h=330, w=300, hh=380, feet=None):
+                L = []
+                if cam:
+                    L.append({"id": "cam", "type": "camera", "in": 0, "out": 60, "source": {"fov": 40}, "transform": {"position": [w / 2, hh / 2, -480]}})
+                L.append({"id": "v", "type": "model", "in": 0, "out": 60, "transform": {"position": [w / 2, hh - 20 if feet is None else feet, 0], "rotation": rot if isinstance(rot, dict) else list(rot)},
+                          "source": {"url": "/test-vrm.glb", "height": h, "vrm": dict({"preset": "stand", "spring": False}, **(vrm or {}))}})
+                return comp(L, w=w, h=hh, dur=60)
+            vg = lambda c_, fr=(10,): asyncio.run(grab(c_, list(fr), base))  # noqa: E731
+            front = vg(vc())[10]
+            im = px(front)
+            solid = sum(1 for y in range(0, 380, 2) for x in range(0, 300, 2) if im.getpixel((x, y))[3] > 200)
+            skin = lambda im_, box: sum(1 for y in range(box[1], box[3]) for x in range(box[0], box[2]) if (lambda p: p[3] > 200 and p[0] > 225 and p[1] > 190 and p[2] > 160)(im_.getpixel((x, y))))  # noqa: E731
+            ok("VRM: 描ける(不透明の画素がある・足もとが下・頭が上)", solid > 1500 and im.getpixel((150, 5))[3] == 0, f"不透明 {solid * 4}")
+            back = vg(vc(rot=(0, 180, 0)))[10]
+            bel = vg(vc(rot=[0, {"k": [{"f": 0, "v": 180}, {"f": 20, "v": 180}]}, 0]))[10]
+            bvk = vg(vc(rot={"k": [{"f": 0, "v": [0, 180, 0]}, {"f": 20, "v": [0, 180, 0]}]}))[10]
+            fs, bs = skin(px(front), (100, 20, 200, 110)), skin(px(back), (100, 20, 200, 110))
+            ok("VRM: 向き 180° = 後ろ姿(顔の肌色が消える)。要素ごとのキー・ベクトルのキーでも同じ絵(カメラあり)", back == bel == bvk and back != front and fs > 300 and bs < fs * 0.2, f"顔の肌色 正面 {fs} 後ろ {bs}")
+            nb = vg(vc(rot=[0, {"k": [{"f": 0, "v": 180}, {"f": 20, "v": 180}]}, 0], cam=False))[10]
+            ok("VRM: カメラなしでも要素ごとのキーの後ろ姿 = 定数の後ろ姿", nb == vg(vc(rot=(0, 180, 0), cam=False))[10])
+            big = dict(h=1500, w=300, hh=300, feet=150 + 0.9 * 1500, cam=False)      # 顔の大写し(頭は足もとから身長の約 0.9)
+            ok("VRM: 顔の大写しに肌色が写っている", skin(px(vg(vc(**big))[10]), (60, 60, 240, 240)) > 3000)
+            fc = lambda ex: vg(vc({"expressions": ex}, **big))[10]  # noqa: E731
+            n0, bl, ll, lr = fc({}), fc({"Blink": 1}), fc({"LookLeft": 1}), fc({"LookRight": 1})
+            ok("VRM: 表情 Blink で絵が変わる", n0 != bl)
+            ok("VRM: 視線 LookLeft・LookRight で絵が変わり、左右で違う", ll != n0 and lr != n0 and ll != lr)
+            sp = {"preset": "idle", "spring": {"stiffness": 1}, "pose": {"head": [0, {"k": [{"f": 0, "v": -30}, {"f": 30, "v": 30}]}, 0]}}
+            s1, s2 = vg(vc(sp), (8, 25, 40)), vg(vc(sp), (40, 8, 25))
+            ok("VRM: 揺れ物つきの決定論(描く順を変えても同じ絵・コマごとに違う絵)", all(s1[f] == s2[f] for f in (8, 25, 40)) and len({hashlib.md5(s1[f]).digest() for f in (8, 25, 40)}) == 3)
+            wn = lambda spring: vg(vc({"spring": spring}, rot=(0, 90, 0)))[10]  # noqa: E731
+            w0, w1, w2 = wn({}), wn({"wind": [0, 0, 3]}), wn({"wind": [0, 0, 3], "wind_bones": "この名前の骨は無い"})
+            ok("VRM: spring.wind で髪が流れる(絵が変わる)。wind_bones に当てはまる骨が無ければ風なしと同じ絵", w0 != w1 and w0 == w2)
+            tk = {"k": [{"f": 0, "v": [0, 180, 0]}, {"f": 20, "v": [0, 180, 0]}, {"f": 30, "v": [0, 20, 0]}]}
+            ti = lambda spring, fr=(34,): vg(vc({"spring": spring}, rot=tk), fr)  # noqa: E731
+            t1, t0, st = ti({})[34], ti({"turn_inertia": 0})[34], vg(vc({"spring": {}}, rot=(0, 20, 0)), (34,))[34]
+            ok("VRM: spring.turn_inertia 0 = 速い振り向きのあとも、回らずに立っているときと同じ髪(既定 1 は振られて違う絵)", t0 == st and t1 != st)
+            ta, tb = ti({"turn_inertia": 0.3}, (26, 34)), ti({"turn_inertia": 0.3}, (34, 26))
+            ok("VRM: turn_inertia つきの決定論(描く順を変えても同じ絵)", ta[26] == tb[26] and ta[34] == tb[34] and ta[34] != t1)
 
         # 3. 決定論 / 4. プレビュー一致
         exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter", "puppet_01_idle"]

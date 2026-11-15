@@ -10,7 +10,7 @@ import { mannequinPose, mannequinQuat, mannequinDims, evalTree } from './mesh3d.
 const D2R = Math.PI / 180
 const FLIP = new THREE.Matrix4().makeScale(1, -1, -1)
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
-const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3(), _e = new THREE.Euler()
+const _a = new THREE.Matrix4(), _b = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _qf = new THREE.Quaternion(), _s = new THREE.Vector3(), _v = new THREE.Vector3(), _e = new THREE.Euler()
 const ONE = new THREE.Vector3(1, 1, 1)
 
 // マネキンの関節 → VRM の人型ボーン
@@ -239,10 +239,12 @@ export class VrmModel {
   }
 
   // レイヤーの行列(文書の座標)→ three.js の座標。sim = 揺れ物の計算用(メートルのまま・拡大なし)
-  placeHolder(scene, L, g, k, sim) {
+  // qf・inertia = 揺れ物の計算でだけ使う「振り向きの勢い」の弱め: 向きを、描くコマの向き qf へ寄せる(inertia 1 = そのまま、0 = レイヤーの回転では髪が振られない)
+  placeHolder(scene, L, g, k, sim, qf = null, inertia = 1) {
     _a.copy(FLIP).multiply(scene.drawWorld(L, g)).multiply(FLIP)
     if (sim) {
       _a.decompose(_p, _q, _s)
+      if (qf && inertia < 1) _q.copy(_q2.copy(qf).slerp(_q, inertia))
       const ks = k * Math.max(1e-6, Math.abs(_s.y))
       this.holder.matrix.compose(_p.multiplyScalar(1 / ks), _q, ONE)
     } else this.holder.matrix.copy(_a.multiply(_b.makeScale(k, k, k)))
@@ -265,16 +267,43 @@ export class VrmModel {
     const sp = ev.spring === false || ev.spring === 0 ? null : isObj(ev.spring) ? ev.spring : {}
     if (sb) {
       // 揺れ物の調整(モデルの設定に掛ける倍率と、重力の足し)。省略 = モデルの設定のまま
-      this.joints ??= [...sb.joints].map((j) => ({ j, s: j.settings.stiffness, d: j.settings.dragForce, g: j.settings.gravityPower }))
+      this.joints ??= [...sb.joints].map((j) => ({ j, s: j.settings.stiffness, d: j.settings.dragForce, g: j.settings.gravityPower, gd: j.settings.gravityDir.clone(), name: String(j.bone?.name || '') }))
       const ks = sp ? Math.max(0, num(sp.stiffness, 1)) : 1, kd = sp ? Math.max(0, num(sp.drag, 1)) : 1, ga = sp ? num(sp.gravity, 0) : 0
-      for (const o of this.joints) { o.j.settings.stiffness = o.s * ks; o.j.settings.dragForce = clamp(o.d * kd, 0, 1); o.j.settings.gravityPower = Math.max(0, o.g + ga) }
+      // wind = 重力に足す一定の力(文書の座標 [x, y, z]。x 正 = 画面の右へ、y 正 = 下へ、z 正 = 奥へ。大きさは gravity と同じ単位)。
+      // wind_bones = 骨の名前の一部(文字列か、その配列。書くと、その骨だけに風を当てる)。部位ごとに変えるときは wind を [{force: [x, y, z], bones: …}, …] と並べる(当てはまる物を足し合わせる)
+      const winds = []
+      if (sp && Array.isArray(sp.wind)) {
+        const lc = (b) => (b != null ? [].concat(b).map((x) => String(x).toLowerCase()) : null)
+        if (sp.wind.some((x) => isObj(x))) { for (const w of sp.wind) if (isObj(w) && Array.isArray(w.force)) winds.push({ f: vec(w.force, 3, 0), b: lc(w.bones) }) }
+        else winds.push({ f: vec(sp.wind, 3, 0), b: lc(sp.wind_bones) })
+      }
+      for (const o of this.joints) {
+        o.j.settings.stiffness = o.s * ks; o.j.settings.dragForce = clamp(o.d * kd, 0, 1)
+        const gp = Math.max(0, o.g + ga)
+        let hit = false
+        _v.copy(o.gd).multiplyScalar(gp)
+        for (const w of winds) {
+          if (w.b && !w.b.some((x) => o.name.toLowerCase().includes(x))) continue
+          if (w.f[0] === 0 && w.f[1] === 0 && w.f[2] === 0) continue
+          _v.x += w.f[0]; _v.y -= w.f[1]; _v.z -= w.f[2]; hit = true
+        }
+        if (hit) {
+          const l = _v.length()
+          o.j.settings.gravityPower = l
+          if (l > 1e-9) o.j.settings.gravityDir.copy(_v).multiplyScalar(1 / l); else o.j.settings.gravityDir.copy(o.gd)
+        } else { o.j.settings.gravityPower = gp; o.j.settings.gravityDir.copy(o.gd) }
+      }
     }
     if (sb && sp) {
       const n = clamp(Math.round(num(sp.warmup, 1) * fps), 0, 600)
+      // turn_inertia(0〜1。既定 1): レイヤーの回転(振り向き)が髪を振る強さ。速い振り向きで長い髪が体に巻きつくときに下げる
+      const inertia = clamp(num(sp.turn_inertia, 1), 0, 1)
+      let qf = null
+      if (inertia < 1) { _a.copy(FLIP).multiply(scene.drawWorld(L, f)).multiply(FLIP).decompose(_p, _qf, _s); qf = _qf }
       for (let i = n; i >= 1; i--) {
         const gf = f - i
         this.applyPose(evalTree(vdef, gf, fps))
-        this.placeHolder(scene, L, gf, k, true)
+        this.placeHolder(scene, L, gf, k, true, qf, inertia)
         this.root.updateMatrixWorld(true)
         if (i === n) sb.reset(); else sb.update(1 / fps)
       }

@@ -98,6 +98,13 @@ const _c12 = new Float32Array(12), _l8 = new Float32Array(8)
 const _pa = [0, 0], _pb = [0, 0], _pc = [0, 0]
 const _u8 = new Float32Array(8), _q8 = new Float32Array(8)
 
+// 配列の要素ごとに書いたキーフレーム([0, {"k": […]}, 0])をそのコマの数にする。要素に書いたキーが無ければ元の配列のまま返す
+// (これが無いと、要素のキーは数として読めず 0 になる = rotation [0, {k: 180…}, 0] の後ろ姿が正面向きに描かれた)
+function elemKeys(v, f, fps) {
+  if (!Array.isArray(v)) return v
+  for (let i = 0; i < v.length; i++) if (v[i] !== null && typeof v[i] === 'object') return v.map((x) => (x !== null && typeof x === 'object' ? evalProp(x, f, fps) : x))
+  return v
+}
 function rotVec(r) {
   if (Array.isArray(r)) return r.length >= 3 ? [num(r[0]), num(r[1]), num(r[2])] : [0, 0, num(r[r.length - 1])]
   return [0, 0, num(r, 0)]
@@ -242,8 +249,8 @@ export class CompScene {
   tr(L, key, f, dflt) {
     const o = this.overrides.size ? this.overrides.get(L.id) : null
     if (o && o[key] != null) return o[key]
-    if (key === 'position') return evalVec(L.def.transform?.position, f, this.fps, dflt)
-    return evalProp(L.def.transform?.[key], f, this.fps, dflt)
+    if (key === 'position') return elemKeys(evalVec(L.def.transform?.position, f, this.fps, dflt), f, this.fps)
+    return elemKeys(evalProp(L.def.transform?.[key], f, this.fps, dflt), f, this.fps)
   }
   // 登場・退場(transition_in / transition_out)。→ そのコマでの「見えている割合」など
   transitionState(L, f, X) {
@@ -301,9 +308,9 @@ export class CompScene {
       for (const e of fx) {
         if (!e || e.type !== 'offset' || e.enabled === false) continue
         const p = e.params || {}
-        if (p.position != null) { const v = vec(evalVec(p.position, f, this.fps), 3, 0); X.px += v[0]; X.py += v[1]; X.pz += v[2] }
-        if (p.scale != null) { const v = evalProp(p.scale, f, this.fps); const s = vec(v, 3, 100); X.sx *= s[0] / 100; X.sy *= (Array.isArray(v) ? s[1] : s[0]) / 100; if (Array.isArray(v) && v.length > 2) X.sz *= s[2] / 100 }
-        if (p.rotation != null) { const r = rotVec(evalProp(p.rotation, f, this.fps)); X.rx += r[0]; X.ry += r[1]; X.rz += r[2] }
+        if (p.position != null) { const v = vec(elemKeys(evalVec(p.position, f, this.fps), f, this.fps), 3, 0); X.px += v[0]; X.py += v[1]; X.pz += v[2] }
+        if (p.scale != null) { const v = elemKeys(evalProp(p.scale, f, this.fps), f, this.fps); const s = vec(v, 3, 100); X.sx *= s[0] / 100; X.sy *= (Array.isArray(v) ? s[1] : s[0]) / 100; if (Array.isArray(v) && v.length > 2) X.sz *= s[2] / 100 }
+        if (p.rotation != null) { const r = rotVec(elemKeys(evalProp(p.rotation, f, this.fps), f, this.fps)); X.rx += r[0]; X.ry += r[1]; X.rz += r[2] }
         if (p.opacity != null) X.op *= clamp(num(evalProp(p.opacity, f, this.fps), 100) / 100, 0, 1)
       }
     }

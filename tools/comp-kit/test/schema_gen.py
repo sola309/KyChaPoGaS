@@ -207,7 +207,7 @@ LT["model"]["source"]["vrm"] = {"type": "object", "label": "VRM(人型モデル�
     "grip_l": N("左手の握り(0 = 開く 〜 1 = 握る。書くと hand_l より優先)", None, 0, 1, 0.01, optional=True), "grip_r": N("右手の握り", None, 0, 1, 0.01, optional=True),
     "expressions": _VJ("表情 {名前: 重み 0〜1}。VRM 0.x の名前(A I U E O Blink Joy Angry Sorrow Fun Blink_L …)も 1.0 の名前(aa happy …)も、モデル独自の名前(JawOpen など。頭の BlendShape. は省ける)も書ける。重みはキーフレームにできる"),
     "auto_blink": _VJ("自動まばたき: true か {interval: 秒(既定 3.4), duration: 秒(既定 0.24), seed}。puppet と同じ式(コマだけで決まる)"),
-    "spring": _VJ("揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量}"),
+    "spring": _VJ("揺れ物(髪・服): false で止める / {warmup: 秒(既定 1。何秒前の静止から回し直すか), stiffness: 倍率, drag: 倍率, gravity: 足す量, wind: [x, y, z](重力に足す一定の力。文書の座標・x 正 = 右・y 正 = 下・z 正 = 奥)か [{force, bones}, …], wind_bones: 骨の名前の一部(その骨だけに風), turn_inertia: 0〜1(レイヤーの回転が髪を振る強さ。既定 1)}"),
     "outline": _VJ("輪郭線: false で消す / 数 = 太さの倍率 / {width: 倍率, color, all: true(モデルが輪郭線なしにしている素材にも付ける)}"),
     "shade": _VJ("影の段(省略 = モデルの設定): {color: 影の色(テクスチャに掛ける), shift: 境目の位置 −1〜1, toony: 境目の硬さ 0〜1}"),
     "origin": S("原点", "feet", [("feet", "足もと(マネキンと同じ)"), ("center", "箱の中心(GLB と同じ)")])}}
