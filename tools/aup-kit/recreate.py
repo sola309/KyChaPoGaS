@@ -102,6 +102,9 @@ def main():
         if only and b['id'] not in only:
             continue
         d = b['fn'](ctx)
+        if os.environ.get('AUP_SPLINE', '1') != '0':      # v5: 数コマおきのキーの列はなめらかな補間に(recreate_lib.auto_spline)
+            from recreate_lib import auto_spline
+            d.setdefault('_feel', {})['spline'] = auto_spline(d['data'])['n']
         if a.dump:
             os.makedirs(a.dump, exist_ok=True)
             json.dump(d, open(os.path.join(a.dump, b['id'] + '_' + key.replace('/', '_') + '.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
@@ -115,7 +118,7 @@ def main():
             cid = api.call('POST', '/api/comps/', dict(body, project_id=a.project_id))['id']
         rmap[key] = {'comp_id': cid, 'id': b['id'], 'how': b['how'], 'placeholder': b['placeholder']}
         json.dump(allmap, open(mp, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-        print(b['id'], '→ comp', cid, d['name'], f"({len(d['data']['layers'])} レイヤー)")
+        print(b['id'], '→ comp', cid, d['name'], f"({len(d['data']['layers'])} レイヤー・なめらかな補間 {d.get('_feel', {}).get('spline', 0)} 本)")
 
 
 if __name__ == '__main__':

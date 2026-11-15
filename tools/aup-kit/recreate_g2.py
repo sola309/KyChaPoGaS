@@ -107,7 +107,8 @@ def _b10_doc(tag, n, s22, flip, off):
     """座標は「完成版で見える向き」で書き、左右反転して使われる連番は全体を鏡に写しておく(AviUtl 側の反転で元に戻る)。"""
     def X(x):
         return 1920 - x if flip else x
-    zs, cov, ret = (off - 23, off - 10, off - 9) if off else (n + 10, n + 20, n + 30)
+    # v5(feel-kit で測った): 寄りは完成版のほうが 3〜4 コマ早く始まり、毎コマほぼ同じ割合で大きくなる(= 指数の寄り。直線の拡大率では inSine が近い)。v4 は inQuad で出だしが遅かった
+    zs, cov, ret = (off - 25, off - 13, off - 12) if off else (n + 10, n + 20, n + 30)
     S1 = 5.2
     hc = (975, 445)                                    # 卵形の窓の中心(せり上がりきった位置)= rig の原点
     q, c = (900, 900), (960, 700)                      # 寄るときに q の点が c へ来る
@@ -119,8 +120,8 @@ def _b10_doc(tag, n, s22, flip, off):
     if off:
         # 寄りきって画面が紫で埋まる(cov)→ 通り抜けたあと、小さくなりながら影絵に戻り(off - 2)、横へ抜ける(off + 8)。
         # 抜ける向きは連番の画面で左(ここだけ X() を通さない。反転して使う 01・03 は完成版で右、反転しない 02 は左)
-        pos += [(zs, [X(hc[0]), hc[1]]), (cov, p1, 'inQuad'), (off - 2, [600, 560], 'outQuad'), (off + 4, [520, 540]), (off + 8, [-1100, 420], 'inQuad')]
-        sc += [(zs, [100, 100]), (cov, [S1 * 100, S1 * 100], 'inQuad'), (off - 2, [100, 100], 'outQuad'), (off + 4, [88, 88]), (off + 8, [85, 85])]
+        pos += [(zs, [X(hc[0]), hc[1]]), (cov, p1, 'inSine'), (off - 4, [600, 560], 'outCirc'), (off + 4, [520, 540]), (off + 8, [-1100, 420], 'inQuad')]
+        sc += [(zs, [100, 100]), (cov, [S1 * 100, S1 * 100], 'inSine'), (off - 4, [100, 100], 'outCirc'), (off + 4, [88, 88]), (off + 8, [85, 85])]
     rig = layer('rig', 'null', n, transform={'position': kf(*pos), 'scale': kf(*sc)})
 
     def ell(id, cx, cy, w, h, **src):

@@ -1,7 +1,9 @@
 {
  "version": 2,
  "notes": {
-  "keyframe": "数・色・ベクトルの値は {\"k\":[{\"f\",\"v\",\"e\"}], \"loop\", \"wiggle\", \"ignore_mid\"} のキーフレームにできる(animatable: true のもの)",
+  "keyframe": "数・色・ベクトルの値は {\"k\":[{\"f\",\"v\",\"e\"}], \"loop\", \"wiggle\", \"ignore_mid\", \"interp\"} のキーフレームにできる(animatable: true のもの)。\"interp\": \"spline\" = e の無い区間をキーを通るなめらかな曲線でつなぐ(数コマおきに打ったキーが折れない)",
+  "stagger": "data.stagger = [{\"layers\": [\"a\", \"b\", \"card*\"], \"step\": 3, \"order\": \"forward|backward|center|edges|random\", \"shift_in\": false}]: 並べたレイヤーの i 番目のキーフレームを i × step コマ遅らせる(ずらし)",
+  "feel": "★ のイージングとプリセットは docs/motion-feel.md(さくら MAD の実測)から。着地・動き出しを拍に合わせるには tools/feel-kit/lint.py で確かめる",
   "optional": "optional: true の項目は、書かなければ default ではなく「無し」として扱われる(フォームでは空欄を許す)",
   "cheap": "effects.*.cheap = true のものはレンダーターゲットを使わない(シェーダと行列だけ)",
   "presets": "apply のキーはレイヤーの点つきの道。\"effects+\" は effects の末尾に足す。{\"relative\": true} のキーフレームは f をレイヤーの in からの相対コマとして足して使う(\"out\" はレイヤーの長さ)",
@@ -11434,6 +11436,46 @@
    "label": "はずみ 減速+加速"
   },
   {
+   "value": "snap",
+   "label": "★ スナップ(すぐ最高速 → 長い余韻。= outCirc)"
+  },
+  {
+   "value": "snapHard",
+   "label": "★ 鋭いスナップ(= outExpo)"
+  },
+  {
+   "value": "whipIn",
+   "label": "★ ため → 最後が最高速(切り替わりへ。= inCirc)"
+  },
+  {
+   "value": "whipInHard",
+   "label": "★ 強いため(= inExpo)"
+  },
+  {
+   "value": "pass",
+   "label": "★ 止まらず通り過ぎる(= inOutQuad)"
+  },
+  {
+   "value": "settle",
+   "label": "★ 少し行き過ぎて戻る(6%)"
+  },
+  {
+   "value": "overshoot",
+   "label": "★ 行き過ぎて戻る(10%)"
+  },
+  {
+   "value": "pop",
+   "label": "★ 大きく行き過ぎて戻る(20%)"
+  },
+  {
+   "value": "spring",
+   "label": "★ ばねで 2 回ゆれる"
+  },
+  {
+   "value": "accelDecel",
+   "label": "★ AviUtl の加減速移動"
+  },
+  {
    "value": "easeIn",
    "label": "(旧)加速"
   },
@@ -11600,6 +11642,209 @@
       "duration": 16,
       "e": "outBack"
      }
+    }
+   },
+   {
+    "id": "feel_snap_in",
+    "label": "★ スナップで入る(1 拍 = 24 コマ・拍の頭で動き出す)",
+    "group": "気持ちよさ",
+    "apply": {
+     "effects+": [
+      {
+       "type": "offset",
+       "params": {
+        "position": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            900,
+            0,
+            0
+           ],
+           "e": "snap"
+          },
+          {
+           "f": 24,
+           "v": [
+            0,
+            0,
+            0
+           ]
+          }
+         ],
+         "relative": true
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "feel_overshoot_in",
+    "label": "★ 行き過ぎて戻る登場(14 コマ)",
+    "group": "気持ちよさ",
+    "apply": {
+     "effects+": [
+      {
+       "type": "offset",
+       "params": {
+        "scale": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            0,
+            0
+           ],
+           "e": "overshoot"
+          },
+          {
+           "f": 14,
+           "v": [
+            100,
+            100
+           ]
+          }
+         ],
+         "relative": true
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "feel_pop_in",
+    "label": "★ はずんで出て、ゆっくり育つ",
+    "group": "気持ちよさ",
+    "apply": {
+     "effects+": [
+      {
+       "type": "offset",
+       "params": {
+        "scale": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            0,
+            0
+           ],
+           "e": "pop"
+          },
+          {
+           "f": 12,
+           "v": [
+            100,
+            100
+           ]
+          },
+          {
+           "f": "out",
+           "v": [
+            108,
+            108
+           ]
+          }
+         ],
+         "relative": true
+        }
+       }
+      }
+     ]
+    }
+   },
+   {
+    "id": "feel_whip_out",
+    "label": "★ ためて飛び去る(切り替わりへ勢いを渡す・18 コマ)",
+    "group": "気持ちよさ",
+    "apply": {
+     "transition_out": {
+      "type": "slide",
+      "direction": "left",
+      "distance": 2200,
+      "duration": 18,
+      "e": "whipIn"
+     }
+    }
+   },
+   {
+    "id": "feel_in_hold_out",
+    "label": "★ 入り 12 → 止め → 抜け 12(減速で入り、加速で抜ける。outQuad → inQuad の組)",
+    "group": "気持ちよさ",
+    "apply": {
+     "effects+": [
+      {
+       "type": "offset",
+       "params": {
+        "position": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            600,
+            0,
+            0
+           ],
+           "e": "outQuad"
+          },
+          {
+           "f": 12,
+           "v": [
+            0,
+            0,
+            0
+           ]
+          }
+         ],
+         "relative": true
+        }
+       }
+      }
+     ],
+     "transition_out": {
+      "type": "slide",
+      "direction": "left",
+      "distance": 600,
+      "duration": 12,
+      "e": "inQuad"
+     }
+    }
+   },
+   {
+    "id": "feel_drift_hold",
+    "label": "★ 止めのあいだも止めない(着地後に 1 コマ 0.3px で流す)",
+    "group": "気持ちよさ",
+    "apply": {
+     "effects+": [
+      {
+       "type": "offset",
+       "params": {
+        "position": {
+         "k": [
+          {
+           "f": 0,
+           "v": [
+            0,
+            0,
+            0
+           ]
+          },
+          {
+           "f": "out",
+           "v": [
+            -36,
+            0,
+            0
+           ]
+          }
+         ],
+         "relative": true
+        }
+       }
+      }
+     ]
     }
    },
    {

@@ -9,6 +9,7 @@
   2. 画像を 100% で置く → 元の画素と 1 バイトも違わない(軽いエフェクト・位置の足し算を付けても同じ)
   2f. puppet レイヤー: 動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定
   2g. puppet のボーン: 肩 90° で腕が真横・動かさない姿 = PNG・決定論・preset wave で腕が上がる
+  2h. 動きの気持ちよさ: interp spline(キーを通る・折れない・行き過ぎない)・イージングの別名とプリセット・data.stagger
   2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度・マネキン(手先の位置・ひじ 90 度・角度のキーフレーム・歩きの位相)
   3. 決定論: コマを描く順を変えても同じ絵(md5)
   4. プレビュー経路 = 書き出し経路(同じ GL なら同じ絵)
@@ -434,6 +435,36 @@ def main():
             up = sum(1 for y in range(int(shr[1] / 2) - 110, int(shr[1] / 2) - 30) for x in range(int(shr[0] / 2) - 130, int(shr[0] / 2) - 20) if mint(wv.getpixel((x, y)))) 
             up0 = sum(1 for y in range(int(shr[1] / 2) - 110, int(shr[1] / 2) - 30) for x in range(int(shr[0] / 2) - 130, int(shr[0] / 2) - 20) if mint(r0.getpixel((x, y))))
             ok("puppet のボーン: preset wave で右腕(画面の左)が肩より上に来る", up > up0 + 150, f"肩より上の袖の画素 {up0} → {up}")
+
+        # 2h. 動きの気持ちよさ(2026-11-15): なめらかな補間・イージングの別名とプリセット・ずらし
+        def boxx(layers, f, w=400, **data):
+            """幅 20 の赤い四角の左端の x(見つからなければ None)"""
+            c = comp(layers, w=w, h=40, dur=60)
+            c["data"].update(data)
+            im = px(asyncio.run(grab(c, [f], base))[f])
+            xs = [x for x in range(w) if im.getpixel((x, 20))[3] > 128]
+            return (xs[0] + xs[-1] + 1) / 2 if xs else None
+
+        def sq(id, pos, **kw):
+            return dict({"id": id, "type": "solid", "in": 0, "out": 60, "source": {"color": "#ff0000", "width": 20, "height": 20}, "transform": {"position": pos}}, **kw)
+        keys = [{"f": 0, "v": [20, 20]}, {"f": 10, "v": [120, 20]}, {"f": 20, "v": [140, 20]}, {"f": 30, "v": [140, 20]}]
+        lin = boxx([sq("a", {"k": keys})], 5)
+        spl = boxx([sq("a", {"k": keys, "interp": "spline"})], 5)
+        ok("interp spline: キーの上は同じ値", boxx([sq("a", {"k": keys, "interp": "spline"})], 10) == 120 and boxx([sq("a", {"k": keys, "interp": "spline"})], 20) == 140)
+        ok("interp spline: キーの間は直線より先へ進む(速さが折れない)・行き過ぎない", lin == 70 and 78 <= spl <= 90 and boxx([sq("a", {"k": keys, "interp": "spline"})], 25) == 140, f"直線 {lin} スプライン {spl}")
+        ok("interp spline: e を書いた区間は e のまま", boxx([sq("a", {"k": [{"f": 0, "v": [20, 20], "e": "outCirc"}, {"f": 10, "v": [120, 20]}, {"f": 20, "v": [140, 20]}, {"f": 30, "v": [150, 20]}], "interp": "spline"})], 5)
+           == boxx([sq("a", {"k": [{"f": 0, "v": [20, 20], "e": "outCirc"}, {"f": 10, "v": [120, 20]}]})], 5))
+        two = lambda e: boxx([sq("a", {"k": [{"f": 0, "v": [20, 20], "e": e}, {"f": 20, "v": [220, 20]}]})], 5)
+        ok("イージングの別名: easeOutCirc = outCirc、プリセット snap = outCirc・whipIn = inCirc", two("easeOutCirc") == two("outCirc") == two("snap") and two("whipIn") == two("inCirc") and two("snap") > 140 > 40 > two("whipIn"), f"{two('snap')} {two('whipIn')}")
+        ov = [boxx([sq("a", {"k": [{"f": 0, "v": [20, 20], "e": "overshoot"}, {"f": 20, "v": [220, 20]}]})], f) for f in (12, 20)]
+        ok("プリセット overshoot: 行き過ぎて(約 10%)戻る", ov[0] > 225 and ov[1] == 220, str(ov))
+        st = [sq("c1", {"k": [{"f": 0, "v": [20, 10]}, {"f": 10, "v": [220, 10]}]}), sq("c2", {"k": [{"f": 0, "v": [20, 30]}, {"f": 10, "v": [220, 30]}]})]
+        cst = comp(st, w=400, h=40, dur=60)
+        cst["data"]["stagger"] = [{"layers": ["c*"], "step": 4}]
+        im = px(asyncio.run(grab(cst, [5], base))[5])
+        row = lambda y: [x for x in range(400) if im.getpixel((x, y))[3] > 128]
+        r1, r2 = row(10), row(30)
+        ok("data.stagger: 2 枚目のキーが 4 コマ遅れる(5 コマ目 = 1 枚目は半分・2 枚目は 1 コマぶん)", r1 and r2 and (r1[0] + r1[-1] + 1) / 2 == 120 and (r2[0] + r2[-1] + 1) / 2 == 40, f"{r1[:1]} {r2[:1]}")
 
         # 3. 決定論 / 4. プレビュー一致
         exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter", "puppet_01_idle"]

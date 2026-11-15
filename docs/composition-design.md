@@ -617,3 +617,21 @@ Live2D のように、1 枚の立ち絵を意味ごとの透過レイヤーに�
   puppet.js はそれを読んで線形ブレンドのスキニング(頂点 = Σ ウェイト × ボーンの行列 × 元の位置)で曲げる。腕・脚の層は左右に分けて 2 回描く(シェーダの `uClip`)。
   書式: `source.pose_preset / pose_phase / pose_amount / pose_ground / pose: {関節: 度 | [度, 長さの倍率]}`。プリセットは mesh レイヤーのマネキンの角度の表(写し)を、正面からの平行投影で 2D の回転 + 見かけの長さに直す。
   `bones.png` が無いパペットは、これまでと 1 画素も変わらない(読みに行って 404 なら無視)。
+
+### v1.1 の追加(動きの気持ちよさ・2026-11-15): なめらかな補間・イージングの別名とプリセット・ずらし
+
+さくら MAD の完成版を 1 コマずつ測って分かった事(`docs/motion-feel.md`)から足した。どれも追加だけで、書かなければ今までと同じ絵になる。
+
+- **`"interp": "spline"`**(プロパティ値): `{"k": [...], "interp": "spline"}`。加減速 `e` の無い区間を、キーを通る単調 3 次(PCHIP)でつなぐ。
+  キーの値の間に収まる(行き過ぎない)・キーで速さが折れない。`e` を書いた区間・`hold`・0.5 コマ未満の区間(= 飛び)はスプラインに入れず、そこで列を切る。
+  列の端は片側の傾き(動いたまま出入りする)。値は数か数の配列(色・文字列は今までどおり)。AviUtl の「曲線移動」・Blender の F カーブ(自動ハンドル)に当たる。
+  使いどころ: 動画を見て数コマおきに打ったキー、カメラの道、往復のゆれ。
+- **イージングの別名**: `easeInSine` `easeOutQuart` … の形(`ease` + `In|Out|InOut|OutIn` + 種類)でも Penner 式を引ける。知らない名前は今までどおり直線(`tools/feel-kit/lint.py --doc` が `unknown_ease` として出す)。
+- **気持ちよさのプリセット**(イージング名。`props.js` の `FEEL_PRESETS`): `snap`(= outCirc)`snapHard`(= outExpo)`whipIn`(= inCirc)`whipInHard`(= inExpo)`pass`(= inOutQuad)
+  `settle`(6% 行き過ぎて戻る)`overshoot`(10%)`pop`(20%)`spring`(ばねで 2 回ゆれる)`accelDecel`(t²(3 − 2t)。AviUtl の加減速移動の形の候補)。schema.json の easings に ★ つきで並ぶ。
+- **`data.stagger`**(ずらしを 1 行で): `"stagger": [{"layers": ["a", "b", "card*"], "step": 3, "order": "forward", "shift_in": false, "from": 0}]`。
+  並べたレイヤーの i 番目のキーフレーム(transform・effects・source・mask・repeater の中の全部の `k[].f`)を i × step コマ遅らせる。`"card*"` はその頭で始まる id を文書の順に全部。
+  `order`: `forward` / `backward` / `center`(内側から)/ `edges`(外側から)/ `random`(`seed`)。`shift_in: true` で `in`・`out` も一緒に遅らせる。
+  文書は書き換えず、エンジンが読むとき(`normalize` → `expandStagger`)に写しを作って足す。1 枚のレイヤーの複製なら今までどおり `repeater.time_offset`、文字なら `per_char.stagger`。
+- **レイヤーのプリセット**(schema.json の presets、group「気持ちよさ」): `feel_snap_in` `feel_overshoot_in` `feel_pop_in` `feel_whip_out` `feel_in_hold_out` `feel_drift_hold`。
+

@@ -321,7 +321,63 @@ export class CompEngine {
 function normalize(comp) {
   let data = comp?.data
   if (typeof data === 'string') { try { data = JSON.parse(data) } catch { data = {} } }
-  return { ...comp, width: comp?.width || 1920, height: comp?.height || 1080, fps: comp?.fps || 30, duration_frames: comp?.duration_frames || 1, data: data || { layers: [] } }
+  data = expandStagger(data || { layers: [] })
+  return { ...comp, width: comp?.width || 1920, height: comp?.height || 1080, fps: comp?.fps || 30, duration_frames: comp?.duration_frames || 1, data }
+}
+
+// ---- ずらし(スタッガー)を 1 行で: data.stagger = [{"layers": ["a", "b", "c"], "step": 3, "order"?, "shift_in"?, "from"?}] ----
+// 並べたレイヤーの i 番目のキーフレームを i × step コマ遅らせる(同じ動きを数コマずつずらして並べる)。文書は書き換えず、読むときに写しを作って足す。
+//   layers: レイヤーの id の並び。"prefix*" と書くと、その頭で始まる id を文書の順に全部
+//   step: ずらすコマ数(小数可。さくら MAD の実測では 1〜3 コマが多い)
+//   order: "forward"(既定)/ "backward" / "center"(内側から)/ "edges"(外側から)/ "random"(seed)
+//   shift_in: true で in(と out)も一緒に遅らせる。既定は false(キーだけ遅らせる)
+//   from: 何番目から数え始めるか(既定 0)
+export function expandStagger(data) {
+  const rules = data && Array.isArray(data.stagger) ? data.stagger : null
+  if (!rules || !rules.length || !Array.isArray(data.layers)) return data
+  const delay = new Map()
+  for (const r of rules) {
+    if (!r || !Array.isArray(r.layers)) continue
+    const ids = []
+    for (const name of r.layers) {
+      if (typeof name === 'string' && name.endsWith('*')) { for (const L of data.layers) if (String(L.id).startsWith(name.slice(0, -1)) && !ids.includes(L.id)) ids.push(L.id) }
+      else if (!ids.includes(name)) ids.push(name)
+    }
+    const n = ids.length, step = +r.step || 0, from = +r.from || 0
+    const rank = ids.map((_, i) => i)
+    if (r.order === 'backward') rank.reverse()
+    else if (r.order === 'center') rank.forEach((_, i) => { rank[i] = Math.abs(i - (n - 1) / 2) - ((n - 1) / 2) % 1 })
+    else if (r.order === 'edges') rank.forEach((_, i) => { rank[i] = Math.floor((n - 1) / 2) - Math.floor(Math.abs(i - (n - 1) / 2)) })
+    else if (r.order === 'random') {
+      let seed = (r.seed ?? 1) | 0
+      const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) | 0; return (seed >>> 0) / 4294967296 }
+      for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = rank[i]; rank[i] = rank[j]; rank[j] = t }
+    }
+    ids.forEach((id, i) => {
+      const d = (rank[i] + from) * step
+      if (d) delay.set(id, { d: (delay.get(id)?.d || 0) + d, shiftIn: !!r.shift_in || !!delay.get(id)?.shiftIn })
+    })
+  }
+  if (!delay.size) return data
+  const shift = (v, d) => {
+    if (Array.isArray(v)) return v.map((x) => shift(x, d))
+    if (!v || typeof v !== 'object') return v
+    const out = {}
+    for (const key of Object.keys(v)) {
+      if (key === 'k' && Array.isArray(v.k)) out.k = v.k.map((q) => (q && typeof q.f === 'number' ? { ...q, f: q.f + d } : q))
+      else out[key] = shift(v[key], d)
+    }
+    return out
+  }
+  const layers = data.layers.map((L) => {
+    const e = delay.get(L.id)
+    if (!e) return L
+    const out = { ...L }
+    for (const key of ['transform', 'effects', 'source', 'masks', 'mask', 'repeater']) if (L[key] != null) out[key] = shift(L[key], e.d)
+    if (e.shiftIn) { if (typeof L.in === 'number') out.in = L.in + e.d; if (typeof L.out === 'number') out.out = L.out + e.d }
+    return out
+  })
+  return { ...data, layers }
 }
 
 export { evalProp }

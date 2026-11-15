@@ -187,8 +187,10 @@ def b03(ctx):
                            three_d=True, transform={'position': pos, 'rotation': kf((0, rot), (n, [rot[0], rot[1], spd * n / 60]))}))
         rings.append(layer(f'ringl{i}', 'shape', n, {'kind': 'ellipse', 'width': r * 2 - 70, 'height': r * 2 - 70, 'fill': None, 'stroke': '#8a8ea0', 'stroke_width': 2.5},
                            three_d=True, transform={'position': pos, 'rotation': rot, 'opacity': 70}))
-    cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2400]), (n, [1000, 520, 4200]))},
-                transform={'position': kf((0, [900, 560, -1500]), (n, [1040, 500, 900]))})
+    # v5(測った): 完成版 600〜719 は 1 コマ 8.9px の一定の流れ(v4 は 3.6px)。直線のまま、進む量を 2 倍に
+    #     v5 の動画(進む量 2 倍)を測ると 1.35 倍で行き過ぎ → v4(0.49 倍)との間を取って 1.6 倍に(この値は描き出して確かめていない)
+    cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2400]), (n, [1023, 508, 5270]))},
+                transform={'position': kf((0, [900, 560, -1500]), (n, [1123, 464, 2320]))})
     return doc('再現 B03 文字散らせ(箱・紙片・槍)', n, [cam, _mesh('spears', n, spears, light={'ambient': 3, 'intensity': 0}), *rings, _mesh('boxes', n, objs)])
 
 
@@ -263,14 +265,38 @@ def b02(ctx):
     # 2 巡目: らせんは 3D の面。完成版の帯は「幅が半径に比例する対数らせん」(平らな渦の線路を斜め上から見た形)なので、
     # 対数らせんの帯 4 本を厚み 0 の押し出し(extrude の points)で 1 枚の平面に作り、group ごと傾けて(x 24°・y −16°)透視のカメラで見る。面の中で 1 コマ −7° 回る。
     # (helix の道に沿う帯 = extrude + path + path.up も試したが、巻きごとの縮み方が完成版(1 巻きで約 4 倍)と合わないので、平らな対数らせんにした)
-    sk, pk = [], []
-    for i, (f, sc, p) in enumerate(segs):
-        f1 = segs[i + 1][0] if i + 1 < len(segs) else n
-        sk += [(f, [sc * 0.0062] * 3), (f1 - 0.01, [sc * 0.0074] * 3)]
-        pk += [(f, [p[0] - 960, p[1] - 540, 0]), (f1 - 0.01, [p[0] + 30 - 960, p[1] + 20 - 540, 0])]
+    # v5(feel-kit で完成版を測った): 完成版は「10 コマごとの切り替え」ではない。切り替わりは 483・489・491・524・530・535 だけで、491〜523 と 536〜583 は切れ目のない長い 1 本。
+    #     速さは 頭が速く(107px/コマ)→ 16 コマで 45 まで落ち → 終わりへ向けて 110 まで加速する(次のカットへ勢いを渡す)。
+    #     → 切り替わりを実測の位置に置き、回る速さ・寄る速さを実測の速さの曲線(measured_feel.json の B02_speed)に比例させる。
+    MF = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'measured_feel.json'), encoding='utf-8'))['B02_speed']
+    sp = MF['v'] + [MF['v'][-1]] * 4
+    cuts = [0] + MF['cuts'] + [n]
+    look = [segs[0], segs[1], segs[2], segs[3], segs[5], segs[6], segs[8]]      # 1 本ごとの寄りと目の位置(v4 の 10 個から 7 個)
+    sk, pk, rk = [], [], []
+    ang = 0.0
+    for i in range(len(cuts) - 1):
+        f, f1 = cuts[i], cuts[i + 1]
+        _, sc, p = look[i]
+        tot = sum(sp[f:f1]) or 1.0
+        grow = 1.0 + min(0.6, 0.0005 * tot)   # 寄り: 動いた量に比例(長い 1 本で 1.6 倍まで。それより寄ると、らせんの中心の穴が画面を占める = 試して戻した)
+        acc = 0.0
+        ff = f
+        while True:
+            u = acc / tot
+            last = ff >= f1 - 1
+            fx = (f1 - 0.01) if last else ff
+            sk.append((fx, [round(sc * 0.0062 * grow ** u, 5)] * 3))
+            pk.append((fx, [round(p[0] - 960 + 60 * u, 2), round(p[1] - 540 + 40 * u, 2), 0]))
+            rk.append((fx, round(ang - 0.165 * acc, 3)))
+            if last:
+                break
+            step = min(2, f1 - 1 - ff)
+            acc += sum(sp[ff:ff + step])
+            ff += step
+        ang -= 0.165 * tot + 47          # 切り替わりで向きも飛ぶ
     ribbons = [{'geometry': 'extrude', 'points': _spiral_band(j, turns=3.0, a0=320), 'depth': 0, 'position': [0, 0, j * 0.5], 'material': {'type': 'basic', 'color': cols[j], 'side': 'double'}} for j in range(4)]
     spiral = layer('spiral', 'mesh', n, {'unlit': True, 'objects': [
-        {'geometry': 'group', 'position': kf(*pk), 'scale': kf(*sk), 'rotation': [24, -16, kf((0, 0), (n, -7 * n))], 'children': ribbons}]}, pos=[960, 540, 0])
+        {'geometry': 'group', 'position': kf(*pk), 'scale': kf(*sk), 'rotation': [24, -16, kf(*rk)], 'children': ribbons}]}, pos=[960, 540, 0])
     white = {'color': '#f4f4f4', 'roughness': 0.9}
     boards = _mesh('boards', n, [
         {'geometry': 'box', 'size': [900, 110, 46], 'material': white, 'rotation': [0, 0, kf((0, 0), (n, 300))],
@@ -287,31 +313,33 @@ def b02(ctx):
 # ---------------------------------------------------------------- B06 桜吹雪トランジション
 # 完成版: 破片(花びら)が左下から飛んできて画面を埋めつくし(単色化で桃色)、しばらく覆ったあと散っていく。
 # mesh の shards(割れる板)を逆向きに使う: progress 1(散った)→ 0(1 枚の板 = 全面)→ 1。
-def _shards_doc(name, n, seed, t_in0, t_full, t_out0, t_out1, count=240):
-    def sh(sd, cnt, dirn, lag):
+def _shards_doc(name, n, seed, t_in0, t_full, t_out0, t_out1, count=240, out_e='inQuad'):
+    def sh(sd, cnt, dirn, lag, col='#ffffff', z=0):
         if t_full <= 0:      # 頭から全面(散るだけ)
             prog = kf((0, 0), (t_out0 + lag, 0, 'inQuad'), (t_out1, 1), (n, 1))
         else:
-            prog = kf((0, 1), (t_in0 + lag, 1, 'outQuad'), (t_full + lag, 0), (t_out0, 0, 'inQuad'), (t_out1, 1), (n, 1))
+            prog = kf((0, 1), (t_in0 + lag, 1, 'inQuad'), (t_full + lag, 0), (t_out0, 0, out_e), (t_out1, 1), (n, 1))     # v5: 集まるのは加速しながら(完成版 1068〜1081 は inQuad。v4 は減速で、埋まるのが 8 コマ遅かった)
         return {'geometry': 'shards', 'size': [1940, 1100], 'count': cnt, 'seed': sd, 'depth': 0, 'progress': prog, 'stagger': 'left_to_right', 'stagger_amount': 0.55,
-                'spread': 1500, 'spread_z': 500, 'direction': dirn, 'spin': 420, 'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double'}}
+                'spread': 1500, 'spread_z': 500, 'direction': dirn, 'spin': 420, 'position': [0, 0, z], 'material': {'type': 'basic', 'color': col, 'side': 'double'}}
     cam = layer('cam', 'camera', n, {'zoom': 1024, 'target': [960, 540, 0]}, transform={'position': [960, 540, -1024]})
-    return doc(name, n, [cam, _mesh('shards', n, [sh(seed, count, [-1700, 900, -200], 0), sh(seed + 50, count // 2, [-1500, 1300, -300], 4)], light={'ambient': 3, 'intensity': 0})])
+    # v5: 2 組目は 14 コマ遅れて集まる(完成版は 1082 で埋まったあとも 1100 まで破片が動きつづける。v4 は 4 コマ遅れで、埋まったあと止まっていた)
+    return doc(name, n, [cam, _mesh('shards', n, [sh(seed, count, [-1700, 900, -200], 0), sh(seed + 50, count // 2, [-1500, 1300, -300], 14 if t_full > 0 else 4, col='#f3f3f3' if t_full > 0 else '#ffffff', z=-30 if t_full > 0 else 0)], light={'ambient': 3, 'intensity': 0})])
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01', 'B06', 'mesh shards(逆再生で集まる → 散る)')
 def b06(ctx):
-    return _shards_doc('再現 B06 桜吹雪トランジション 1.01', 100, 11, 6, 30, 86, 100)
+    return _shards_doc('再現 B06 桜吹雪トランジション 1.01', 100, 11, 4, 20, 86, 100)
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01/seed1', 'B06', 'mesh shards')
 def b06_s1(ctx):
-    return _shards_doc('再現 B06 桜吹雪トランジション seed1', 100, 21, 8, 44, 84, 100)
+    # v5: seed1 の 85 コマ目からは 1108〜1123 で単独でも使われ、完成版ではその頭(1105〜1111)がいちばん速い(散りの途中から始まる)→ 散りを 4 コマ早く・頭を速く(outQuad)
+    return _shards_doc('再現 B06 桜吹雪トランジション seed1', 100, 21, 6, 34, 80, 100, out_e='outQuad')
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01/seed2', 'B06', 'mesh shards')
 def b06_s2(ctx):
-    return _shards_doc('再現 B06 桜吹雪トランジション seed2', 100, 31, 4, 34, 86, 100)
+    return _shards_doc('再現 B06 桜吹雪トランジション seed2', 100, 31, 3, 24, 86, 100)
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01/seed3', 'B06', 'mesh shards')

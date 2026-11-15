@@ -354,6 +354,10 @@ EAS = [("linear", "直線"), ("hold", "瞬間移動")]
 jn = {"Quad": "2 次", "Cubic": "3 次", "Quart": "4 次", "Quint": "5 次", "Sine": "サイン", "Expo": "指数", "Circ": "円", "Elastic": "ばね", "Back": "行きすぎ", "Bounce": "はずみ"}
 for k, j in jn.items():
     for d, dj in (("in", "加速"), ("out", "減速"), ("inOut", "加速+減速"), ("outIn", "減速+加速")): EAS.append((d + k, f"{j} {dj}"))
+# 動きの気持ちよさのプリセット(props.js の FEEL_PRESETS。docs/motion-feel.md)
+EAS += [("snap", "★ スナップ(すぐ最高速 → 長い余韻。= outCirc)"), ("snapHard", "★ 鋭いスナップ(= outExpo)"), ("whipIn", "★ ため → 最後が最高速(切り替わりへ。= inCirc)"), ("whipInHard", "★ 強いため(= inExpo)"),
+        ("pass", "★ 止まらず通り過ぎる(= inOutQuad)"), ("settle", "★ 少し行き過ぎて戻る(6%)"), ("overshoot", "★ 行き過ぎて戻る(10%)"), ("pop", "★ 大きく行き過ぎて戻る(20%)"), ("spring", "★ ばねで 2 回ゆれる"),
+        ("accelDecel", "★ AviUtl の加減速移動")]
 EAS += [("easeIn", "(旧)加速"), ("easeOut", "(旧)減速"), ("easeInOut", "(旧)加速+減速"), ("easeInCubic", "(旧)3 次 加速"), ("easeOutCubic", "(旧)3 次 減速"), ("easeInOutCubic", "(旧)3 次 加速+減速"), ("easeInBack", "(旧)行きすぎ 加速"), ("easeOutBack", "(旧)行きすぎ 減速"), ("easeOutElastic", "(旧)ばね"), ("easeOutBounce", "(旧)はずみ"), ("easeInBounce", "(旧)はずみ 加速"), ("easeInExpo", "(旧)指数 加速"), ("easeOutExpo", "(旧)指数 減速")]
 def kf(*keys): return {"k": [{"f": f, "v": v, **({"e": e} if e else {})} for f, v, e in keys], "relative": True}
 PRESETS = {"layer": [
@@ -363,6 +367,12 @@ PRESETS = {"layer": [
     {"id": "in_clip_down", "label": "上から開く(クリッピング)", "group": "登場", "apply": {"transition_in": {"type": "clip", "side": "bottom", "duration": 24, "e": "inOutExpo"}}},
     {"id": "in_iris", "label": "円で開く", "group": "登場", "apply": {"transition_in": {"type": "iris", "shape": "circle", "duration": 20, "e": "outCirc"}}},
     {"id": "in_zoom_back", "label": "はずんで出る", "group": "登場", "apply": {"transition_in": {"type": "zoom", "from": 0, "duration": 16, "e": "outBack"}}},
+    {"id": "feel_snap_in", "label": "★ スナップで入る(1 拍 = 24 コマ・拍の頭で動き出す)", "group": "気持ちよさ", "apply": {"effects+": [{"type": "offset", "params": {"position": kf((0, [900, 0, 0], "snap"), (24, [0, 0, 0], None))}}]}},
+    {"id": "feel_overshoot_in", "label": "★ 行き過ぎて戻る登場(14 コマ)", "group": "気持ちよさ", "apply": {"effects+": [{"type": "offset", "params": {"scale": kf((0, [0, 0], "overshoot"), (14, [100, 100], None))}}]}},
+    {"id": "feel_pop_in", "label": "★ はずんで出て、ゆっくり育つ", "group": "気持ちよさ", "apply": {"effects+": [{"type": "offset", "params": {"scale": {"k": [{"f": 0, "v": [0, 0], "e": "pop"}, {"f": 12, "v": [100, 100]}, {"f": "out", "v": [108, 108]}], "relative": True}}}]}},
+    {"id": "feel_whip_out", "label": "★ ためて飛び去る(切り替わりへ勢いを渡す・18 コマ)", "group": "気持ちよさ", "apply": {"transition_out": {"type": "slide", "direction": "left", "distance": 2200, "duration": 18, "e": "whipIn"}}},
+    {"id": "feel_in_hold_out", "label": "★ 入り 12 → 止め → 抜け 12(減速で入り、加速で抜ける。outQuad → inQuad の組)", "group": "気持ちよさ", "apply": {"effects+": [{"type": "offset", "params": {"position": kf((0, [600, 0, 0], "outQuad"), (12, [0, 0, 0], None))}}], "transition_out": {"type": "slide", "direction": "left", "distance": 600, "duration": 12, "e": "inQuad"}}},
+    {"id": "feel_drift_hold", "label": "★ 止めのあいだも止めない(着地後に 1 コマ 0.3px で流す)", "group": "気持ちよさ", "apply": {"effects+": [{"type": "offset", "params": {"position": {"k": [{"f": 0, "v": [0, 0, 0]}, {"f": "out", "v": [-36, 0, 0]}], "relative": True}}}]}},
     {"id": "out_fade", "label": "フェードアウト", "group": "退場", "apply": {"transition_out": {"type": "fade", "duration": 15}}},
     {"id": "out_slide", "label": "上へ飛び去る", "group": "退場", "apply": {"transition_out": {"type": "slide", "direction": "up", "distance": 1200, "duration": 16, "e": "inCirc"}}},
     {"id": "drift", "label": "ゆっくり流れる(位置の足し算)", "group": "動き", "apply": {"effects+": [{"type": "offset", "params": {"position": {"k": [{"f": 0, "v": [0, 112, 0]}, {"f": "out", "v": [0, 0, 0]}], "relative": True}}}]}},
@@ -383,7 +393,9 @@ PRESETS = {"layer": [
     {"id": "counter_date", "label": "走る日付", "group": "カウンター", "apply": {"source.counter": {"value": {"k": [{"f": 0, "v": 201111110000}, {"f": 90, "v": 202111111111, "e": "outExpo"}], "relative": True}, "format": "####.##.##.##:##", "fixed_width": True, "scramble": {"k": [{"f": 0, "v": 100}, {"f": 100, "v": 0}], "relative": True}}}},
     {"id": "pattern_fill", "label": "模様で塗る", "group": "見た目", "apply": {"source.fill": {"pattern": {"kind": "stripes", "colors": ["#e65163", "#f6a5b0"], "size": 14, "angle": 45}}}},
 ]}
-schema = {"version": 2, "notes": {"keyframe": "数・色・ベクトルの値は {\"k\":[{\"f\",\"v\",\"e\"}], \"loop\", \"wiggle\", \"ignore_mid\"} のキーフレームにできる(animatable: true のもの)",
+schema = {"version": 2, "notes": {"keyframe": "数・色・ベクトルの値は {\"k\":[{\"f\",\"v\",\"e\"}], \"loop\", \"wiggle\", \"ignore_mid\", \"interp\"} のキーフレームにできる(animatable: true のもの)。\"interp\": \"spline\" = e の無い区間をキーを通るなめらかな曲線でつなぐ(数コマおきに打ったキーが折れない)",
+    "stagger": "data.stagger = [{\"layers\": [\"a\", \"b\", \"card*\"], \"step\": 3, \"order\": \"forward|backward|center|edges|random\", \"shift_in\": false}]: 並べたレイヤーの i 番目のキーフレームを i × step コマ遅らせる(ずらし)",
+    "feel": "★ のイージングとプリセットは docs/motion-feel.md(さくら MAD の実測)から。着地・動き出しを拍に合わせるには tools/feel-kit/lint.py で確かめる",
     "optional": "optional: true の項目は、書かなければ default ではなく「無し」として扱われる(フォームでは空欄を許す)", "cheap": "effects.*.cheap = true のものはレンダーターゲットを使わない(シェーダと行列だけ)",
     "presets": "apply のキーはレイヤーの点つきの道。\"effects+\" は effects の末尾に足す。{\"relative\": true} のキーフレームは f をレイヤーの in からの相対コマとして足して使う(\"out\" はレイヤーの長さ)",
     "aliases": "effect_aliases の左の名前でも同じエフェクトとして読む"},

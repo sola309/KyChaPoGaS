@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """作り直し G4: S23・S26・S34・S36・S38・S40・S43 の連番(花びら・ちり・金紙など)。"""
 from recreate_lib import *   # noqa: F401,F403
+from recreate_lib import kfa as kf   # noqa: F811  この組のキーは「着くまでの加減速を着地のキーに書く」流儀(v4 まで 1 区間ずれて直線で動いていた)
 
 
 
@@ -195,8 +196,10 @@ def b25(ctx):
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
         layer('charaB', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=101,
               # v4: 完成版 5293・5300・5333 の頭の大きさ(640 幅で 95→67→58px)と位置から。101〜111 は 60%、119 までに 42% へ引き、150 で 37%
-              transform={'anchor': [60, -380, 0], 'position': kf((101, [880, 590, 0]), (111, [880, 589, 0]), (119, [922, 558, 0], 'outCubic'), (150, [959, 554, 0]), (177, [1100, 610, 0], 'inOutCubic'), (246, [1110, 600, 0])),
-                         'scale': kf((101, [60, 60]), (111, [60, 60]), (119, [42, 42], 'outCubic'), (150, [37, 37]), (177, [118, 118], 'inOutCubic'), (246, [120, 120]))}),
+              # v5(feel-kit で測った): 引きは 5284(101)の最初のコマがいちばん速く、16 コマで減速(outSine〜outQuad)。5337〜5369(154〜186)の寄りは加速しつづけ(inSine)、
+              #     止まらずに 5372(189)から 100 コマ以上かけて減速する(outSine)。v4 は 111 から直線で引き、寄りは inOut で 177 に止まっていた
+              transform={'anchor': [60, -380, 0], 'position': kf((101, [880, 590, 0]), (117, [922, 558, 0], 'outQuad'), (152, [959, 554, 0]), (187, [1085, 604, 0], 'inSine'), (246, [1112, 600, 0], 'outCirc')),
+                         'scale': kf((101, [60, 60]), (117, [42, 42], 'outQuad'), (152, [37, 37]), (187, [104, 104], 'inSine'), (246, [122, 122], 'outCirc'))}),
         layer('charaA', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=81, t1=101,
               transform={'anchor': [60, -380, 0], 'position': kf((81, [380, 340, 0]), (85, [400, 350, 0]), (93, [880, 520, 0], 'inOutCubic'), (100, [875, 522, 0])),
                          'scale': kf((81, [715, 715]), (85, [690, 690]), (93, [150, 150], 'inOutCubic'), (100, [147, 147])),

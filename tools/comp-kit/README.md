@@ -9,7 +9,7 @@
 |---|---|
 | `comp-engine.js` | 入口。`CompEngine`(load / loadFonts / renderFrame / update / pick / layerBounds / dispose) |
 | `scene.js` | 1 つの文書を描く本体(変形・グループ・カメラ・描く順・エフェクトの列・複製・マット・ブレンド・調整レイヤー・入れ子・選択) |
-| `props.js` | プロパティ値(キーフレーム・イージング(Penner 式の全種類)・loop・wiggle・ignore_mid)、決定論の乱数、色 |
+| `props.js` | プロパティ値(キーフレーム・イージング(Penner 式の全種類 + `easeInSine` 形の別名 + 気持ちよさのプリセット `snap` `whipIn` `settle` `overshoot` `pop` ほか)・loop・wiggle・ignore_mid・`interp: "spline"` = キーを通るなめらかな補間)、決定論の乱数、色 |
 | `gfx.js` | RT の使い回し、全画面パス、四角形のまとめ描き、レイヤー用シェーダ(縁 AA・マスク・模様・軽いエフェクト) |
 | `ops.js` | **軽いエフェクト**(切る・隠す・色)。RT を使わず、レイヤーを描くシェーダの中で順に評価する。並び(署名)ごとにシェーダを作って使い回す |
 | `effects.js` | **重いエフェクト**(ぼかし・光・縁・影・ゆがみ)。RT → RT のパス |
@@ -311,6 +311,13 @@ v1.1 で足した書式は `docs/composition-design.md` の「v1.1 の追加」�
 - `brush_ink`(重い): 文字・線を筆ふうにする。`weight`(太らせる px。負で細らせる)`unevenness`(太さのむら ± px)`uneven_size`(むらの大きさ px)`roughness`(縁のゆれ px)`rough_size`(ゆれの細かさ px)
   `dry`(かすれ %)`dry_angle`(筆の向き。90 = 横、180 = 縦)`dry_length` `dry_size`(かすれの筋の長さ・太さ px)`softness`(縁 %)`seed`。
   ぼかしたアルファを、場所ごとに違うしきい値で切り直す作り(角が丸まる・細い線は太さの 0.8 倍くらいまで動かせる)。模様は箱の左上に固定。文字ごとアニメ(per_char)の文字には画面の px で掛かる。
+
+## 動きの気持ちよさ(2026-11-15 に足した物)
+
+- `{"k": [...], "interp": "spline"}`: `e` の無い区間をキーを通る単調 3 次でつなぐ(キーで速さが折れない・行き過ぎない)。`e` つきの区間・`hold`・0.5 コマ未満の区間で列を切る。
+- イージング名の別名 `ease(In|Out|InOut|OutIn)(Quad…Bounce)` と、プリセット `snap` `snapHard` `whipIn` `whipInHard` `pass` `settle` `overshoot` `pop` `spring` `accelDecel`。
+- `data.stagger: [{"layers": [...], "step": コマ, "order", "shift_in", "from"}]`: 並べたレイヤーのキーを i × step コマ遅らせる(`comp-engine.js` の `expandStagger`。読むときに足す)。
+- 検査: `tools/feel-kit/lint.py --comp-id N`(最後のキーの加減速・知らない名前・直線のキーの列)。考え方と数値は `docs/motion-feel.md`、手引きは `docs/composition-authoring.md` の「動きを気持ちよくする」。
 
 ## 仕様との差・できていないこと
 

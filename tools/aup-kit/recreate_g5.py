@@ -327,7 +327,7 @@ def s05(ctx):
         path = {'type': 'helix', 'axis': 'z', 'radius': 170, 'radius_end': 1500, 'turns': 0.9, 'height': 500, 'start': i * 120 + 20}
         for j, (cnt, sz, sw) in enumerate([(170, [70, 104], 50), (90, [120, 170], 95)]):
             arms.append({'geometry': 'extrude', 'shape': 'petal', 'size': sz, 'depth': 0, 'material': {'type': 'standard', 'color': '#ffffff', 'roughness': 0.9, 'side': 'double'},
-                         'instances': {'count': cnt, 'seed': 500 + i * 10 + j, 'layout': 'along', 'path': path, 'align': True, 'offset': kf((0, 0.85), (44, 0.0, 'outQuad')),
+                         'instances': {'count': cnt, 'seed': 500 + i * 10 + j, 'layout': 'along', 'path': path, 'align': True, 'offset': kf((0, 0.85), (88, -0.35)),     # v5: 完成版は 2962〜3000 のあいだ流れつづける(動きの量が一定)。v4 は 44 コマで流れが止まっていた
                                        'rotation_random': [180, 180, 180], 'scale': [0.45, 1.5], 'spin': [30, 40, 20], 'spin_random': [60, 60, 60], 'sway': {'amp': [sw, sw, sw], 'freq': 0.12},
                                        'colors': ['#e9b3c8', '#f0c4d4', '#dfa5bd', '#e6adc3']}})
     swirl = {'geometry': 'group', 'position': [90, -60, 0], 'children': arms,
@@ -341,6 +341,12 @@ def s05(ctx):
     return doc('再現 S05 花びらの渦', n, [
         fall('after', 55, 90, 120),
         # 86〜92: 大写しの花びらが画面をおおう(一面の桃色)
-        layer('cover', 'solid', n, {'color': '#f1bfcd', 'width': W, 'height': H}, pos=[W / 2, H / 2], t0=82, t1=97, transform={'position': [W / 2, H / 2], 'opacity': kf((82, 0), (87, 100), (92, 100), (97, 0))}),
+        # v5: 完成版の 3020〜3027 は「止まった一面の桃色」ではなく、画面より大きい花びらが 1 コマ 250〜285px の速さで左下へ横切る(feel-kit で測った動きの量のピーク)。
+        #     → 大きい花びらの一斉放出を足し、桃色の板は短く・うすく
+        layer('sweep', 'particles', n, {'seed': 77, 'emitter': {'preset': 'petals', 'sprite': 'petal', 'position': [0, 0, 0], 'emit': 'box', 'area': [3800, 2400, 0], 'rate': 0, 'bursts': [{'f': 0, 'count': 18}, {'f': 3, 'count': 10}],
+                                                         'life': 0.4, 'life_random': 0.2, 'size': [1150, 950], 'size_random': 0.45, 'direction': 235, 'spread': 26, 'speed': 15500, 'speed_random': 0.25,
+                                                         'wind': [0, 0, 0], 'gravity': [0, 0, 0], 'colors': ['#f7c9d6', '#f3b9cb', '#fbdde6', '#f1bfcd'], 'opacity': [100, 100, 100, 100], 'fade_in': 0}},
+              pos=[1700, 250], t0=83, t1=100),
+        layer('cover', 'solid', n, {'color': '#f1bfcd', 'width': W, 'height': H}, pos=[W / 2, H / 2], t0=83, t1=95, transform={'position': [W / 2, H / 2], 'opacity': kf((83, 0), (87, 80), (90, 80), (95, 0))}),
         layer('swirl', 'mesh', n, {'env': 'soft', 'light': {'ambient': 2.3, 'intensity': 0.9, 'direction': [-0.4, -1, -0.8]}, 'objects': [swirl]}, pos=[960, 540, 0], t1=95),
     ])

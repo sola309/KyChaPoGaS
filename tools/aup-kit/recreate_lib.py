@@ -33,8 +33,88 @@ def reg(key, lid, how, placeholder=False):
 # ---------------------------------------------------------------- 小道具
 
 def kf(*pts):
-    """kf((f, v), (f, v, 'outQuad'), ...) → キーフレーム値"""
+    """kf((f, v, 'outQuad'), (f, v), ...) → キーフレーム値。3 つ目の加減速は「そのキーから次のキーまで」(エンジンと同じ = 区間の頭に書く)。
+    着地の側に書きたいときは kfa を使う。最後のキーに書いた加減速は効かない。"""
     return {'k': [dict(f=p[0], v=p[1], **({'e': p[2]} if len(p) > 2 else {})) for p in pts]}
+
+
+def kfa(*pts):
+    """kfa((f, v), (f, v, 'outCirc'), ...): 3 つ目は「このキーへ着くまでの」加減速(着地の側に書く流儀)。
+    エンジンは区間の頭のキーの e を使うので、1 個前のキーへずらして入れる。kf と混ぜて使わないこと(1 区間ずれて、直線のまま動く原因になる)。"""
+    ks = [dict(f=p[0], v=p[1]) for p in pts]
+    for i in range(1, len(pts)):
+        if len(pts[i]) > 2:
+            ks[i - 1]['e'] = pts[i][2]
+    return {'k': ks}
+
+
+_EZ = {'linear': lambda t: t, 'inQuad': lambda t: t * t, 'outQuad': lambda t: 1 - (1 - t) ** 2, 'inCubic': lambda t: t ** 3, 'outCubic': lambda t: 1 - (1 - t) ** 3,
+       'inQuart': lambda t: t ** 4, 'outQuart': lambda t: 1 - (1 - t) ** 4, 'inExpo': lambda t: 0.0 if t <= 0 else 2 ** (10 * (t - 1)), 'outExpo': lambda t: 1.0 if t >= 1 else 1 - 2 ** (-10 * t),
+       'inCirc': lambda t: 1 - math.sqrt(max(0.0, 1 - t * t)), 'outCirc': lambda t: math.sqrt(max(0.0, 1 - (1 - t) ** 2)),
+       'inOutQuad': lambda t: 2 * t * t if t < 0.5 else 1 - 2 * (1 - t) ** 2, 'inOutCubic': lambda t: 4 * t ** 3 if t < 0.5 else 1 - 4 * (1 - t) ** 3}
+
+
+def retime(keys, f0, f1, ease, step=2):
+    """道のり(keys = [(f, v), …]。直線でつないだ道)の形はそのままに、f0〜f1 のあいだの進み方だけを ease の曲線に置き換える。
+    途中のキーを通る道を「1 本の加減速」で進ませたいときに使う(キーごとに加減速を書くと、キーのたびに止まって見える)。
+    → [(f, v), …](step コマごとの密なキー。区間の外のキーはそのまま)。v は数の並び。"""
+    ks = sorted(keys, key=lambda k: k[0])
+    inside = [k for k in ks if f0 <= k[0] <= f1]
+    assert inside and inside[0][0] == f0 and inside[-1][0] == f1, 'f0・f1 はキーのあるコマにする'
+    # 道のりの長さで媒介変数を取る
+    def dist(a, b):
+        return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b))) if isinstance(a, (list, tuple)) else abs(a - b)
+    cum = [0.0]
+    for a, b in zip(inside, inside[1:]):
+        cum.append(cum[-1] + dist(a[1], b[1]))
+    total = cum[-1] or 1.0
+
+    def at(u):
+        d = u * total
+        for i in range(len(inside) - 1):
+            if d <= cum[i + 1] or i == len(inside) - 2:
+                seg = (cum[i + 1] - cum[i]) or 1.0
+                t = min(1.0, max(0.0, (d - cum[i]) / seg))
+                a, b = inside[i][1], inside[i + 1][1]
+                return [round(x + (y - x) * t, 3) for x, y in zip(a, b)] if isinstance(a, (list, tuple)) else round(a + (b - a) * t, 4)
+    fn = _EZ[ease]
+    out = [k[:2] for k in ks if k[0] < f0]
+    f = f0
+    while f < f1:
+        out.append((f, at(fn((f - f0) / (f1 - f0)))))
+        f += step
+    out.append((f1, at(1.0)))
+    out += [k[:2] for k in ks if k[0] > f1]
+    return out
+
+
+SPLINE_KEYS = {'position', 'scale', 'rotation', 'anchor', 'target', 'offset', 'zoom', 'head_turn', 'head_tilt', 'body_lean'}
+
+
+def auto_spline(node, name=None, stat=None):
+    """完成版を見て数コマおきに打ったキーの列(直線でつないだ道)を、キーを通るなめらかな補間(interp: "spline")にする。
+    直線のままだとキーのたびに速さが折れて、かくかくした動きになる(元は Blender の F カーブ = なめらか)。
+    対象: 位置・拡大・回転・カメラの目標など(SPLINE_KEYS)で、キーが 3 個以上あり、加減速の無い区間が 2 つ以上続く物。
+    加減速 e を書いた区間・hold・0.5 コマ未満の区間(飛び)はエンジンがスプラインから外す。"""
+    stat = stat if stat is not None else {'n': 0}
+    if isinstance(node, dict):
+        k = node.get('k')
+        if isinstance(k, list) and name in SPLINE_KEYS and 'interp' not in node and len(k) >= 3:
+            run = best = 0
+            for a, b in zip(k, k[1:]):
+                ok = not a.get('e') and b['f'] - a['f'] >= 0.5 and isinstance(a.get('v'), (int, float, list)) and a.get('v') != b.get('v')
+                run = run + 1 if ok else 0
+                best = max(best, run)
+            if best >= 2:
+                node['interp'] = 'spline'
+                stat['n'] += 1
+            return stat
+        for key, v in node.items():
+            auto_spline(v, key if not isinstance(v, list) or key in SPLINE_KEYS or True else name, stat) if not isinstance(v, list) else [auto_spline(x, key if key in SPLINE_KEYS else None if isinstance(x, dict) and ('type' in x or 'geometry' in x or 'id' in x) else key, stat) for x in v]
+    elif isinstance(node, list):
+        for x in node:
+            auto_spline(x, name, stat)
+    return stat
 
 
 def layer(id, type, n, source=None, pos=None, **kw):

@@ -106,7 +106,34 @@ for (const name of ['Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', '
   EASE['outIn' + name] = (t) => (t < 0.5 ? fout(t * 2) / 2 : 0.5 + fin(t * 2 - 1) / 2)
   PENNER_ORDER.push('in' + name, 'out' + name, 'inOut' + name, 'outIn' + name)
 }
+// 別名: easeInSine / easeOutQuart … の形でも書ける(知らない名前は黙って直線になるので、よくある書き方を受ける)
+for (const name of ['Quad', 'Cubic', 'Quart', 'Quint', 'Sine', 'Expo', 'Circ', 'Elastic', 'Back', 'Bounce']) {
+  for (const d of ['In', 'Out', 'InOut', 'OutIn']) {
+    const alias = 'ease' + d + name
+    if (!EASE[alias]) EASE[alias] = EASE[d[0].toLowerCase() + d.slice(1) + name]
+  }
+}
+// ---- 動きの気持ちよさのプリセット(docs/motion-feel.md。さくら MAD の実測から)----
+// 名前で書ける: {"e": "snap"} など。中身は下の式。
+//   snap      = outCirc。最初のコマから最高速で、長く尾を引いて止まる(登場・着地の基本)
+//   snapHard  = outExpo。もっと鋭く出て、残りの 8 割の時間は余韻
+//   whipIn    = inCirc。じわっと動き出し、最後のコマが最高速(切り替わり・次の動きへ勢いを渡す)
+//   whipInHard = inExpo
+//   pass      = inQuad → outQuad を 1 本にした物(= inOutQuad)。止まらずに通り過ぎる
+//   settle    = 行き過ぎ 6% → 戻る(outBack の弱い版。係数 1.0)
+//   overshoot = 行き過ぎ 10% → 戻る(outBack。係数 1.70158)
+//   pop       = 行き過ぎ 20% → 戻る(強い outBack。係数 3.2。小さい物の登場)
+//   spring    = 行き過ぎ → 2 回ゆれて止まる(outElastic)
+//   accelDecel = AviUtl の「加減速移動」(加速 + 減速)。t²(3 − 2t)
+const backOut = (s) => (t) => 1 + (s + 1) * (t - 1) ** 3 + s * (t - 1) ** 2
+export const FEEL_PRESETS = {
+  snap: EASE.outCirc, snapHard: EASE.outExpo, whipIn: EASE.inCirc, whipInHard: EASE.inExpo, pass: EASE.inOutQuad,
+  settle: backOut(1.0), overshoot: backOut(1.70158), pop: backOut(3.2), spring: EASE.outElastic,
+  accelDecel: (t) => t * t * (3 - 2 * t),
+}
+for (const [k, fn] of Object.entries(FEEL_PRESETS)) if (!EASE[k]) EASE[k] = fn
 export const EASE_NAMES = Object.keys(EASE)
+export const isEaseName = (e) => typeof e !== 'string' || e in EASE
 // 3 次ベジェ(CSS の cubic-bezier と同じ)。x から媒介変数を解いて y を返す
 function bezierEase(x1, y1, x2, y2, x) {
   const bx = (t) => 3 * (1 - t) * (1 - t) * t * x1 + 3 * (1 - t) * t * t * x2 + t * t * t
@@ -161,6 +188,71 @@ function lerpAny(a, b, t) {
   return t < 1 ? a : b // 文字列など: 次のキーまで保持
 }
 
+// ---- なめらかな補間(interp: "spline")------------------------------------------
+// キーを通る単調 3 次(PCHIP)。行き過ぎない(キーの値の間に収まる)・キーで速さが折れない。
+// 加減速 e を書いた区間・hold・0.5 コマ未満の区間(= 飛び)はスプラインに入れず、そこで列を切る。列の端は片側の傾き(動いたまま出入りする)。
+const splineCache = new WeakMap()
+const numLike = (v) => typeof v === 'number' || (Array.isArray(v) && v.every((x) => typeof x === 'number'))
+function pchipSlopes(x, y) {
+  const n = x.length, h = new Array(n - 1), d = new Array(n - 1), m = new Array(n)
+  for (let i = 0; i < n - 1; i++) { h[i] = x[i + 1] - x[i]; d[i] = (y[i + 1] - y[i]) / h[i] }
+  if (n === 2) { m[0] = m[1] = d[0]; return m }
+  for (let i = 1; i < n - 1; i++) {
+    if (d[i - 1] * d[i] <= 0) m[i] = 0
+    else {
+      const w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1]
+      m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+    }
+  }
+  const edge = (h0, h1, d0, d1) => {
+    let v = ((2 * h0 + h1) * d0 - h0 * d1) / (h0 + h1)
+    if (v * d0 <= 0) v = 0
+    else if (d0 * d1 <= 0 && Math.abs(v) > 3 * Math.abs(d0)) v = 3 * d0
+    return v
+  }
+  m[0] = edge(h[0], h[1], d[0], d[1])
+  m[n - 1] = edge(h[n - 2], h[n - 3], d[n - 2], d[n - 3])
+  return m
+}
+function splineRuns(k) {
+  let runs = splineCache.get(k)
+  if (runs) return runs
+  runs = new Array(k.length - 1).fill(null)
+  const ok = (i) => !k[i].e && k[i + 1].f - k[i].f >= 0.5 && numLike(k[i].v) && numLike(k[i + 1].v) &&
+    Array.isArray(k[i].v) === Array.isArray(k[i + 1].v) && (!Array.isArray(k[i].v) || k[i].v.length === k[i + 1].v.length)
+  let i = 0
+  while (i < k.length - 1) {
+    if (!ok(i)) { i++; continue }
+    let j = i
+    while (j < k.length - 1 && ok(j)) j++
+    // キー i..j が 1 本の列
+    const x = [], dim = Array.isArray(k[i].v) ? k[i].v.length : 0
+    for (let q = i; q <= j; q++) x.push(k[q].f)
+    const slopes = []
+    for (let c = 0; c < Math.max(1, dim); c++) {
+      const y = []
+      for (let q = i; q <= j; q++) y.push(dim ? k[q].v[c] : k[q].v)
+      slopes.push(pchipSlopes(x, y))
+    }
+    for (let q = i; q < j; q++) runs[q] = { i0: i, slopes, dim }
+    i = j
+  }
+  splineCache.set(k, runs)
+  return runs
+}
+function splineEval(k, i, t) {
+  const run = splineRuns(k)[i]
+  if (!run) return undefined
+  const a = k[i], b = k[i + 1], h = b.f - a.f, u = (t - a.f) / h
+  const h00 = (1 + 2 * u) * (1 - u) * (1 - u), h10 = u * (1 - u) * (1 - u), h01 = u * u * (3 - 2 * u), h11 = u * u * (u - 1)
+  const q = i - run.i0
+  const one = (ya, yb, c) => h00 * ya + h10 * h * run.slopes[c][q] + h01 * yb + h11 * h * run.slopes[c][q + 1]
+  if (!run.dim) return one(a.v, b.v, 0)
+  const out = new Array(run.dim)
+  for (let c = 0; c < run.dim; c++) out[c] = one(a.v[c], b.v[c], c)
+  return out
+}
+
 function addWiggle(v, w, sec) {
   if (!w || !w.amp) return v
   const seed = (w.seed ?? 1) | 0, x = sec * (w.freq ?? 1)
@@ -175,7 +267,7 @@ function addWiggle(v, w, sec) {
 
 export const isAnimated = (p) => !!p && typeof p === 'object' && !Array.isArray(p) && (Array.isArray(p.k) || !!p.wiggle)
 
-// p: 定数 / {k:[{f,v,e}], loop, wiggle} / {v, wiggle}。f はコマ(小数可)
+// p: 定数 / {k:[{f,v,e}], loop, wiggle, interp} / {v, wiggle}。f はコマ(小数可)。interp: "spline" = キーを通るなめらかな補間(e の無い区間だけ)
 export function evalProp(p, f, fps = 30, dflt) {
   if (p == null) return dflt
   if (typeof p !== 'object' || Array.isArray(p)) return p
@@ -202,6 +294,7 @@ export function evalProp(p, f, fps = 30, dflt) {
       while (i < n - 2 && k[i + 1].f <= t) i++
       const a = k[i], b = k[i + 1]
       if (a.e === 'hold') v = a.v
+      else if (p.interp === 'spline' && !a.e && (v = splineEval(k, i, t)) !== undefined) { /* なめらかな補間 */ }
       else {
         const u = (t - a.f) / Math.max(1e-9, b.f - a.f)
         v = lerpAny(a.v, b.v, ease(a.e, u))
