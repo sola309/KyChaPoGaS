@@ -35,7 +35,9 @@ PENNER_DIRS = ['in', 'out', 'inOut', 'outIn']
 
 
 def penner_name(n):
-    """イージング番号(UndoFish 氏 easing_aviutl.lua)→ 名前。1 = linear、2〜41 は 4 個ずつ in/out/inOut/outIn。"""
+    """イージング番号(UndoFish 氏 easing_aviutl.lua)→ 名前。1 = linear、2〜41 は 4 個ずつ in/out/inOut/outIn。
+    2026-11-15 に実物の easing_aviutl.lua の表 ft[1..41] と照合して一致を確かめた(docs/aviutl-scripts.md)。
+    0 や 42 以上は表に無く、実物では Lua のエラーになる(そのときのトラックの値は未確認。ここでは直線にしている)。"""
     try:
         n = int(n)
     except Exception:
@@ -97,6 +99,8 @@ def ease_value(name, t):
         return 0.0
     if name == 'linear' or not name:
         return t
+    if name == 'accelDecel':      # AviUtl の加減速移動(加速 + 減速)。完成版の実測で t²(3 − 2t)
+        return t * t * (3 - 2 * t)
     m = re.match(r'^(inOut|outIn|in|out)([A-Z][a-z]+)$', name)
     if not m:
         return t
@@ -248,10 +252,14 @@ class Chain:
 
 
 def seg_ease(t):
-    """1 区間のトラック → (補間の名前, 中間点無視か)。"""
+    """1 区間のトラック → (補間の名前, 中間点無視か)。
+    区間の時間の割合(2026-11-15 に完成版で確かめた。docs/aviutl-scripts.md): 途中の区間は (f − 区間の頭)/(次の区間の頭 − 区間の頭)
+    (中間点の値に届くのは次の区間の先頭コマ)、最後の区間は (f − 頭)/(最後のコマ − 頭)(最後のコマで終了値に届く)。
+    組み込みの加速 + 減速は t²(3 − 2t)(= エンジンの accelDecel。完成版のフェード 2 か所で実測、ずれの rms 0.001・0.006。inOutQuad だと 0.024)。
+    加速だけ・減速だけの式は測れる所が無く未確認(2 次の inQuad / outQuad は推定のまま)。"""
     mode = t.get('mode')
     acc, dec = t.get('accel'), t.get('decel')
-    ad = 'inOutQuad' if (acc and dec) else 'inQuad' if acc else 'outQuad' if dec else None
+    ad = 'accelDecel' if (acc and dec) else 'inQuad' if acc else 'outQuad' if dec else None
     if mode is None or mode == '移動無し':
         return None, False
     if mode == '瞬間移動':
@@ -264,7 +272,7 @@ def seg_ease(t):
         return ad or 'linear', False
     # 直線移動・加減速移動・ほか
     if mode == '加減速移動':
-        return ad or 'inOutQuad', False
+        return ad or 'accelDecel', False
     return ad or 'linear', False
 
 
@@ -971,11 +979,17 @@ class SceneBuilder:
             self.rep['effects_mapped']['text.per_char'] += 1
             return []
         if name == '振り子':
+            # exedit.anm「振り子」(本文を読んだ 2026-11-15): 回転 += sin((秒 × 速さ + 番号 × ずらし/50) × π) × 角度。
+            # 0° から始まって +角度 へ振れ、1 往復は 2/速さ 秒(速さ 2 なら 1 秒 = 60 コマ)。
+            # 前は −角度 から始めて 1 往復を 1/速さ 秒にしていた(2 倍速く、出だしの向きも違った)。ずらし(個別オブジェクトごとの位相)は見ていない
             sp, ang = K(0) or 1, K(1)
-            half = fps / (2 * sp)
-            return [self.fx('offset', {'rotation': {'k': [{'f': c.start, 'v': [0, 0, -ang], 'e': 'inOutSine'},
-                                                          {'f': round(c.start + half, 3), 'v': [0, 0, ang], 'e': 'inOutSine'}],
-                                                    'loop': 'pingpong'}})]
+            q = fps / (2 * sp)          # 0 → 山 までのコマ数(1/4 往復)
+            ks = [{'f': c.start, 'v': [0, 0, 0], 'e': 'outSine'}]
+            i = 0
+            while c.start + q * (2 * i + 1) < c.end + 2 * q:
+                ks.append({'f': round(c.start + q * (2 * i + 1), 3), 'v': [0, 0, ang if i % 2 == 0 else -ang], 'e': 'inOutSine'})
+                i += 1
+            return [self.fx('offset', {'rotation': {'k': ks}})]
         if name == '輪郭追跡(表示)@輪郭追跡':
             return [self.fx('trace_outline', {'progress': T(0), 'width': T(1), 'start': T(2), 'threshold': T(3),
                                               'color': col_param(prm.get('col')), 'only_line': bool(prm.get('rin')), 'opts': prm})]
@@ -1029,12 +1043,16 @@ class SceneBuilder:
                 p.update({'light': col_param(prm.get('col1'), '#ffffff'), 'dark': col_param(prm.get('col2'), '#000000')})
             return [self.fx('threshold', p)]
         if name == 'ラフエッジ':
-            # 「ラフエッジ」(本文は読めていない。推測): track0 = ずれの大きさ px、track2 = アルファを切り直す位置 %。track1・track3 の意味は分からない(params に残す)。
+            # 「ラフエッジ」(本文を読んだ 2026-11-15): track0 = 変形量(ノイズの地図で絵をずらす量)、track1 = 周期(ノイズの細かさ。Y 周期は fry、空なら同じ)、
+            # track2 = 変化速度(ノイズが時間で変わる速さ。アルファのしきい値ではない)、track3 = 形状(ノイズの種類 1〜6)、seed、check0 = 周囲を少し残す。
+            # 仕組み: 元の絵を +変形量 と −変形量 の 2 通りにずらし、どちらかで透明になる所を元の絵から削る(check0 のときは − 側だけ)。色は元のまま。
+            # 下の threshold に track2(= 50)を入れているのは意味の取り違えだが、しきい値 50 % は「両方のずらしで残る所」に近い形になるのでそのままにしてある(size 80 px も見た目から)。
             # 完成版 441〜444(S4 のシルエットが、ちぎれた島から元の形へ戻る)を見て、ノイズで絵をずらして読み + しきい値で切り直す形にした。ノイズの大きさ 80 px は見た目から
             return [self.fx('rough_edges', {'amount': T(0), 'size': 80, 'threshold': T(2), 'octaves': 3, 'seed': int(prm.get('seed', 0) or 0),
                                             'aviutl': {'track1': K(1), 'track3': K(3), 'opts': prm}})]
         if name == '内側シャドー@ANM1':
-            # @ANM1.anm「内側シャドー」(本文は読めていない。推測): track0・1 = X・Y のずれ px、track2 = 濃さ %、track3 = 拡散 px、color = 影の色
+            # @ANM1.anm「内側シャドー」(本文を読んで確認 2026-11-15): track0・1 = X・Y のずれ px、track2 = 濃さ %、track3 = 拡散(ぼかしの範囲 px)、color = 影の色。
+            # 絵の透明度を反転した形をぼかして色を付け、ずらして重ね、元の形で切る(extbuffer を使う)
             return [self.fx('inner_shadow', {'x': T(0), 'y': T(1), 'opacity': T(2), 'blur': T(3), 'color': col_param(prm.get('color'), '#000000')})]
         if name == 'メディアンカット減色@T_Color_Module':
             # @T_Color_Module.anm「メディアンカット減色」: track0 = 色数。絵が決まっているとき(画像ファイル + 置き換え先の新しい絵がある)は、
@@ -1061,7 +1079,8 @@ class SceneBuilder:
             self.rep['notes']['メディアンカット減色: 絵が決まらないので posterize で代えた'] += 1
             return [self.fx('posterize', {'levels': max(2, round(ncol ** (1 / 3))), 'count_aviutl': ncol})]
         if name == 'Text 字間調整@hksy' and src is not None and 'text' in src and isinstance(src.get('tracking', 0), (int, float)):
-            # @hksy「Text 字間調整」(本文は読めていない。推測): track0 = 字間に足す px。完成版 3838〜3852(S30 の赤い帯の品書き: 1000 → 0 で字が寄ってくる)で確かめる
+            # @hksy「Text 字間調整」(本文を読んで確認 2026-11-15): 文字毎に個別のとき、i 文字目を (i − (文字数 − 1)/2) × track0 px だけ X へずらす(まん中を軸に左右へ広がる)。
+            # track1・track2 は同じ事を Y・Z で(この作品は 0)。字間に足す px という読みは合っている(左寄せ・右寄せの文字でも、まん中が軸)
             base = src.get('tracking', 0) or 0
             src['tracking'] = T(0, lambda v: round(v + base, 3))
             self.rep['effects_mapped']['text.tracking'] += 1
@@ -1072,7 +1091,11 @@ class SceneBuilder:
                                          'self_mask': bool(chk), 'opts': prm})]
         m = re.match(r'^(X|Y|Z|拡大率|透明度|回転)@イージング$', name)
         if m:
-            # タイプ・開始・終了・進捗(-1 = オブジェクトの長さで 0→1)
+            # @イージング.anm(本文を読んだ 2026-11-15): track0 = タイプ(1〜41)、track1 = 開始、track2 = 終了、track3 = 進捗 %(-1 = 自動)。
+            # 自動のときの割合は obj.frame / obj.totalframe(= 長さのコマ数 N で割る。トラックバーと違い、最後のコマは (N − 1)/N で終了値に届かない)
+            # → 終わりのキーは c.end + 1 に置く。X・Y・Z・回転は元の値に足す(flg=1「元の値を無視」のときは置き換え。この作品は全部 flg=0)、
+            # 拡大率・透明度は足さずに上書き(obj.zoom = r/100、obj.alpha = 1 − r/100)。Back 係数 es・振れ幅 ea・周期 ep はこの作品では既定のまま。
+            # interval(ずらし ms)は個別オブジェクトごとに index × interval ぶん遅らせる(この作品は全部 0)
             ez = penner_name(K(0))
             a, b = K(1), K(2)
             what = m.group(1)
@@ -1105,7 +1128,7 @@ class SceneBuilder:
                     keys.append((f_, v, None))
                 keys = [k for i, k in enumerate(keys) if i in (0, len(keys) - 1) or k[1] != keys[i - 1][1] or k[1] != keys[i + 1][1]]
                 return [self.fx('offset', {key: Conv._kf(keys) if len(keys) > 1 else keys[0][1]})]
-            return [self.fx('offset', {key: {'k': [{'f': c.start, 'v': val(a), 'e': ez}, {'f': c.end, 'v': val(b)}]}})]
+            return [self.fx('offset', {key: {'k': [{'f': c.start, 'v': val(a), 'e': ez}, {'f': c.end + 1, 'v': val(b)}]}})]
         return [self.raw_fx(f, cv, fi, name)]
 
     def new_image_path(self, path):
@@ -1609,8 +1632,12 @@ class SceneBuilder:
             self.rep['effects_mapped']['vignette_blur'] += 1
             return L, {}
         if name == 'フレア':
-            # exedit.obj「フレア」(本文は読めていない。推測): track0 = 大きさ(にじみの半径 ≒ track0 × 1.5 px。完成版 3014 で測った)、track1 = 強さ %、track3 = 光芒の長さ px、
-            # h_num = 光芒の本数、f_col = 光の色、c_alp = 芯の濃さ。完成版 3012〜3021(S23 の目の横の光。横一文字の光芒 + 青白いにじみ)を見て合わせた。
+            # exedit.obj「フレア」(本文を読んだ 2026-11-15): track0 = サイズ w(ぼかした円を 半径 w/5 から 2 倍ずつ 5 回、濃さ 1・1/2・1/4・1/8・1/16 で加算。いちばん外は w × 3.2)、
+            # track1 = 放射の光芒の長さ %、track2 = 放射の光芒の数(0 = 出さない。この作品は 0)、track3 = 水平の光芒の長さ px(中心から片側)。
+            # c_alp = 放射の光芒の強さ、speed = 放射の光芒の変化、blink = 点滅(濃さ = 0.9〜1 の乱数。0.1 のとき)、h_len = 水平の光芒の高さ(半分の高さ = w × h_len / 4 を 2 倍ずつ 3 回)、
+            # h_num = 水平の光芒の数(2 以上は 180°/数 ずつ回して並べる。上限 8)、f_col = 色。大きさは「不透明度 × 1.5 − 0.5」と拡大率にも比例する。
+            # 下の lens_flare の値(radius = w × 0.8、intensity、streak_width = 4 + w/5、core)は完成版 3012〜3021 を見て合わせた物で、式からは出していない。
+            # track1(= 85 の固定)を強さに、c_alp を芯に使っているのは見た目合わせのための流用(この作品では track2 = 0 なので放射の光芒そのものは出ない)。
             # 透明な板(カメラ制御の対象にできるよう shape)に lens_flare を掛ける。板の大きさは光芒が収まる幅
             t0 = [k[1] for k in cv.scalar(0, 'track0')]
             t3 = [k[1] for k in cv.scalar(0, 'track3')]
@@ -1624,10 +1651,15 @@ class SceneBuilder:
             self.rep['notes']['カスタムオブジェクト フレア → lens_flare(値の読みは推測)'] += 1
             return L, src
         if name == '雪':
-            # exedit.obj「雪」(本文は読めていない。推測): track0 = 速さ %、size = 粒の大きさ %、col = 色、name = 粒の形。
+            # exedit.obj「雪」(本文を読んだ 2026-11-15): track0 = 個数(いつも全部が画面にいる)、track1 = 速度(1 秒に 画面の高さ + 粒 2 個ぶん × track1/10 を落ちる)、
+            # track2 = 方向(落ちるあいだの横流れ = track2 × 粒の幅)、track3 = ゆらぎ幅(× 粒の幅)。size = 粒の大きさ px(ぼかし size/3 つき)、col = 色、name = 粒の形、
+            # f_speed = ゆらぎの速さ、depth = 奥行き: i 番目の粒は 大きさ・速さとも 1/(1 + depth × i/個数) 倍(depth 15 なら 1〜1/16。小さく遅い粒が大半)。
+            # この作品(S30 3591〜3761)は 個数 100・速度 2・size 100・depth 15 → 手前の粒は 100 px・約 280 px/秒、まん中の粒は 12 px・33 px/秒。
+            # 下の粒子の値(毎秒 18 個 × 5 秒 ≒ 90 個・70 px/秒・46 px)は見た目から決めた物で、track0 を「速さ %」と読んでいたのは誤り(100/100 = 1 でたまたま同じ)。
+            # 奥行きごとの大きさ・速さの分布は粒子では出せない(エンジンに要る変更: 粒ごとの奥行き倍率)。
             # 完成版 3600〜3760(S30。画面全体に、ぼけた白い粒がまばらにゆっくり落ちる)を見て、粒子で代えた(1 粒ずつの位置は合わない)
             L = self.base_layer(c, 'particles')
-            sp = float(K(0) or 100) / 100
+            sp = 1.0     # 速さの倍率。track0 は個数なので使わない(前は track0/100 = 1 だった。出る値は同じ)
             sz = float(prm.get('size', 100) or 100) / 100
             src = {'seed': c.id % 9973 + 1, 'emitter': {
                 'sprite': 'soft', 'blend': 'normal', 'emit': 'box', 'position': [0, 0, 0], 'area': [round(self.W * 1.15), round(self.H * 1.15), 0],
@@ -1638,18 +1670,23 @@ class SceneBuilder:
             self.rep['notes']['カスタムオブジェクト 雪 → particles(数・速さ・大きさは見た目からの推測)'] += 1
             return L, src
         if name == '本当のブロックノイズ':
-            # 「本当のブロックノイズ」(本文は読めていない。推測): 画面の四角い区画をずらす。kazu = 区画の数、xsize・ysize = 区画の大きさ、xzure・yzure = ずれ(どれも {最小, 最大})。
-            # track0 を「効く割合 %」と読んだ(S8 1166〜1377 は track0 = 0 で、完成版の続きの 3 コマを比べても区画のずれは見えない)
+            # 「本当のブロックノイズ」(本文を読んだ 2026-11-15): 下の絵(フレームバッファ)の四角い区画を切り取り、ずらして描く。
+            # track0 = しきい値(0〜100): 変化の刻みごとに 0〜100 の乱数を引き、乱数 > しきい値 のときだけ出る(0 = ほぼ毎回出る・100 = 出ない)。
+            # track1 = 変化(ms。乱数を引き直す間隔。100 = 1 秒に 10 回)、track2 = 個別(区画ごとに後ろのフィルタを掛ける)、track3 = ずれ%指定(1 = ずれを区画の大きさの % で読む)。
+            # kazu = 区画の数、xsize・ysize = 区画の大きさ、xzure・yzure = ずれ(どれも {最小, 最大})。
+            # 前は track0 を「効く割合 %」と逆に読んでいて、track0 = 0 の S8 1166〜1377 は何も出なかった。完成版 1298〜1305 の箱の縁に横の段が出て、6 コマ(100 ms)ごとに入れ替わるのを見て確かめた。
+            # エンジンの amount は「区画の数に掛ける割合」なので、出る・出ないの確率は数の増減で代えている(しきい値 0・100 では同じ結果)
             def pair(v, d):
                 m = re.findall(r'-?\d+(?:\.\d+)?', str(v)) if v is not None else []
                 return [float(m[0]), float(m[1])] if len(m) >= 2 else d
             L = self.base_layer(c, 'adjustment')
             c._pre_fx = [self.fx('block_noise', {
-                'amount': cv.prop(0, 'track0'), 'count': pair(prm.get('kazu'), [5, 15]), 'width': pair(prm.get('xsize'), [300, 500]),
+                'amount': cv.prop(0, 'track0', lambda v: round(100 - v, 3)), 'speed': (round(1000 / K(1), 3) if (K(1) or 0) > 0 else 0),
+                'count': pair(prm.get('kazu'), [5, 15]), 'width': pair(prm.get('xsize'), [300, 500]),
                 'height': pair(prm.get('ysize'), [10, 100]), 'shift_x': pair(prm.get('xzure'), [-30, 30]), 'shift_y': pair(prm.get('yzure'), [-30, 30]),
                 'seed': c.id % 997, 'aviutl': dict({f'track{i}': K(i) for i in range(4)}, opts=prm)})]
             c._screen_fx = True
-            self.rep['notes']['カスタムオブジェクト 本当のブロックノイズ → block_noise(track0 = 効く割合 は推測)'] += 1
+            self.rep['notes']['カスタムオブジェクト 本当のブロックノイズ → block_noise(しきい値の確率は区画の数で代えた)'] += 1
             return L, {}
         L = self.base_layer(c, 'null')
         self.rep['effects_unmapped'][f'カスタムオブジェクト:{name}'] += 1
@@ -2101,6 +2138,16 @@ def _asset_file(self, asset_id):
     return cache.get(asset_id)
 
 
+def _profile_top_start(prof):
+    """_radial_profile の並びから、輪郭追跡の始まり(いちばん上の行の、いちばん左の点)の角度(度。真上から時計回り)。"""
+    n = len(prof)
+    pts = [(-r * math.cos(2 * math.pi * i / n), r * math.sin(2 * math.pi * i / n), i) for i, r in enumerate(prof)]   # (y, x, 番号)。y は下が正
+    top = min(p[0] for p in pts)
+    tol = max(1.0, max(prof) * 0.015)
+    y, x, i = min((p for p in pts if p[0] <= top + tol), key=lambda p: p[1])
+    return round(360.0 * i / n, 2)
+
+
 def _spread_markers(self, out):
     """effects に残した印を、効く相手へ配る。
     _motion_blur: 付いていたレイヤー(グループなら対象の絵)の motion_blur にする。
@@ -2153,7 +2200,10 @@ def _spread_markers(self, out):
                 ks.append({'f': spans[-1][1], 'v': 0})
             merged[name] = {'k': ks}
         # 道のりで刻む: 相手が画像なら、(作り直しモードの)新しい絵のアルファから「中心 → 輪郭の距離」を 96 方向ぶん測って dash_path に渡す。
-        # 道のりの始まりは左端・時計回り(完成版 1204 の六角形で、破線が 左の角 → 右上の辺 → 下の辺 に出ているのを見て決めた。推測)
+        # 道のりの始まりは左端(270°)・時計回り(完成版 1204 の六角形で、破線が 左の角 → 右上の辺 → 下の辺 に出ているのを見て決めた値)。
+        # @輪郭追跡.anm の本文(2026-11-15 に読んだ)では: 上の行から順に探して最初に当たる不透明な画素(= いちばん上の行の、いちばん左)から始め、
+        # 逆回転(rev)が 0 なら時計回り、1 なら反時計回り。開始点(track2)は道のりの % ぶん先へずらす。向きは合っているが、始まりは本文の読み(_profile_top_start。
+        # 新しい六角形の絵では 0°)と上の見た目合わせ(270°)が食い違う。完成版の絵でどちらが合うかを確かめられていないので、値は前のまま(docs/aviutl-scripts.md)
         prof = _radial_profile(self.asset_file((L.get('source') or {}).get('asset_id')))
         if prof:
             merged['dash_path'] = prof
