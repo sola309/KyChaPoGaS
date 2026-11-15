@@ -1923,6 +1923,25 @@ class SceneBuilder:
                         layers[u.id]['three_d'] = True
                         if u.id in extra:
                             extra[u.id]['three_d'] = True
+        # FEEL2: 入れ子のグループ制御。上のグループ制御の範囲に「上位グループ制御の影響を受ける」グループ制御が入っているとき、AviUtl は上の制御(位置・フィルタ)を
+        #   下のグループ制御の対象にも効かせる。エンジンの scope は 1 段しか見ないので、下のグループの対象を上のグループの scope に足す
+        #   (さくら S30 の 3591〜3609: クリッピング(右 1007)つきのグループ → グループ → 顔の大写しの絵。足さないと切られない所が先に画面を横切る)
+        for c in sorted(controls, key=lambda u: -u.layer):
+            G = layers.get(c.id)
+            if c.kind != 'グループ制御' or not isinstance(G, dict) or not G.get('scope'):
+                continue
+            # いまは「クリッピング(crop)つきのグループ」だけに限る(確かめたのは S30 の 1 か所)。位置を動かすグループ・斜め/扇クリッピング・マスクの入れ子は全 36 か所あり、
+            #   足すと見た目が変わるので、1 か所ずつ完成版と見比べてから AUP_NEST_GROUP=all で広げること
+            if os.environ.get('AUP_NEST_GROUP', 'crop') != 'all' and not any(e.get('type') == 'crop' for e in G.get('effects') or []):
+                continue
+            for u in controls:
+                H = layers.get(u.id)
+                if u is c or u.kind != 'グループ制御' or not isinstance(H, dict) or u.lid not in G['scope'] or not H.get('inherit'):
+                    continue
+                more = [i for i in (H.get('scope') or []) if i not in G['scope']]
+                if more:
+                    G['scope'] = G['scope'] + more
+                    self.rep['notes']['入れ子のグループ制御: 下のグループの対象を上の scope に足した'] += 1
         # カメラ制御が無くても、AviUtl は Z・X/Y 軸回転を透視で描く(視点は (0,0,-1024)、Z=0 が等倍)。
         # そういうレイヤーを three_d にして、既定のカメラ(zoom 1024・並べ替えなし)の scope に入れる。
         def nz(v, idx):

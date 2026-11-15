@@ -332,7 +332,7 @@ def s05(ctx):
                                        'colors': ['#e9b3c8', '#f0c4d4', '#dfa5bd', '#e6adc3']}})
     swirl = {'geometry': 'group', 'position': [90, -60, 0], 'children': arms,
              'rotation': [kf((0, 22), (88, 8)), kf((0, -14), (88, 0)), kf((0, 0), (92, 120))],
-             'scale': kf(*[(f, [v] * 3) + tuple(e) for f, v, *e in [(0, 0.8), (60, 1.0, 'inCubic'), (78, 1.6), (85, 4), (90, 9), (94, 16)]])}
+             'scale': kf(*[(f, [v] * 3) + tuple(e) for f, v, *e in [(0, 0.8), (60, 1.0, 'inCubic'), (78, 1.6), (87, 2.4), (90, 7), (94, 16)]])}
 
     def fall(id, seed, cnt, size):
         em = {'preset': 'petals', 'sprite': 'petal', 'position': [0, 0, 0], 'emit': 'box', 'area': [2300, 1400, 0], 'rate': 0, 'bursts': [{'f': 0, 'count': cnt}], 'life': 1.25, 'life_random': 0.6,
@@ -344,9 +344,9 @@ def s05(ctx):
         # v5: 完成版の 3020〜3027 は「止まった一面の桃色」ではなく、画面より大きい花びらが 1 コマ 250〜285px の速さで左下へ横切る(feel-kit で測った動きの量のピーク)。
         #     → 大きい花びらの一斉放出を足し、桃色の板は短く・うすく
         layer('sweep', 'particles', n, {'seed': 77, 'emitter': {'preset': 'petals', 'sprite': 'petal', 'position': [0, 0, 0], 'emit': 'box', 'area': [3800, 2400, 0], 'rate': 0, 'bursts': [{'f': 0, 'count': 18}, {'f': 3, 'count': 10}],
-                                                         'life': 0.4, 'life_random': 0.2, 'size': [1150, 950], 'size_random': 0.45, 'direction': 235, 'spread': 26, 'speed': 15500, 'speed_random': 0.25,
+                                                         'life': 0.4, 'life_random': 0.2, 'size': [1150, 950], 'size_random': 0.45, 'direction': 235, 'spread': 26, 'speed': 19000, 'speed_random': 0.25,
                                                          'wind': [0, 0, 0], 'gravity': [0, 0, 0], 'colors': ['#f7c9d6', '#f3b9cb', '#fbdde6', '#f1bfcd'], 'opacity': [100, 100, 100, 100], 'fade_in': 0}},
-              pos=[1700, 250], t0=83, t1=100),
-        layer('cover', 'solid', n, {'color': '#f1bfcd', 'width': W, 'height': H}, pos=[W / 2, H / 2], t0=83, t1=95, transform={'position': [W / 2, H / 2], 'opacity': kf((83, 0), (87, 80), (90, 80), (95, 0))}),
+              pos=[1700, 250], t0=88, t1=100),      # FEEL2: 完成版は 3014〜3020 が静か(50px/コマ)で、3022 に一気に桃色になり 3023〜3027 だけ速い(134〜549)。v5 は 3016 から飛ばしていて 6 コマ早かった → 88(3021)から
+        layer('cover', 'solid', n, {'color': '#f1bfcd', 'width': W, 'height': H}, pos=[W / 2, H / 2], t0=89, t1=95, transform={'position': [W / 2, H / 2], 'opacity': kf((89, 92), (92, 85), (94, 40), (95, 0))}),
         layer('swirl', 'mesh', n, {'env': 'soft', 'light': {'ambient': 2.3, 'intensity': 0.9, 'direction': [-0.4, -1, -0.8]}, 'objects': [swirl]}, pos=[960, 540, 0], t1=95),
     ])

@@ -255,6 +255,9 @@ def _spiral_band(j, turns=2.7, r0=40, grow=4.2, d=0.36, step=5, a0=0):
     return inner + outer[::-1]
 
 
+B02_GAIN = [(9, 1.2), (41, 1.8), (42, 1.7), (47, 1.7), (48, 1.15), (53, 1.15), (54, 1.0), (62, 1.5), (70, 1.5), (84, 2.6), (101, 3.3)]      # FEEL2: 回る速さの倍率(コマ = ルート − 482)
+
+
 @reg(S4 + '03_螺旋線路/1.01', 'B02', 'mesh(3D の面に対数らせんの帯 4 本 = extrude の points・厚み 0 を傾けて透視で)+ mesh(白い板 = box の ring 複製)+ camera')
 def b02(ctx):
     n = 102
@@ -272,6 +275,14 @@ def b02(ctx):
     sp = MF['v'] + [MF['v'][-1]] * 4
     cuts = [0] + MF['cuts'] + [n]
     look = [segs[0], segs[1], segs[2], segs[3], segs[5], segs[6], segs[8]]      # 1 本ごとの寄りと目の位置(v4 の 10 個から 7 個)
+    # FEEL2: v5 のあとの区間描きで測ると、長い 1 本の中で再現の速さが手本より落ちていく(536〜583 で 手本比 1.0 → 0.4。終わりの加速が出ていなかった)。
+    #     → 回る速さに、測った比の逆数(B02_GAIN: comp のコマ → 倍率。あいだは直線)を掛ける
+    def gain(f):
+        g = B02_GAIN
+        for (fa, ga), (fb, gb) in zip(g, g[1:]):
+            if fa <= f <= fb:
+                return ga + (gb - ga) * (f - fa) / max(1, fb - fa)
+        return g[-1][1] if f > g[-1][0] else g[0][1]
     sk, pk, rk = [], [], []
     ang = 0.0
     for i in range(len(cuts) - 1):
@@ -280,6 +291,7 @@ def b02(ctx):
         tot = sum(sp[f:f1]) or 1.0
         grow = 1.0 + min(0.6, 0.0005 * tot)   # 寄り: 動いた量に比例(長い 1 本で 1.6 倍まで。それより寄ると、らせんの中心の穴が画面を占める = 試して戻した)
         acc = 0.0
+        racc = 0.0
         ff = f
         while True:
             u = acc / tot
@@ -287,13 +299,14 @@ def b02(ctx):
             fx = (f1 - 0.01) if last else ff
             sk.append((fx, [round(sc * 0.0062 * grow ** u, 5)] * 3))
             pk.append((fx, [round(p[0] - 960 + 60 * u, 2), round(p[1] - 540 + 40 * u, 2), 0]))
-            rk.append((fx, round(ang - 0.165 * acc, 3)))
+            rk.append((fx, round(ang - 0.165 * racc, 3)))
             if last:
                 break
             step = min(2, f1 - 1 - ff)
             acc += sum(sp[ff:ff + step])
+            racc += sum(sp[x] * gain(x) for x in range(ff, ff + step))
             ff += step
-        ang -= 0.165 * tot + 47          # 切り替わりで向きも飛ぶ
+        ang -= 0.165 * racc + 47          # 切り替わりで向きも飛ぶ
     ribbons = [{'geometry': 'extrude', 'points': _spiral_band(j, turns=3.0, a0=320), 'depth': 0, 'position': [0, 0, j * 0.5], 'material': {'type': 'basic', 'color': cols[j], 'side': 'double'}} for j in range(4)]
     spiral = layer('spiral', 'mesh', n, {'unlit': True, 'objects': [
         {'geometry': 'group', 'position': kf(*pk), 'scale': kf(*sk), 'rotation': [24, -16, kf(*rk)], 'children': ribbons}]}, pos=[960, 540, 0])

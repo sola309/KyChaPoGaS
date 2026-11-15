@@ -15,6 +15,9 @@ def b13(ctx):
     ])
 
 
+B28_GUST = (650, 1250, 1800)      # 頭の突風で流す量(小・中・大の花びらの層。comp の px。シーンでは 186% で置かれる)
+
+
 @reg('scene/40_キャラ相関図/Blender_桜吹雪/1.01', 'B28', 'particles(petals)')
 def b28(ctx):
     # シーンでは 186% + 単色化(ffaaac)で、カメラの下に置かれる。カメラが相関図の上を大きく動いても花びらが画面を覆い続けるので、
@@ -22,11 +25,16 @@ def b28(ctx):
     n = 206
     w, h = 3840, 2160
     ar, ps = (w * 1.15, h * 1.3, 0), (w / 2 - 80, h / 2 - 200)
-    return doc('再現 B28 桜吹雪(相関図)', n, [
+    L = [
         petals('a', n, seed=31, rate=380, life=6, size=27, wind=(30, 0, 0), gravity=(0, 45, 0), colors=('#ffffff',), flutter=260, area=ar, pos=ps),
         petals('b', n, seed=32, rate=90, life=6, size=52, wind=(50, 0, 0), gravity=(0, 60, 0), colors=('#ffffff',), flutter=200, area=ar, pos=ps),
         petals('c', n, seed=33, rate=10, life=5, size=120, wind=(70, 0, 0), gravity=(0, 80, 0), colors=('#ffffff',), flutter=160, area=ar, pos=ps),
-    ], w=w, h=h)
+    ]
+    # FEEL2: 完成版の 5372〜5430 は花びらが速く左へ流れ(速い画素で 46 → 34 → 18 px/コマ)、60 コマほどで落ち着く。v5 は頭から同じ速さ(11 px/コマ)だった
+    #   → 層ごと右から左へ流して減速させる(大きい花びらほど大きく = 手前ほど速い)
+    for lay, dx in zip(L, B28_GUST):
+        lay['transform']['position'] = kf((0, [ps[0] + dx, ps[1] - dx * 0.2, 0]), (95, [ps[0], ps[1], 0], 'outCubic'))
+    return doc('再現 B28 桜吹雪(相関図)', n, L, w=w, h=h)
 
 
 @reg('scene/34_咲き誇れ/Blender_桜吹雪/1.04', 'B24', 'particles(petals)')
@@ -166,6 +174,18 @@ def b25c(ctx):
     return doc('仮: マネキン B25 杏子(3D モデルの代わり)', n, L, w=w, h=h)
 
 
+# FEEL2: B25 の動きの実測(完成版のコマを目で見て測った数だけ。絵は使っていない)。コマ = comp の中のコマ(ルートのコマ − 5183)
+B25_PUSH = (40, 64, 0.4)                                             # 寄りの始まり・終わり・道の折れ目(A→B が全体のどこまでか)
+B25_PACK = ([430, 110, 0], ([800, -520, 0], [24, -21, -105], 2.9), ([-750, -1950, 0], [16, -15, -195], 5.0))   # 寄りの途中(B)と終わり(C)の 位置・回転・拡大
+B25_CHARA = [(82, 900, 60, 170), (83, 690, 192, 230), (85, 490, 422, 361), (88, 300, 634, 453), (91, 239, 768, 484), (95, 151, 852, 499), (99, 106, 883, 518),
+             (102, 86, 891, 526), (106, 70, 914, 522), (110, 61, 922, 530), (117, 45, 925, 548)]      # (コマ, 拡大 %, 口の x, 口の y)。コマ = ルート − 5183
+# 終わりの寄り(完成版 5330〜5367 の頭の大きさと口の位置を 10 コマおきに見て測った): 145 から動きだし、10 コマで約 1.7 倍の調子で加速しつづけ、
+#   止まる前に 5367(184)で次のシーンに覆われる。v5 は 152〜187 で 37 → 104%(手本は 177 で 105%・184 で 150%)と遅かった
+B25_CLOSE = [(145, 37, 959, 554), (157, 43, 935, 595), (167, 62, 1037, 670), (177, 105, 1075, 734), (184, 150, 1130, 770), (190, 185, 1150, 780), (246, 200, 1160, 785)]
+B25_MACRO_S = [(64, 38), (67, 53), (70, 80), (74, 140), (77, 200), (78, 198), (79, 185), (80, 130), (81, 74)]
+B25_MACRO_POS = [(64, 860, 450), (70, 925, 505), (77, 985, 548), (78, 800, 480), (79, 417, 373), (80, 107, 279), (81, -23, 183)]
+
+
 @reg('scene/38_えちえち杏子ちゃん/Blender_ポッキーゲーム/1.11', 'B25', 'mesh(箱・袋・棒)+ 仮: マネキン(杏子)+ particles')
 def b25(ctx):
     n = 247
@@ -174,41 +194,52 @@ def b25(ctx):
     front = {'color': '#ffffff', 'roughness': 0.6, 'texture': dict(tex), 'texture_repeat': [0.235, 0.66], 'texture_offset': [0.0, 0.0]}
     back = {'color': '#ffffff', 'roughness': 0.6, 'texture': dict(tex), 'texture_repeat': [0.235, 0.66], 'texture_offset': [0.235, 0.0]}
     plain = {'color': red, 'roughness': 0.6}
-    stick = {'geometry': 'group', 'position': [40, kf((20, -120), (48, -560, 'outCubic'), (70, -640)), 0], 'rotation': [0, 0, kf((20, 0), (48, 6))], 'children': [
+    # FEEL2(完成版 5184〜5300 を 1 コマずつ測り直した。数だけ): 元は Blender のカメラ 1 本の動き = 箱が飛び込む(2〜21。3 コマ目がいちばん速く、長く尾を引く)→
+    #   ふた・袋・棒が 20〜25 で一気に出る → 40 から寄りはじめ、52〜74 は同じ速さで寄りつづけ(止まらない)→ 77〜81 で棒に沿って一気に引き(79 が山)→
+    #   そのまま 81〜116 を 1 コマあたり約 0.93〜0.95 倍の同じ調子で引きつづける(指数の減衰)。v5 は 13・23・55・66・93・101 で止まる階段だった。
+    stick = {'geometry': 'group', 'position': [40, kf((20, -120), (25, -560, 'outCubic'), (40, -575)), 0], 'rotation': [0, 0, kf((20, 0), (25, 6, 'outCubic'))], 'children': [
         {'geometry': 'cylinder', 'radius': 9, 'height': 430, 'position': [0, -30, 0], 'material': {'color': choco, 'roughness': 0.45}},
         {'geometry': 'cylinder', 'radius': 8, 'height': 90, 'position': [0, 230, 0], 'material': {'color': bisc, 'roughness': 0.8}},
     ]}
     inner = [{'geometry': 'cylinder', 'radius': 8, 'height': 300, 'position': [-70 + i * 28, -150, (i % 2) * 14 - 7], 'material': {'color': choco, 'roughness': 0.5}} for i in range(6)]
+
+    def push(A, B, C, f0=B25_PUSH[0], f1=B25_PUSH[1], brk=B25_PUSH[2]):
+        """寄り: 前半で速さが 0 から上がり、後半は同じ速さ(完成版の速さの曲線の形)。道は A → B → C。2 コマおきの密なキー"""
+        out = []
+        for f in range(f0, f1 + 1, 2):
+            t = (f - f0) / (f1 - f0)
+            u = 1.3333 * t * t if t < 0.5 else 0.3333 + 1.3333 * (t - 0.5)
+            a, b, w = (A, B, u / brk) if u < brk else (B, C, (u - brk) / (1 - brk))
+            out.append((f, [round(x + (y - x) * w, 3) for x, y in zip(a, b)]))
+        return out
+    PA, PB, PC = B25_PACK
     pack = {'geometry': 'group',
-            'position': kf((0, [300, 430, 0]), (13, [450, 170, 0], 'outCubic'), (23, [430, 110, 0], 'outCubic'), (45, [430, 110, 0]), (55, [950, -780, 0], 'inOutCubic'),
-                           (66, [-1500, -2700, 0], 'inOutCubic')),
-            'rotation': kf((0, [55, -10, -125]), (13, [38, -12, -100], 'outCubic'), (23, [28, -18, -68], 'outCubic'), (45, [28, -18, -68]), (55, [22, -22, -122], 'inOutCubic'),
-                           (66, [14, -14, -225], 'inOutCubic')),
-            'scale': kf(*[(f, [v, v, v]) + tuple(e) for f, v, *e in [(0, 1.7), (13, 2.0, 'outCubic'), (23, 2.2, 'outCubic'), (45, 2.2), (55, 3.2, 'inOutCubic'), (66, 6.0, 'inOutCubic')]]),
+            'position': kf((2, [270, 760, 0]), (21, [430, 110, 0], 'outQuart'), *push([430, 110, 0], PB[0], PC[0])),
+            'rotation': kf((2, [55, -10, -125]), (21, [28, -18, -68], 'outQuart'), *push([28, -18, -68], PB[1], PC[1])),
+            'scale': kf((2, [1.7] * 3), (21, [2.2] * 3, 'outQuart'), *push([2.2] * 3, [PB[2]] * 3, [PC[2]] * 3)),
             'children': [
                 {'geometry': 'box', 'size': [300, 540, 90], 'material': plain, 'faces': [plain, plain, {'color': '#8d8d8d', 'roughness': 0.9}, plain, front, back]},
-                {'geometry': 'box', 'size': [262, 300, 62], 'position': [0, kf((16, -130), (24, -300, 'outCubic')), 0], 'material': {'color': silver, 'metalness': 0.5, 'roughness': 0.45}},
-                {'geometry': 'box', 'size': [262, 150, 60], 'position': [0, kf((16, -130), (24, -240, 'outCubic')), 2], 'material': {'color': '#c5141c', 'roughness': 0.5}},
-                {'geometry': 'box', 'size': [300, 170, 5], 'position': [0, kf((14, -272), (22, -330, 'outCubic')), kf((14, 44), (22, 120, 'outCubic'))],
-                 'rotation': [kf((14, 0), (22, -58, 'outCubic')), 0, 0], 'material': {'color': '#f1ece3', 'roughness': 0.9}},
+                {'geometry': 'box', 'size': [262, 300, 62], 'position': [0, kf((20, -130), (24, -300, 'outCubic')), 0], 'material': {'color': silver, 'metalness': 0.5, 'roughness': 0.45}},
+                {'geometry': 'box', 'size': [262, 150, 60], 'position': [0, kf((20, -130), (24, -240, 'outCubic')), 2], 'material': {'color': '#c5141c', 'roughness': 0.5}},
+                {'geometry': 'box', 'size': [300, 170, 5], 'position': [0, kf((19, -272), (23, -330, 'outCubic')), kf((19, 44), (23, 120, 'outCubic'))],
+                 'rotation': [kf((19, 0), (23, -58, 'outCubic')), 0, 0], 'material': {'color': '#f1ece3', 'roughness': 0.9}},
                 stick] + inner}
+    # 人物: 口(= anchor)の画面上の位置と頭の大きさを完成版の 5265〜5300 の 11 コマで測った値。81 から最後まで 1 枚(v5 は 101 で別の層に替わり、大きさが 147% → 60% に飛んでいた)
+    CH = B25_CHARA
     L = [
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
-        layer('charaB', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=101,
-              # v4: 完成版 5293・5300・5333 の頭の大きさ(640 幅で 95→67→58px)と位置から。101〜111 は 60%、119 までに 42% へ引き、150 で 37%
-              # v5(feel-kit で測った): 引きは 5284(101)の最初のコマがいちばん速く、16 コマで減速(outSine〜outQuad)。5337〜5369(154〜186)の寄りは加速しつづけ(inSine)、
-              #     止まらずに 5372(189)から 100 コマ以上かけて減速する(outSine)。v4 は 111 から直線で引き、寄りは inOut で 177 に止まっていた
-              transform={'anchor': [60, -380, 0], 'position': kf((101, [880, 590, 0]), (117, [922, 558, 0], 'outQuad'), (152, [959, 554, 0]), (187, [1085, 604, 0], 'inSine'), (246, [1112, 600, 0], 'outCirc')),
-                         'scale': kf((101, [60, 60]), (117, [42, 42], 'outQuad'), (152, [37, 37]), (187, [104, 104], 'inSine'), (246, [122, 122], 'outCirc'))}),
-        layer('charaA', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=81, t1=101,
-              transform={'anchor': [60, -380, 0], 'position': kf((81, [380, 340, 0]), (85, [400, 350, 0]), (93, [880, 520, 0], 'inOutCubic'), (100, [875, 522, 0])),
-                         'scale': kf((81, [715, 715]), (85, [690, 690]), (93, [150, 150], 'inOutCubic'), (100, [147, 147])),
-                         'rotation': kf((81, [0, 0, 3]), (93, [0, 0, 0]))}),
+        layer('chara', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=82,
+              # 152 から先は v5 のまま: 5337〜5369(154〜186)の寄りは加速しつづけ(inSine)、止まらずに 189 から 100 コマ以上かけて減速(outCirc)
+              transform={'anchor': [60, -380, 0],
+                         'position': {'k': [dict(f=f, v=[x, y, 0]) for f, s, x, y in CH] + [dict(f=f, v=[x, y, 0]) for f, s, x, y in B25_CLOSE], 'interp': 'spline'},
+                         'scale': {'k': [dict(f=f, v=[s, s]) for f, s, x, y in CH] + [dict(f=f, v=[s, s]) for f, s, x, y in B25_CLOSE], 'interp': 'spline'},
+                         'rotation': kf((82, [0, 0, 3]), (94, [0, 0, 0], 'outQuad'))}),
         layer('macro', 'shape', n, {'kind': 'rect', 'width': 3200, 'height': 180, 'radius': 90,
-                                    'fill': {'gradient': {'angle': 90, 'stops': [[0, '#6b3f2c'], [0.45, '#55301f'], [1, '#2e1810']]}}}, t0=64, t1=81,
-              transform={'position': kf((64, [820, 420, 0]), (73, [960, 540, 0], 'outCubic'), (80, [990, 550, 0])),
-                         'rotation': kf((64, [0, 0, 62]), (73, [0, 0, 26], 'outCubic'), (80, [0, 0, 20])),
-                         'scale': kf((64, [100, 35]), (73, [100, 100], 'outCubic'), (80, [100, 28]))}),
+                                    'fill': {'gradient': {'angle': 90, 'stops': [[0, '#6b3f2c'], [0.45, '#55301f'], [1, '#2e1810']]}}}, t0=64, t1=82,
+              # 棒の太さ(完成版の 5250〜5265 で測った。1920 幅で 96 → 307 → 365 → 134 → 84px)= 縦の拡大。77〜80 は棒に沿って左上へ引く(右の端が見えてくる)
+              transform={'position': {'k': [dict(f=f, v=[x, y, 0]) for f, x, y in B25_MACRO_POS]},
+                         'rotation': {'k': [dict(f=64, v=[0, 0, 44]), dict(f=70, v=[0, 0, 30]), dict(f=77, v=[0, 0, 25]), dict(f=81, v=[0, 0, 21])], 'interp': 'spline'},
+                         'scale': {'k': [dict(f=f, v=[100, s]) for f, s in B25_MACRO_S]}}),
         layer('pack', 'mesh', n, {'light': {'ambient': 1.1, 'intensity': 1.6, 'direction': [-0.4, -0.8, -1]}, 'env': 'soft', 'objects': [pack]}, pos=[960, 540], t1=66),
     ]
     return doc('再現 B25 ポッキーゲーム 1.11', n, L)
