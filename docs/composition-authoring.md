@@ -570,3 +570,13 @@ call("PATCH", f"/api/comps/{cid}", {"data": comp["data"]})
     `scale` は倍率(% ではない)。y は下が正(`lathe` の `profile`・`extrude` の `points`・`velocity`・`gravity` も)。金属は `env` が `"none"` だと黒い。
     透過 PNG を貼るときは `transparent: true` か `alpha_test: 0.5`。交差・影を落とし合う物は同じ mesh レイヤーに入れる(レイヤーどうしは原点の奥行きで並ぶだけ)。
     `instances.colors` を使うときマテリアルは白。破片(`shards`)の `progress` 0 は元の板そのものなので、割れ始めるコマまで置いておいてよい。
+
+## 解像度の決まり(2026-11-17・さくら再現 v14 で分かった事)
+
+- **素材の画素数と中身の細かさは別**。小さく生成した絵を大きな画素数へ引き伸ばして登録すると、数の上では足りて見えるのに画面で粗い。生成したままの画素数で登録し、置く大きさは `source.fit`({width, height, mode: "stretch"})で決める
+  (箱だけ変わり、位置・anchor・マスク・切り抜きは動かない)。大きく映す絵は、寄りの最大のコマで「素材 1 画素 → 画面 1 画素以下」になる大きさを、拡大モデル(realesr-animevideov3)で作ってから置く。
+- **入れ子の comp は自分の画素数で描いてから親で拡大される**。親で 1.2 倍以上に拡大する・3D で手前に置く comp レイヤーには `raster_scale`(1.5〜4)を書く(子を k 倍の画素数で描く。重いので要る所だけ)。
+  カメラのそばを通る文字・図形にも同じ項目が効く(エンジンは scale のキーの最大値しか見ない。カメラの寄り・親の拡大は見ない)。
+- ノイズ(`noise`)の amount は画素ごとの振れ幅(100 = ±50%)。紙の粒くらいなら 10〜15。動かさないなら `animated: false`(毎コマ変わるとちらつく)。
+- 書き出しは符号化を 1 回に。区間ごとに符号化した物をつないで再符号化すると、細かさが 2 割落ち、色変換が不正確だと約 3 暗くなる(RGB → YUV は BT.709 を明示・accurate_rnd)。
+- 測り方: エンジンの中で全レイヤーの四隅を画面へ写して倍率を出す(`/tmp/claude-1000/sakura-rebuild/POLISH6/probe.js`)。くわしくは `outputs/pocky2026/finish/v13/_share/sakura_repro_v14/RESOLUTION_v14.md`。

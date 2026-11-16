@@ -10651,6 +10651,17 @@
    "animatable": true,
    "group": "時間"
   },
+  "raster_scale": {
+   "type": "number",
+   "label": "描き出す倍率(0 = 自動。カメラの寄り・親の comp での拡大で粗く見える所に 1.5〜4)",
+   "default": 0,
+   "min": 0,
+   "max": 8,
+   "step": 0.25,
+   "animatable": false,
+   "optional": true,
+   "group": "表示"
+  },
   "visible": {
    "type": "bool",
    "label": "表示",

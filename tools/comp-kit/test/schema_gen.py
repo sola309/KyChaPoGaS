@@ -359,6 +359,7 @@ COMMON = {
     "in": N("開始コマ", 0, 0, 10000000, 1, False, group="時間"), "out": N("終了コマ(含まない)", 150, 0, 10000000, 1, False, group="時間"), "start": N("素材の開始コマ", 0, -10000000, 10000000, 1, False, group="時間", types=["video", "comp", "sequence"]), "speed": N("再生速度", 1, -16, 16, 0.01, False, group="時間", types=["video", "comp", "sequence"]),
     "time_remap": N("タイムリマップ(素材のコマ)", None, 0, 10000000, 1, optional=True, group="時間", types=["video", "comp", "sequence"]), "freeze": N("止めるコマ", None, 0, 10000000, 1, optional=True, group="時間", types=["video", "comp", "sequence"]), "reverse": B("逆再生", group="時間", types=["video", "comp", "sequence"]), "loop": B("繰り返す", group="時間", types=["video", "comp", "sequence"]),
     "posterize_time": N("コマ打ち(1 秒あたりのコマ数。0 = なし)", 0, 0, 120, 1, group="時間"),
+    "raster_scale": N("描き出す倍率(0 = 自動。カメラの寄り・親の comp での拡大で粗く見える所に 1.5〜4)", 0, 0, 8, 0.25, False, optional=True, group="表示"),
     "visible": B("表示", True, group="表示"), "locked": B("ロック", group="表示"), "solo": B("ソロ", group="表示"), "guide": B("下絵(書き出しに出さない)", group="表示"),
     "blend": {"type": "select", "label": "合成モード", "default": "normal", "options": "blend_modes", "animatable": False, "group": "合成"}, "three_d": B("3D レイヤー", group="3D"), "billboard": B("いつもカメラを向く", group="3D"), "double_sided": B("裏面も描く", True, group="3D"),
     "motion_blur": B("モーションブラー", group="合成"), "parent": T("親レイヤー", None, layer=True, optional=True, group="変形"), "clip_to": T("このレイヤーの形で切り抜く(相手も映る)", None, layer=True, optional=True, group="合成"),

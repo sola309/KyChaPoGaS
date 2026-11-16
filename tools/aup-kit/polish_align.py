@@ -84,6 +84,12 @@ def main():
     edits = table.get('layer_edits', {})          # "comp:layer" → {"set": {"a.b.c": 値}, "add_effects": [...]}(顔合わせ以外の小さな直し)
     comps = call('GET', f'/api/comps/?project_id={PROJECT}')
     n_l = n_c = 0
+    p6_back = {}
+    try:
+        t6 = json.load(open(os.path.join(os.path.dirname(TABLE), 'polish6_hires.json'), encoding='utf-8'))
+        p6_back = {v['new']: int(k) for k, v in t6.get('assets', t6).items() if str(k).isdigit()}
+    except (OSError, ValueError):
+        pass
     for c0 in comps:
         c = call('GET', f"/api/comps/{c0['id']}")
         data = c['data']
@@ -124,6 +130,7 @@ def main():
             mark = {}
             # 2) 顔合わせ
             aid = (L.get('source') or {}).get('asset_id')
+            aid = p6_back.get(aid, aid)      # v14: 高い解像度の素材へ替えてあるレイヤー(polish6_hires.py)は、替える前の id で表を引く
             r = rules.get(aid) if L.get('type') == 'image' else None
             if r and (not r.get('layers') or key in r['layers']) and key not in (r.get('skip') or []):
                 rr = dict(r, **(r.get('per_layer') or {}).get(key, {}))

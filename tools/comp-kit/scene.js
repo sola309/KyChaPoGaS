@@ -521,7 +521,12 @@ export class CompScene {
     }
     return s
   }
+  // raster_scale(レイヤーの項目): 描き出す倍率を自分で決める。カメラの寄り・親の comp での拡大は scale のキーからは分からないので、
+  //   引き伸ばされて粗く見える所に書く(文字・図形のラスタ、エフェクト用の RT、入れ子の comp の描き出しに効く)
+  rasterHint(L) { const o = num(L.def.raster_scale, 0); return o > 0 ? clamp(o, 0.25, 8) : 0 }
   rasterScale(L) {
+    const o = this.rasterHint(L)
+    if (o) return o * this.env.rs
     if (L.rsHint) return L.rsHint * this.env.rs
     let s = this.scaleEstimate(L)
     const pc = L.def.source?.per_char
@@ -533,6 +538,8 @@ export class CompScene {
   }
   // エフェクト用の RT の倍率(レイヤーの 1px を何画素で持つか)
   fxRes(L) {
+    const o = this.rasterHint(L)
+    if (o) return o * this.env.rs
     if (!L.fxHint) {
       const s = this.scaleEstimate(L)
       const steps = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4]
@@ -889,7 +896,11 @@ export class CompScene {
         cf = this.fitFrame(L, cf, e.scene.duration)
         if (cf < -1e-6 || cf >= e.scene.duration) return null
         // source.transparent: true = 子の背景色(bg)を塗らない(子に何も無い所は、親の下のレイヤーが透けて見える)
-        const rt = e.scene.renderCached(cf, [...stack, e.id], !!L.def.source?.transparent)
+        // raster_scale: 子を k 倍の画素数で描く(親で拡大して映す入れ子が粗くならないように。子の中の文字・図形・3D・エフェクトも k 倍で描かれる)
+        const rk = Math.min(4, this.rasterHint(L) || 1), rs0 = this.env.rs
+        let rt
+        if (rk !== 1) this.env.rs = rs0 * rk
+        try { rt = e.scene.renderCached(cf, [...stack, e.id], !!L.def.source?.transparent) } finally { this.env.rs = rs0 }
         C.temp = rt; C.texture = rt.texture; C.uvRect = [0, 1, 1, 0]; C.edge = true
         break
       }

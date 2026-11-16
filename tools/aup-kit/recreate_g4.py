@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """作り直し G4: S23・S26・S34・S36・S38・S40・S43 の連番(花びら・ちり・金紙など)。"""
+import os
 from recreate_lib import *   # noqa: F401,F403
 from recreate_lib import kfa as kf   # noqa: F811  この組のキーは「着くまでの加減速を着地のキーに書く」流儀(v4 まで 1 区間ずれて直線で動いていた)
 
@@ -142,6 +143,10 @@ def _b25c_puppet():
     hc = [560, 380]
     if g['puppet_id'] == 'sakura_A_profile2':      # v4: 腰までの横顔(顔の層が無い 2 層のパペット)。頭の中心・高さは絵から測った値。口が目印 (760, 520) に来るように置く
         g = dict(g, head=[1040, 395], head_h=230)
+        # v14(POLISH6): 寄りの大写し(5364〜5428)でパペットの絵 1 画素が画面の 3.7 画素に伸びて粗かった → 2.5 倍(3200 角)に拡大した版 sakura_A_profile2_hr
+        #   (POLISH6/mk_puppet_hr.py。座標は全部 2.5 倍なので、頭の位置・高さも 2.5 倍で渡すと同じ置き方になる)
+        if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../backend/data/puppets/sakura_A_profile2_hr/manifest.json')):
+            g = dict(g, puppet_id='sakura_A_profile2_hr', head=[1040 * 2.5, 395 * 2.5], head_h=230 * 2.5, canvas=[3200, 3200])
         hc = [672 + 800, 334]
         w = 3000                                    # 左へ長くなびくポニーテールが切れないように comp を左右に 800 ずつ広げる(中心からの位置は同じ)
     L = [puppet_layer('fig', n, g, hc, 450, seed=2, wind=-0.9, sway=1.5, turn=0.08)]
