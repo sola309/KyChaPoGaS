@@ -179,6 +179,7 @@ def figure(pos, color, h=165, name='figure', rot=None):
 
 # FEEL2: 完成版 3520〜3552 の 1 コマごとの動きの速さ(feel-kit の実測。数だけ)。添字 0 = comp の 130 → 131 コマの動き
 ROOF_ORBIT_SPEED = [9, 9, 10, 11, 10, 13, 12, 12, 13, 13, 14, 16, 17, 20, 24, 23, 29, 31, 30, 40, 37, 43, 52, 56, 61, 71, 79, 92, 117, 135, 211, 201, 299]
+ROOF_ORBIT_POW = 0.7       # v15: 回りこみの配分(1 = 手本の速さの累積そのまま。小さいほど前半へ配る)
 ROOF_PHI_END = 128.0      # v14: 回りこみの終わりの向き(度)
 ROOF_ORBIT_END = ((700, -330, 1080), (150, -40, 1550))      # 回りこみの終わりの カメラの位置・注視点
 
@@ -253,12 +254,15 @@ def _roof_front_cam():
     #   終わりの数コマに動きが集まっていなかった(手本は 33 コマのうち終わりの 4 コマで全体の 47% を動く)。
     #   → 向き φ を「手本の 1 コマごとの速さ(ROOF_ORBIT_SPEED)の累積の割合」で 130〜163 の全部に配り直し、距離・高さ・見下ろし・外し角は φ の関数(測ったキーの組は同じ)にした。
     #   道(通る点の並び)は v13 と同じで、進み方だけ終わりへ寄せた。終わりの向きは ROOF_PHI_END(測った 105° より少し先まで回す)
-    tot = float(sum(ROOF_ORBIT_SPEED))
+    # v15(POLISH7): v14 の配り方(速さの累積そのまま)は前半が手本より遅かった(3521〜3539 の動きの量 56〜203 に対し手本 92〜404。終わりの 1 コマは 15°以上回って
+    #   動きの道具も目も追えない)。回る量(ROOF_PHI_END)は同じまま、重みを 速さ^0.7 に(前半の 19 コマの取り分 17.5% → 27.5%・最後の 1 コマ 21° → 14°)
+    wts = [v ** ROOF_ORBIT_POW for v in ROOF_ORBIT_SPEED]
+    tot = float(sum(wts))
     phis = [k[1] for k in ROOF_ORBIT_KEYS]
     acc = 0.0
     for f in range(130, 164):
         if f > 130:
-            acc += ROOF_ORBIT_SPEED[f - 131]
+            acc += wts[f - 131]
         phi = ROOF_PHI_END * acc / tot
         pq = min(phi, phis[-1])
         prm = [phi] + [_pchip(phis, [k[j] for k in ROOF_ORBIT_KEYS], pq) for j in range(2, 6)]

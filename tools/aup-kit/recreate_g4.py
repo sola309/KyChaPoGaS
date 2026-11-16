@@ -241,6 +241,9 @@ def b25(ctx):
     CH = B25_CHARA
     L = [
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
+        # v15(POLISH7): 寄りの余韻(5302〜5325 = 118〜141)で手本は花びらと雲が流れつづける(動きの量 17〜46)。こちらは小さい花びら(34px・1 コマ 1.5px)だけで 0〜9、止まって見えた。
+        #   手前を大きな花びらが速く横切る層を足す(95px・1 コマ 約 5px。30 コマ目から出しはじめる。出しはじめを 100・84 コマ目にした 1・2 回目は、粒が育つ前で 1 枚も映らなかった)。寿命 2.5 秒・1 秒 8 枚 = 同時に 20 枚まで
+        petals('pt2', n, seed=93, rate=8, life=2.5, size=80, wind=(-300, 0, 0), gravity=(0, 130, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=260, pre=-30, area=(2800, 1300, 0)),
         layer('chara', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=82,
               # 152 から先は v5 のまま: 5337〜5369(154〜186)の寄りは加速しつづけ(inSine)、止まらずに 189 から 100 コマ以上かけて減速(outCirc)
               transform={'anchor': [60, -380, 0],

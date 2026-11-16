@@ -94,11 +94,13 @@ def clock_layers(ctx, n, tree_scale):
     for i, t in enumerate(ROMAN):
         a = math.radians(i * 30)
         L.append(layer(f'num{i}', 'text', n, {'text': t, 'font': 'Noto Serif JP', 'weight': 900, 'size': 195, 'fill': INK, 'tracking': -4}, parent='face', t0=92,
-                       transform={'position': [math.sin(a) * 590, -math.cos(a) * 590], 'rotation': i * 30,
-                                  'scale': kf((92, [6, 8], 'inQuad'), (99, [22, 30], 'outCubic'), (110, [66, 100])), 'opacity': kf((92, 0), (96, 100))}))
-    for j, (r, f0) in enumerate([(120, 98), (240, 100)]):          # 出てすぐ広がって消える輪 2 本
-        L.append(layer(f'pulse{j}', 'shape', f0 + 26, {'kind': 'ellipse', 'width': r * 2, 'height': r * 2, 'fill': None, 'stroke': '#ffffff', 'stroke_width': 22}, parent='face', t0=f0,
-                       transform={'position': [0, 0], 'scale': kf((f0, [40, 40], 'outQuad'), (f0 + 26, [150, 150])), 'opacity': kf((f0, 0), (f0 + 5, 40), (f0 + 26, 0))}))
+                       # v15(POLISH7): 止め(100〜132 = 884〜916)で手本は「数字が外へ広がりながら大きくなりつづけ、中心から輪が次々に広がる」(連続コマで見た)。
+                       #   v14 までは数字が 110 で止まり、輪は 2 本だけで 126 に消えていた → 数字の大きさ・半径を 128 まで長い減速で動かし、輪を 6 本に(104〜122 に 6 コマおき・30 コマかけて広がる)
+                       transform={'position': kf((92, [math.sin(a) * 500, -math.cos(a) * 500], 'outCubic'), (128, [math.sin(a) * 590, -math.cos(a) * 590])), 'rotation': i * 30,
+                                  'scale': kf((92, [6, 8], 'inQuad'), (99, [22, 30], 'outCubic'), (128, [66, 100])), 'opacity': kf((92, 0), (96, 100))}))
+    for j, (r, f0) in enumerate([(120, 98), (240, 100), (200, 104), (280, 110), (230, 116), (300, 122)]):          # 出てすぐ広がって消える輪(v15: 2 → 6 本)
+        L.append(layer(f'pulse{j}', 'shape', f0 + (26 if j < 2 else 32), {'kind': 'ellipse', 'width': r * 2, 'height': r * 2, 'fill': None, 'stroke': '#ffffff', 'stroke_width': 22}, parent='face', t0=f0,
+                       transform={'position': [0, 0], 'scale': kf((f0, [40, 40], 'outQuad'), (f0 + (26 if j < 2 else 32), [150, 150] if j < 2 else [190, 190])), 'opacity': kf((f0, 0), (f0 + 5, 40), (f0 + (26 if j < 2 else 32), 0))}))
     L.append(layer('ring_in', 'shape', n, {'kind': 'ellipse', 'width': 750, 'height': 750, 'fill': None, 'stroke': '#ffffff', 'stroke_width': 2.5,
                                            'trim': kf((85, [0, 0], 'outQuad'), (102, [0, 1]))}, parent='face', t0=85, transform={'position': [0, 0], 'rotation': -60, 'opacity': 85}))
     L.append(layer('ring_tick', 'shape', n, {'kind': 'ellipse', 'width': 1490, 'height': 1490, 'fill': None, 'stroke': '#ffffff', 'stroke_width': 16, 'dash': [2, 37]}, parent='face', t0=92,
@@ -417,18 +419,25 @@ def _title_confetti(name, n, seed):
     tex_r = {'type': 'standard', 'color': '#ffffff', 'roughness': 0.7, 'texture': {'comp_id': PKG_COMP, 'frame': 105}, 'texture_repeat': [0.42, 0.62], 'texture_offset': [0.0, 0.0]}
     tex_g = {'type': 'standard', 'color': '#d8f0dc', 'roughness': 0.7, 'texture': {'comp_id': PKG_COMP, 'frame': 10}, 'texture_repeat': [0.5, 0.8], 'texture_offset': [0.0, 0.05]}
 
-    def boxes(color, tex, sd, count, size, sc):
+    def boxes(color, tex, sd, count, size, sc, zc, depth):
         m = {'color': color, 'roughness': 0.75}
-        # v14(POLISH6): v13 で流れを 2.5 倍にしても動きの量が 5 前後のままだった原因 = 箱・紙片が小さく遠く、まばら(奥行き 5200 の箱の中に散らばり、画面に映るのは数個・数十 px)。
-        #   手本は左手前を大きな緑の箱が横切り、中くらいの紙片が画面じゅうを流れる → 散らばる範囲を手前へ浅くし(奥行き 5200 → 3000・中心 z 2200 → 1300)、大きさを 1.5 倍に
-        return {'geometry': 'box', 'size': size, 'position': [0, 0, 1300], 'material': m, 'faces': [m, m, m, m, tex or m, tex or m],
-                'instances': {'count': count, 'seed': sd, 'layout': 'box', 'area': [4800, 2800, 3000], 'scale': [sc[0] * 1.5, sc[1] * 1.5], 'rotation_random': [180, 180, 180],
+        # v14(POLISH6): 流れを 2.5 倍にしても動きの量が 5 前後だった原因 = 箱・紙片が小さく遠くまばら → 手前へ浅く(奥行き 3000・中心 z 1300)・1.5 倍にした。
+        # v15(POLISH7): v14 は手前(カメラから 500 以内)を通る箱が画面で 300〜500px になり、濃い赤の大きな面が六角形の飾り・白い麻の葉の線・題字のソウルジェムに重なってごちゃついた(1300 付近。ユーザー指摘)。
+        #   手本は「細い紙片がたくさん + 左下を横切る淡い緑の箱 1 個」で、主役(題字・六角形)のまわりに大きな面は来ない。→ 流れ(速さ・向き)は同じまま、
+        #   (1) 絵つきの箱は数を 28 → 11、奥へ(終わりのコマでもカメラから 1250 以上 = 画面で 180px 以下)、(2) 紙片は奥行きをそろえ(終わりでもカメラから 750 以上)、大きさは v13 の約 2 倍・数は 200 → 185(画面で 40〜200px。1 回目は v13 と同じ大きさで点にしか見えず流れが消えた)、
+        #   (3) 手本と同じ「左下を横切る淡い緑の箱」を 1 個だけ別レイヤー(不透明度 80%)で足した(題字・六角形にはかからない道)。
+        return {'geometry': 'box', 'size': size, 'position': [0, -200, zc], 'material': m, 'faces': [m, m, m, m, tex or m, tex or m],
+                'instances': {'count': count, 'seed': sd, 'layout': 'box', 'area': [5600, 3200, depth], 'scale': sc, 'rotation_random': [180, 180, 180],
                               'spin': [45, 60, 30], 'spin_random': [70, 80, 50], 'velocity': [-150, 220, -300], 'velocity_random': [120, 120, 120]}}      # v13(POLISH5): 流れを 2.5 倍に。v12 は題字の止め(1244〜1254・1297〜1308)で背景の箱・紙片がほぼ動かず、動きの量 0〜1(手本は 30 前後で流れつづける)
-    objs = [boxes(red, tex_r, seed, 16, [110, 172, 34], [0.6, 1.5]), boxes(green, tex_g, seed + 1, 12, [110, 172, 34], [0.6, 1.5]),
-            boxes(red, None, seed + 2, 120, [60, 15, 9], [0.6, 1.5]), boxes(green, None, seed + 3, 80, [60, 15, 9], [0.6, 1.5])]
+    objs = [boxes(red, tex_r, seed, 6, [110, 172, 34], [0.8, 1.3], 2500, 1800), boxes(green, tex_g, seed + 1, 5, [110, 172, 34], [0.8, 1.3], 2500, 1800),
+            boxes(red, None, seed + 2, 110, [60, 15, 9], [1.3, 2.6], 2700, 2800), boxes(green, None, seed + 3, 75, [60, 15, 9], [1.3, 2.6], 2700, 2800)]
+    mg = {'color': '#8fd0a0', 'roughness': 0.8}
+    hero = [{'geometry': 'box', 'size': [110, 172, 34], 'position': [-1198, 294, 2003], 'material': mg, 'faces': [mg, mg, mg, mg, tex_g, tex_g],
+             'instances': {'count': 1, 'seed': seed + 5, 'layout': 'box', 'area': [0, 0, 0], 'scale': [1.5, 1.5], 'rotation': [25, 35, 15], 'spin': [22, 30, 8], 'velocity': [249, 10, -788]}}]
     cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2000]), (n, [1000, 520, 2600]))},
                 transform={'position': kf((0, [900, 560, -1500], 'outCubic'), (60, [960, 540, -900]), (n, [1000, 520, -500]))})
-    return doc(name, n, [cam, petals('pet', n, seed=seed + 9, rate=5, life=5, size=26, wind=(-70, 0, 0), gravity=(0, 70, 0), colors=('#f6c1d2', '#f4aac4')), _mesh('boxes', n, objs)])
+    return doc(name, n, [cam, petals('pet', n, seed=seed + 9, rate=5, life=5, size=26, wind=(-70, 0, 0), gravity=(0, 70, 0), colors=('#f6c1d2', '#f4aac4')),
+                         _mesh('hero', n, hero, transform={'opacity': 80}), _mesh('boxes', n, objs)])
 
 
 @reg(S4 + '09_タイトルパート背景/1.02', 'B07', 'mesh(箱・紙片の instances)+ particles')
