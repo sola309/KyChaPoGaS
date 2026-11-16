@@ -10,6 +10,7 @@
   2f. puppet レイヤー: 動かさない姿 = PNG を重ねた絵・決定論・首ふりで目が動く・髪の根元は固定
   2g. puppet のボーン: 肩 90° で腕が真横・動かさない姿 = PNG・決定論・preset wave で腕が上がる
   2i. 要素ごとのキー(transform.rotation [0, {k}, 0] = 定数・ベクトルのキーと同じ絵)。VRM(モデルがあるときだけ: 描ける・後ろ姿・表情・視線・揺れ物の決定論・風)
+  2j. マスクの大きさのキーフレームが 0 のコマ = 面積 0 のマスク(全部隠す。反転は何も隠さない。定数の 0 は今までどおり)
   2h. 動きの気持ちよさ: interp spline(キーを通る・折れない・行き過ぎない)・イージングの別名とプリセット・data.stagger
   2e. mesh レイヤー: 光なしの箱の画素数・faces の並びと回転の向き・破片の progress 0 = 元の板・comp テクスチャ = comp レイヤー・立体文字の輪郭・複製の決定論・被写界深度・マネキン(手先の位置・ひじ 90 度・角度のキーフレーム・歩きの位相)
   3. 決定論: コマを描く順を変えても同じ絵(md5)
@@ -535,6 +536,26 @@ def main():
             ok("VRM: spring.turn_inertia 0 = 速い振り向きのあとも、回らずに立っているときと同じ髪(既定 1 は振られて違う絵)", t0 == st and t1 != st)
             ta, tb = ti({"turn_inertia": 0.3}, (26, 34)), ti({"turn_inertia": 0.3}, (34, 26))
             ok("VRM: turn_inertia つきの決定論(描く順を変えても同じ絵)", ta[26] == tb[26] and ta[34] == tb[34] and ta[34] != t1)
+
+        # 2j. マスクの大きさのキーフレームが 0 のコマ = 面積 0 のマスク(2026-11-16。前は「大きさの指定なし」と読んで、0 から開くマスクの頭の 1 コマだけ全部出た・反転は全部消えた)
+        def mk(fx, group=False):
+            sol = {"id": "s", "type": "solid", "in": 0, "out": 10, "source": {"color": "#ff0000", "width": 120, "height": 120}}
+            if group:
+                return comp([{"id": "g", "type": "group", "in": 0, "out": 10, "scope": ["s"], "effects": [fx]}, sol])
+            return comp([dict(sol, effects=[fx])])
+        cnt = lambda c_, f=0: (lambda im_: sum(1 for y in range(0, 200, 4) for x in range(0, 200, 4) if im_.getpixel((x, y))[3] > 128))(px(asyncio.run(grab(c_, [f], base))[f]))  # noqa: E731
+        grow = {"k": [{"f": 0, "v": 0}, {"f": 8, "v": 160}]}
+        full = cnt(mk({"type": "opacity", "params": {"amount": 100}}))
+        buf = io.BytesIO(); Image.new("RGBA", (32, 32), (255, 255, 255, 255)).save(buf, "PNG")
+        murl = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        for nm, base_p in (("mask", {"shape": "ellipse"}), ("mask_image", {"url": murl})):
+            for grp in (False, True):
+                tag = f"{nm}{'(グループ)' if grp else ''}"
+                n0 = cnt(mk({"type": nm, "params": dict(base_p, size=grow)}, grp), 0)
+                n4 = cnt(mk({"type": nm, "params": dict(base_p, size=grow)}, grp), 4)
+                i0 = cnt(mk({"type": nm, "params": dict(base_p, size=grow, invert=True)}, grp), 0)
+                ok(f"{tag}: 大きさのキーが 0 のコマは全部隠す・途中のコマは一部だけ・反転は何も隠さない", n0 == 0 and 0 < n4 < full and i0 == full, f"0 コマ目 {n0} / 4 コマ目 {n4} / 反転 {i0} / 全部 {full}")
+        ok("mask: 定数の size 0 は今までどおりレイヤーの大きさ(全部見える)", cnt(mk({"type": "mask", "params": {"shape": "rect", "size": 0}})) == full)
 
         # 3. 決定論 / 4. プレビュー一致
         exs = ["05_particles_adjustment", "10_text"] if a.quick else ["01_kinetic_type", "04_mask_matte_fx", "05_particles_adjustment", "08_repeater_shapes", "10_text", "11_character_card", "12_petals_3d_dof", "14_mesh_3d", "15_confetti_shatter", "puppet_01_idle"]

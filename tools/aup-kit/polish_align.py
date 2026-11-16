@@ -88,6 +88,21 @@ def main():
         c = call('GET', f"/api/comps/{c0['id']}")
         data = c['data']
         before = json.dumps(data, ensure_ascii=False, sort_keys=True)
+        # 0) 重なり順の直し(表の "reorder": {"comp": [["動かす id", "この id のすぐ前(手前)へ"], …]})。まず前回の分を元の場所へ戻す
+        Ls = data.get('layers', [])
+        for L in [x for x in Ls if 'polish_after' in x]:
+            aft = L.pop('polish_after')
+            Ls.remove(L)
+            i = next((j for j, y in enumerate(Ls) if y['id'] == aft), -1)
+            Ls.insert(i + 1, L)
+        if not a.revert:
+            for mv, before_id in (table.get('reorder') or {}).get(str(c['id']), []):
+                i = next((j for j, y in enumerate(Ls) if y['id'] == mv), None)
+                if i is None or not any(y['id'] == before_id for y in Ls):
+                    continue
+                L = Ls.pop(i)
+                L['polish_after'] = Ls[i - 1]['id'] if i > 0 else None
+                Ls.insert(next(j for j, y in enumerate(Ls) if y['id'] == before_id), L)
         for L in data.get('layers', []):
             key = f"{c['id']}:{L['id']}"
             # 1) 元へ戻す

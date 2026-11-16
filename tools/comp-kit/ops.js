@@ -136,6 +136,9 @@ R.mask_shape = {
     else { float rm = min($0.z, $0.w); sd = OSTAR(q / max($0.zw, vec2(1e-3)) * rm, rm, $3.x, $1.y); }
     float k = OAA(sd - $2.y, $1.z, px); if ($1.w > 0.5) k = 1.0 - k; m *= mix(1.0, k, $2.x); }`,
   pack(p, ctx, o, i) {
+    // 大きさのキーフレームが 0 以下のコマ = 面積 0 のマスク(ふつうは全部隠す・反転は何も隠さない)。前は「大きさの指定なし = レイヤーの大きさ」と読み、
+    // 0 から開く円のマスクの頭の 1 コマだけ絵が全部出る(反転なら全部消える)不具合があった(2026-11-16)。定数の 0・省略は今までどおりレイヤーの大きさ
+    if (p._size_anim && !p.fit_original && num(p.size, 0) <= 0) { if (!p.invert) ctx.hide = true; return false }
     const r = ctx.rect, c = cxy(r, p)
     // 大きさ: w,h(px)か、size(px)+ aspect(-100〜100。正で縦長、負で横長)。省略時はレイヤーの大きさ
     let w = num(p.w ?? p.width, NaN), h = num(p.h ?? p.height, NaN)
@@ -164,6 +167,8 @@ R.mask_image = {
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) k = 0.0;
     if ($1.w > 0.5) k = 1.0 - k; m *= mix(1.0, k, $2.x); }`,
   pack(p, ctx, o, i) {
+    // 大きさのキーフレームが 0 以下のコマ = 面積 0 のマスク(mask_shape と同じ決まり)
+    if (p._size_anim && !p.fit_original && num(p.size, 0) <= 0) { if (!p.invert) ctx.hide = true; return false }
     const e = ctx.image(p)
     if (!e) return false
     // まだ読めていない間は、反転でなければ全部隠す(一瞬だけ素通しで見えるのを防ぐ)

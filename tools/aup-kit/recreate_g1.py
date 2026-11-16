@@ -189,8 +189,18 @@ def b03(ctx):
                            three_d=True, transform={'position': pos, 'rotation': rot, 'opacity': 70}))
     # v5(測った): 完成版 600〜719 は 1 コマ 8.9px の一定の流れ(v4 は 3.6px)。直線のまま、進む量を 2 倍に
     #     v5 の動画(進む量 2 倍)を測ると 1.35 倍で行き過ぎ → v4(0.49 倍)との間を取って 1.6 倍に(この値は描き出して確かめていない)
-    cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2400]), (n, [1023, 508, 5270]))},
-                transform={'position': kf((0, [900, 560, -1500]), (n, [1123, 464, 2320]))})
+    # POLISH2 11/16: 一定の速さの流れ → 半拍ごとに「加速して、拍で抜ける」脈に。完成版 596〜724 の流れは 11 コマ周期で 6 → 18px/コマ まで上がっては落ちる(feel-kit の実測。拍とは合っていない)。
+    #     形(1 周期で速さが約 3 倍まで上がって落ちる)は完成版にならい、周期は曲の半拍(12.15 コマ。拍 = ルートの 614.4 + 24.3k = この comp の 30.4)に合わせた。進む量の合計は前と同じ
+    import math as _m
+    P_, B0_ = 12.15, 30.4
+    sp = [_m.exp(1.1 * (((f + 0.5 - B0_) / P_) % 1.0)) for f in range(n)]
+    tot, acc, us = sum(sp), 0.0, [0.0]
+    for v in sp:
+        acc += v
+        us.append(acc / tot)
+    mix = lambda a, b, u: [round(x + (y - x) * u, 2) for x, y in zip(a, b)]      # noqa: E731
+    cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf(*[(f, mix([960, 540, 2400], [1023, 508, 5270], us[f])) for f in range(n + 1)])},
+                transform={'position': kf(*[(f, mix([900, 560, -1500], [1123, 464, 2320], us[f])) for f in range(n + 1)])})
     return doc('再現 B03 文字散らせ(箱・紙片・槍)', n, [cam, _mesh('spears', n, spears, light={'ambient': 3, 'intensity': 0}), *rings, _mesh('boxes', n, objs)])
 
 

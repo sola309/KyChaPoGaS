@@ -112,8 +112,8 @@ def tex(name):
     elif name == 'blob':     # 足もとの影(まるくぼけた黒)
         im = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        d.ellipse((10, 10, 54, 54), fill=(30, 26, 22, 150))
-        im = im.filter(ImageFilter.GaussianBlur(6))
+        d.ellipse((8, 8, 56, 56), fill=(24, 20, 18, 235))      # POLISH2 11/16: 濃く(前は 150 でほぼ見えなかった)
+        im = im.filter(ImageFilter.GaussianBlur(5))
     else:
         raise KeyError(name)
     _TEX[name] = _url(im)
@@ -357,7 +357,9 @@ def _cam_yaw(x, z):
 
 # v6: 並ぶ 7 体の足もと(完成版 3585 の足の画面位置を、測り直したカメラから床へ逆算。R/V6/roofcam.json)と、座る B の板(ベンチの上・高さ 128)
 ROOF_FEET_V6 = {1: (-299, -1022), 2: (-71, -724), 3: (-22, -1437), 4: (189, -1082), 5: (478, -573), 6: (597, -919), 7: (454, -1457)}
-ROOF_BSIT_V6 = dict(pos=(-30, -83, -2004), h=138)
+ROOF_BSIT_V6 = dict(pos=(40, -54, -1850), h=138)      # POLISH2: (-30, -83, -2004) から奥へ(ベンチの脚まで画面に入るように)
+ROOF_SHADOW_OFS = (14, 6)      # POLISH2: 並ぶ 7 体の足もとの影のずらし(x, z)
+ROOF_BENCH = ((40, -1850, 230), (330, -1790, 190))      # POLISH2 11/16: ベンチ = 横長(x にのびる)の板 2 台(x, z, 幅)。1 台目に座る B を乗せる(前は奥へのびる細い板で、B は板の左の空中に居た)
 
 
 def roof_figures(n, ctx=None):
@@ -380,7 +382,7 @@ def roof_figures(n, ctx=None):
         h = ROOF_BSIT_V6['h']
         w = h * a['w'] / a['h']
         px, py, pz = ROOF_BSIT_V6['pos']
-        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px, py + 1 - h / 2, pz], 'B_sit': True,
+        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px, py + 4 - h / 2, pz], 'B_sit': True,      # POLISH2: 絵の接地の線(下から 3.5%)をベンチの板の上面(y=-83)へ
                 'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'asset_id': a['asset_id']}}}
     return F
 
@@ -430,11 +432,12 @@ def roof_parts(n, parts, figures=False, ctx=None):
                       'instances': {'count': cnt, 'seed': seed, 'layout': 'box', 'area': [130000, 0, 54000], 'scale': [0.5, 1.4]}})
     # v4: 金網ごしの棟は屋上より 3m 低い細長い屋根が奥へのびる形(完成版 3465 の白い台形)。前は 20m 下にあって画面の外だった
     if 'sc1' in P:
-        O.append(box((200, 1500, 1100), (-1150, 1050, 2720), '#e6e4dc'))
-        O.append(box((200, 1500, 1100), (-620, 1050, 2720), '#efeee8'))
+        # POLISH2 11/16: 白一色の箱 → コンクリートの質感(回りこみの終わり 3549〜3552 で画面の半分を占めるので)
+        O.append(box((200, 1500, 1100), (-1150, 1050, 2720), '#e6e4dc', material=mat('#f4f2ea', 'floor', (2, 6))))
+        O.append(box((200, 1500, 1100), (-620, 1050, 2720), '#efeee8', material=mat('#fbf9f2', 'floor', (2, 6))))
     if 'sc2' in P:
-        O.append(box((210, 1500, 1000), (-290, 1050, 2800), '#e2e0d8'))
-        O.append(box((340, 1400, 300), (-200, 1150, 2330), '#dcdad2'))
+        O.append(box((210, 1500, 1000), (-290, 1050, 2800), '#e2e0d8', material=mat('#f0eee6', 'floor', (2, 6))))
+        O.append(box((340, 1400, 300), (-200, 1150, 2330), '#dcdad2', material=mat('#e8e6de', 'floor', (2, 2))))
     if 'sc3' in P:    # 右の木組みの足場
         for k in range(6):
             O.append(box((300, 420, 240), (560 + k * 120, 510, 2230 + k * 215), '#d9b45c', material=mat('#d9b45c', wireframe=True)))
@@ -454,10 +457,12 @@ def roof_parts(n, parts, figures=False, ctx=None):
         O.append(plane((3200, 200), (0, -100, -1510), '#ffffff', tname='net', repeat=(400, 25), type='basic', transparent=True, alpha_test=0.05))
         O.append({'geometry': 'box', 'size': [5, 200, 5], 'position': [0, -100, -1510], 'material': mat('#9a9a5c'),
                   'instances': {'count': 59, 'layout': 'grid', 'grid': [59, 1, 1], 'spacing': [55, 0, 0]}})
-        for bx, bw in ((45, 110), (158, 80)):
-            O.append(box((bw, 10, 320), (bx, -78, -1933), '#6f5a44'))
-            for lx in (-bw / 2 + 6, bw / 2 - 6):
-                O.append(box((8, 78, 8), (bx + lx, -39, -1780), '#d9a040'))
+        for bx, bz, bw in ROOF_BENCH:      # POLISH2: 横長のベンチ(板 + 脚 4 本 + 床の影)
+            O.append(box((bw, 10, 84), (bx, -49, bz), '#6f5a44'))      # 板の上面 y=-54(腰かけの高さ)
+            for lx in (-bw / 2 + 8, bw / 2 - 8):
+                for lz in (-34, 34):
+                    O.append(box((8, 44, 8), (bx + lx, -22, bz + lz), '#d9a040'))
+            O.append(plane((bw + 60, 150), (bx - 16, -3.2, bz - 10), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
         O.append(box((110, 150, 110), (-331, -75, -1700), '#e0b040', material=mat('#e0b040', wireframe=True)))
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
@@ -470,7 +475,9 @@ def roof_parts(n, parts, figures=False, ctx=None):
             extra = roof_vrm_layers(n, VRM_PARKA[ctx.project_id])
         O.extend(x for x in F if x)
         for _i, (sx_, sz_) in ROOF_FEET_V6.items():      # POLISH 11/16: 並ぶ 7 体の足もとに丸い影(宙に浮いて見えたので)
-            O.append(plane((120, 60), (sx_ + 14, -3.5, sz_ + 6), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
+            O.append(plane((150, 78), (sx_ + ROOF_SHADOW_OFS[0], -3.5, sz_ + ROOF_SHADOW_OFS[1]), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
+        if sit_pic:      # POLISH2: 座る B の、ベンチの板の上の影
+            O.append(plane((150, 60), (ROOF_BSIT_V6['pos'][0] + 4, ROOF_BSIT_V6['pos'][1] - 1.2, ROOF_BSIT_V6['pos'][2] + 6), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
         if not sit_pic:
             O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                          # 槍(座り姿の絵には槍が描いてある)
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)

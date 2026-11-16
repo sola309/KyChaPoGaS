@@ -989,7 +989,10 @@ export class CompScene {
           else if (e.type !== 'offset') this.warn('fx' + e.type, `未対応のエフェクト: ${e.type}`)
           continue
         }
-        out.push({ type: e.type, p: evalAll(e.params, ff, this.fps) })
+        const p = evalAll(e.params, ff, this.fps)
+        // マスクの大きさがキーフレーム(または揺れ)のとき: 0 以下のコマは「面積 0 のマスク」として扱う(ops.js。定数の 0・省略は今までどおり「元の大きさ」)
+        if ((e.type === 'mask' || e.type === 'mask_shape' || e.type === 'mask_image') && isAnimated(e.params?.size)) p._size_anim = true
+        out.push({ type: e.type, p })
       }
     }
     add(L.def.effects, f, true)

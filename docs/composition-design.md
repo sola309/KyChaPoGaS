@@ -203,7 +203,7 @@ v1 の文書はそのまま読める(`version` は 1 のまま。足した項目
 | `iris` | `progress`(%)か `radius`(px)、`shape`(circle / rect / diamond / star / polygon)、`sides`、`inner`、`cx` `cy`、`feather`、`invert` | 形で開く |
 | `wipe` | `progress` `angle` `feather` | v1 と同じ。範囲はレイヤーの箱 |
 | `mask_shape`(別名 `mask`) | `shape`(rect / ellipse / diamond / triangle / pentagon / hexagon / star / polygon)、`x` `y`、`size` + `aspect`(正 = 横を縮める %、負 = 縦を縮める %)または `w` `h`、`rotation`、`radius`(rect の角丸)、`sides` `inner`、`feather`、`expansion`、`invert`、`opacity`、`fit_original` | マスク(図形)。レイヤーに付いて動く。大きさを書かなければレイヤーの箱 |
-| `mask_image` | `asset_id`(または `url`)、`x` `y`、`size`(画像の長辺 px。0・省略 = 元の大きさ)、`scale`、`aspect`、`rotation`、`feather`、`invert`、`channel`("alpha" / "luma" / 省略 = アルファがあればアルファ、無ければ輝度)、`opacity` | マスク(画像)。1 回の描画で 2 枚まで(超えると RT に描き出す) |
+| `mask_image` | `asset_id`(または `url`)、`x` `y`、`size`(画像の長辺 px。定数の 0・省略 = 元の大きさ。**キーフレームの値が 0 以下のコマは面積 0 のマスク = 全部隠す(反転は何も隠さない)**。`mask` / `mask_shape` の `size` も同じ。2026-11-16)、`scale`、`aspect`、`rotation`、`feather`、`invert`、`channel`("alpha" / "luma" / 省略 = アルファがあればアルファ、無ければ輝度)、`opacity` | マスク(画像)。1 回の描画で 2 枚まで(超えると RT に描き出す) |
 | `opacity` | `amount`(%) | 列の途中で不透明度を掛ける |
 
 **色**(どれも軽い)
