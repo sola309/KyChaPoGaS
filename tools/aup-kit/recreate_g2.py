@@ -143,7 +143,15 @@ def _b10_doc(tag, n, s22, flip, off):
         a = math.radians(-28 + i * 14)
         base.append(ell(f'br{i}', hc[0] + 410 * math.cos(a), hc[1] + 460 * math.sin(a), 44, 44, fill=PURPLE))
     layers = []
-    return doc(f'再現 B10 ソウルジェムトランジション {tag}', n, layers + [ring] + top + [inner, hole] + base + [rig])
+    # POLISH3 11/16: 受け皿の中に明るい紫の輪(飾りの線)。寄りきってから抜けるまでの 4〜5 コマ(01 なら 1759〜1763)、画面が紫一色で止まって見えた
+    #     → 輪が画面を横切るので、単色のコマが無くなり寄り・抜けの動きが見える。ふだんは受け皿の飾りの線として見える
+    LIGHT = '#8d5aa6'
+    deco = [ell('dc0', 905, 545, 836, 936, fill=None, stroke=LIGHT, stroke_width=9),
+            ell('dc1', 930, 1090, 610, 350, fill=None, stroke=LIGHT, stroke_width=11),
+            ell('dc2', 930, 1090, 430, 236, fill=None, stroke=LIGHT, stroke_width=8),
+            ell('dc3', 930, 1090, 250, 126, fill=None, stroke=LIGHT, stroke_width=6),
+            ell('dc5', 905, 800, 64, 64, fill=LIGHT)]      # (まわりの輪 dc4 は窓のふちで欠けて見えたので外した)
+    return doc(f'再現 B10 ソウルジェムトランジション {tag}', n, layers + [ring] + top + [inner, hole] + deco + base + [rig])
 
 
 def _mk_b10(tag, key, n, s22, flip, off):

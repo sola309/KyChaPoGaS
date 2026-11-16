@@ -325,7 +325,7 @@ def board(ctx, g, pos, h, yaw=0):
 
 
 # 屋上の人物の衣装の記号(KEY/OUTFITS.md)と向き。パペットがあれば板、無ければマネキン
-B_SIT_KEY = 'v4:roof/B_sit.png'
+B_SIT_KEY = 'v11:roof/B_bench_sit.png'      # POLISH3 11/16: 腰かけた姿の絵(replace_POLISH3.json)。前は 'v4:roof/B_sit.png'(床座りの絵 11128)
 ROOF_SYMS = [('A', 'back'), ('G', None), ('C', None), ('F', None), ('A', None), ('E', None), ('H', None), ('D', None), ('B', 'sit')]
 ROOF_PUPPETS = [None if v == 'sit' else find_puppet(s, v) for s, v in ROOF_SYMS]     # 登録の時点で引く(how に書くため)
 for _g in ROOF_PUPPETS:
@@ -357,7 +357,8 @@ def _cam_yaw(x, z):
 
 # v6: 並ぶ 7 体の足もと(完成版 3585 の足の画面位置を、測り直したカメラから床へ逆算。R/V6/roofcam.json)と、座る B の板(ベンチの上・高さ 128)
 ROOF_FEET_V6 = {1: (-299, -1022), 2: (-71, -724), 3: (-22, -1437), 4: (189, -1082), 5: (478, -573), 6: (597, -919), 7: (454, -1457)}
-ROOF_BSIT_V6 = dict(pos=(40, -54, -1850), h=138)      # POLISH2: (-30, -83, -2004) から奥へ(ベンチの脚まで画面に入るように)
+ROOF_BSIT_V6 = dict(pos=(6, 0, -1896), h=164, seat=(40, -54, -1850))      # POLISH3 11/16: 腰かけた姿の新しい絵(足は床・腰はベンチの板)。板の手前のふち(z=-1892)のすぐ前に立てる。前(POLISH2)は pos=(40, -54, -1850), h=138 = 床座りの絵を板の上に乗せていた
+_OLD_ROOF_BSIT_V6 = dict(pos=(40, -54, -1850), h=138)      # POLISH2: (-30, -83, -2004) から奥へ(ベンチの脚まで画面に入るように)
 ROOF_SHADOW_OFS = (14, 6)      # POLISH2: 並ぶ 7 体の足もとの影のずらし(x, z)
 ROOF_BENCH = ((40, -1850, 230), (330, -1790, 190))      # POLISH2 11/16: ベンチ = 横長(x にのびる)の板 2 台(x, z, 幅)。1 台目に座る B を乗せる(前は奥へのびる細い板で、B は板の左の空中に居た)
 
@@ -382,7 +383,7 @@ def roof_figures(n, ctx=None):
         h = ROOF_BSIT_V6['h']
         w = h * a['w'] / a['h']
         px, py, pz = ROOF_BSIT_V6['pos']
-        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px, py + 4 - h / 2, pz], 'B_sit': True,      # POLISH2: 絵の接地の線(下から 3.5%)をベンチの板の上面(y=-83)へ
+        F[8] = {'geometry': 'plane', 'size': [w, h], 'position': [px, py + 2.5 - h / 2, pz], 'B_sit': True,      # POLISH2: 絵の接地の線(下から 3.5%)をベンチの板の上面(y=-83)へ
                 'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', 'transparent': True, 'alpha_test': 0.02, 'texture': {'asset_id': a['asset_id']}}}
     return F
 
@@ -477,7 +478,9 @@ def roof_parts(n, parts, figures=False, ctx=None):
         for _i, (sx_, sz_) in ROOF_FEET_V6.items():      # POLISH 11/16: 並ぶ 7 体の足もとに丸い影(宙に浮いて見えたので)
             O.append(plane((150, 78), (sx_ + ROOF_SHADOW_OFS[0], -3.5, sz_ + ROOF_SHADOW_OFS[1]), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
         if sit_pic:      # POLISH2: 座る B の、ベンチの板の上の影
-            O.append(plane((150, 60), (ROOF_BSIT_V6['pos'][0] + 4, ROOF_BSIT_V6['pos'][1] - 1.2, ROOF_BSIT_V6['pos'][2] + 6), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
+            _st = ROOF_BSIT_V6['seat']      # POLISH3: 影は腰の下(板の上)と足もと(床)
+            O.append(plane((130, 56), (_st[0] + 4, _st[1] - 1.2, _st[2] + 6), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
+            O.append(plane((110, 50), (ROOF_BSIT_V6['pos'][0] - 40, -3.6, ROOF_BSIT_V6['pos'][2] - 14), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
         if not sit_pic:
             O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                          # 槍(座り姿の絵には槍が描いてある)
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
