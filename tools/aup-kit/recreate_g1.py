@@ -64,21 +64,21 @@ def _hand(L, n, hid, ang, length, head, shaft_w, head_fill, parent='piv'):
     """針 1 本: 回す null + 軸(下端が根元)+ 先の矢じり。length = [(コマ, px)…]"""
     L.append(layer(hid + '_head', 'shape', n, {'kind': 'path', 'closed': True, 'points': [[0, -head[1]], [head[0] / 2, 0], [0, -head[1] * 0.28], [-head[0] / 2, 0]],
                                               'fill': head_fill, 'stroke': '#ffffff', 'stroke_width': max(2, head[0] * 0.12), 'join': 'miter'},
-                   parent=hid, transform={'position': kf(*[(f, [0, -v + head[1]]) for f, v in length])}))
+                   parent=hid, transform={'position': dict(kf(*[(f, [0, -v + head[1]]) for f, v in length]), interp='spline')}))
     L.append(layer(hid + '_shaft', 'shape', n, {'kind': 'rect', 'width': shaft_w, 'height': 1000, 'fill': GOLD}, parent=hid,
-                   transform={'anchor': [0, 500], 'position': [0, 0], 'scale': kf(*[(f, [100, v / 10]) for f, v in length])}))
-    L.append(layer(hid, 'null', n, parent=parent, transform={'position': [0, 0], 'rotation': kf(*ang)}))
+                   transform={'anchor': [0, 500], 'position': [0, 0], 'scale': dict(kf(*[(f, [100, v / 10]) for f, v in length]), interp='spline')}))
+    L.append(layer(hid, 'null', n, parent=parent, transform={'position': [0, 0], 'rotation': dict(kf(*ang), interp='spline')}))      # v13(POLISH5): 目で読んだ角度のキーの列(直線 10〜14 本)→ spline(キーのたびに回る速さが折れない)
 
 
 def clock_layers(ctx, n, tree_scale):
     L = []
     pre = [(0, 765), (66, 765), (72, 615), (80, 510), (84, 450)]
     # 針(手前から 秒・分・時)
-    _hand(L, n, 'sec', [(0, 0), (64, 0), (66, -3), (72, -12), (80, -30), (84, -70), (88, -128), (91, -189), (94, -255), (97, -295), (100, -324), (106, -355), (116, -372), (126, -378), (136, -376)],
+    _hand(L, n, 'sec', [(0, 0), (64, 0), (66, -3), (72, -12), (80, -30), (84, -70), (88, -128), (91, -189), (94, -255), (97, -295), (100, -324), (106, -355), (116, -372), (126, -380), (136, -386)],
           pre + [(88, 480), (94, 492), (97, 540), (100, 600), (106, 700), (116, 780), (136, 800)], (22, 80), 2.5, '#ffffff')
-    _hand(L, n, 'min', [(0, 0), (64, 0), (72, -10), (80, -24), (84, -55), (88, -98), (91, -147), (94, -196), (97, -231), (100, -252), (106, -276), (116, -290), (126, -292.5), (136, -293)],
+    _hand(L, n, 'min', [(0, 0), (64, 0), (72, -10), (80, -24), (84, -55), (88, -98), (91, -147), (94, -196), (97, -231), (100, -252), (106, -276), (116, -290), (126, -295), (136, -299)],
           pre + [(88, 470), (94, 497), (97, 543), (100, 567), (106, 618), (116, 653), (126, 666), (136, 678)], (48, 112), 3.5, '#d9344e')
-    _hand(L, n, 'hour', [(0, 0), (64, 0), (80, -2), (88, -5), (91, -13), (94, -16), (97, -18), (100, -19), (106, -22), (116, -24)],
+    _hand(L, n, 'hour', [(0, 0), (64, 0), (80, -2), (88, -5), (91, -13), (94, -16), (97, -18), (100, -19), (106, -22), (116, -24), (136, -27)],
           pre + [(88, 468), (91, 484), (100, 460), (116, 410), (136, 396)], (48, 112), 3.5, '#d9344e')
     # 大写しのあいだの矢じりの中(灰色)と、針の飾り(金のひし形)
     zo = kf((0, 100), (14, 100), (20, 0))
@@ -117,13 +117,14 @@ def clock_layers(ctx, n, tree_scale):
     L.append(layer('in_color', 'image', n, {'asset_id': aid}, t0=146, matte={'layer': 'facemask', 'mode': 'alpha'},
                    transform={'position': [960, 540], 'scale': tree_scale}))
     L.append(layer('facemask', 'shape', n, {'kind': 'ellipse', 'width': CLOCK_R * 2 - 70, 'height': CLOCK_R * 2 - 70, 'fill': '#ffffff'}, parent='face', t0=84, transform={'position': [0, 0]}))
-    L.append(layer('face', 'null', n, parent='piv', transform={'position': [0, 0], 'scale': fs}))
+    L.append(layer('face', 'null', n, parent='piv', transform={'position': [0, 0], 'scale': fs, 'rotation': dict(kf((88, 0), (100, -1.2), (116, -4.4), (136, -8.4), (n, -8.4)), interp='spline')}))
     # piv = 針の根元 = 文字盤の中心。zoom = 針の先(大写しの拡大の中心)
     L.append(layer('piv', 'null', n, parent='zoom', transform={'position': kf((0, [0, 765]), (66, [0, 765]), (72, [0, 615]), (80, [0, 495]), (84, [0, 420]), (88, [0, 405]),
                                                                            (132, [0, 405]), (136, [0, 435]), (146, [0, 630]), (148, [0, 735]), (152, [0, 1050]), (156, [0, 1245]), (161, [0, 1320]), (176, [0, 1365]), (216, [0, 1380]), (n, [0, 1395]))}))
     L.append(layer('zoom', 'null', n, transform={
-        'position': kf((0, [960, -600]), (2, [960, -100]), (4, [960, 0]), (6, [960, 30]), (8, [960, 75]), (12, [960, 90]), (20, [960, 120]), (28, [960, 135])),
-        'scale': kf((0, [1400, 1400]), (2, [470, 470]), (4, [360, 360]), (6, [220, 220]), (8, [200, 200]), (12, [160, 160]), (20, [130, 130]), (28, [100, 100]))}))
+        'position': dict(kf((0, [960, -600]), (2, [960, -100]), (4, [960, 0]), (6, [960, 30]), (8, [960, 75]), (12, [960, 90]), (20, [960, 120]), (28, [960, 135])), interp='spline'),
+        # v13(POLISH5): 目で読んだ直線のキーの列 → spline(2・4・6・8 で折れない)。止め(100〜132 = 884〜916)は完全な静止だった(手本は 50 前後で動きつづける)→ ごくゆっくり引きつづける(100 → 98%)。文字盤はゆっくり左へ回りつづけ(face の rotation。完成版 905→915 で数字が約 2° 左へ回っている)、針も止めずに進める
+        'scale': dict(kf((0, [1400, 1400]), (2, [470, 470]), (4, [360, 360]), (6, [220, 220]), (8, [200, 200]), (12, [160, 160]), (20, [130, 130]), (28, [100, 100]), (96, [100, 100]), (132, [98, 98]), (n, [98, 98])), interp='spline')}))
     return L
 
 
@@ -225,6 +226,20 @@ def b01_waves(ctx):
                bg='#ffffff', w=2048, h=2048)
 
 
+def _b01_road_keys(n):
+    """道のせり上がり(12〜26 で速く、26 からは同じ速さで上がりつづける)。v12 は outCubic(26 で速さ 0)+ 直線で、26 で一度止まっていた。
+    v13: 12〜26 を「終わりの速さ = あとの直線の速さ」になる 3 次(エルミート)にして 2 コマおきに焼き、26 からは直線のまま(手本は 463 から動きの量が 56 前後で一定)。"""
+    p0, p1, p2 = 4409.0, 2385.0, 1734.0
+    v1 = (p2 - p1) / (n - 26) * 14          # 26 での速さ(区間 14 コマあたり)
+    m0 = 3 * (p1 - p0)                      # 出だしは outCubic と同じ速さ
+    out = []
+    for f in range(12, 27, 2):
+        t = (f - 12) / 14
+        y = (2 * t ** 3 - 3 * t ** 2 + 1) * p0 + (t ** 3 - 2 * t ** 2 + t) * m0 + (-2 * t ** 3 + 3 * t ** 2) * p1 + (t ** 3 - t ** 2) * v1
+        out.append((f, [0, round(y, 1), 2376]))
+    return out + [(35, [0, round((p1 + p2) / 2, 1), 2376]), (n, [0, p2, 2376])]
+
+
 @reg(S4 + '01_線路花びら1-44/1.02', 'B01', 'mesh(3D の床: 遠くの 1 点から手前へ広がる扇形の板 3 枚 + 波縞の円盤の道)+ camera + particles')
 def b01(ctx):
     # 2 巡目: 床を 3D に。床は水平な面で、遠くの 1 点(奥行き D)から手前へ細い扇形(赤・紫・青)が広がる。視点が上がる(床が下がる)と、
@@ -242,7 +257,8 @@ def b01(ctx):
     floor = {'geometry': 'group', 'position': hk, 'children': [wedge(-16.5, -4.8, '#d2283c', 0), wedge(-4.8, 0, '#8e78c0', 0), wedge(0, 7.3, '#6ab4c8', 0)]}
     wv = ctx.comp('aux:B01_waves')
     road = {'geometry': 'ring', 'inner': 0, 'outer': 4000, 'segments': 128, 'rotation': [90, 0, 0],
-            'position': kf((12, [0, 4409, 2376], 'outCubic'), (26, [0, 2385, 2376]), (n, [0, 1734, 2376])),
+            # v13(POLISH5): outCubic(12〜26)のあとに直線(26〜44)をつないでいて、26 で一度止まってから等速で動き直していた → 同じ 3 点を通る spline 1 本(減速しながら止まらずに上がりつづける)
+            'position': dict(kf(*_b01_road_keys(n)), interp='spline'),
             'material': {'type': 'basic', 'color': '#ffffff', 'side': 'double', **({'texture': {'comp_id': wv, 'frame': 0}, 'texture_repeat': [2, 2]} if wv else {})}}
     cam = layer('cam', 'camera', n, {'zoom': 1024, 'target': [960, 540, 0]}, transform={'position': [960, 540, -1024]})
     return doc('再現 B01 線路花びら 1.02', n, [
@@ -405,7 +421,7 @@ def _title_confetti(name, n, seed):
         m = {'color': color, 'roughness': 0.75}
         return {'geometry': 'box', 'size': size, 'position': [0, 0, 2200], 'material': m, 'faces': [m, m, m, m, tex or m, tex or m],
                 'instances': {'count': count, 'seed': sd, 'layout': 'box', 'area': [5600, 3200, 5200], 'scale': sc, 'rotation_random': [180, 180, 180],
-                              'spin': [30, 40, 20], 'spin_random': [70, 80, 50], 'velocity': [-60, 90, -120], 'velocity_random': [60, 60, 60]}}
+                              'spin': [45, 60, 30], 'spin_random': [70, 80, 50], 'velocity': [-150, 220, -300], 'velocity_random': [120, 120, 120]}}      # v13(POLISH5): 流れを 2.5 倍に。v12 は題字の止め(1244〜1254・1297〜1308)で背景の箱・紙片がほぼ動かず、動きの量 0〜1(手本は 30 前後で流れつづける)
     objs = [boxes(red, tex_r, seed, 16, [110, 172, 34], [0.6, 1.5]), boxes(green, tex_g, seed + 1, 12, [110, 172, 34], [0.6, 1.5]),
             boxes(red, None, seed + 2, 120, [60, 15, 9], [0.6, 1.5]), boxes(green, None, seed + 3, 80, [60, 15, 9], [0.6, 1.5])]
     cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2000]), (n, [1000, 520, 2600]))},

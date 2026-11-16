@@ -244,13 +244,31 @@ def _roof_front_cam():
     pos = [(0, (0, hold[0][1] - 490, hold[0][2]), 'outCubic'), (8, hold[0]), (114, hold[0])] + _pull(hold[0], P0, r=1.3)
     tgt = [(0, (0, hold[1][1] - 490, hold[1][2]), 'outCubic'), (8, hold[1]), (114, hold[1])] + _pull(hold[1], T0, r=1.3)
     xs = [k[0] for k in ROOF_ORBIT_KEYS]
+    # v13(POLISH5): 向き φ だけ終わりの 7 コマを 1 コマごとに(v12 は 159→161 が 1 コマ 5°、161→163 が 15° と段になり、3550 で動きの量が一度落ちていた)。
+    #   156(52°)〜163(105°)のあいだを、手本の 1 コマごとの速さ(ROOF_ORBIT_SPEED の終わり 7 個 = 79・92・117・135・211・201・299)の割合で分けた
+    px = [130, 140, 150, 156, 157, 158, 159, 160, 161, 162, 163]
+    py = [0, 15, 35, 52, 55.7, 60.0, 65.5, 71.8, 81.6, 91.0, 105]
     for f in range(130, 164):
-        P, T = _orbit_cam(*[_pchip(xs, [k[j] for k in ROOF_ORBIT_KEYS], f) for j in range(1, 6)])
+        prm = [_pchip(xs, [k[j] for k in ROOF_ORBIT_KEYS], f) for j in range(1, 6)]
+        prm[0] = _pchip(px, py, f)
+        P, T = _orbit_cam(*prm)
         pos.append((f, P)); tgt.append((f, T))
     return {'pos': pos, 'tgt': tgt}
 
 
 _RF = _roof_front_cam()
+
+
+def _settle_drift(p0, p1, p2, f0=164, f1=204, f2=245):
+    """f0 で p0 → f1 で p1 → f2 で p2。p1→p2 の等速の流れを f0 までさかのぼらせ、その線からのずれを 2^(-10t) で減らす(1 コマごとのキー)。"""
+    out = []
+    for f in range(f0, f1 + 1):
+        t = (f - f0) / (f1 - f0)
+        d = 0.0 if f == f1 else 2 ** (-10 * t)
+        line = [b + (c - b) * (f - f1) / (f2 - f1) for b, c in zip(p1, p2)]
+        l0 = [b + (c - b) * (f0 - f1) / (f2 - f1) for b, c in zip(p1, p2)]
+        out.append((f, tuple(round(l + (a - z) * d, 2) for l, a, z in zip(line, p0, l0))))
+    return out + [(f2, tuple(p2))]
 
 ROOF_CAM = dict(
     zoom=kf((0, 1400), (163, 1400, 'hold'), (164, 2600), (245, 2600)),      # v6: 後半は望遠
@@ -264,8 +282,10 @@ ROOF_CAM = dict(
     #     そのあと 1 コマ 1.0%→0.1% のゆるい寄りが 3590 まで減速しながら続く(v5 は 3566 で止まっていた)。
     #     回りこみの進み方 = 完成版の 1 コマごとの速さ(ROOF_ORBIT_SPEED)を足し上げた割合。回りこむ量は x 450 → ROOF_ORBIT_END(空の板の外が映らないよう、空の左右に壁を足した)
     # v7(VRMSAK): 前半(〜163)を、人物(VRM)の頭頂・すそ・足もとと金網の上下の画面位置から合わせ直した(_roof_front_cam)。v6 までの値は R/VRMSAK/recreate_g3.before_vrmsak.py
-    pos=(_RF['pos'][:-1] + [(163, _RF['pos'][-1][1], 'hold'), (164, (-304, -397, -2685), 'outCubic'), (204, (-284, -380, -2615)), (245, (-316, -380, -2606))]),
-    tgt=(_RF['tgt'][:-1] + [(163, _RF['tgt'][-1][1], 'hold'), (164, (310, -158, -1630), 'outExpo'), (204, (26, -124, -1550)), (245, (-6, -124, -1541))]),
+    pos=(_RF['pos'][:-1] + [(163, _RF['pos'][-1][1], 'hold')] + _settle_drift((-304, -397, -2685), (-284, -380, -2615), (-364, -380, -2593))),
+    tgt=(_RF['tgt'][:-1] + [(163, _RF['tgt'][-1][1], 'hold')] + _settle_drift((310, -158, -1630), (26, -124, -1550), (-54, -124, -1528))),
+    # v13(POLISH5): 切り替わりのあと。v12 は outExpo(164〜204)のあとに別のゆっくりした流れ(204〜245)をつないでいて、outExpo の尾(3582〜3594)で動きの量が 0.5 まで落ちて
+    #     ほぼ静止していた(手本は 47 前後で動きつづける)。_settle_drift = 「204〜245 の流れを 164 までさかのぼらせた直線」+「残りを指数で減らす」を 1 コマごとに焼いた 1 本(止まらずに流れへつながる)。流れの量も 2.5 倍に(204→245 で横へ 80。v12 は 32 で、動きの量が手本の 1/4)
     # v12(POLISH4): 切り替わりのあとの横移動。v11 は outQuad 10 コマ → outCubic 30 コマの 2 本つなぎで、174 で一度止まってから動き直し、3566 にはほぼ静止していた
     #     (動きの量 85→0。完成版は 140 から 3580 まで減りつづける)。振り幅を 1.5 倍にして outExpo 1 本(40 コマ)に = 頭のコマが最速で、長い余韻
     # v6: 後半(164〜)のカメラを測り直した。完成版 3585 の 7 体の頭頂・足もと・柵の下の線・柱の上下を 100px の目盛りで目で測り、さらに柵の柱の傾き(左 −4.2°〜右 +3.3°)から望遠だと分かり、zoom 2600(前半は 1400 のまま)・高さ 380・見下ろし 13°・柵に対して 16° 斜め、と出した
@@ -467,7 +487,14 @@ def roof_parts(n, parts, figures=False, ctx=None):
                 for lz in (-34, 34):
                     O.append(box((8, 44, 8), (bx + lx, -22, bz + lz), '#d9a040'))
             O.append(plane((bw + 60, 150), (bx - 16, -3.2, bz - 10), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
-        O.append(box((110, 150, 110), (-331, -75, -1700), '#e0b040', material=mat('#e0b040', wireframe=True)))
+        # v13(POLISH5): 黄色い木組みの台。v12 までは箱の wireframe(細い線 + 面の対角線)で、作りかけの線に見えていた → 角材 9 の柱 4 本 + 上と中段の横木(完成版 3580 の左下: 黄色い木の枠に横木)
+        _fx, _fz, _fw, _fh, _ft = -331, -1700, 110, 84, 8      # 高さ 150 だと画面の左端で背の高い棚に見えた(全編シート 3564〜3612)→ 84(完成版は腰かけほどの高さ)
+        for _sx in (-1, 1):
+            for _sz in (-1, 1):
+                O.append(box((_ft, _fh, _ft), (_fx + _sx * (_fw - _ft) / 2, -_fh / 2, _fz + _sz * (_fw - _ft) / 2), '#e3b548'))
+            for _y in (-_fh + _ft / 2, -_fh * 0.45):
+                O.append(box((_ft, _ft, _fw), (_fx + _sx * (_fw - _ft) / 2, _y, _fz), '#eec565'))
+                O.append(box((_fw, _ft, _ft), (_fx, _y, _fz + _sx * (_fw - _ft) / 2), '#eec565'))
         O.append(box((560, 380, 560), (-1300, -190, 1180), '#8d887c'))
         O.append(plane((90, 190), (-1300, -95, 895), '#ffd84a', type='basic'))
     extra = []
@@ -737,7 +764,7 @@ def b19(ctx):
            ('#f2edb9', 8), (None, 10), ('#f1a8bd', 20), (None, 14), ('#f2edb9', 6), (None, 10), ('#f1a8bd', 26), (None, 12), ('#f2edb9', 7), (None, 9),
            ('#f1a8bd', 18), (None, 13), ('#f2edb9', 6), (None, 8)]
     tot = sum(a for _, a in seq)
-    Ls.append(layer('hub', 'null', n, pos=[1560, -40], transform={'rotation': kf((0, 0), (n, 14))}))
+    Ls.append(layer('hub', 'null', n, pos=[1560, -40], transform={'rotation': kf((0, 0), (n, 78))}))      # v13(POLISH5): 14° → 78°(1 コマ 0.75°)。v12 はほぼ止まって見え、4094〜4104 の動きの量が手本の半分で減りつづけていた(手本は放射の帯がコマごとに回って 350〜400 のまま)。角度そのものは測れていない(連続コマの見た目から)
     a = 0
     for i, (c, w) in enumerate(seq):
         w2 = w * 360 / tot
@@ -807,7 +834,8 @@ def b22(ctx):
     n = 147
     O = []
     # (1) 0〜22: 大きな槍が 1 本、左から右へ横切る
-    O.append(dict(spear_obj((0, 0, 0), rot=(0, 0, 90), L=900), position=kfa((0, [-3200, 20, 0]), (16, [-1250, 20, 0], 'linear'), (22, [600, 20, 0], 'linear'), (28, [5200, 20, 0])), scale=3.0))
+    # v13(POLISH5): 直線 3 本のつぎはぎ(1 コマ 122 → 308 → 767px と 16・22 で折れる)→ 同じ点を通る spline 1 本(なめらかに加速しつづける)
+    O.append(dict(spear_obj((0, 0, 0), rot=(0, 0, 90), L=900), position=dict(kf((0, [-3200, 20, 0]), (16, [-1250, 20, 0]), (22, [600, 20, 0]), (28, [5200, 20, 0])), interp='spline'), scale=3.0))
     # (2) 26〜44: 2 本が下から斜めに上がる
     for i, (x0, r) in enumerate(((-1000, 12), (640, 18))):
         O.append(dict(spear_obj((0, 0, 0), rot=(0, 0, r), L=1100), position=kfa((10, [x0 - r * 30, 2300, 300]), (27, [x0 + r * 10, 150, 300], 'easeOutCubic'), (40, [x0 + r * 30, -2800, 300], 'easeInCubic'))))
@@ -817,8 +845,10 @@ def b22(ctx):
             t0 = 33 + k * 1.2
             x, z = s * (700 - k * 30), k * 90 - 100
             ytop = 170 + k * 27.5
-            O.append(dict(spear_obj((0, 0, 0), L=800), position=kf((t0, [x, 5000, z], 'easeOutBack'), (t0 + 10, [x, ytop, z]), (100 + k, [x, ytop, z], 'easeInCubic'), (132 + k, [x + s * 900, -3400, z])),
-                          rotation=kf((98 + k, [0, 0, 0]), (118 + k, [0, 0, s * 24]))))
+            # v13(POLISH5): 扇に倒れる動き。v12 は 98+k から直線で 24° 倒れ、手本(4384 まで静止 → 4397 が山)より 6 コマ早く動きだして量も大きかった
+            #   → 倒れ = 104+k から inQuad で 17°(動きだしは小さく、抜けの加速へつながる)、抜け = 106+k から
+            O.append(dict(spear_obj((0, 0, 0), L=800), position=kf((t0, [x, 5000, z], 'easeOutBack'), (t0 + 10, [x, ytop, z]), (106 + k, [x, ytop, z], 'easeInCubic'), (134 + k, [x + s * 900, -3400, z])),
+                          rotation=kf((104 + k, [0, 0, 0], 'easeInQuad'), (124 + k, [0, 0, s * 17]))))
     C = cam(n, 1100, [(0, (0, 0, -1100)), (n, (0, 0, -1100))], [(0, (0, 0, 0)), (n, (0, 0, 0))])
     return doc('再現 B22 槍並べ', n, [C, mesh('spears', n, O, unlit=True)])
 
