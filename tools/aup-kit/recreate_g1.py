@@ -344,17 +344,32 @@ def b02(ctx):
 # ---------------------------------------------------------------- B06 桜吹雪トランジション
 # 完成版: 破片(花びら)が左下から飛んできて画面を埋めつくし(単色化で桃色)、しばらく覆ったあと散っていく。
 # mesh の shards(割れる板)を逆向きに使う: progress 1(散った)→ 0(1 枚の板 = 全面)→ 1。
-def _shards_doc(name, n, seed, t_in0, t_full, t_out0, t_out1, count=240, out_e='inQuad'):
+def _shards_doc(name, n, seed, t_in0, t_full, t_out0, t_out1, count=240, out_e='inQuad', tail=0):
     def sh(sd, cnt, dirn, lag, col='#ffffff', z=0):
         if t_full <= 0:      # 頭から全面(散るだけ)
             prog = kf((0, 0), (t_out0 + lag, 0, 'inQuad'), (t_out1, 1), (n, 1))
         else:
-            prog = kf((0, 1), (t_in0 + lag, 1, 'inQuad'), (t_full + lag, 0), (t_out0, 0, out_e), (t_out1, 1), (n, 1))     # v5: 集まるのは加速しながら(完成版 1068〜1081 は inQuad。v4 は減速で、埋まるのが 8 コマ遅かった)
+            if False:
+                pass
+            else:
+                prog = kf((0, 1), (t_in0 + lag, 1, 'inQuad'), (t_full + lag, 0), (t_out0, 0, out_e), (t_out1, 1), (n, 1))     # v5: 集まるのは加速しながら(完成版 1068〜1081 は inQuad。v4 は減速で、埋まるのが 8 コマ遅かった)
         return {'geometry': 'shards', 'size': [1940, 1100], 'count': cnt, 'seed': sd, 'depth': 0, 'progress': prog, 'stagger': 'left_to_right', 'stagger_amount': 0.55,
                 'spread': 1500, 'spread_z': 500, 'direction': dirn, 'spin': 420, 'position': [0, 0, z], 'material': {'type': 'basic', 'color': col, 'side': 'double'}}
     cam = layer('cam', 'camera', n, {'zoom': 1024, 'target': [960, 540, 0]}, transform={'position': [960, 540, -1024]})
     # v5: 2 組目は 14 コマ遅れて集まる(完成版は 1082 で埋まったあとも 1100 まで破片が動きつづける。v4 は 4 コマ遅れで、埋まったあと止まっていた)
-    return doc(name, n, [cam, _mesh('shards', n, [sh(seed, count, [-1700, 900, -200], 0), sh(seed + 50, count // 2, [-1500, 1300, -300], 14 if t_full > 0 else 4, col='#f3f3f3' if t_full > 0 else '#ffffff', z=-30 if t_full > 0 else 0)], light={'ambient': 3, 'intensity': 0})])
+    objs = [sh(seed, count, [-1700, 900, -200], 0), sh(seed + 50, count // 2, [-1500, 1300, -300], 14 if t_full > 0 else 4, col='#f3f3f3' if t_full > 0 else '#ffffff', z=-30 if t_full > 0 else 0)]
+    if tail:
+        # v12(POLISH4): 埋まったあとの止め。完成版は 1082〜1108 のあいだも、桃色の上を薄い色の細かい破片が流れながら減っていく(動きの量 20〜100)。
+        #   v11 は t_full で 1 枚の板に戻り、18 コマ完全に止まっていた。板を灰 #c4c4c4(輝度 0.767 = 単色化の桃色 #ffaaac と同じ)にし、明るい細かい破片の組を手前に流す。
+        #   使う側(S04 の o484)の単色化を「輝度を保持する」にすると、板は前と同じ桃色・破片は一段明るい桃色になる(polish_align の表)。散るだけの使い方(o487)はベタ塗りのままなので変わらない
+        for o in objs:
+            o['material']['color'] = '#c4c4c4'
+        # 2 組を半周期ずらして流す(1 組だと動きの量が手本の 1/10 だった)。どちらも左下へ 1 コマ 80px ほどで流れ、遠ざかるほど薄くなる
+        for j, (t0_, sd) in enumerate(((t_full - 6, 90), (t_full + 6, 130))):
+            d = sh(seed + sd, 800, [-2600, 1400, -300], 0, col='#e6e6e6', z=-70 - j * 10)
+            d.update(progress=kf((0, 1), (t0_, 1, 'outQuad'), (t0_ + 5, 0.14), (t0_ + 33, 0.9), (max(t0_ + 34, t_out0), 1), (n, 1)), stagger='none', spread=1500, spin=320, scale_end=0.6, fade=0.5)
+            objs.append(d)
+    return doc(name, n, [cam, _mesh('shards', n, objs, light={'ambient': 3, 'intensity': 0})])
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01', 'B06', 'mesh shards(逆再生で集まる → 散る)')
@@ -365,7 +380,7 @@ def b06(ctx):
 @reg(S4 + '08_桜吹雪トランジション/1.01/seed1', 'B06', 'mesh shards')
 def b06_s1(ctx):
     # v5: seed1 の 85 コマ目からは 1108〜1123 で単独でも使われ、完成版ではその頭(1105〜1111)がいちばん速い(散りの途中から始まる)→ 散りを 4 コマ早く・頭を速く(outQuad)
-    return _shards_doc('再現 B06 桜吹雪トランジション seed1', 100, 21, 6, 34, 80, 100, out_e='outQuad')
+    return _shards_doc('再現 B06 桜吹雪トランジション seed1', 100, 21, 6, 27, 80, 100, out_e='outQuad', tail=30)   # v12: 埋まるのを 1090 → 1083 に(完成版は 1081〜1082)
 
 
 @reg(S4 + '08_桜吹雪トランジション/1.01/seed2', 'B06', 'mesh shards')

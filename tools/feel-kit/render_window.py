@@ -39,7 +39,7 @@ def main():
     f0, f1 = a.range
     n = f1 - f0
     W, H = src['width'], src['height']
-    doc = {'project_id': a.project, 'name': f'FEEL 区間 comp{a.comp} {f0}-{f1}', 'fps': src['fps'], 'duration_frames': n, 'width': W, 'height': H,
+    doc = {'project_id': a.project, 'name': f'試験: FEEL 区間 comp{a.comp} {f0}-{f1}', 'fps': src['fps'], 'duration_frames': n, 'width': W, 'height': H,
            'data': {'version': 1, 'bg': '#000000', 'layers': [{'id': 'w', 'type': 'comp', 'in': 0, 'out': n, 'start': f0, 'speed': 1.0, 'source': {'comp_id': a.comp},
                                                               'transform': {'position': [W / 2, H / 2, 0]}}]}}
     c = call('POST', '/api/comps/', doc)
