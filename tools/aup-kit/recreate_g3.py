@@ -41,20 +41,29 @@ def tex(name):
         for o in (-64, 0, 64):
             d.line((o, 0, o + 64, 64), fill=(70, 86, 80, 255), width=3)
             d.line((o + 64, 0, o, 64), fill=(70, 86, 80, 255), width=3)
-    elif name == 'sky':      # 空: 上が青灰、地平線へ白く。横に流れる雲のすじ
-        im = Image.new('RGBA', (256, 256))
-        d = ImageDraw.Draw(im)
-        for y in range(256):
-            t = y / 255
-            d.line((0, y, 256, y), fill=(int(228 + 27 * t), int(234 + 20 * t), int(242 + 8 * t), 255))
-        cl = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
-        dc = ImageDraw.Draw(cl)
+    elif name == 'sky':      # 空(POLISH 11/16: 白一色に見えたので描き直し): 上が青、地平線へ白っぽい暖色。横に流れる雲の層
         import random
-        r = random.Random(7)
-        for i in range(26):
-            x, y, w, h = r.randint(-40, 230), r.randint(20, 215), r.randint(50, 150), r.randint(3, 9)
-            dc.ellipse((x, y, x + w, y + h), fill=(255, 250, 240, r.randint(90, 190)) if i % 3 else (205, 214, 228, 120))
-        im.alpha_composite(cl.filter(ImageFilter.GaussianBlur(3)))
+        im = Image.new('RGBA', (512, 512))
+        d = ImageDraw.Draw(im)
+        # 画面に映るのは地平線の近く(絵の下 1/4)だけなので、色の移りと雲はそこに寄せる
+        stops = [(0.0, (96, 150, 218)), (0.70, (120, 172, 228)), (0.86, (176, 212, 240)), (0.95, (232, 240, 246)), (1.0, (255, 238, 208))]
+        for y in range(512):
+            t = y / 511
+            for (t0, c0), (t1, c1) in zip(stops, stops[1:]):
+                if t0 <= t <= t1:
+                    u = (t - t0) / (t1 - t0)
+                    d.line((0, y, 512, y), fill=tuple(int(c0[i] + (c1[i] - c0[i]) * u) for i in range(3)) + (255,))
+        r = random.Random(11)
+        cl = Image.new('RGBA', (512, 512), (0, 0, 0, 0))
+        dc = ImageDraw.Draw(cl)
+        for i in range(16):      # 白い雲のかたまり(小さな丸を横に並べる)。灰色のすじは使わない(曇り空に見えたので)
+            cx, cy = r.randint(0, 511), r.randint(372, 478)
+            for j in range(r.randint(4, 8)):
+                w, h = r.randint(14, 34), r.randint(3, 7)
+                x, y = cx + r.randint(-36, 36), cy + r.randint(-3, 3)
+                for dx in (0, -512, 512):
+                    dc.ellipse((x + dx, y, x + dx + w, y + h), fill=(255, 255, 252, r.randint(150, 235)))
+        im.alpha_composite(cl.filter(ImageFilter.GaussianBlur(1.6)))
     elif name == 'figure':   # 立っている人の影絵(頭・ポニーテール・胴・脚)。白で描いて色はマテリアルで付ける
         im = Image.new('RGBA', (128, 320), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
@@ -74,16 +83,37 @@ def tex(name):
         d.polygon([(66, 150), (134, 150), (150, 232), (50, 232)], fill=c)
         d.rectangle((66, 228, 92, 256), fill=c)
         d.rectangle((108, 228, 134, 256), fill=c)
-    elif name == 'floor':    # コンクリートの床(ざらつき)
+    elif name == 'floor':    # コンクリートの床(POLISH 11/16: 白飛びして見えたので暗め + 目地 + しみ)
         import random
         r = random.Random(3)
-        im = Image.new('RGBA', (128, 128))
+        im = Image.new('RGBA', (256, 256))
         px = im.load()
-        for y in range(128):
-            for x in range(128):
-                v = 205 + r.randint(-16, 16)
-                px[x, y] = (v, v - 6, v - 22, 255)
-        im = im.filter(ImageFilter.GaussianBlur(0.7))
+        for y in range(256):
+            for x in range(256):
+                v = 150 + r.randint(-12, 12)
+                px[x, y] = (v, v - 5, v - 16, 255)
+        im = im.filter(ImageFilter.GaussianBlur(0.8))
+        st = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+        ds = ImageDraw.Draw(st)
+        for i in range(14):
+            x, y, w = r.randint(-30, 240), r.randint(-30, 240), r.randint(30, 90)
+            ds.ellipse((x, y, x + w, y + w * r.uniform(0.4, 0.9)), fill=(96, 88, 76, r.randint(18, 46)) if i % 3 else (236, 230, 214, 40))
+        im.alpha_composite(st.filter(ImageFilter.GaussianBlur(7)))
+        d = ImageDraw.Draw(im)
+        for k in (0, 128):       # 目地(2 × 2 枚)
+            d.line((k, 0, k, 256), fill=(112, 106, 96, 255), width=2)
+            d.line((0, k, 256, k), fill=(112, 106, 96, 255), width=2)
+    elif name == 'bld':      # 街の建物の壁(窓の列)。白で描いて色はマテリアルで付ける
+        im = Image.new('RGBA', (64, 64), (232, 232, 228, 255))
+        d = ImageDraw.Draw(im)
+        for yy in range(6, 64, 16):
+            for xx in range(5, 64, 16):
+                d.rectangle((xx, yy, xx + 8, yy + 8), fill=(120, 132, 150, 255))
+    elif name == 'blob':     # 足もとの影(まるくぼけた黒)
+        im = Image.new('RGBA', (64, 64), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse((10, 10, 54, 54), fill=(30, 26, 22, 150))
+        im = im.filter(ImageFilter.GaussianBlur(6))
     else:
         raise KeyError(name)
     _TEX[name] = _url(im)
@@ -391,12 +421,12 @@ def roof_parts(n, parts, figures=False, ctx=None):
         for sx in (-1, 1):      # FEEL2: 空の左右の壁(回りこみでカメラが横を向いても、空の板の外の黒が映らないように)
             O.append(plane((140000, 70000), (sx * 130000, -33500, -10000), '#ffffff', rot=(0, 90, 0), tname='sky', type='basic'))
     if 'roof' in P:   # 屋上(= 連番「高台足場」)
-        O.append(box((3200, 120, 3000), (0, 60, 0), '#d2c9b4', material=mat('#ffffff', 'floor', (8, 8))))       # 屋上の床
+        O.append(box((3200, 120, 3000), (0, 60, 0), '#d2c9b4', material=mat('#ffffff', 'floor', (10, 10))))       # 屋上の床
         O.append(box((3200, 2400, 3000), (0, 1320, 0), '#b9b3a6'))                                              # 建物の胴
     if 'city' in P:
         O.append(plane((300000, 300000), (0, 2500, 60000), '#5a4353', rot=(90, 0, 0)))
         for i, (cnt, sz, col, seed) in enumerate(((260, (1500, 380, 1500), '#a9a9a6', 5), (200, (900, 600, 900), '#8f9090', 6), (90, (2600, 300, 1800), '#c9c8c2', 7))):
-            O.append({'geometry': 'box', 'size': list(sz), 'position': [0, 2500 - sz[1] / 2, 47000], 'material': mat(col),
+            O.append({'geometry': 'box', 'size': list(sz), 'position': [0, 2500 - sz[1] / 2, 47000], 'material': mat(col, 'bld', (3, 2)),
                       'instances': {'count': cnt, 'seed': seed, 'layout': 'box', 'area': [130000, 0, 54000], 'scale': [0.5, 1.4]}})
     # v4: 金網ごしの棟は屋上より 3m 低い細長い屋根が奥へのびる形(完成版 3465 の白い台形)。前は 20m 下にあって画面の外だった
     if 'sc1' in P:
@@ -416,8 +446,8 @@ def roof_parts(n, parts, figures=False, ctx=None):
                   'instances': {'count': 81, 'layout': 'grid', 'grid': [81, 1, 1], 'spacing': [40, 0, 0]}})
         O.append(box((3200, 3.5, 3.5), (0, -154, 1500), '#33463a'))
     if 'stand' in P:  # 高台: 床・細い柵・ベンチ・塔屋(戸口が光る)
-        O.append(plane((3200, 2100), (0, -2, -450), '#77705c', rot=(90, 0, 0), type='basic'))
-        O.append(plane((3200, 900), (0, 0, 1050), '#77705c', rot=(90, 0, 0), type='basic'))      # v6: 後半は奥の床も日かげ(前半は床の下に隠しておく)
+        O.append(plane((3200, 2100), (0, -2, -450), '#c2b896', rot=(90, 0, 0), tname='floor', repeat=(16, 10), type='basic'))
+        O.append(plane((3200, 900), (0, 0, 1050), '#c2b896', rot=(90, 0, 0), tname='floor', repeat=(16, 5), type='basic'))      # v6: 後半は奥の床も日かげ(前半は床の下に隠しておく)
         O[-1]['position'][1] = kf((0, 40), (163, 40, 'hold'), (164, -2), (245, -2))                 # 後半に映る側の床は日かげ(暗い)
         # v6(完成版 3585 を測り直した): 手前の床は柵の向こうと同じ高さ。柵 = 高さ 200・柱の間 55 の細い柱 + 金網(上の横木は映っていない)。ベンチ = 高さ 83 の板 2 枚が柵から手前へまっすぐのびる
         O.append(box((3600, 2800, 1300), (0, 1400, -2150), '#b5a26e', material=mat('#b5a26e', 'floor', (8, 4))))
@@ -439,6 +469,8 @@ def roof_parts(n, parts, figures=False, ctx=None):
             F[0] = F[4] = None
             extra = roof_vrm_layers(n, VRM_PARKA[ctx.project_id])
         O.extend(x for x in F if x)
+        for _i, (sx_, sz_) in ROOF_FEET_V6.items():      # POLISH 11/16: 並ぶ 7 体の足もとに丸い影(宙に浮いて見えたので)
+            O.append(plane((120, 60), (sx_ + 14, -3.5, sz_ + 6), '#ffffff', rot=(90, 0, 0), tname='blob', type='basic', transparent=True))
         if not sit_pic:
             O.append(box((330, 4, 4), (-105, -235, -1485), '#b0343a', rot=(0, 0, -35)))                          # 槍(座り姿の絵には槍が描いてある)
     lt = {'direction': [-0.4, -1, -0.5], 'intensity': kf((150, 1.6), (175, 0.6)), 'ambient': kf((150, 1.1), (175, 0.42))}     # 後半は床が暗い(日かげ)
