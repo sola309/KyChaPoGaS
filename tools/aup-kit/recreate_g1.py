@@ -21,8 +21,18 @@ B04_ROT = 65.0
 B04_ROT_N = 42
 
 
+def _b04_cover(f):
+    """f コマ目の回転・横ずれのとき、1920×1080 の絵が画面の四隅を覆いきる最小の拡大(%)。"""
+    t = min(1.0, f / B04_ROT_N); th = math.radians(B04_ROT * (1 - t) ** 3); dx = 0.75 * B04_ROT * (1 - t) ** 3
+    c, s = math.cos(th), math.sin(th)
+    return 100 * max(max(abs((x - dx) * c + y * s) / 960, abs(-(x - dx) * s + y * c) / 540) for x in (-960, 960) for y in (-540, 540))
+
+
 def _b04_tr(n, extra_rot=0.0, scale=None):
-    sc = scale or kf((0, [170.2, 170.2]), (60, [170.2, 170.2]), (n, [170.2 - 0.0431 * (n - 60)] * 2))
+    # v18(POLISH8): 回りはじめの 11 コマ(ルート 784〜795)は 170.2% では絵の短い辺が画面の対角に届かず、右上・左下に黒い角が映っていた。
+    #   その間だけ四隅を覆う拡大(×1.02)から 170.2% へ、16 コマ目までになめらかに戻す(1 コマごとに焼く)
+    head = [(f, [round(max(_b04_cover(f) * 1.02, 170.2 + 12 * max(0.0, 1 - max(0, f - 8) / 8) ** 2 if f >= 8 else 0), 2)] * 2) for f in range(0, 17)]
+    sc = scale or kf(*head, (60, [170.2, 170.2]), (n, [170.2 - 0.0431 * (n - 60)] * 2))
     return {'position': kf((0, [960 + 0.75 * B04_ROT, 540], 'outCubic'), (B04_ROT_N, [960, 540])),
             'rotation': kf((0, B04_ROT + extra_rot, 'outCubic'), (B04_ROT_N, extra_rot)), 'scale': sc}
 
