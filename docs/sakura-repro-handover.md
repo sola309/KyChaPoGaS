@@ -1,11 +1,11 @@
-# さくら再現(project 37)引き継ぎ — 2026-11-17 v21 時点
+# さくら再現(project 37)引き継ぎ — 2026-11-17 v22 時点
 
 新しいスレッドは、まずこの文書と下の「読む順」を読む。
 
 ## いまの状態
 
-- 最新は **v21** = project 37 track 111 / clip 2262 / asset 12042。
-  `repo/outputs/pocky2026/finish/v13/_share/sakura_repro_v21/`(共有 `http://100.92.208.57:8766/sakura_repro_v21/`)。直しの表 `NOTES_v21.md`。メッシュの道具 `repo/tools/aup-kit/mesh_avatar/`。
+- 最新は **v21** = project 37 track 112 / clip 2263 / asset 12212。
+  `repo/outputs/pocky2026/finish/v13/_share/sakura_repro_v22/`(共有 `http://100.92.208.57:8766/sakura_repro_v22/`)。直しの表 `NOTES_v22.md`。メッシュの道具 `repo/tools/aup-kit/mesh_avatar/`。
 - 11/17 夜のユーザーの方針: 「前半の動きが硬い。再現よりあなたのアイデア・感性・音源解析でクオリティアップを」「一枚絵を分解して動かす仕組みが古い → Mesh Avatar Studio 等を活用」「3D 杏子の髪のめり込み。モデルは別名で改良してよい(上書き禁止)」「動画は Claude アプリで見たい・比較は縦並び」
 - ブランチ `feature/compositions`、最新 commit `c71a54f`(push 済み)。master へのマージはユーザーの同意が出てから。
 - 版と置き場所(project 37 のトラックはどれも残してある。消さない):
@@ -23,6 +23,7 @@
 | v19 | 109 / 2260 / 11482 | ワイプ 3271・水着の右端 2816(毛先の絵 11481)・余韻の背景の流れ |
 | v20 | 110 / 2261 / 11654 | 速い動きのブラー・VRM の髪の当たり(別名 11483)・探偵の杏子をメッシュで動かす |
 | v21 | 111 / 2262 / 12042 | キャラ紹介の 2〜4 人目もメッシュで動かす |
+| v22 | 112 / 2263 / 12212 | 時計の上の杏子をメッシュで・屋上に夕方の光 |
 
 - 数値(完成版との速さの曲線): 相関 0.906(v11)→ 0.934(v17)→ 0.935(v18・v19)。v15 からほぼ横ばいで、測って合わせる直しは頭打ち。
 - **だれも動画として通し再生では見ていない**(連続コマの静止画と数値まで)。ユーザーに再生して見てもらい、気になる場面を聞くのが次の一番効く手。
@@ -49,7 +50,7 @@ v17 の通し点検・丸窓・並ぶ槍・止めの 5 か所は v18、3271 の�
 
 1. この文書
 2. `/tmp/claude-1000/sakura-rebuild/BRIEF.md`(道具 imp.sh / rec.sh / chk.sh と決まり。/tmp なので消えていたら WORKLOG と `repo/tools/aup-kit/` から読み直す)
-3. `repo/outputs/compositions/WORKLOG.md` の末尾(v9〜v21)
+3. `repo/outputs/compositions/WORKLOG.md` の末尾(v9〜v22)
 4. `repo/docs/motion-feel.md`(7 章〜)、`repo/docs/composition-authoring.md`(解像度の決まり)、`repo/docs/aviutl-scripts.md`
 5. 作業場 `/tmp/claude-1000/sakura-rebuild/POLISH9/`(硬さの道具・VRM・mesh)、`POLISH8/`(通し点検・区間描き・全編の道具)、`POLISH7/`(測る道具・描き出しの流儀。変更前の写し `bak*/`)、`POLISH4`〜`POLISH6`
 

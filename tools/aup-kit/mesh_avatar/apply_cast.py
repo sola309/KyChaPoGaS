@@ -7,7 +7,7 @@ RB = '/home/kigarashi309/workspace/projects/KyChaPoGaS/reference/aviutl_mad/saku
 lid, aid = sys.argv[1], int(sys.argv[2]); x0, y0, x1, y1 = [float(v) for v in sys.argv[3].split(',')]
 ids = json.load(open(sys.argv[4])); note = sys.argv[5]
 C = pickle.load(open('/tmp/claude-1000/sakura-rebuild/POLISH7/comps37.pkl', 'rb'))
-L = [l for l in C[199]['data']['layers'] if l['id'] == lid][0]
+L = [l for l in C[int(__import__('os').environ.get('COMP','199'))]['data']['layers'] if l['id'] == lid][0]
 assert L['type'] == 'image', L['type']
 W, H = Image.open(r.asset_path(aid)).size
 fit = (L.get('source') or {}).get('fit'); u = (fit['width'] / W) if fit else 1.0
@@ -15,7 +15,7 @@ flip = any(e['type'] == 'flip' and e['params'].get('h') for e in L.get('effects'
 a = (L['transform'].get('anchor') or [0, 0, 0])
 off = (((x0 + x1) / 2 - W / 2) * u, ((y0 + y1) / 2 - H / 2) * u)
 anchor = [round(a[0] + off[0] if flip else a[0] - off[0], 1), round(a[1] - off[1], 1), 0]
-A = json.load(open(RB)); E = A['layer_edits']; key = '199:' + lid
+A = json.load(open(RB)); E = A['layer_edits']; key = __import__('os').environ.get('COMP','199') + ':' + lid
 prev = E.get(key, {})
 st = dict(prev.get('set', {}))
 st.update({'type': 'sequence', 'source': {'sequence': {'asset_ids': ids}, 'fit': {'width': round((x1 - x0) * u, 1), 'height': round((y1 - y0) * u, 1), 'mode': 'stretch'}},

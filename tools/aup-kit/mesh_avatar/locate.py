@@ -4,7 +4,7 @@ sys.path.insert(0, '/home/kigarashi309/workspace/projects/KyChaPoGaS/repo/tools/
 from PIL import Image
 lid, aid, f = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 C = pickle.load(open('/tmp/claude-1000/sakura-rebuild/POLISH7/comps37.pkl', 'rb'))
-L = [l for l in C[199]['data']['layers'] if l['id'] == lid][0]
+L = [l for l in C[int(__import__('os').environ.get('COMP','199'))]['data']['layers'] if l['id'] == lid][0]
 src = L.get('source') or {}; fit = src.get('fit')
 im = Image.open(r.asset_path(aid)).convert('RGBA'); W, H = im.size
 w0 = fit['width'] if fit else W
