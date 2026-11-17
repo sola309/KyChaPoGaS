@@ -270,7 +270,9 @@ def _b11_bone_pose(n, grp):
 
 
 # ---- v7(VRMSAK): 私服パーカー(A)は VRM モデル(ユーザー本人の作。project 37 の素材 11163 = .vrm を .glb の名前で上げた物)。AUP_VRM=0 で前の立ち絵に戻る ----
-VRM_PARKA = {37: 11163, 35: 11160}
+# v20(POLISH9): 髪がパーカーの腕・脇・フードにめり込む → 当たり判定を布の厚みぶん大きくした別名の版 11483(..._claude_hairfix_v1.glb。
+#   /tmp/claude-1000/sakura-rebuild/POLISH9/vrm_hairfix.py で JSON の数だけ変更。元の 11163 は上書きしていない)
+VRM_PARKA = {37: 11483, 35: 11160}
 VRM_ON = os.environ.get('AUP_VRM', '1') != '0' and PEOPLE != 'mannequin'
 # 見た目(完成版 1650・3500 を見て数にした): 肌 #fde9d5 で顔に影の段なし・髪 明 #c3687d / 暗い筋 #77464d・パーカー #a0b8b4 で影はしわの細い筋だけ・輪郭線は 1080p で 1.5〜2px の暗い茶。
 # → 光は正面やや上から、影の境目を奥へずらして(shift −0.35)顔に影の塊を出さない。輪郭線は服にも付ける
