@@ -183,8 +183,8 @@ def s03(ctx):
         petals_.append({'geometry': 'group', 'rotation': [0, 0, i * 72], 'children': [
             {'geometry': 'group', 'position': rad, 'rotation': [0, 0, 180], 'children': [gem(face={'type': 'basic', 'color': fc}, face2=p, rotation=own)]}]})
     # 入り(完成版 214〜246 = ここの 2〜34): 玉は外から中心へ寄りながら(輪の半径 2.3 → 1 倍)小さくなる(2.6 → 1 倍)。どちらも頭がいちばん速い減速 1 本(キーは測った値・spline)
-    sc_in = [(1, 5.2), (2, 4.2), (3, 3.5), (4, 3.05), (6, 2.5), (10, 1.9), (14, 1.55), (18, 1.33), (22, 1.18), (26, 1.08), (30, 1.02), (34, 1.0), (78, 1.03), (110, 1.09), (124, 1.125)]
-    sc = {'k': [dict(f=f, v=[S * v] * 3) for f, v in sc_in[:-1]] + [dict(f=124, v=[S * 1.125] * 3, e='inQuart'), dict(f=147, v=[S * 3.3] * 3)], 'interp': 'spline'}
+    sc_in = [(1, 5.2), (2, 4.2), (3, 3.5), (4, 3.05), (6, 2.5), (10, 1.9), (14, 1.55), (18, 1.33), (22, 1.18), (26, 1.08), (30, 1.02), (34, 1.0), (78, 1.05), (110, 1.15), (124, 1.21)]      # v16: 止めの寄りを約 1.7 倍に(1.0 → 1.21。v15 は 1.125 で 318〜330 の動きの量 1〜6・手本 27〜53)
+    sc = {'k': [dict(f=f, v=[S * v] * 3) for f, v in sc_in[:-1]] + [dict(f=124, v=[S * 1.21] * 3, e='inQuart'), dict(f=147, v=[S * 3.3] * 3)], 'interp': 'spline'}
     ring = {'geometry': 'group', 'position': [0, -20, 0], 'children': petals_,
             'rotation': [0, 0, {'k': [dict(f=1, v=-75, e='outCubic'), dict(f=46, v=0), dict(f=57, v=0)] + _s03_turn() + [dict(f=126, v=72, e='inCubic'), dict(f=147, v=112)]}],
             'scale': sc}

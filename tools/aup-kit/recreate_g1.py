@@ -434,10 +434,18 @@ def _title_confetti(name, n, seed):
     mg = {'color': '#8fd0a0', 'roughness': 0.8}
     hero = [{'geometry': 'box', 'size': [110, 172, 34], 'position': [-1198, 294, 2003], 'material': mg, 'faces': [mg, mg, mg, mg, tex_g, tex_g],
              'instances': {'count': 1, 'seed': seed + 5, 'layout': 'box', 'area': [0, 0, 0], 'scale': [1.5, 1.5], 'rotation': [25, 35, 15], 'spin': [22, 30, 8], 'velocity': [249, 10, -788]}}]
+    # v16(POLISH7): v15 は主役のまわりは片づいたが、流れの量が v13 並み(2〜15。手本 28〜38)に戻った。大きい物を戻さずに量を上げる:
+    #   (a) 手前の紙片の流れを 1.6 倍の速さに(数は同じ)、(b) 奥(カメラから 2800〜5200)にうすい紙片の層 420 枚(不透明度 45%・速さ 2 倍。遠いので画面では 15〜45px・主役より奥の地になじむ)
+    for o in objs[2:]:
+        o['instances']['velocity'] = [-240, 350, -480]
+    far = [dict(boxes(c, None, seed + 20 + i, cnt, [60, 15, 9], [1.2, 2.2], 4300, 2600), ) for i, (c, cnt) in enumerate(((red, 250), (green, 170)))]
+    for o in far:
+        o['instances']['velocity'] = [-420, 520, -700]
+        o['instances']['area'] = [9000, 5200, 2600]
     cam = layer('cam', 'camera', n, {'zoom': 1100, 'target': kf((0, [960, 540, 2000]), (n, [1000, 520, 2600]))},
                 transform={'position': kf((0, [900, 560, -1500], 'outCubic'), (60, [960, 540, -900]), (n, [1000, 520, -500]))})
     return doc(name, n, [cam, petals('pet', n, seed=seed + 9, rate=5, life=5, size=26, wind=(-70, 0, 0), gravity=(0, 70, 0), colors=('#f6c1d2', '#f4aac4')),
-                         _mesh('hero', n, hero, transform={'opacity': 80}), _mesh('boxes', n, objs)])
+                         _mesh('hero', n, hero, transform={'opacity': 80}), _mesh('boxes', n, objs), _mesh('far', n, far, transform={'opacity': 45})])
 
 
 @reg(S4 + '09_タイトルパート背景/1.02', 'B07', 'mesh(箱・紙片の instances)+ particles')
@@ -460,7 +468,9 @@ def _track(name, n, fill, stroke=None):
 
 @reg(S4 + '10_タイトルパート線路/1.00', 'B08', 'shape(path)+ 模様(waves)')
 def b08(ctx):
-    return _track('再現 B08 タイトルパート線路', 200, {'pattern': {'kind': 'stripes', 'colors': ['#ffffff', '#d2d2d6'], 'size': 46, 'angle': 90}})
+    # v16(POLISH7): 手本の題字の場面で大きく動いているのは「下の線路の縞が手前へ流れつづける」事だった(1290 と 1296 の差の絵で確認。麻の葉の地は動かない)。
+    #   v15 までは縞が止まっていて、動きの量が 2〜15(手本 28〜38)。縞を 1 コマ 5px で手前(下)へ流す。題字・六角形には重ならない
+    return _track('再現 B08 タイトルパート線路', 200, {'pattern': {'kind': 'stripes', 'colors': ['#ffffff', '#d2d2d6'], 'size': 46, 'angle': 90, 'offset': kf((0, [0, 0]), (200, [0, -1000]))}})
 
 
 @reg(S4 + '10_タイトルパート線路/1.00/ワイヤー', 'B08', 'shape(path)+ 模様(grid の線だけ)')

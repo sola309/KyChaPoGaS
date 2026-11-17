@@ -44,7 +44,8 @@ def b24(ctx):
     n = 90
     w, h = 3000, 1688
     return doc('再現 B24 桜吹雪(咲き誇れ)', n, [
-        petals('a', n, seed=41, rate=55, life=4, size=72, wind=(-260, 0, 0), gravity=(0, 220, 0), colors=('#fff3f6', '#ffdfe8', '#ffffff', '#ffd0dd'),
+        # v16(POLISH7): 花びらが白〜ごくうすい桃色で、白っぽい背景の上では見えず、止め(4634〜4652)が静止に見えた(動きの量 2〜10・手本 25〜40)→ 桃色を濃く
+        petals('a', n, seed=41, rate=55, life=4, size=72, wind=(-260, 0, 0), gravity=(0, 220, 0), colors=('#ffc2d2', '#ffa9c0', '#ffd9e3', '#ff96b2'),
                area=(w * 1.2, h * 1.2, 0), pos=(w / 2, h / 2), flutter=300),
         petals('b', n, seed=42, rate=3, life=3, size=210, wind=(-420, 0, 0), gravity=(0, 380, 0), colors=('#ffd3df', '#ffe3ec'),
                area=(w * 1.2, h * 1.2, 0), pos=(w / 2, h / 2), flutter=200),
@@ -224,12 +225,23 @@ def b25(ctx):
             out.append((f, [round(x + (y - x) * w, 3) for x, y in zip(a, b)]))
         return out
     PA, PB, PC = B25_PACK
+
+    def land(A, B, f0=1, f1=14, f2=30):
+        """飛びこみ(v16・2 回目): 頭が最速で 14 コマまでにほぼ着く速い成分(outQuint・6 割)+ 30 コマ目まで尾を引く遅い成分(outQuad・4 割)を 1 コマごとに焼く。
+        1 回目(着地を 21 → 26 に延ばした outQuint 1 本)は尾は付いたが頭の山が 422 → 342 に下がった(手本 557)。v15 の outQuint(21)は 5200〜5204 が 2〜10 で死んでいた(手本 26〜54)"""
+        out = []
+        for f in range(f0, f2 + 1):
+            a = min(1.0, (f - f0) / (f1 - f0)); b = (f - f0) / (f2 - f0)
+            u = 0.6 * (1 - (1 - a) ** 5) + 0.4 * (1 - (1 - b) ** 2)
+            out.append((f, [round(x + (y - x) * u, 3) for x, y in zip(A, B)]))
+        return out
     pack = {'geometry': 'group',
             # v13(POLISH5): 飛びこみを 1 コマ早く・出だしを少し上から。v12 は箱が見えはじめるのが 5187、動きの山が 5189 で、拍(5187〜5188。手本の山 5187)に 2 コマ遅れていた
             #   (この組の kf は kfa = 着地のキーに加減速を書く流儀。outQuart → outQuint で頭の 2 コマをさらに速く)
-            'position': kf((1, [280, 690, 0]), (21, [430, 110, 0], 'outQuint'), *push([430, 110, 0], PB[0], PC[0])),
-            'rotation': kf((1, [55, -10, -125]), (21, [28, -18, -68], 'outQuint'), *push([28, -18, -68], PB[1], PC[1])),
-            'scale': kf((1, [1.7] * 3), (21, [2.2] * 3, 'outQuint'), *push([2.2] * 3, [PB[2]] * 3, [PC[2]] * 3)),
+            # v16: 着地を 21 → 26 コマ目に(同じ outQuint。v15 は 5200〜5204 で動きの量 10 → 3 と早く死んでいた。手本は 54 → 26 と尾を引く)
+            'position': kf(*land([280, 690, 0], [430, 110, 0]), *push([430, 110, 0], PB[0], PC[0])),
+            'rotation': kf(*land([55, -10, -125], [28, -18, -68]), *push([28, -18, -68], PB[1], PC[1])),
+            'scale': kf(*land([1.7] * 3, [2.2] * 3), *push([2.2] * 3, [PB[2]] * 3, [PC[2]] * 3)),
             'children': [
                 {'geometry': 'box', 'size': [300, 540, 90], 'material': plain, 'faces': [plain, plain, {'color': '#8d8d8d', 'roughness': 0.9}, plain, front, back]},
                 {'geometry': 'box', 'size': [262, 300, 62], 'position': [0, kf((20, -130), (24, -300, 'outCubic')), 0], 'material': {'color': silver, 'metalness': 0.5, 'roughness': 0.45}},
@@ -243,7 +255,10 @@ def b25(ctx):
         petals('pt', n, seed=91, rate=16, life=5, size=34, wind=(-90, 0, 0), gravity=(0, 90, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=300, pre=-80),
         # v15(POLISH7): 寄りの余韻(5302〜5325 = 118〜141)で手本は花びらと雲が流れつづける(動きの量 17〜46)。こちらは小さい花びら(34px・1 コマ 1.5px)だけで 0〜9、止まって見えた。
         #   手前を大きな花びらが速く横切る層を足す(95px・1 コマ 約 5px。30 コマ目から出しはじめる。出しはじめを 100・84 コマ目にした 1・2 回目は、粒が育つ前で 1 枚も映らなかった)。寿命 2.5 秒・1 秒 8 枚 = 同時に 20 枚まで
-        petals('pt2', n, seed=93, rate=8, life=2.5, size=80, wind=(-300, 0, 0), gravity=(0, 130, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=260, pre=-30, area=(2800, 1300, 0)),
+        # v16(POLISH7): v15 の「大きい花びら 20 枚」では数が変わらなかった。手本を等倍で見ると、動いているのは「数百枚のごく小さい花びら(6〜12px)の群れ」(人物のまわりを左へ流れながら舞う)。
+        #   小さい花びらを同時に約 400 枚(13px・1 コマ 3〜4px・ゆらぎ大)。大きい層は v15 の半分に
+        petals('pt2', n, seed=93, rate=4, life=2.5, size=80, wind=(-300, 0, 0), gravity=(0, 130, 0), colors=('#ffc3d2', '#ffd9e2', '#ffb1c6'), flutter=260, pre=-30, area=(2800, 1300, 0)),
+        petals('pt3', n, seed=95, rate=170, life=3.6, size=24, wind=(-210, 0, 0), gravity=(0, 40, 0), colors=('#ff9db8', '#ffb4c8', '#ff86a8', '#ffc6d4'), flutter=520, pre=-30, area=(2900, 1500, 0)),      # 1 回目(13px・うすい桃色・110 枚/秒)は地に溶けて見えなかった → 24px・濃い桃色・170 枚/秒
         layer('chara', 'comp', n, {'comp_id': ctx.comp('aux:B25_chara'), 'transparent': True}, t0=82,
               # 152 から先は v5 のまま: 5337〜5369(154〜186)の寄りは加速しつづけ(inSine)、止まらずに 189 から 100 コマ以上かけて減速(outCirc)
               transform={'anchor': [60, -380, 0],
