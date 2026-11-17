@@ -470,7 +470,7 @@ def _track(name, n, fill, stroke=None):
 def b08(ctx):
     # v16(POLISH7): 手本の題字の場面で大きく動いているのは「下の線路の縞が手前へ流れつづける」事だった(1290 と 1296 の差の絵で確認。麻の葉の地は動かない)。
     #   v15 までは縞が止まっていて、動きの量が 2〜15(手本 28〜38)。縞を 1 コマ 5px で手前(下)へ流す。題字・六角形には重ならない
-    return _track('再現 B08 タイトルパート線路', 200, {'pattern': {'kind': 'stripes', 'colors': ['#ffffff', '#d2d2d6'], 'size': 46, 'angle': 90, 'offset': kf((0, [0, 0]), (200, [0, -1000]))}})
+    return _track('再現 B08 タイトルパート線路', 200, {'pattern': {'kind': 'stripes', 'colors': ['#ffffff', '#d2d2d6'], 'size': 46, 'angle': 90, 'offset': kf((0, [0, 0]), (200, [0, -860]))}})
 
 
 @reg(S4 + '10_タイトルパート線路/1.00/ワイヤー', 'B08', 'shape(path)+ 模様(grid の線だけ)')
