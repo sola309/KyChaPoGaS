@@ -40,6 +40,34 @@ POS_SUFFIX = {
 }
 
 
+# 杏子のデザインの決まり (memory: kyoko-hair-tv-style・kyoko-ponytail-volume・kyoko-bangs-check)。台帳の説明に別の髪色・髪型が
+# 書いてあっても、人物の絵は必ずこの形に直す (ファンアートの描き分けより「杏子に見える」ことを優先)
+KYOKO_FIX = ('sakura kyoko, long hair, red hair, high ponytail, thick ponytail, black hair ribbon, hair bow, '
+             'sidelocks, pointy bangs, red eyes, fang, smooth hair, large hair strands')
+KYOKO_NEG = ('black hair, brown hair, orange hair, blonde hair, pink hair, purple hair, blue hair, gradient hair, multicolored hair, '
+             'wavy hair, curly hair, short hair, twintails, braid, low ponytail, messy hair, flyaway hair, dark hair shadow, '
+             'other characters, 2girls, multiple girls, greyscale, desaturated, muted colors, blurry')
+HAIR_WORDS = ('hair', 'ponytail', 'twintails', 'braid', 'bangs', 'eyes', 'ribbon', 'bow')
+PERSON_KINDS = {'stand', 'chibi', 'bust', 'scene', 'sketch'}
+
+
+def kyoko_tags(tags, kind, multi):
+    """人物の絵: 髪・目の説明を消して決まりの塊を足す。何人も並ぶ絵は「全員が杏子」と書く"""
+    if kind not in PERSON_KINDS:
+        return tags, ''
+    keep = [t.strip() for t in tags.split(',') if t.strip() and not any(w in t for w in HAIR_WORDS)
+            and t.strip() not in ('1girl', '2girls', '3girls', 'multiple girls', 'sakura kyoko', 'miki sayaka', 'akemi homura')]
+    if multi:
+        head = 'multiple girls, everyone is sakura kyoko, same face, ' + KYOKO_FIX
+        neg = KYOKO_NEG.replace('other characters, 2girls, multiple girls, ', 'other characters, ')
+    else:
+        head = KYOKO_FIX
+        neg = KYOKO_NEG
+    if kind == 'sketch':
+        neg = neg.replace('greyscale, desaturated, ', '')
+    return head + ', ' + ', '.join(keep), neg
+
+
 def bucket(w, h, area=1024 * 1024):
     """元の縦横比に近い SDXL の大きさ (64 の倍数・約 1 MP)"""
     ar = (w / h) if w and h else 1.0
@@ -75,6 +103,7 @@ def main():
     ap.add_argument('--kinds', default='')
     ap.add_argument('--redo', default='')
     ap.add_argument('--limit', type=int, default=0)
+    ap.add_argument('--style', default='anime', choices=['anime', 'ume'], help='anime = TV アニメの塗り / ume = 蒼樹うめ風')
     ap.add_argument('--max-side', type=int, default=4096, help='元が大きすぎるときの上限 (長い辺)')
     a = ap.parse_args()
     os.makedirs(os.path.join(a.work, 'gen'), exist_ok=True)
@@ -136,12 +165,14 @@ def main():
         gw, gh = bucket(W, H)
         seed = 380000 + fid * 7 + (amap.get(key, {}).get('tries', 0) * 1000 if fid in redo else 0)
         multi = bool(r.get('multi'))
-        pos = ('masterpiece, best quality, ' if multi else L.WAI_POS)
-        tags = r['tags'] + POS_SUFFIX.get(kind, '')
+        body, kneg = kyoko_tags(r['tags'], kind, multi)
+        tags = body + POS_SUFFIX.get(kind, '')
+        pos = ('1girl, solo, ' if kind in PERSON_KINDS and not multi else '') + 'masterpiece, best quality, amazing quality, mahou shoujo madoka magica, ' + \
+            ('aoki ume, ' if a.style == 'ume' else 'anime screencap, anime coloring, ')
         if kind in ('bg', 'object'):
             pos = 'masterpiece, best quality, '
         print(f'[{fid}] {kind} {W}x{H} gen {gw}x{gh} seed {seed}: {tags[:90]}', flush=True)
-        job, aid = L.wai(tags, seed, w=gw, h=gh, pos=pos, neg_extra=', '.join(x for x in (NEG_EXTRA.get(kind, ''), r.get('neg', '')) if x), project_id=PROJECT)
+        job, aid = L.wai(tags, seed, w=gw, h=gh, pos=pos, neg_extra=', '.join(x for x in (NEG_EXTRA.get(kind, ''), kneg, r.get('neg', '')) if x), project_id=PROJECT)
         if not aid:
             print('  生成に失敗', job.get('error'), flush=True)
             continue
