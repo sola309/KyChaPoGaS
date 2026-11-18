@@ -578,6 +578,12 @@ class Conv:
             if tr and 'k' in tr:
                 d['time_remap'] = conv_prop(tr, L['start'], fps, lambda v: round(v * (s.get('fps_exact') or fps), 3))
                 STATS['time_remap'] += 1
+            else:
+                # AE は素材 (子のコンポ) の終わりより先を描かない。comp-kit は最後のコマで止まるので out を切る
+                end = round((L['start'] + (s.get('duration') or 0)) * fps, 3)
+                if end < d['out']:
+                    d['out'] = max(d['in'], end)
+                    STATS['comp_out_clamped'] += 1
             return [d]
         if kind == 'solid':
             s = self.by[L['source_id']]
@@ -601,6 +607,10 @@ class Conv:
                 d['source'] = {'comp_id': a['comp_id']}
                 d['start'] = round((L['in'] - L['start']) * fps, 3)
                 d['name'] = '作り直し: ' + (s.get('name') or '')  # コンポは素材と同じ大きさで作る (アンカー・位置がそのまま合う)
+                # 元の動画に掛けていた色の補正 (露光量など) は作り直した場面には合わないので外す。切る・隠す効果は残す
+                d['effects'] = [e for e in d.get('effects', []) if e.get('type') not in ('color', 'levels', 'tint', 'gradient_overlay')]
+                if not d['effects']:
+                    d.pop('effects')
             elif a:
                 d['type'] = 'image'
                 d['source'] = {'asset_id': a['asset_id'], 'fit': {'width': size[0], 'height': size[1], 'mode': 'stretch'}}
@@ -1014,10 +1024,13 @@ class Conv:
             elif mn == 'ADBE Gaussian Blur 2':
                 out.append({'type': 'blur', 'params': {'radius': g(1, 0)}, 'ae': 'gaussian_blur'})
             elif mn == 'ADBE Geometry2':
+                # トランスフォーム効果: 1 アンカー・2 位置はレイヤーの大きさの割合 (既定どちらも中心)。comp-kit の offset は px のずらし
+                lw, lh = size if size[0] else (self.cur_comp['width'], self.cur_comp['height'])
+                anc = vecn(g(1, [0.5, 0.5]), 2) if not isinstance(g(1), dict) else [0.5, 0.5]
                 pos = g(2, None)
                 prm = {}
                 if pos is not None:
-                    prm['position'] = pos
+                    prm['position'] = map_val(pos, lambda v: [round((vecn(v, 2)[0] - anc[0]) * lw, 2), round((vecn(v, 2)[1] - anc[1]) * lh, 2)])
                 sc = g(3, None)
                 if sc is not None:
                     prm['scale'] = sc
@@ -1070,7 +1083,8 @@ class Conv:
                 self.missing_fx['4色グラデーション(4 色の直線で代用)'] += 1
             elif mn == 'ADBE Exposure2':
                 ex = g(3, 0)
-                out.append({'type': 'color', 'params': {'brightness': map_val(ex, lambda v: round((2 ** v - 1) * 100, 2))}, 'ae': 'exposure'})
+                # 露光量は掛け算 (1 段 = 2 倍)。comp-kit の color の luminance (100 = そのまま) に
+                out.append({'type': 'color', 'params': {'luminance': map_val(ex, lambda v: round(100 * 2 ** v, 2))}, 'ae': 'exposure'})
             elif mn == 'ADBE Brightness & Contrast 2':
                 out.append({'type': 'color', 'params': {'brightness': g(1, 0), 'contrast': g(2, 0)}, 'ae': 'brightness_contrast'})
             elif mn == 'CC Jaws':
