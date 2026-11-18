@@ -595,7 +595,13 @@ class Conv:
             s = self.by[L['source_id']]
             self.footage_used[s['id']] += 1
             a = self.assets.get(str(s['id']))
-            if a:
+            if a and a.get('comp_id'):
+                # 動画の素材の代わりに、アプリで作ったコンポ (3D の場面など) を置く。素材の頭 = コンポの頭。置き換え表に {"comp_id": N}
+                d['type'] = 'comp'
+                d['source'] = {'comp_id': a['comp_id']}
+                d['start'] = round((L['in'] - L['start']) * fps, 3)
+                d['name'] = '作り直し: ' + (s.get('name') or '')  # コンポは素材と同じ大きさで作る (アンカー・位置がそのまま合う)
+            elif a:
                 d['type'] = 'image'
                 d['source'] = {'asset_id': a['asset_id'], 'fit': {'width': size[0], 'height': size[1], 'mode': 'stretch'}}
                 d['name'] = '仮: ' + (s.get('name') or '')

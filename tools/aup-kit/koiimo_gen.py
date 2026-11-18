@@ -88,9 +88,37 @@ def main():
     only = {int(x) for x in a.only.split(',') if x}
     redo = {int(x) for x in a.redo.split(',') if x}
     kinds = {x for x in a.kinds.split(',') if x}
+    names = {i: os.path.basename((items.get(i, {}).get('path') or items.get(i, {}).get('name') or '').replace('\\', '/'))
+             for i in items}
+    seen_name = {}   # 同じ PSD の別レイヤー → 最初の 1 枚だけ描き、残りは透明
+    seen_tags = {}   # 連番 (… コンポジション 1_000NN) は同じ絵を使い回す
     n = 0
     for r in rows:
         fid, kind = int(r['fid']), r.get('kind', 'unknown')
+        nm = names.get(fid, '')
+        if r.get('tags') and kind not in ('video', 'unknown') and str(fid) not in amap:
+            if nm in seen_name and nm.lower().endswith(('.psd', '.psb')) and seen_name[nm][1] == r['tags']:
+                it = items.get(fid, {})
+                W, H = int(it.get('width') or 16), int(it.get('height') or 16)
+                op = os.path.join(a.work, 'gen', f'{fid}.png')
+                Image.new('RGBA', (max(1, min(W, 4096)), max(1, min(H, 4096))), (0, 0, 0, 0)).save(op)
+                up = L.upload(op, name=f'koiimo_{fid}_empty.png', project_id=PROJECT)
+                amap[str(fid)] = {'asset_id': up['id'], 'kind': 'empty', 'status': '仮', 'note': f'同じ PSD ({nm}) の別レイヤー。絵は {seen_name[nm][0]} に 1 枚で描いた'}
+                print(f'[{fid}] 同じ PSD の別レイヤー → 透明', flush=True)
+                continue
+            if 'コンポジション' in nm and r['tags'] in seen_tags and str(seen_tags[r['tags']]) in amap:
+                src = amap[str(seen_tags[r['tags']])]
+                it = items.get(fid, {})
+                W, H = int(it.get('width') or 1024), int(it.get('height') or 1024)
+                op = os.path.join(a.work, 'gen', f'{fid}.png')
+                fit_canvas(Image.open(os.path.join(a.work, 'gen', f'{seen_tags[r["tags"]]}.png')), W, H, src['kind']).save(op)
+                up = L.upload(op, name=f'koiimo_{fid}_seq.png', project_id=PROJECT)
+                amap[str(fid)] = dict(src, asset_id=up['id'], note=f'連番の 1 コマ。{seen_tags[r["tags"]]} と同じ絵 (動きは無い)')
+                print(f'[{fid}] 連番 → {seen_tags[r["tags"]]} の絵を使い回す', flush=True)
+                continue
+        if r.get('tags'):
+            seen_name.setdefault(nm, (fid, r['tags']))
+            seen_tags.setdefault(r['tags'], fid)
         if only and fid not in only:
             continue
         if kinds and kind not in kinds:
@@ -101,7 +129,7 @@ def main():
         if key in amap and fid not in redo:
             continue
         it = items.get(fid, {})
-        W, H = int(it.get('width') or 1024), int(it.get('height') or 1024)
+        W, H = int(r.get('w') or it.get('width') or 1024), int(r.get('h') or it.get('height') or 1024)  # 台帳に w/h があればそれ (動画の場面の背景など)
         if max(W, H) > a.max_side:
             s = a.max_side / max(W, H)
             W, H = int(W * s), int(H * s)
@@ -113,7 +141,7 @@ def main():
         if kind in ('bg', 'object'):
             pos = 'masterpiece, best quality, '
         print(f'[{fid}] {kind} {W}x{H} gen {gw}x{gh} seed {seed}: {tags[:90]}', flush=True)
-        job, aid = L.wai(tags, seed, w=gw, h=gh, pos=pos, neg_extra=NEG_EXTRA.get(kind, ''), project_id=PROJECT)
+        job, aid = L.wai(tags, seed, w=gw, h=gh, pos=pos, neg_extra=', '.join(x for x in (NEG_EXTRA.get(kind, ''), r.get('neg', '')) if x), project_id=PROJECT)
         if not aid:
             print('  生成に失敗', job.get('error'), flush=True)
             continue
