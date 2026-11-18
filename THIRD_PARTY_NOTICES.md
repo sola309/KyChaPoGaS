@@ -25,6 +25,7 @@ MIT / BSD / Apache-2.0 系です(同梱していません)。
 | GPT-SoVITS | MIT | |
 | WAI-illustrious-SDXL 等のCivitaiモデル | モデル毎(Illustrious系ライセンス等) | **要確認**: 各モデルページの利用条件(商用可否・生成物の扱い)に従うこと。DLには各自のCIVITAI_TOKENが必要 |
 | FLUX.1 Dev | FLUX Dev 非商用ライセンス | gated model(HuggingFaceログイン必須) |
+| コンポジション用の書体(`backend/data/fonts/`、手で置く): Anton・Sawarabi Mincho・Stick・Kiwi Maru・Zen Old Mincho・Shippori Mincho・Josefin Sans | SIL Open Font License 1.1 | Google Fonts(github.com/google/fonts の ofl/)から取得(2026-11-18、恋妹 2022 再現の書体の代わり) |
 
 ## 生成物について
 

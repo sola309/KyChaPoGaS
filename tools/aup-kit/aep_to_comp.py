@@ -615,7 +615,8 @@ class Conv:
             doc = doc or {}
             size = doc.get('size') or 60
             src = {'text': doc.get('text') if doc.get('text') is not None else (L.get('name') or ''),
-                   'font': self.font_map(doc.get('font')), 'size': size,
+                   'font': self.font_map(doc.get('font'))[0], 'weight': self.font_map(doc.get('font'))[1],
+                   'italic': self.font_map(doc.get('font'))[2], 'size': size,
                    'align': {0: 'left', 1: 'right', 2: 'center'}.get(doc.get('justify'), 'left'),
                    'valign': 'top'}
             lead = doc.get('leading') or 0
@@ -706,18 +707,22 @@ class Conv:
             return out
         return [d]
 
-    FONTS = {'APJapanesefont': 'APJapanesefont', 'APJapanesefontT': 'APJapanesefont'}
+    # AE の書体 → 入っている書体 (名前, 太さ, 斜体)。無料で使える OFL の書体で近いものを選んだ (2026-11-18)
+    FONTS = {'APJapanesefont': ('APJapanesefont', 400, False), 'APJapanesefontT': ('APJapanesefont', 400, False),
+             '07AkazukinPop': ('Mochiy Pop One', 400, False), 'Impact': ('Anton', 400, False),
+             'SawarabiMincho-Medium': ('Sawarabi Mincho', 400, False), 'Stick-Regular': ('Stick', 400, False),
+             'KozMinPr6N-Bold': ('Shippori Mincho', 700, False), 'KozMinPr6N-Light': ('Zen Old Mincho', 400, False),
+             'TenMincho-Regular': ('Shippori Mincho', 400, False),
+             'SourceHanSansJP-Bold': ('Noto Sans JP', 700, False), 'SourceHanSansJP-Heavy': ('Noto Sans JP', 900, False),
+             'Agenda-Light': ('Noto Sans JP', 300, False), 'Agenda-LightItalic': ('Noto Sans JP', 300, True),
+             'Agenda-RegularItalic': ('Noto Sans JP', 400, True), 'Agenda-BoldItalic': ('Noto Sans JP', 700, True)}
     MISSING_FONTS = Counter()
 
     def font_map(self, f):
-        if not f:
-            return 'Noto Sans JP'
         if f in self.FONTS:
             return self.FONTS[f]
-        self.MISSING_FONTS[f] += 1
-        if 'Heavy' in f or 'Black' in f or f in ('Impact',) or 'Bold' in f:
-            return 'Noto Sans JP'
-        return 'Noto Sans JP'
+        self.MISSING_FONTS[f or ''] += 1
+        return ('Noto Sans JP', 400, False)
 
     # ---------------------------------------------------------- シェイプの中身
     def shape_contents(self, L, fps, parent_id, root):

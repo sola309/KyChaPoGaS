@@ -45,7 +45,7 @@
 | 6 | Lumetri・グラデーション(ランプ)・4 色グラデーション・色相/彩度・露光量・輝度&コントラスト | 29・25・5・9・8・4 | 未(近い効果で代用予定) |
 | 7 | CC Jaws(ギザギザのワイプ) | 29 | **直した**(wipe の `teeth_height`・`teeth_width`) |
 | 8 | CC Particle World・Light Wrap・時間置き換え・エコー・放射状シャドウ | 少数 | 未 |
-| 9 | 書体: 07AkazukinPop・Impact・Agenda・小塚明朝・TenMincho・Sawarabi など 12 種 | 35 | Noto Sans JP で代用中 |
+| 9 | 書体: 07AkazukinPop・Impact・Agenda・小塚明朝・TenMincho・Sawarabi など 12 種 | 35 | **直した**(OFL の書体を足して対応表: Mochiy Pop One・Anton・Shippori Mincho・Zen Old Mincho・Sawarabi Mincho・Stick・Noto Sans JP) |
 | 10 | マージパス | 126 | 無視中 |
 
 ## 次にやること
