@@ -190,14 +190,17 @@ R.mask_image = {
   },
 }
 R.wipe = {
-  n: 2,
-  mask: `{ float ext = abs($0.x) * $1.z + abs($0.y) * $1.w; float sx = dot($P - $1.xy, $0.xy) + ext; float edge = $0.z * (2.0 * ext + $0.w) - $0.w;
+  n: 3,
+  // $2: ギザギザの縁(CC Jaws)。x = 歯の幅、y = 歯の高さ(0 = まっすぐ)。縁に沿った位置で三角波だけ境目をずらす
+  mask: `{ float ext = abs($0.x) * $1.z + abs($0.y) * $1.w; float sx = dot($P - $1.xy, $0.xy) + ext; float edge = $0.z * (2.0 * ext + $0.w + $2.y) - $0.w - $2.y * 0.5;
+    if ($2.y > 0.0) { float u = dot($P - $1.xy, vec2(-$0.y, $0.x)) / $2.x; sx += (abs(fract(u) - 0.5) * 2.0 - 0.5) * $2.y; }
     m *= $0.z <= 0.0 ? 1.0 : $0.w > 1e-3 ? clamp((sx - edge) / $0.w, 0.0, 1.0) : clamp(0.5 + (sx - edge) / px, 0.0, 1.0); }`,
   pack(p, ctx, o, i) {
     const r = ctx.rect, d = dirOf(num(p.angle, 90)), pr = pct(p.progress, 0)
     if (pr <= 0) return false
     put(o, i, d[0], d[1], pr, Math.max(0, num(p.feather, 0)))
     put(o, i + 4, r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2)
+    put(o, i + 8, Math.max(1, num(p.teeth_width, 40)), Math.max(0, num(p.teeth_height, 0)))
   },
 }
 R.opacity = {

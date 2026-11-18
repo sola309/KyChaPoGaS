@@ -452,6 +452,26 @@
      "max": 500,
      "step": 1,
      "animatable": true
+    },
+    "teeth_height": {
+     "type": "number",
+     "label": "ギザギザの高さ(0 = まっすぐ。CC Jaws)",
+     "default": 0,
+     "min": 0,
+     "max": 1000,
+     "step": 1,
+     "animatable": true,
+     "optional": true
+    },
+    "teeth_width": {
+     "type": "number",
+     "label": "ギザギザの歯の幅",
+     "default": 40,
+     "min": 1,
+     "max": 2000,
+     "step": 1,
+     "animatable": true,
+     "optional": true
     }
    }
   },

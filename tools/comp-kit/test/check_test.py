@@ -170,6 +170,21 @@ def main():
             im = px(asyncio.run(grab(c, [0], base))[0])
             left, right = im.getpixel((50, 100))[0] > 200, im.getpixel((150, 100))[0] > 200
             ok(f"shape の trim_fill = {flag}: 左半分 = {want_left}", left == want_left and right, f"{im.getpixel((50, 100))} {im.getpixel((150, 100))}")
+        # wipe のギザギザ(teeth): 50% で縦の境目。歯の高さ 40・幅 40 なら境目の x が歯の頂点と谷で 40 ずれる。0% は全部見え、100% は全部消える
+        def wipe_img(pr, th):
+            c = comp([{"id": "a", "type": "solid", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": {"color": "#ffff00", "width": 200, "height": 200},
+                       "effects": [{"type": "wipe", "params": {"progress": pr, "angle": 90, "teeth_height": th, "teeth_width": 40}}]}], bg="#000000")
+            return px(asyncio.run(grab(c, [0], base))[0])
+        def edge_x(im, y):
+            row = [im.getpixel((x, y))[0] > 128 for x in range(200)]
+            return next((x for x in range(200) if row[x]), 200)
+        im = wipe_img(50, 40)
+        xs = [edge_x(im, y) for y in range(0, 200, 5)]
+        ok("wipe のギザギザ: 境目が歯の高さぶん揺れる", 34 <= max(xs) - min(xs) <= 46, str((min(xs), max(xs))))
+        im0, im1, imf = wipe_img(0.5, 40), wipe_img(100, 40), wipe_img(50, 0)
+        ok("wipe のギザギザ: 0% は全部見え 100% は全部消える", edge_x(im0, 100) == 0 and all(edge_x(im1, y) == 200 for y in range(0, 200, 10)), "")
+        xf = [edge_x(imf, y) for y in range(0, 200, 10)]
+        ok("wipe: 歯の高さ 0 は元どおりまっすぐ", max(xf) - min(xf) == 0 and 95 <= xf[0] <= 105, str(xf[:3]))
         # ぼかしのあとの flip(画面より大きいレイヤーでも反転する)。左が赤・右が緑の 2 枚組をぼかして左右反転 → 左が緑
         half = lambda col, x: {"id": col, "type": "solid", "in": 0, "out": 10, "transform": {"position": [x, 300]}, "source": {"color": col, "width": 800, "height": 1200}}  # noqa: E731
         sub = {"id": 9950, "name": "sub", "width": 1600, "height": 1200, "fps": 30, "duration_frames": 10, "data": {"version": 1, "bg": None, "layers": [half("#ff0000", 400), half("#00ff00", 1200)]}}

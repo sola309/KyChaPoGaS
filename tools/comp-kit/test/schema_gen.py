@@ -30,7 +30,8 @@ fx("blinds", "斜めブラインド", G1, {"ratio": P("残す割合", 50), "pitc
 fx("clip_sector", "扇クリッピング", G1, {"start": A("基準角"), "sweep": A("拡張角(消す範囲)", 90), "cx": CX(), "cy": CY(), "feather": FE(), "keep": B("扇形のほうを残す")}, True)
 fx("radial_wipe", "扇形ワイプ(残す)", G1, {"start": A("開始角"), "sweep": A("見せる範囲", 360), "cx": CX(), "cy": CY(), "feather": FE()}, True)
 fx("iris", "アイリス", G1, {"progress": P("開きぐあい", 100), "shape": S("形", "circle", [("circle", "円"), ("rect", "四角"), ("diamond", "ひし形"), ("star", "星"), ("polygon", "多角形")]), "sides": N("頂点の数", 5, 3, 24, 1, False), "inner": N("星の内径", 0.5, 0.05, 1, 0.01, False), "cx": CX(), "cy": CY(), "feather": FE(), "invert": B("反転")}, True)
-fx("wipe", "ワイプ", G1, {"progress": P("進みぐあい", 0), "angle": A("角度", 90), "feather": FE()}, True)
+fx("wipe", "ワイプ", G1, {"progress": P("進みぐあい", 0), "angle": A("角度", 90), "feather": FE(),
+                          "teeth_height": N("ギザギザの高さ(0 = まっすぐ。CC Jaws)", 0, 0, 1000, 1, optional=True), "teeth_width": N("ギザギザの歯の幅", 40, 1, 2000, 1, optional=True)}, True)
 fx("mask_shape", "マスク(図形)", G1, {"shape": S("形", "ellipse", SHAPES_M), "x": CX(), "y": CY(), "size": N("サイズ", 200, 0, 8000, 1), "aspect": N("縦横比", 0, -100, 100, 1), "rotation": A("回転"), "feather": FE(), "radius": N("角丸", 0, 0, 2000, 1), "expansion": N("広げる", 0, -500, 500, 1), "invert": B("反転"), "opacity": P("強さ")}, True)
 fx("mask_image", "マスク(画像)", G1, {"asset_id": N("画像の素材", None, anim=False, asset="image"), "x": CX(), "y": CY(), "size": N("サイズ(長辺。0 = 元の大きさ)", 0, 0, 8000, 1), "rotation": A("回転"), "aspect": N("縦横比", 0, -100, 100, 1), "feather": FE(), "invert": B("反転"), "channel": S("使う成分", "auto", [("auto", "自動"), ("alpha", "アルファ"), ("luma", "輝度")]), "opacity": P("強さ")}, True)
 fx("opacity", "透明度", G1, {"amount": P("不透明度")}, True)

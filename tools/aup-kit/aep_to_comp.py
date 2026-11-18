@@ -1062,8 +1062,9 @@ class Conv:
             elif mn == 'ADBE Brightness & Contrast 2':
                 out.append({'type': 'color', 'params': {'brightness': g(1, 0), 'contrast': g(2, 0)}, 'ae': 'brightness_contrast'})
             elif mn == 'CC Jaws':
-                out.append({'type': 'wipe', 'params': {'progress': g(1, 0), 'angle': 90, 'feather': 0}, 'ae': 'cc_jaws'})
-                self.missing_fx['CC Jaws(ギザギザのワイプ → 直線のワイプで代用)'] += 1
+                # CC Jaws: 1 完了 3 方向 4 高さ 5 幅 (既定は高さ 50・幅 50 とみなす)
+                out.append({'type': 'wipe', 'params': {'progress': g(1, 0), 'angle': g(3, 90), 'feather': 0,
+                                                       'teeth_height': g(4, 50), 'teeth_width': g(5, 50)}, 'ae': 'cc_jaws'})
             else:
                 self.missing_fx[(e.get('name') or '') + ' ' + mn] += 1
         return out
