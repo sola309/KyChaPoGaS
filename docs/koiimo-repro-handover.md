@@ -53,6 +53,13 @@
 - 生成: `tools/aup-kit/koiimo_gen.py`(WAI txt2img → 人物・小物は切り抜き → 元の大きさの画布 → project 38 に登録 → `assets_map.json`)。`aep_to_comp.py --assets` で置き換わる。全部「仮」。
 - 動画で見えているのは 5 つ: 冒頭の空と傘(Blender、11〜22 秒)、街の空撮(51〜54 秒)、ウユニ塩湖(66.5〜67.6)、ピュアガール(70〜73.5)、緑のパーカーの 3D の踊り(75〜81。VRM で作る)。過去作の動画はほぼ区間の下に隠れている。
 
+## 11/18 夕方までの状態
+- 生成 158 件(新しく描いた 126・同じ PSD の別レイヤーは透明 18・連番は使い回し 14)+ 場面の背景 3。どれも「仮」。台帳 `reference/aviutl_mad/koiimo/rebuild/`(assets_map.json・assets_map_scenes.json・describe_*.json・inv3.json。作業中の元は scratchpad/koi)。
+- 作り直した場面 4 つ(`koiimo_scenes.py`): 399001 冒頭の空と mesh の傘、399003 街の空撮、399009 ピュアガールの部屋(mesh の柱・床・机 + 立ち絵の板 + カメラ)、399011 緑のパーカーの踊り(VRM 11483 を拍に合わせたポーズ。2048 角)。
+- DB: project 38 の comp 162 個(root = comp 697)。対応表 `reference/aviutl_mad/koiimo/comp_map_38.json`。`koiimo_upload.py` で同じ comp を更新する。
+- 全編の書き出し: `/tmp/claude-1000/koiimo-rebuild/full_v.sh <版>`(render6.py 3 並列 → 手本の音で符号化 → 縦並びの比較とスマホ用)。
+- 弱い所: 何人も並ぶ絵は WAI が別の子(黒髪など)を混ぜる → 1 人ずつ描いて合成するのがよい。小物・名札の切り抜きが消える(10244・1297・10341・10342)。11色waip は v21 だと 11.1 秒で終わる(1.01 はもう少し長い)。
+
 ## 次にやること
 1. 1.01 と全編を並べて、変換の外れを直す(区間ごと)。
 2. 素材の作り直しの方針をユーザーと決める(イラスト・切り抜き・Blender の場面・過去作の動画)。
