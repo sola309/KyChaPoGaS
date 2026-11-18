@@ -111,10 +111,50 @@ def dance(vrm_asset):
             'data': {'version': 1, 'bg': '#bfe0f4', 'layers': layers}}
 
 
+def pure_girl(stands):
+    """3D の部屋を駆け抜ける (元 Blender 'v4'。手本 69.8〜73.5 秒)。黄緑の柱の格子・青い床・白い机 (mesh) の間に、
+    生成した杏子の立ち絵 (stands = 素材の id の列。台帳の stand から選ぶ) を 3D の板として立て、カメラが奥へ進む"""
+    dur = 225
+    floor_y = 620
+    objs = [{'geometry': 'plane', 'size': [3600, 22000], 'position': [0, floor_y, 9000], 'rotation': [90, 0, 0],
+             'material': {'color': '#27b9f0', 'roughness': 0.35, 'metalness': 0.1}}]
+    for z in range(0, 20001, 900):
+        for x in (-1100, 1100):
+            objs.append({'geometry': 'box', 'size': [46, 1500, 46], 'position': [x, floor_y - 750, z], 'material': {'color': '#c9d83c', 'roughness': 0.5}})
+        objs.append({'geometry': 'box', 'size': [2246, 40, 40], 'position': [0, floor_y - 1480, z], 'material': {'color': '#c9d83c', 'roughness': 0.5}})
+    for x in (-1100, 1100):
+        for h in (300, 900):
+            objs.append({'geometry': 'box', 'size': [36, 36, 20000], 'position': [x, floor_y - h, 10000], 'material': {'color': '#c9d83c', 'roughness': 0.5}})
+    import random
+    rnd = random.Random(38)
+    for i in range(46):
+        x = rnd.choice([-1, 1]) * rnd.uniform(380, 980)
+        z = rnd.uniform(500, 19000)
+        objs.append({'geometry': 'box', 'size': [220, 26, 150], 'position': [x, floor_y - 160, z], 'material': {'color': '#f4f7fb', 'roughness': 0.6}})
+        objs.append({'geometry': 'box', 'size': [16, 134, 16], 'position': [x, floor_y - 80, z], 'material': {'color': '#8b9aa8'}})
+    layers = []
+    for i, aid in enumerate(stands[:12]):
+        x = (-1 if i % 2 else 1) * (230 + (i * 157) % 520)
+        z = 600 + i * 800
+        layers.append({'id': f'st{i}', 'name': f'立ち絵 {i}(仮)', 'type': 'image', 'three_d': True, 'billboard': True, 'in': 0, 'out': dur,
+                       'transform': {'position': [960 + x, 540 + floor_y - 450, z]},
+                       'source': {'asset_id': aid, 'fit': {'height': 900}}})
+    layers.append({'id': 'cam', 'name': 'カメラ', 'type': 'camera', 'in': 0, 'out': dur,
+                   'transform': {'position': K((0, [960, 380, -2600]), (dur, [990, 420, 12500]), e='inOutSine')},
+                   'source': {'fov': 62, 'target': K((0, [960, 470, 2000]), (dur, [930, 520, 18000]), e='inOutSine')}})
+    layers.append({'id': 'room', 'name': '部屋 (mesh)', 'type': 'mesh', 'in': 0, 'out': dur, 'transform': {'position': [960, 540, 0]},
+                   'source': {'env': 'soft', 'light': {'ambient': 0.9, 'intensity': 1.3, 'direction': [-0.3, 1, 0.4]}, 'objects': objs}})
+    layers.append({'id': 'sky', 'name': '空', 'type': 'shape', 'in': 0, 'out': dur, 'transform': {'position': [960, 540]},
+                   'source': {'kind': 'rect', 'width': 1920, 'height': 1080, 'fill': {'gradient': {'type': 'linear', 'angle': 180, 'stops': [[0, '#e9f7ff'], [1, '#bfe6ff']]}}}})
+    return {'id': 399009, 'name': '作り直し: ピュアガールの部屋 (3D)', 'width': 1920, 'height': 1080, 'fps': FPS, 'duration_frames': dur,
+            'data': {'version': 1, 'bg': '#dff3ff', 'layers': layers}}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--map', required=True)
     ap.add_argument('--out', required=True)
+    ap.add_argument('--stands', default='', help='立ち絵を選ぶ台帳 (gen1/assets_map.json)')
     ap.add_argument('--vrm', type=int, default=0, help='踊りに使う VRM の素材 (project 37 の 11483。作者のみ・再配布禁止)')
     a = ap.parse_args()
     amap = json.load(open(a.map))
@@ -122,6 +162,10 @@ def main():
     docs = [sky_umbrella(amap), city(amap)]
     if a.vrm:
         docs.append(dance(a.vrm))
+    if a.stands:
+        sm = json.load(open(a.stands))
+        ids = [v['asset_id'] for k, v in sm.items() if v.get('kind') == 'stand' and v.get('tries')]
+        docs.append(pure_girl(ids[::max(1, len(ids) // 12)]))
     for doc in docs:
         json.dump(doc, open(os.path.join(a.out, '%d.json' % doc['id']), 'w'), ensure_ascii=False)
         print('wrote', doc['id'], doc['name'])
