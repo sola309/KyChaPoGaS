@@ -78,14 +78,51 @@ def city(amap):
             'data': {'version': 1, 'bg': '#bfe9ff', 'layers': layers}}
 
 
+def dance(vrm_asset):
+    """緑のパーカーの杏子が踊る (元 'v4-4_AnKit.mp4'。手本 75.1〜81.0 秒)。ユーザーの VRM (作者のみ・再配布禁止) を拍に合わせてポーズで動かす。
+    拍 = 176.5 BPM (20.4 コマ)。手本の頭 (4506) から最初の拍まで 7 コマ"""
+    dur = 360
+    beat = [7 + 20.4 * i for i in range(18)]
+    # 拍ごとのポーズ: (拍の番号, 2 つ目のプリセット, 混ぜる量)
+    seq = [(0, 'idle', 0.0), (2, 'hand_on_hip', 0.9), (5, 'idle', 0.2), (6, 'peace', 1.0), (9, 'idle', 0.1), (10, 'wave', 1.0), (13, 'hand_on_hip', 0.9), (16, 'idle', 0.0)]
+    pb, pm = [], []
+    for i, (bi, name, mix) in enumerate(seq):
+        f = round(beat[bi], 2)
+        pb.append({'f': f - 6, 'v': name, 'e': 'hold'})
+        pm.append({'f': f - 6, 'v': 0.0 if i and seq[i - 1][1] != name else pm[-1]['v'] if pm else 0.0, 'e': 'snap'})
+        pm.append({'f': f + 6, 'v': mix, 'e': 'inOutSine'})
+    pm.sort(key=lambda k: k['f'])
+    sway, bounce = [], []
+    for i, f in enumerate(beat):
+        sway.append({'f': round(f, 2), 'v': [0, 0, 7 if i % 2 else -7], 'e': 'inOutSine'})
+        bounce.append({'f': round(f, 2), 'v': [960, 1832], 'e': 'outCubic'})
+        bounce.append({'f': round(f + 7, 2), 'v': [960, 1816], 'e': 'inQuad'})
+    layers = [
+        {'id': 'kyoko', 'name': '杏子 (VRM・仮)', 'type': 'model', 'in': 0, 'out': dur,
+         'transform': {'position': {'k': bounce}, 'rotation': [0, {'k': [{'f': 0, 'v': -14, 'e': 'inOutSine'}, {'f': 180, 'v': 10, 'e': 'inOutSine'}, {'f': dur, 'v': -6}]}, 0]},
+         'three_d': True,
+         'source': {'asset_id': vrm_asset, 'height': 1600, 'light': {'intensity': 1.0, 'ambient': 0.35},
+                                        'vrm': {'preset': 'idle', 'phase': {'k': [{'f': 0, 'v': 0}, {'f': dur, 'v': 3}]}, 'preset_b': {'k': pb}, 'preset_mix': {'k': pm},
+                            'pose': {'waist': {'k': sway}}, 'auto_blink': True, 'expressions': {'Joy': 0.45}}}},
+        {'id': 'bg', 'name': '空色', 'type': 'shape', 'in': 0, 'out': dur, 'transform': {'position': [960, 540]},
+         'source': {'kind': 'rect', 'width': 1920, 'height': 1080, 'fill': {'gradient': {'type': 'linear', 'angle': 180, 'stops': [[0, '#cfe8f7'], [1, '#a9d3ee']]}}}},
+    ]
+    return {'id': 399011, 'name': '作り直し: 緑のパーカーの踊り (VRM)', 'width': 1920, 'height': 1080, 'fps': FPS, 'duration_frames': dur,
+            'data': {'version': 1, 'bg': '#bfe0f4', 'layers': layers}}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--map', required=True)
     ap.add_argument('--out', required=True)
+    ap.add_argument('--vrm', type=int, default=0, help='踊りに使う VRM の素材 (project 37 の 11483。作者のみ・再配布禁止)')
     a = ap.parse_args()
     amap = json.load(open(a.map))
     os.makedirs(a.out, exist_ok=True)
-    for doc in (sky_umbrella(amap), city(amap)):
+    docs = [sky_umbrella(amap), city(amap)]
+    if a.vrm:
+        docs.append(dance(a.vrm))
+    for doc in docs:
         json.dump(doc, open(os.path.join(a.out, '%d.json' % doc['id']), 'w'), ensure_ascii=False)
         print('wrote', doc['id'], doc['name'])
 
