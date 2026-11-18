@@ -288,9 +288,32 @@ export function rasterShape(s, rs) {
     ctx.strokeStyle = halo.color; ctx.lineWidth = sw + 2 * hw; ctx.lineJoin = join === 'miter' ? 'miter' : 'round'
     ctx.stroke()
   }
+  // trim の区間(線と塗りで同じ)。null = 全体
+  const trimSegs = (() => {
+    const tr = Array.isArray(s.trim) ? s.trim : null
+    let a = tr ? num(tr[0], 0) / 100 : 0, b = tr ? num(tr[1], 100) / 100 : 1
+    if (a > b) [a, b] = [b, a]
+    a = Math.max(0, a); b = Math.min(1, b)
+    const off = num(s.trim_offset, 0) / 100
+    if (a <= 0 && b >= 1) return null
+    if (b <= a) return []
+    // 閉じた形で offset を使うと終点をまたぐので 2 本に分ける
+    if (closed && off) {
+      const a2 = (((a + off) % 1) + 1) % 1, b2 = a2 + (b - a)
+      return b2 <= 1 ? trimPolyline(pts, true, a2, b2) : [...trimPolyline(pts, true, a2, 1), ...trimPolyline(pts, true, 0, b2 - 1)]
+    }
+    return trimPolyline(pts, closed, a, b)
+  })()
   if (fill && pts.length > 2) {
-    ctx.beginPath(); trace(pts, true)
-    if (holes) for (const hl of holes) trace(hl, true)
+    ctx.beginPath()
+    if (trimSegs && s.trim_fill) {
+      // trim_fill: 塗りも trim で削る(AE と同じく、残った線の両端をまっすぐ結んで塗る = 弓形)
+      if (trimSegs.length === 2 && closed) trace([...trimSegs[0], ...trimSegs[1]], true)
+      else for (const sg of trimSegs) if (sg.length > 2) trace(sg, true)
+    } else {
+      trace(pts, true)
+      if (holes) for (const hl of holes) trace(hl, true)
+    }
     ctx.fillStyle = fill; ctx.fill(poly.rule || (holes ? 'evenodd' : 'nonzero'))
   }
   if (hasStroke) {
@@ -301,23 +324,12 @@ export function rasterShape(s, rs) {
       ctx.setLineDash(s.dash.map((v) => Math.max(0.01, +v || 0)))
       ctx.lineDashOffset = num(s.dash_offset, 0)
     }
-    const tr = Array.isArray(s.trim) ? s.trim : null
-    let a = tr ? num(tr[0], 0) / 100 : 0, b = tr ? num(tr[1], 100) / 100 : 1
-    if (a > b) [a, b] = [b, a]
-    a = Math.max(0, a); b = Math.min(1, b)
-    const off = num(s.trim_offset, 0) / 100
-    if (a <= 0 && b >= 1) {
+    if (!trimSegs) {
       ctx.beginPath(); trace(pts, closed)
       if (holes) for (const hl of holes) trace(hl, true)
       ctx.stroke()
-    } else if (b > a) {
-      // 閉じた形で offset を使うと終点をまたぐので 2 本に分ける
-      let segs
-      if (closed && off) {
-        const a2 = (((a + off) % 1) + 1) % 1, b2 = a2 + (b - a)
-        segs = b2 <= 1 ? trimPolyline(pts, true, a2, b2) : [...trimPolyline(pts, true, a2, 1), ...trimPolyline(pts, true, 0, b2 - 1)]
-      } else segs = trimPolyline(pts, closed, a, b)
-      for (const sg of segs) { ctx.beginPath(); trace(sg, false); ctx.stroke() }
+    } else {
+      for (const sg of trimSegs) { ctx.beginPath(); trace(sg, false); ctx.stroke() }
     }
   }
   // rect = テクスチャを貼る矩形(線の太さぶん広い)、box = 形そのものの外接矩形(マスク・選択枠の基準)

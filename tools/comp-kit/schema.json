@@ -5121,6 +5121,14 @@
      "animatable": true,
      "group": "線"
     },
+    "trim_fill": {
+     "type": "bool",
+     "label": "塗りも描く範囲で削る(両端をまっすぐ結ぶ。AE のパスのトリミング)",
+     "default": false,
+     "animatable": false,
+     "optional": true,
+     "group": "線"
+    },
     "dash": {
      "type": "vec2",
      "label": "破線(線・すき間)",

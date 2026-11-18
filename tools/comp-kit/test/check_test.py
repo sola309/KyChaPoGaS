@@ -163,6 +163,13 @@ def main():
             hole = im.getpixel((100, 100))[0] < 40
             ok(f"shape の subpaths({name}): 穴 = {want_hole}・離れた部分も描く", hole == want_hole and im.getpixel((100, 70))[0] > 200 and im.getpixel((180, 100))[0] > 200,
                f"{im.getpixel((100, 100))} {im.getpixel((100, 70))} {im.getpixel((180, 100))}")
+        # trim_fill: 円を 0〜50% に削ると、時計回りに上から下までの右半分だけ塗る(弓形 = 半円)。無ければ全体
+        for flag, want_left in ((True, False), (False, True)):
+            c = comp([{"id": "a", "type": "shape", "in": 0, "out": 10, "transform": {"position": [100, 100]},
+                       "source": {"kind": "ellipse", "width": 160, "height": 160, "fill": "#ffff00", "trim": [0, 50], "trim_fill": flag}}], bg="#000000")
+            im = px(asyncio.run(grab(c, [0], base))[0])
+            left, right = im.getpixel((50, 100))[0] > 200, im.getpixel((150, 100))[0] > 200
+            ok(f"shape の trim_fill = {flag}: 左半分 = {want_left}", left == want_left and right, f"{im.getpixel((50, 100))} {im.getpixel((150, 100))}")
         # ぼかしのあとの flip(画面より大きいレイヤーでも反転する)。左が赤・右が緑の 2 枚組をぼかして左右反転 → 左が緑
         half = lambda col, x: {"id": col, "type": "solid", "in": 0, "out": 10, "transform": {"position": [x, 300]}, "source": {"color": col, "width": 800, "height": 1200}}  # noqa: E731
         sub = {"id": 9950, "name": "sub", "width": 1600, "height": 1200, "fps": 30, "duration_frames": 10, "data": {"version": 1, "bg": None, "layers": [half("#ff0000", 400), half("#00ff00", 1200)]}}

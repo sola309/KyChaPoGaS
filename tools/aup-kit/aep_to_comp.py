@@ -779,12 +779,13 @@ class Conv:
                     s0 = pv(kid(tr, 'ADBE Vector Trim Start'), L, st, fps, default=0)
                     s1 = pv(kid(tr, 'ADBE Vector Trim End'), L, st, fps, default=100)
                     so = pv(kid(tr, 'ADBE Vector Trim Offset'), L, st, fps, default=0)
-                    # comp-kit の trim は [始, 終] の 1 本。いまは線にだけ効く (塗りの trim = 扇形は未対応)
+                    # comp-kit の trim は [始, 終] の 1 本
                     lay['source']['trim'] = merge_xy(s0, s1)
                     if so:
                         lay['source']['trim_offset'] = map_val(so, lambda v: v / 3.6)  # AE は角度、comp-kit は %
-                    if lay['source'].get('fill') and not lay['source'].get('stroke'):
-                        STATS['trim_on_fill_unsupported'] += 1
+                    if lay['source'].get('fill'):
+                        lay['source']['trim_fill'] = True  # AE のトリミングは塗りも削る
+                        STATS['trim_on_fill'] += 1
                     STATS['shape_trim'] += 1
                 for j, rp in reps:
                     if j > idx:
