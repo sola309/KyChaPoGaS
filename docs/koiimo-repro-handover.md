@@ -48,6 +48,11 @@
 | 9 | 書体: 07AkazukinPop・Impact・Agenda・小塚明朝・TenMincho・Sawarabi など 12 種 | 35 | **直した**(OFL の書体を足して対応表: Mochiy Pop One・Anton・Shippori Mincho・Zen Old Mincho・Sawarabi Mincho・Stick・Noto Sans JP) |
 | 10 | マージパス | 126 | 無視中 |
 
+## 絵の作り直し(11/18 ユーザー指示: すべて新しく作る。さくらの空の区間も新規。書体は足してよい)
+- 台帳: 仮の板を ID の色で塗った描き出し → 各素材の出ている時刻と位置 → 手本の該当コマ(`scratchpad/koi/inv3.json`・`full_*.jpg`)。それを見て言葉にした説明 `describe_A/B/C.json`(fid・kind・tags)。元のファイルは開かない。
+- 生成: `tools/aup-kit/koiimo_gen.py`(WAI txt2img → 人物・小物は切り抜き → 元の大きさの画布 → project 38 に登録 → `assets_map.json`)。`aep_to_comp.py --assets` で置き換わる。全部「仮」。
+- 動画で見えているのは 5 つ: 冒頭の空と傘(Blender、11〜22 秒)、街の空撮(51〜54 秒)、ウユニ塩湖(66.5〜67.6)、ピュアガール(70〜73.5)、緑のパーカーの 3D の踊り(75〜81。VRM で作る)。過去作の動画はほぼ区間の下に隠れている。
+
 ## 次にやること
 1. 1.01 と全編を並べて、変換の外れを直す(区間ごと)。
 2. 素材の作り直しの方針をユーザーと決める(イラスト・切り抜き・Blender の場面・過去作の動画)。

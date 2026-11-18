@@ -597,7 +597,8 @@ class Conv:
             a = self.assets.get(str(s['id']))
             if a:
                 d['type'] = 'image'
-                d['source'] = dict(a, fit={'width': size[0], 'height': size[1]})
+                d['source'] = {'asset_id': a['asset_id'], 'fit': {'width': size[0], 'height': size[1], 'mode': 'stretch'}}
+                d['name'] = '仮: ' + (s.get('name') or '')
             else:
                 d['type'] = 'shape'
                 name = os.path.basename((s.get('path') or s.get('name') or '').replace('\\', '/'))
