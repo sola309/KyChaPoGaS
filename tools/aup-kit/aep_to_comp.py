@@ -681,6 +681,11 @@ class Conv:
                     if op is not None:
                         lt['opacity'] = op
                     if fx:
+                        for e in fx:
+                            if e.get('_box_rel') and isinstance(cp, list):
+                                # 箱の中心 = 形の位置 (AE のレイヤー空間)
+                                e['params']['cx'] = round(e['params']['cx'] - cp[0], 2)
+                                e['params']['cy'] = round(e['params']['cy'] - cp[1], 2)
                         ch['effects'] = fx + ch.get('effects', [])
                     if d.get('masks'):
                         ch['masks'] = d['masks']
@@ -1012,6 +1017,50 @@ class Conv:
                     prm['opacity'] = op
                 out.append({'type': 'offset', 'params': prm, 'ae': 'transform'})
                 STATS['fx_transform'] += 1
+            elif mn == 'ADBE Ramp':
+                # グラデーション: 始点・終点はレイヤーの大きさの割合 (レイヤー空間)。comp-kit は箱の中心からの px と角度
+                lw, lh = size if size[0] else (self.cur_comp['width'], self.cur_comp['height'])
+                sp = vecn(g(1, [0.5, 0]), 2)
+                ep = vecn(g(3, [0.5, 1]), 2)
+                if isinstance(sp, dict) or isinstance(ep, dict) or isinstance(g(1), dict) or isinstance(g(3), dict):
+                    STATS['ramp_keyed_points'] += 1
+                S = [sp[0] * lw, sp[1] * lh]
+                E = [ep[0] * lw, ep[1] * lh]
+                radial = (g(5, 1) or 1) == 2
+                c0 = [size[0] / 2, size[1] / 2]
+                vx, vy = E[0] - S[0], E[1] - S[1]
+                ln = math.hypot(vx, vy) or 1
+                if radial:
+                    cx, cy = S[0] - c0[0], S[1] - c0[1]
+                    ang = 0
+                else:
+                    cx, cy = (S[0] + E[0]) / 2 - c0[0], (S[1] + E[1]) / 2 - c0[1]
+                    ang = math.degrees(math.atan2(vx, -vy)) - 180
+                blend = g(7, 0)
+                out.append({'type': 'gradient_overlay', 'params': {
+                    'color': g(2, '#000000', hexc), 'color2': g(4, '#ffffff', hexc), 'shape': 'radial' if radial else 'linear',
+                    'angle': round(ang, 3), 'cx': round(cx, 2), 'cy': round(cy, 2), 'width': round(ln, 2),
+                    'amount': map_val(blend, lambda v: 100 - v)}, 'ae': 'ramp', '_box_rel': True})
+            elif mn == 'ADBE 4ColorGradient':
+                # 4 色グラデーション → 4 色の直線グラデーション (左から右へ点の x の順) で代用
+                lw, lh = size if size[0] else (self.cur_comp['width'], self.cur_comp['height'])
+                pts = []
+                for k in range(4):
+                    pt = vecn(g(1 + 2 * k, [0.5, 0.5]), 2)
+                    pts.append((pt[0] * lw, pt[1] * lh, g(2 + 2 * k, '#ffffff', hexc)))
+                pts.sort(key=lambda q: q[0])
+                c0 = [size[0] / 2, size[1] / 2]
+                x0, x1 = pts[0][0], pts[-1][0]
+                out.append({'type': 'gradient_overlay', 'params': {
+                    'colors': [q[2] for q in pts], 'shape': 'linear', 'angle': -90,
+                    'cx': round((x0 + x1) / 2 - c0[0], 2), 'cy': round(sum(q[1] for q in pts) / 4 - c0[1], 2),
+                    'width': round(max(1, x1 - x0), 2), 'amount': map_val(g(10, 0), lambda v: 100 - v)}, 'ae': '4color', '_box_rel': True})
+                self.missing_fx['4色グラデーション(4 色の直線で代用)'] += 1
+            elif mn == 'ADBE Exposure2':
+                ex = g(3, 0)
+                out.append({'type': 'color', 'params': {'brightness': map_val(ex, lambda v: round((2 ** v - 1) * 100, 2))}, 'ae': 'exposure'})
+            elif mn == 'ADBE Brightness & Contrast 2':
+                out.append({'type': 'color', 'params': {'brightness': g(1, 0), 'contrast': g(2, 0)}, 'ae': 'brightness_contrast'})
             elif mn == 'CC Jaws':
                 out.append({'type': 'wipe', 'params': {'progress': g(1, 0), 'angle': 90, 'feather': 0}, 'ae': 'cc_jaws'})
                 self.missing_fx['CC Jaws(ギザギザのワイプ → 直線のワイプで代用)'] += 1
