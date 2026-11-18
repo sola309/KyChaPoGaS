@@ -26,8 +26,9 @@ PROJECT = 38
 FORBIDDEN = ('reference/aviutl_mad/koiimo/1111_', 'I:\\', 'I:/', 'sola2070')
 CUT = {'stand', 'chibi', 'object', 'logo_text'}
 NEG_EXTRA = {
-    'stand': 'background, scenery',
-    'chibi': 'background, scenery',
+    # 切り抜く絵は髪・体が絵の端で途切れないように (11/18 指摘。途切れたら koiimo_fixcut.py で描き足す)
+    'stand': 'background, scenery, cropped, out of frame, cut off, head out of frame',
+    'chibi': 'background, scenery, cropped, out of frame, cut off',
     'object': '1girl, person, background',
     'bg': '1girl, person, people, character',
 }
@@ -94,6 +95,56 @@ def fit_canvas(src, W, H, kind):
     return im.crop((x, y, x + W, y + H))
 
 
+POSES = ['standing, hand on hip', 'peace sign, smile', 'arms behind back, leaning forward', 'waving, open mouth',
+         'holding spear, confident', 'eating pocky, one eye closed', 'arms crossed, smirk', 'jumping, happy']
+
+
+def compose_multi(a, r, W, H, seed, style_pos):
+    """何人も並ぶ絵: WAI に一度に描かせると別の子が混ざるので、杏子を 1 人ずつ描いて切り抜き、背景 (人なし) の上に並べる"""
+    import re
+    kind = r.get('kind')
+    m = re.search(r'(\d+)\+?girls', r['tags'])
+    n = max(2, min(8, int(m.group(1)) if m else 5))
+    body, kneg = kyoko_tags(r['tags'], 'stand', False)
+    keep = ', '.join(t for t in body.split(', ')[len(KYOKO_FIX.split(', ')):] if not re.search(r'girls|everyone|same face|clones|multiple', t))
+    canvas = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    if kind == 'scene':
+        bw, bh = bucket(W, H)
+        _, bg = L.wai(keep + ', no humans, scenery, background', seed + 1, w=bw, h=bh, pos='masterpiece, best quality, ',
+                      neg_extra='1girl, person, people, character', project_id=PROJECT)
+        if bg:
+            canvas = fit_canvas(Image.open(asset_file(bg)), W, H, 'bg').convert('RGBA')
+    figs = []
+    for i in range(n):
+        tags = KYOKO_FIX + ', full body, ' + POSES[i % len(POSES)] + ', ' + keep + POS_SUFFIX['stand']
+        _, gid = L.wai(tags, seed + 10 + i, w=832, h=1216, pos='1girl, solo, ' + style_pos, neg_extra=NEG_EXTRA['stand'] + ', ' + kneg,
+                       project_id=PROJECT)
+        if not gid:
+            continue
+        _, cut = L.cutout(gid)
+        im = Image.open(asset_file(cut or gid)).convert('RGBA')
+        bb = im.getbbox()
+        figs.append(im.crop(bb) if bb else im)
+    # 奥の列 (小さめ・上) と手前の列 (大きめ・下) を交互に。左右に均等
+    for i, im in enumerate(figs):
+        back = (i % 2 == 1)
+        h = int(H * (0.78 if back else 0.95))
+        s = h / im.height
+        im = im.resize((max(1, int(im.width * s)), h), Image.LANCZOS)
+        cx = int(W * (i + 0.5) / len(figs))
+        y = int(H * (0.02 if back else 0.05)) + (H - h) - int(H * 0.05)
+        canvas.alpha_composite(im, (cx - im.width // 2, max(0, y)))
+    return canvas
+
+
+def asset_file(aid):
+    for x in L.call('GET', f'/api/assets/?project_id={PROJECT}'):
+        if x['id'] == aid:
+            assert not any(t in x['file_path'] for t in FORBIDDEN)
+            return x['file_path']
+    raise KeyError(aid)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--desc', nargs='+', required=True)
@@ -103,7 +154,8 @@ def main():
     ap.add_argument('--kinds', default='')
     ap.add_argument('--redo', default='')
     ap.add_argument('--limit', type=int, default=0)
-    ap.add_argument('--style', default='anime', choices=['anime', 'ume'], help='anime = TV アニメの塗り / ume = 蒼樹うめ風')
+    ap.add_argument('--compose-multi', action='store_true', help='何人も並ぶ絵は 1 人ずつ描いて合成する')
+    ap.add_argument('--style', default='ume', choices=['anime', 'ume'], help='ume = 蒼樹うめ風 (11/18 ユーザーが選んだ既定) / anime = TV アニメの塗り')
     ap.add_argument('--max-side', type=int, default=4096, help='元が大きすぎるときの上限 (長い辺)')
     a = ap.parse_args()
     os.makedirs(os.path.join(a.work, 'gen'), exist_ok=True)
@@ -171,6 +223,18 @@ def main():
             ('aoki ume, ' if a.style == 'ume' else 'anime screencap, anime coloring, ')
         if kind in ('bg', 'object'):
             pos = 'masterpiece, best quality, '
+        if multi and a.compose_multi:
+            print(f'[{fid}] 何人も並ぶ絵 → 1 人ずつ描いて合成 {W}x{H}', flush=True)
+            out = compose_multi(a, r, W, H, seed, pos.replace('1girl, solo, ', ''))
+            op = os.path.join(a.work, 'gen', f'{fid}.png')
+            out.save(op)
+            up = L.upload(op, name=f'koiimo_{fid}_multi.png', project_id=PROJECT)
+            amap[key] = {'asset_id': up['id'], 'kind': kind, 'tags': r['tags'], 'seed': seed, 'status': '仮', 'how': '1 人ずつ描いて合成',
+                         'tries': amap.get(key, {}).get('tries', 0) + 1, 'w': W, 'h': H}
+            json.dump(amap, open(mp + '.tmp', 'w'), ensure_ascii=False, indent=1)
+            os.replace(mp + '.tmp', mp)
+            print(f'  → asset {up["id"]}', flush=True)
+            continue
         print(f'[{fid}] {kind} {W}x{H} gen {gw}x{gh} seed {seed}: {tags[:90]}', flush=True)
         job, aid = L.wai(tags, seed, w=gw, h=gh, pos=pos, neg_extra=', '.join(x for x in (NEG_EXTRA.get(kind, ''), kneg, r.get('neg', '')) if x), project_id=PROJECT)
         if not aid:
