@@ -149,6 +149,8 @@ LT["shape"] = {"label": "シェイプ", "icon": "🔷", "source": {"kind": S("�
     "thickness": N("太さの比(矢じり・十字)", 0.4, 0.02, 1, 0.01, optional=True, **g("形")), "head": N("矢の頭の比", 0.4, 0.02, 1, 0.01, optional=True, **g("形")), "shaft": N("矢の軸の比", 0.4, 0.01, 1, 0.01, optional=True, **g("形")), "petals": N("花びらの数", 5, 3, 24, 1, optional=True, **g("形")),
     "jitter": N("ばらつき(爆発)", 0.2, 0, 1, 0.01, optional=True, **g("形")), "seed": N("種", 1, 0, 9999, 1, False, optional=True, **g("形")), "points": {"type": "points", "label": "頂点(線・パス)", "default": [[-100, 0], [100, 0]], "animatable": True, "optional": True, "group": "形"},
     "closed": B("閉じる(パス)", optional=True, **g("形")), "morph_to": {"type": "points", "label": "変形先の頂点", "default": None, "animatable": False, "optional": True, "group": "形"}, "morph": P("変形の割合", 0, optional=True, **g("形")),
+    "subpaths": {"type": "json", "label": "複合パス(穴・離れた部分。[{points, closed}])", "default": None, "animatable": False, "optional": True, "group": "形"},
+    "fill_rule": S("重なりの塗り方(複合パス)", "nonzero", [("nonzero", "向きで決める(AE と同じ)"), ("evenodd", "重なるたびに反転")], optional=True, **g("形")),
     "fill": FILL("塗り", "#ffffff", "塗り"), "stroke": {"type": "fill", "label": "線の色", "default": None, "animatable": True, "group": "線", "accepts": ["color", "gradient", "none"]}, "stroke_width": N("線の太さ", 0, 0, 500, 0.5, **g("線")),
     "stroke_in_box": B("線の外側までを箱にする(crop・マスクの基準。AviUtl の図形と同じ)", optional=True, **g("線")),
     "cap": S("線の端", "butt", [("butt", "切り落とし"), ("round", "丸"), ("square", "四角")], **g("線")), "join": S("角", "round", [("round", "丸"), ("miter", "とがり"), ("bevel", "面取り")], **g("線")),
@@ -430,7 +432,7 @@ def when(table, key, cond_key, values):
     if key in table: table[key]["when"] = {cond_key: values}
 SH = LT["shape"]["source"]
 for k, kinds in {"sides": ["polygon", "star", "burst"], "inner": ["star", "ring", "flower", "burst"], "start": ["arc", "pie", "ring"], "end": ["arc", "pie", "ring"], "thickness": ["chevron", "cross"],
-                 "head": ["arrow"], "shaft": ["arrow"], "petals": ["flower"], "jitter": ["burst"], "seed": ["burst"], "points": ["line", "path"], "closed": ["path"], "morph_to": ["path"], "morph": ["path"],
+                 "head": ["arrow"], "shaft": ["arrow"], "petals": ["flower"], "jitter": ["burst"], "seed": ["burst"], "points": ["line", "path"], "closed": ["path"], "morph_to": ["path"], "morph": ["path"], "subpaths": ["path"], "fill_rule": ["path"],
                  "radius": ["rect", "polygon", "star", "path", "bubble"]}.items(): when(SH, k, "kind", kinds)
 PAT_WHEN = {"stagger": ["dots", "halftone"], "slope": ["yagasuri"], "rings": ["seigaiha"], "count": ["rays"], "jitter": ["rays"], "inner": ["rays"], "amplitude": ["waves", "zigzag"], "wavelength": ["waves"],
             "contrast": ["noise"], "seed": ["noise", "grain", "rays"], "grad_angle": ["halftone"], "grad_length": ["halftone"], "dot_min": ["halftone"], "dot_max": ["halftone"],

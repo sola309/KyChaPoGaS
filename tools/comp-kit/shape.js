@@ -188,6 +188,12 @@ export function shapePolyline(s) {
     }
     pts = flattenPath(src, closed)
     if (kind === 'path' && num(s.radius, 0) > 0 && closed) pts = roundCorners(pts, num(s.radius, 0))
+    // 複合パス: subpaths = [{points, closed}](AE の 1 つの塗りに入る複数のパス。字の穴など)。fill_rule 既定 nonzero(AE と同じ)
+    if (kind === 'path' && Array.isArray(s.subpaths) && s.subpaths.length) {
+      holes = s.subpaths.filter((sp) => sp && Array.isArray(sp.points) && sp.points.length > 1)
+        .map((sp) => flattenPath(sp.points, sp.closed !== false))
+      return { pts, closed, holes, rule: s.fill_rule === 'evenodd' ? 'evenodd' : 'nonzero', sub: true }
+    }
   } else return null
   return { pts, closed, holes }
 }
@@ -257,6 +263,7 @@ export function rasterShape(s, rs) {
   const join = s.join || 'round', cap = s.cap || 'butt'
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   for (const p of pts) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]) }
+  if (poly.sub) for (const hl of holes) for (const p of hl) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]) }
   const bb = { x0, y0, x1, y1 }
   // _halo: {width, color} = 形の外側の縁取り(stroke_outline を形のラスタライズに畳み込んだもの。scene.js の haloOf)
   const halo = s._halo && closed && num(s._halo.width, 0) > 0 ? s._halo : null
@@ -284,7 +291,7 @@ export function rasterShape(s, rs) {
   if (fill && pts.length > 2) {
     ctx.beginPath(); trace(pts, true)
     if (holes) for (const hl of holes) trace(hl, true)
-    ctx.fillStyle = fill; ctx.fill(holes ? 'evenodd' : 'nonzero')
+    ctx.fillStyle = fill; ctx.fill(poly.rule || (holes ? 'evenodd' : 'nonzero'))
   }
   if (hasStroke) {
     if (dual) ctx.setTransform(rs, 0, 0, rs, -rx * rs, -ry * rs + ch)

@@ -148,6 +148,21 @@ def main():
                        "effects": [{"type": "crop", "params": {"top": 5, "bottom": 5, "left": 5, "right": 5}}]}], bg="#000000")
             sp = span(px(asyncio.run(grab(c, [0], base))[0]))
             ok(f"shape の stroke_in_box = {flag}: crop の基準", sp == want, str(sp))
+        # 複合パス(subpaths): 外側の四角 + 逆回りの内側の四角 = 穴(nonzero)。evenodd なら同じ向きでも穴。箱は subpaths も含む
+        outer = [[-60, -60], [60, -60], [60, 60], [-60, 60]]
+        inner_rev = [[-20, -20], [-20, 20], [20, 20], [20, -20]]
+        inner_same = [[-20, -20], [20, -20], [20, 20], [-20, 20]]
+        far = [[70, -10], [90, -10], [90, 10], [70, 10]]
+        for name, sub, rule, want_hole in (("nonzero・逆回り", inner_rev, None, True), ("nonzero・同じ向き", inner_same, None, False),
+                                           ("evenodd・同じ向き", inner_same, "evenodd", True)):
+            src = {"kind": "path", "points": outer, "closed": True, "fill": "#ffff00", "subpaths": [{"points": sub}, {"points": far}]}
+            if rule:
+                src["fill_rule"] = rule
+            c = comp([{"id": "a", "type": "shape", "in": 0, "out": 10, "transform": {"position": [100, 100]}, "source": src}], bg="#000000")
+            im = px(asyncio.run(grab(c, [0], base))[0])
+            hole = im.getpixel((100, 100))[0] < 40
+            ok(f"shape の subpaths({name}): 穴 = {want_hole}・離れた部分も描く", hole == want_hole and im.getpixel((100, 70))[0] > 200 and im.getpixel((180, 100))[0] > 200,
+               f"{im.getpixel((100, 100))} {im.getpixel((100, 70))} {im.getpixel((180, 100))}")
         # ぼかしのあとの flip(画面より大きいレイヤーでも反転する)。左が赤・右が緑の 2 枚組をぼかして左右反転 → 左が緑
         half = lambda col, x: {"id": col, "type": "solid", "in": 0, "out": 10, "transform": {"position": [x, 300]}, "source": {"color": col, "width": 800, "height": 1200}}  # noqa: E731
         sub = {"id": 9950, "name": "sub", "width": 1600, "height": 1200, "fps": 30, "duration_frames": 10, "data": {"version": 1, "bg": None, "layers": [half("#ff0000", 400), half("#00ff00", 1200)]}}
